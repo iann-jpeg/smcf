@@ -96,6 +96,56 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         </CardContent>
       </Card>
 
+      {/* M-Pesa Payment Section */}
+      {!memberData.hasPaidThisCycle && (
+        <Card className="border-mpesa-green bg-gradient-to-br from-mpesa-green/5 to-mpesa-green/10">
+          <CardHeader className="text-center">
+            <CardTitle className="flex items-center justify-center gap-2 text-mpesa-green">
+              <Phone className="w-6 h-6" />
+              Make Your KES 200 Contribution
+            </CardTitle>
+            <CardDescription className="text-lg">
+              Pay securely via M-Pesa STK Push
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="bg-white/50 p-4 rounded-lg space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Amount:</span>
+                <span className="text-2xl font-bold text-mpesa-green">KES 200</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Destination:</span>
+                <span className="font-medium">SMCF Group Account</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Your Number:</span>
+                <span className="font-medium">{userData.phoneNumber}</span>
+              </div>
+            </div>
+            
+            <div className="text-center space-y-4">
+              <Button 
+                onClick={handleMakePayment} 
+                variant="mpesa" 
+                size="lg"
+                className="w-full text-lg font-semibold"
+              >
+                <Phone className="w-5 h-5 mr-2" />
+                Send M-Pesa Payment
+              </Button>
+              
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p>• You'll receive an M-Pesa prompt on your phone</p>
+                <p>• Enter your M-Pesa PIN to complete the payment</p>
+                <p>• Funds will be sent to the SMCF group account</p>
+                <p>• You'll receive confirmation SMS and receipt</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Tabs defaultValue="overview" className="w-full">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="overview">Overview</TabsTrigger>
