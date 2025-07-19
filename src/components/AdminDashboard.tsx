@@ -14,9 +14,11 @@ import {
   TrendingUp,
   Send,
   UserPlus,
-  Download
+  Download,
+  Wallet
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import MpesaDisbursementDialog from '@/components/MpesaDisbursementDialog';
 
 interface AdminDashboardProps {
   userData: any;
@@ -25,6 +27,7 @@ interface AdminDashboardProps {
 
 const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
   const { toast } = useToast();
+  const [showDisbursementDialog, setShowDisbursementDialog] = useState(false);
 
   // Mock admin data
   const [adminData] = useState({
@@ -285,6 +288,36 @@ const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
         </TabsContent>
 
         <TabsContent value="disbursements" className="space-y-6">
+          {/* M-Pesa Send Payment Section */}
+          <Card className="border-l-4 border-l-mpesa-green bg-mpesa-green/5">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Wallet className="w-5 h-5 text-mpesa-green" />
+                Send M-Pesa Payment
+              </CardTitle>
+              <CardDescription>
+                Send money directly to members via M-Pesa
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">
+                    Send payments to any group member from your M-Pesa account
+                  </p>
+                </div>
+                <Button 
+                  onClick={() => setShowDisbursementDialog(true)}
+                  variant="mpesa"
+                  size="sm"
+                >
+                  <Wallet className="w-4 h-4 mr-2" />
+                  Send Payment
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Next Disbursement */}
           <Card className="border-l-4 border-l-accent bg-accent/5">
             <CardHeader>
@@ -349,6 +382,13 @@ const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* M-Pesa Disbursement Dialog */}
+      <MpesaDisbursementDialog
+        open={showDisbursementDialog}
+        onOpenChange={setShowDisbursementDialog}
+        members={adminData.members}
+      />
     </div>
   );
 };
