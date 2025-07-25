@@ -20,11 +20,13 @@ import {
   Wallet,
   Edit,
   Trash2,
-  Save
+  Save,
+  Megaphone
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import MpesaDisbursementDialog from '@/components/MpesaDisbursementDialog';
 import AddMemberDialog from '@/components/AddMemberDialog';
+import AnnouncementDialog from '@/components/AnnouncementDialog';
 
 interface AdminDashboardProps {
   userData: any;
@@ -35,20 +37,21 @@ const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
   const { toast } = useToast();
   const [showDisbursementDialog, setShowDisbursementDialog] = useState(false);
   const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
+  const [showAnnouncementDialog, setShowAnnouncementDialog] = useState(false);
   const [editingMember, setEditingMember] = useState<string | null>(null);
   const [editedMemberData, setEditedMemberData] = useState<any>({});
 
   // Mock admin data
   const [adminData, setAdminData] = useState({
     members: [
-      { id: 'SMCF-0001', name: 'John Kamau', phone: '+254722123456', status: 'paid', amount: 200, date: '2024-01-15' },
-      { id: 'SMCF-0002', name: 'Mary Wanjiku', phone: '+254733234567', status: 'paid', amount: 200, date: '2024-01-15' },
-      { id: 'SMCF-0003', name: 'Peter Mwangi', phone: '+254744345678', status: 'paid', amount: 200, date: '2024-01-16' },
-      { id: 'SMCF-0004', name: 'Grace Nyong', phone: '+254755456789', status: 'paid', amount: 200, date: '2024-01-16' },
-      { id: 'SMCF-0005', name: 'David Kiprotich', phone: '+254766567890', status: 'paid', amount: 200, date: '2024-01-17' },
-      { id: 'SMCF-0006', name: 'Sarah Wambui', phone: '+254777678901', status: 'paid', amount: 200, date: '2024-01-17' },
-      { id: 'SMCF-0007', name: 'James Ochieng', phone: '+254788789012', status: 'paid', amount: 200, date: '2024-01-18' },
-      { id: 'SMCF-0008', name: 'Faith Akinyi', phone: '+254799890123', status: 'paid', amount: 200, date: '2024-01-18' },
+      { id: 'SMCF-0001', name: 'John Kamau', phone: '+254722123456', status: 'paid', amount: 204, date: '2024-01-15' },
+      { id: 'SMCF-0002', name: 'Mary Wanjiku', phone: '+254733234567', status: 'paid', amount: 204, date: '2024-01-15' },
+      { id: 'SMCF-0003', name: 'Peter Mwangi', phone: '+254744345678', status: 'paid', amount: 204, date: '2024-01-16' },
+      { id: 'SMCF-0004', name: 'Grace Nyong', phone: '+254755456789', status: 'paid', amount: 204, date: '2024-01-16' },
+      { id: 'SMCF-0005', name: 'David Kiprotich', phone: '+254766567890', status: 'paid', amount: 204, date: '2024-01-17' },
+      { id: 'SMCF-0006', name: 'Sarah Wambui', phone: '+254777678901', status: 'paid', amount: 204, date: '2024-01-17' },
+      { id: 'SMCF-0007', name: 'James Ochieng', phone: '+254788789012', status: 'paid', amount: 204, date: '2024-01-18' },
+      { id: 'SMCF-0008', name: 'Faith Akinyi', phone: '+254799890123', status: 'paid', amount: 204, date: '2024-01-18' },
       { id: 'SMCF-0009', name: 'Michael Kariuki', phone: '+254700901234', status: 'pending', amount: 0, date: null },
       { id: 'SMCF-0010', name: 'Lucy Njeri', phone: '+254711012345', status: 'pending', amount: 0, date: null },
       { id: 'SMCF-0011', name: 'Samuel Mutua', phone: '+254722123456', status: 'pending', amount: 0, date: null },
@@ -133,6 +136,32 @@ const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
     });
   };
 
+  const handleTogglePaymentStatus = (memberId: string) => {
+    setAdminData(prev => ({
+      ...prev,
+      members: prev.members.map(member => {
+        if (member.id === memberId) {
+          const newStatus = member.status === 'paid' ? 'pending' : 'paid';
+          return {
+            ...member,
+            status: newStatus,
+            amount: newStatus === 'paid' ? 204 : 0,
+            date: newStatus === 'paid' ? new Date().toISOString().split('T')[0] : null
+          };
+        }
+        return member;
+      })
+    }));
+    
+    const member = adminData.members.find(m => m.id === memberId);
+    const newStatus = member?.status === 'paid' ? 'pending' : 'paid';
+    
+    toast({
+      title: "Payment Status Updated",
+      description: `${member?.name}'s payment status changed to ${newStatus}`,
+    });
+  };
+
   const handleCancelEdit = () => {
     setEditingMember(null);
     setEditedMemberData({});
@@ -178,6 +207,14 @@ const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
               <UserPlus className="w-4 h-4 mr-2" />
               Add Member
             </Button>
+            <Button 
+              onClick={() => setShowAnnouncementDialog(true)}
+              variant="secondary" 
+              size="sm"
+            >
+              <Megaphone className="w-4 h-4 mr-2" />
+              Send Announcement
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -204,7 +241,7 @@ const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
                   {paidMembers.length}
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  KES {(paidMembers.length * 200).toLocaleString()} collected
+                  KES {(paidMembers.length * 204).toLocaleString()} collected
                 </div>
               </CardContent>
             </Card>
@@ -221,7 +258,7 @@ const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
                   {pendingMembers.length}
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  KES {(pendingMembers.length * 200).toLocaleString()} outstanding
+                  KES {(pendingMembers.length * 204).toLocaleString()} outstanding
                 </div>
               </CardContent>
             </Card>
@@ -296,6 +333,13 @@ const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
                             )}
                           </div>
                           <div className="flex gap-1">
+                            <Button 
+                              size="sm" 
+                              variant={member.status === 'paid' ? 'destructive' : 'default'}
+                              onClick={() => handleTogglePaymentStatus(member.id)}
+                            >
+                              {member.status === 'paid' ? 'Mark Pending' : 'Mark Paid'}
+                            </Button>
                             <Button size="sm" variant="ghost" onClick={() => handleEditMember(member.id)}>
                               <Edit className="w-3 h-3" />
                             </Button>
@@ -505,6 +549,12 @@ const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
         open={showAddMemberDialog}
         onOpenChange={setShowAddMemberDialog}
         onMemberAdded={handleAddMember}
+      />
+
+      {/* Announcement Dialog */}
+      <AnnouncementDialog
+        open={showAnnouncementDialog}
+        onOpenChange={setShowAnnouncementDialog}
       />
     </div>
   );

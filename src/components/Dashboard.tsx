@@ -38,8 +38,8 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
     totalMembers: 12,
     paidMembers: 8,
     nextRecipient: 'Mary Wanjiku',
-    totalAmount: 2400, // 12 members × 200 KES
-    collectedAmount: 1600, // 8 members × 200 KES
+    totalAmount: 2448, // 12 members × 204 KES
+    collectedAmount: 1632, // 8 members × 204 KES
     cycleStartDate: '2024-01-15',
     paymentDeadline: '2024-01-20'
   });

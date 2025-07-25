@@ -29,11 +29,11 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
   const memberData = {
     hasPaidThisCycle: Math.random() > 0.3, // 70% chance of having paid
     paymentHistory: [
-      { cycle: 14, amount: 200, date: '2024-01-10', status: 'paid' },
-      { cycle: 13, amount: 200, date: '2024-01-05', status: 'paid' },
-      { cycle: 12, amount: 200, date: '2023-12-31', status: 'paid' },
-      { cycle: 11, amount: 200, date: '2023-12-26', status: 'paid' },
-      { cycle: 10, amount: 200, date: '2023-12-21', status: 'paid' },
+      { cycle: 14, amount: 204, date: '2024-01-10', status: 'paid' },
+      { cycle: 13, amount: 204, date: '2024-01-05', status: 'paid' },
+      { cycle: 12, amount: 204, date: '2023-12-31', status: 'paid' },
+      { cycle: 11, amount: 204, date: '2023-12-26', status: 'paid' },
+      { cycle: 10, amount: 204, date: '2023-12-21', status: 'paid' },
     ],
     nextPayoutCycle: 18,
     totalContributed: 2800,
@@ -55,10 +55,10 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
 
   const handlePaymentSuccess = () => {
     memberData.hasPaidThisCycle = true;
-    toast({
-      title: "Payment Successful",
-      description: "Your KES 200 contribution has been received",
-    });
+      toast({
+        title: "Payment Successful",
+        description: "Your KES 204 contribution has been received",
+      });
     setShowPayment(false);
   };
 
@@ -80,8 +80,8 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                 </h3>
                 <p className="text-sm text-muted-foreground">
                   {memberData.hasPaidThisCycle 
-                    ? `You've contributed KES 200 for cycle #${cycleData.currentCycle}`
-                    : `KES 200 payment due in ${cycleData.daysLeft} days`
+                    ? `You've contributed KES 204 for cycle #${cycleData.currentCycle}`
+                    : `KES 204 payment due in ${cycleData.daysLeft} days`
                   }
                 </p>
               </div>
@@ -102,17 +102,17 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
           <CardHeader className="text-center">
             <CardTitle className="flex items-center justify-center gap-2 text-mpesa-green">
               <Phone className="w-6 h-6" />
-              Make Your KES 200 Contribution
+              Make Your KES 204 Contribution
             </CardTitle>
             <CardDescription className="text-lg">
-              Pay securely via M-Pesa STK Push
+              Pay securely via M-Pesa Paybill or STK Push
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="bg-white/50 p-4 rounded-lg space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">Amount:</span>
-                <span className="text-2xl font-bold text-mpesa-green">KES 200</span>
+                <span className="text-2xl font-bold text-mpesa-green">KES 204</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">Destination:</span>
@@ -136,10 +136,11 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
               </Button>
               
               <div className="text-xs text-muted-foreground space-y-1">
-                <p>• Pay via M-Pesa Till Number: <strong>6938069</strong></p>
-                <p>• You'll receive an M-Pesa prompt on your phone</p>
-                <p>• Enter your M-Pesa PIN to complete the payment</p>
-                <p>• Funds will be sent to the SMCF group account</p>
+                <p><strong>Multiple Payment Options:</strong></p>
+                <p>• <strong>M-Pesa Paybill:</strong> 6938069 (Recommended)</p>
+                <p>• <strong>Lipa na M-Pesa:</strong> Buy Goods & Services</p>
+                <p>• <strong>M-Pesa App:</strong> Business &gt; Lipa na M-Pesa &gt; Till 6938069</p>
+                <p>• <strong>USSD:</strong> *334# &gt; Lipa na M-Pesa &gt; Enter Till 6938069</p>
                 <p>• You'll receive confirmation SMS and receipt</p>
               </div>
             </div>
@@ -336,7 +337,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         open={showPayment}
         onOpenChange={setShowPayment}
         onPaymentSuccess={handlePaymentSuccess}
-        amount={200}
+        amount={204}
         memberData={userData}
       />
     </div>

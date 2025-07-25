@@ -5,9 +5,11 @@ import { Wallet, Users, Shield, TrendingUp, Smartphone, Clock } from 'lucide-rea
 import smcfLogo from '@/assets/smcf-logo.png';
 import AuthDialog from '@/components/AuthDialog';
 import Dashboard from '@/components/Dashboard';
+import OrganizationDialog from '@/components/OrganizationDialog';
 
 const Index = () => {
   const [showAuth, setShowAuth] = useState(false);
+  const [showOrganization, setShowOrganization] = useState(false);
   const [userRole, setUserRole] = useState<'admin' | 'member' | null>(null);
   const [currentUser, setCurrentUser] = useState(null);
 
@@ -52,14 +54,19 @@ const Index = () => {
               Digital Table Banking
             </h2>
             <p className="text-xl md:text-2xl text-muted-foreground mb-8">
-              Automated KES 200 contributions every 5 days. <br />
+              Automated KES 204 contributions every 5 days. <br />
               Secure M-Pesa integration. Real-time tracking.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
               <Button size="lg" onClick={() => setShowAuth(true)} className="text-lg py-6 px-8">
                 Join SMCF Today
               </Button>
-              <Button size="lg" variant="outline" className="text-lg py-6 px-8">
+              <Button 
+                size="lg" 
+                variant="outline" 
+                className="text-lg py-6 px-8"
+                onClick={() => setShowOrganization(true)}
+              >
                 Learn More
               </Button>
             </div>
@@ -69,7 +76,7 @@ const Index = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-16">
             <Card className="text-center hover:shadow-financial transition-all duration-300">
               <CardContent className="pt-6">
-                <div className="text-3xl font-bold text-financial-success mb-2">KES 200</div>
+                <div className="text-3xl font-bold text-financial-success mb-2">KES 204</div>
                 <div className="text-muted-foreground">Every 5 Days</div>
               </CardContent>
             </Card>
@@ -153,8 +160,8 @@ const Index = () => {
               },
               {
                 step: 2,
-                title: "Contribute KES 200",
-                description: "Every 5 days, contribute KES 200 via secure M-Pesa STK Push payment."
+                title: "Contribute KES 204",
+                description: "Every 5 days, contribute KES 204 via secure M-Pesa paybill 6938069 or STK Push payment."
               },
               {
                 step: 3,
@@ -204,6 +211,12 @@ const Index = () => {
         open={showAuth} 
         onOpenChange={setShowAuth}
         onLogin={handleLogin}
+      />
+
+      {/* Organization Dialog */}
+      <OrganizationDialog 
+        open={showOrganization}
+        onOpenChange={setShowOrganization}
       />
     </div>
   );
