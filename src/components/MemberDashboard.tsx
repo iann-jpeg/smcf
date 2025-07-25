@@ -136,6 +136,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
               </Button>
               
               <div className="text-xs text-muted-foreground space-y-1">
+                <p>• Pay via M-Pesa Till Number: <strong>6938069</strong></p>
                 <p>• You'll receive an M-Pesa prompt on your phone</p>
                 <p>• Enter your M-Pesa PIN to complete the payment</p>
                 <p>• Funds will be sent to the SMCF group account</p>

@@ -4,6 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { 
   Users, 
   DollarSign, 
@@ -15,10 +17,14 @@ import {
   Send,
   UserPlus,
   Download,
-  Wallet
+  Wallet,
+  Edit,
+  Trash2,
+  Save
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import MpesaDisbursementDialog from '@/components/MpesaDisbursementDialog';
+import AddMemberDialog from '@/components/AddMemberDialog';
 
 interface AdminDashboardProps {
   userData: any;
@@ -28,9 +34,12 @@ interface AdminDashboardProps {
 const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
   const { toast } = useToast();
   const [showDisbursementDialog, setShowDisbursementDialog] = useState(false);
+  const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
+  const [editingMember, setEditingMember] = useState<string | null>(null);
+  const [editedMemberData, setEditedMemberData] = useState<any>({});
 
   // Mock admin data
-  const [adminData] = useState({
+  const [adminData, setAdminData] = useState({
     members: [
       { id: 'SMCF-0001', name: 'John Kamau', phone: '+254722123456', status: 'paid', amount: 200, date: '2024-01-15' },
       { id: 'SMCF-0002', name: 'Mary Wanjiku', phone: '+254733234567', status: 'paid', amount: 200, date: '2024-01-15' },
@@ -83,6 +92,52 @@ const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
     });
   };
 
+  const handleAddMember = (newMember: any) => {
+    setAdminData(prev => ({
+      ...prev,
+      members: [...prev.members, newMember]
+    }));
+  };
+
+  const handleEditMember = (memberId: string) => {
+    const member = adminData.members.find(m => m.id === memberId);
+    if (member) {
+      setEditingMember(memberId);
+      setEditedMemberData({ ...member });
+    }
+  };
+
+  const handleSaveMember = (memberId: string) => {
+    setAdminData(prev => ({
+      ...prev,
+      members: prev.members.map(m => 
+        m.id === memberId ? { ...editedMemberData } : m
+      )
+    }));
+    setEditingMember(null);
+    setEditedMemberData({});
+    toast({
+      title: "Member Updated",
+      description: "Member information has been saved successfully",
+    });
+  };
+
+  const handleDeleteMember = (memberId: string) => {
+    setAdminData(prev => ({
+      ...prev,
+      members: prev.members.filter(m => m.id !== memberId)
+    }));
+    toast({
+      title: "Member Removed",
+      description: "Member has been removed from the group",
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingMember(null);
+    setEditedMemberData({});
+  };
+
   const paidMembers = adminData.members.filter(m => m.status === 'paid');
   const pendingMembers = adminData.members.filter(m => m.status === 'pending');
 
@@ -115,7 +170,11 @@ const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
               <Download className="w-4 h-4 mr-2" />
               Export Records
             </Button>
-            <Button variant="outline" size="sm">
+            <Button 
+              onClick={() => setShowAddMemberDialog(true)}
+              variant="outline" 
+              size="sm"
+            >
               <UserPlus className="w-4 h-4 mr-2" />
               Add Member
             </Button>
@@ -180,27 +239,78 @@ const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
               <div className="space-y-3">
                 {adminData.members.map((member, index) => (
                   <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-3 h-3 rounded-full ${
-                        member.status === 'paid' ? 'bg-financial-success' : 'bg-financial-warning'
-                      }`} />
-                      <div>
-                        <div className="font-medium">{member.name}</div>
-                        <div className="text-sm text-muted-foreground">
-                          {member.id} • {member.phone}
+                    {editingMember === member.id ? (
+                      <div className="flex-1 space-y-3">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label htmlFor={`name-${member.id}`} className="text-xs">Name</Label>
+                            <Input
+                              id={`name-${member.id}`}
+                              value={editedMemberData.name || ''}
+                              onChange={(e) => setEditedMemberData(prev => ({...prev, name: e.target.value}))}
+                              className="text-sm"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor={`phone-${member.id}`} className="text-xs">Phone</Label>
+                            <Input
+                              id={`phone-${member.id}`}
+                              value={editedMemberData.phone || ''}
+                              onChange={(e) => setEditedMemberData(prev => ({...prev, phone: e.target.value}))}
+                              className="text-sm"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={() => handleSaveMember(member.id)}>
+                            <Save className="w-3 h-3 mr-1" />
+                            Save
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={handleCancelEdit}>
+                            Cancel
+                          </Button>
                         </div>
                       </div>
-                    </div>
-                    <div className="text-right">
-                      <Badge variant={member.status === 'paid' ? 'default' : 'secondary'}>
-                        {member.status === 'paid' ? 'Paid' : 'Pending'}
-                      </Badge>
-                      {member.date && (
-                        <div className="text-xs text-muted-foreground mt-1">
-                          {member.date}
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-3">
+                          <div className={`w-3 h-3 rounded-full ${
+                            member.status === 'paid' ? 'bg-financial-success' : 'bg-financial-warning'
+                          }`} />
+                          <div>
+                            <div className="font-medium">{member.name}</div>
+                            <div className="text-sm text-muted-foreground">
+                              {member.id} • {member.phone}
+                            </div>
+                          </div>
                         </div>
-                      )}
-                    </div>
+                        <div className="flex items-center gap-3">
+                          <div className="text-right">
+                            <Badge variant={member.status === 'paid' ? 'default' : 'secondary'}>
+                              {member.status === 'paid' ? 'Paid' : 'Pending'}
+                            </Badge>
+                            {member.date && (
+                              <div className="text-xs text-muted-foreground mt-1">
+                                {member.date}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex gap-1">
+                            <Button size="sm" variant="ghost" onClick={() => handleEditMember(member.id)}>
+                              <Edit className="w-3 h-3" />
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="ghost" 
+                              onClick={() => handleDeleteMember(member.id)}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>
@@ -388,6 +498,13 @@ const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
         open={showDisbursementDialog}
         onOpenChange={setShowDisbursementDialog}
         members={adminData.members}
+      />
+
+      {/* Add Member Dialog */}
+      <AddMemberDialog
+        open={showAddMemberDialog}
+        onOpenChange={setShowAddMemberDialog}
+        onMemberAdded={handleAddMember}
       />
     </div>
   );

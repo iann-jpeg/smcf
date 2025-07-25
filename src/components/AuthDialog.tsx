@@ -44,6 +44,30 @@ const AuthDialog = ({ open, onOpenChange, onLogin }: AuthDialogProps) => {
   };
 
   const handleLogin = (role: 'admin' | 'member') => {
+    // Hardcode admin login
+    if (role === 'admin' && loginData.phone === '0117512982') {
+      const userData = {
+        phone: loginData.phone,
+        name: 'SMCF Administrator',
+        idNumber: 'ADMIN001',
+        memberId: null,
+        role
+      };
+
+      onLogin(role, userData);
+      
+      toast({
+        title: "Admin Login Successful",
+        description: `Welcome ${userData.name}!`,
+      });
+
+      // Reset form
+      setLoginData({ phone: '', otp: '', name: '', idNumber: '' });
+      setOtpSent(false);
+      setIsRegistering(false);
+      return;
+    }
+
     if (!otpSent || !loginData.otp) {
       toast({
         title: "OTP Required",
