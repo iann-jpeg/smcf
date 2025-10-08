@@ -38,10 +38,11 @@ interface AdminDashboardProps {
   members: any[];
   announcements: any[];
   onLogout: () => void;
+  refreshMembers?: () => void;
   cycleData?: any;
 }
 
-const AdminDashboard = ({ userData, members, announcements, onLogout }: AdminDashboardProps) => {
+const AdminDashboard = ({ userData, members, announcements, onLogout, refreshMembers }: AdminDashboardProps) => {
   console.log('AdminDashboard rendered with:', { userData, members: members?.length || 0, announcements: announcements?.length || 0 });
   
   // Safety check for required data
@@ -133,11 +134,16 @@ const AdminDashboard = ({ userData, members, announcements, onLogout }: AdminDas
   };
 
   const handleAddMember = (newMember: any) => {
-    // mutate original array if provided, otherwise just push into safeMembers
-    if (Array.isArray(members)) {
-      members.push(newMember);
+    // prefer to refresh from server when possible
+    if (typeof refreshMembers === 'function') {
+      refreshMembers();
     } else {
-      safeMembers.push(newMember);
+      // mutate original array if provided, otherwise just push into safeMembers
+      if (Array.isArray(members)) {
+        members.push(newMember);
+      } else {
+        safeMembers.push(newMember);
+      }
     }
     toast({
       title: "Member Added",
@@ -158,8 +164,8 @@ const AdminDashboard = ({ userData, members, announcements, onLogout }: AdminDas
     fetch(`${API_BASE}/members/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(editedMemberData) })
       .then(res => res.json())
       .then(updated => {
-        // refresh page data simply
-        window.location.reload();
+        if (typeof refreshMembers === 'function') refreshMembers();
+        else window.location.reload();
       })
       .catch(err => {
         console.error('Save failed', err);
@@ -196,7 +202,10 @@ const AdminDashboard = ({ userData, members, announcements, onLogout }: AdminDas
   const deleteMemberRemote = (member: any) => {
     const id = member._id || member.id;
     fetch(`${API_BASE}/members/${id}`, { method: 'DELETE' })
-      .then(() => window.location.reload())
+      .then(() => {
+        if (typeof refreshMembers === 'function') refreshMembers();
+        else window.location.reload();
+      })
       .catch(err => toast({ title: 'Delete Failed', description: 'Could not delete member', variant: 'destructive' }));
   };
 
@@ -204,7 +213,10 @@ const AdminDashboard = ({ userData, members, announcements, onLogout }: AdminDas
     const id = member._id || member.id;
     const newStatus = member.status === 'paid' ? 'pending' : 'paid';
     fetch(`${API_BASE}/members/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ status: newStatus }) })
-      .then(() => window.location.reload())
+      .then(() => {
+        if (typeof refreshMembers === 'function') refreshMembers();
+        else window.location.reload();
+      })
       .catch(err => toast({ title: 'Update Failed', description: 'Could not update status', variant: 'destructive' }));
   };
 
@@ -215,7 +227,10 @@ const AdminDashboard = ({ userData, members, announcements, onLogout }: AdminDas
       const above = sorted[idx-1];
       const payload = [ { id: above._id || above.id, position: member.position || (idx+1) }, { id: member._id || member.id, position: above.position || idx } ];
       fetch(`${API_BASE}/members/reorder`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) })
-        .then(() => window.location.reload())
+        .then(() => {
+          if (typeof refreshMembers === 'function') refreshMembers();
+          else window.location.reload();
+        })
         .catch(err => toast({ title: 'Reorder Failed', description: 'Could not change order', variant: 'destructive' }));
     }
   };

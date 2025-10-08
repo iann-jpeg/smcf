@@ -14,9 +14,8 @@ const Admin = ({ userData, onLogout }) => {
 
   useEffect(() => {
     if (currentUser) {
-      // Initial fetch
-  fetch(`${API_BASE}/members`).then(res => res.json()).then(setMembers);
-  fetch(`${API_BASE}/announcements`).then(res => res.json()).then(setAnnouncements);
+      refreshMembers();
+      fetch(`${API_BASE}/announcements`).then(res => res.json()).then(setAnnouncements);
       // Realtime updates
       socket.on('member:new', member => setMembers(prev => [member, ...prev]));
       socket.on('announcement:new', announcement => setAnnouncements(prev => [announcement, ...prev]));
@@ -26,6 +25,10 @@ const Admin = ({ userData, onLogout }) => {
       };
     }
   }, [currentUser]);
+
+  const refreshMembers = () => {
+    fetch(`${API_BASE}/members`).then(res => res.json()).then(setMembers).catch(err => console.error('Refresh members failed', err));
+  };
 
   const handleLogin = (role: 'admin' | 'member', userData: any) => {
     if (role === 'admin') {
@@ -56,7 +59,7 @@ const Admin = ({ userData, onLogout }) => {
     );
   }
 
-  return <AdminDashboard userData={currentUser} members={members} announcements={announcements} onLogout={handleLogout} />;
+  return <AdminDashboard userData={currentUser} members={members} announcements={announcements} onLogout={handleLogout} refreshMembers={refreshMembers} />;
 };
 
 export default Admin;

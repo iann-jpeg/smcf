@@ -34,37 +34,32 @@ const AddMemberDialog = ({ open, onOpenChange, onMemberAdded }: AddMemberDialogP
     }
 
     setIsProcessing(true);
-
-    // Simulate adding member
-    setTimeout(() => {
-      const newMember = {
-        id: `SMCF-${String(Math.floor(Math.random() * 9999) + 1).padStart(4, '0')}`,
+    try {
+      const payload = {
         name: memberData.name,
         phone: memberData.phone,
-        idNumber: memberData.idNumber,
+        id_number: memberData.idNumber,
+        monthly_contribution: Number(memberData.initialContribution || 0),
         status: 'pending',
         amount: 0,
-        date: null,
-        joinDate: new Date().toISOString().split('T')[0]
+        join_date: new Date().toISOString()
       };
 
-      onMemberAdded(newMember);
-      setIsProcessing(false);
-      
-      toast({
-        title: "Member Added Successfully",
-        description: `${memberData.name} has been added to the group`,
-      });
+      const res = await fetch(`${API_BASE}/members`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      if (!res.ok) throw new Error('Failed to create member');
+      const created = await res.json();
 
-      // Reset form and close
-      setMemberData({
-        name: '',
-        phone: '',
-        idNumber: '',
-        initialContribution: '200'
-      });
+      // Notify parent and close
+      onMemberAdded(created);
+      setIsProcessing(false);
+      toast({ title: 'Member Added Successfully', description: `${created.name} has been added to the group` });
+      setMemberData({ name: '', phone: '', idNumber: '', initialContribution: '200' });
       onOpenChange(false);
-    }, 1500);
+    } catch (err) {
+      console.error('Add member failed', err);
+      setIsProcessing(false);
+      toast({ title: 'Add Failed', description: 'Could not add member', variant: 'destructive' });
+    }
   };
 
   const resetForm = () => {
