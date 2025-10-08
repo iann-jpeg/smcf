@@ -9,6 +9,7 @@ import AdminDashboard from '@/components/AdminDashboard';
 // Test components removed; render the real AdminDashboard
 import DebugInfo from '@/components/DebugInfo';
 import OrganizationDialog from '@/components/OrganizationDialog';
+import API_BASE from '@/lib/api';
 
 const Index = () => {
   const [showAuth, setShowAuth] = useState(false);
@@ -23,7 +24,7 @@ const Index = () => {
   useEffect(() => {
     if (userRole === 'admin' && currentUser) {
       // Fetch members and announcements for admin
-      fetch('http://localhost:4000/members')
+  fetch(`${API_BASE}/members`)
         .then(res => res.json())
         .then(data => {
           setMembers(data);
@@ -48,7 +49,7 @@ const Index = () => {
         })
         .catch(err => console.error('Error fetching members:', err));
       
-      fetch('http://localhost:4000/announcements')
+  fetch(`${API_BASE}/announcements`)
         .then(res => res.json())
         .then(data => setAnnouncements(data))
         .catch(err => console.error('Error fetching announcements:', err));

@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import AdminDashboard from '@/components/AdminDashboard';
 import AuthDialog from '@/components/AuthDialog';
 import io from 'socket.io-client';
+import API_BASE from '@/lib/api';
 
-const socket = io('http://localhost:4000');
+const socket = io(API_BASE);
 
 const Admin = ({ userData, onLogout }) => {
   const [members, setMembers] = useState([]);
@@ -14,8 +15,8 @@ const Admin = ({ userData, onLogout }) => {
   useEffect(() => {
     if (currentUser) {
       // Initial fetch
-      fetch('http://localhost:4000/members').then(res => res.json()).then(setMembers);
-      fetch('http://localhost:4000/announcements').then(res => res.json()).then(setAnnouncements);
+  fetch(`${API_BASE}/members`).then(res => res.json()).then(setMembers);
+  fetch(`${API_BASE}/announcements`).then(res => res.json()).then(setAnnouncements);
       // Realtime updates
       socket.on('member:new', member => setMembers(prev => [member, ...prev]));
       socket.on('announcement:new', announcement => setAnnouncements(prev => [announcement, ...prev]));

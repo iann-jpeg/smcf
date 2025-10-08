@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import API_BASE from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -34,7 +35,6 @@ const AuthDialog = ({ open, onOpenChange, onLogin }: AuthDialogProps) => {
     }
 
   // Try calling backend to send OTP; fall back to demo behavior on failure
-  const API_BASE = (import.meta.env.VITE_API_URL as string) || 'http://localhost:4000';
   fetch(`${API_BASE}/api/auth/send-otp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: loginData.phone }) })
       .then(async (r) => {
         if (!r.ok) throw new Error('Failed to send OTP');
@@ -57,7 +57,6 @@ const AuthDialog = ({ open, onOpenChange, onLogin }: AuthDialogProps) => {
     }
 
   // Call backend verify endpoint; fallback to demo verification if network fails
-  const API_BASE = (import.meta.env.VITE_API_URL as string) || 'http://localhost:4000';
   fetch(`${API_BASE}/api/auth/verify-otp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: loginData.phone, otp: loginData.otp }) })
       .then(async (r) => {
         if (!r.ok) {

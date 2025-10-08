@@ -22,8 +22,9 @@ import MemberDashboard from '@/components/MemberDashboard';
 import AdminDashboard from '@/components/AdminDashboard';
 import PaymentDialog from '@/components/PaymentDialog';
 import io from 'socket.io-client';
+import API_BASE from '@/lib/api';
 
-const socket = io('http://localhost:4000'); // Update if backend runs elsewhere
+const socket = io(API_BASE); // Uses VITE_API_URL or fallback
 
 interface DashboardProps {
   userRole: 'admin' | 'member';

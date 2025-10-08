@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import API_BASE from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -52,7 +53,6 @@ const LoanRequestDialog = ({ open, onOpenChange, memberId, memberPhone, onSubmit
       return;
     }
     try {
-      const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
       const body = {
         member_id: memberId,
         phone: phone,

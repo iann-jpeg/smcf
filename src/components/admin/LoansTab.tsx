@@ -7,9 +7,10 @@ const LoansTab = () => {
   const [loans, setLoans] = useState<any[]>([]);
   const { toast } = useToast();
 
+  import API_BASE from '@/lib/api';
+
   const fetchLoans = async () => {
     try {
-      const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
       const res = await fetch(`${API_BASE}/api/loans`);
       const data = await res.json();
       setLoans(data);
@@ -22,7 +23,6 @@ const LoansTab = () => {
 
   const approve = async (id: string) => {
     try {
-      const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
       const res = await fetch(`${API_BASE}/api/loans/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'approved', approved_at: new Date().toISOString() }) });
       const updated = await res.json();
       toast({ title: 'Loan Approved', description: `Loan ${id} approved` });

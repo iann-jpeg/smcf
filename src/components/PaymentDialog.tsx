@@ -38,12 +38,14 @@ const PaymentDialog = ({
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
   // ...existing code...
+import API_BASE from '@/lib/api';
+
 const handleInitiatePayment = async () => {
   setPaymentStep('processing');
   setIsProcessing(true);
 
   try {
-    const response = await fetch('http://localhost:4000/api/mpesa/stkpush', {
+  const response = await fetch(`${API_BASE}/api/mpesa/stkpush`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

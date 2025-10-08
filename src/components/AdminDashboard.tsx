@@ -37,6 +37,7 @@ interface AdminDashboardProps {
   members: any[];
   announcements: any[];
   onLogout: () => void;
+  cycleData?: any;
 }
 
 const AdminDashboard = ({ userData, members, announcements, onLogout }: AdminDashboardProps) => {
@@ -70,7 +71,7 @@ const AdminDashboard = ({ userData, members, announcements, onLogout }: AdminDas
 
   // Polling for recent payments
   const pollRef = useRef<NodeJS.Timeout | null>(null);
-  const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+  import API_BASE from '@/lib/api';
 
   const fetchPayments = async () => {
     try {
