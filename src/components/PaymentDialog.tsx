@@ -15,6 +15,7 @@ import {
   Lock
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import API_BASE from '@/lib/api';
 
 interface PaymentDialogProps {
   open: boolean;
@@ -38,7 +39,6 @@ const PaymentDialog = ({
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
   // ...existing code...
-import API_BASE from '@/lib/api';
 
 const handleInitiatePayment = async () => {
   setPaymentStep('processing');

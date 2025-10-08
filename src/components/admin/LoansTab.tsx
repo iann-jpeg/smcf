@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import API_BASE from '@/lib/api';
 
 const LoansTab = () => {
   const [loans, setLoans] = useState<any[]>([]);
   const { toast } = useToast();
 
-  import API_BASE from '@/lib/api';
 
   const fetchLoans = async () => {
     try {

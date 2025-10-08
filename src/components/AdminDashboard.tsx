@@ -24,6 +24,7 @@ import {
   Megaphone
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import API_BASE from '@/lib/api';
 import MpesaDisbursementDialog from '@/components/MpesaDisbursementDialog';
 import AddMemberDialog from '@/components/AddMemberDialog';
 import AnnouncementDialog from '@/components/AnnouncementDialog';
@@ -71,7 +72,6 @@ const AdminDashboard = ({ userData, members, announcements, onLogout }: AdminDas
 
   // Polling for recent payments
   const pollRef = useRef<NodeJS.Timeout | null>(null);
-  import API_BASE from '@/lib/api';
 
   const fetchPayments = async () => {
     try {

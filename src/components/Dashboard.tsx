@@ -180,7 +180,13 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
         {userRole === 'member' ? (
           <MemberDashboard userData={userData} cycleData={cycleData} />
         ) : (
-          <AdminDashboard userData={userData} cycleData={cycleData} />
+          <AdminDashboard
+            userData={userData}
+            cycleData={cycleData}
+            members={members}
+            announcements={announcements}
+            onLogout={onLogout}
+          />
         )}
       </div>
     </div>
