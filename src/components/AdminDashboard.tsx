@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -27,45 +27,74 @@ import { useToast } from '@/hooks/use-toast';
 import MpesaDisbursementDialog from '@/components/MpesaDisbursementDialog';
 import AddMemberDialog from '@/components/AddMemberDialog';
 import AnnouncementDialog from '@/components/AnnouncementDialog';
+import LoansTab from './admin/LoansTab';
+import ApprovalsTab from './admin/ApprovalsTab';
+import ReportsTab from './admin/ReportsTab';
+// ...existing code...
 
 interface AdminDashboardProps {
   userData: any;
-  cycleData: any;
+  members: any[];
+  announcements: any[];
+  onLogout: () => void;
 }
 
-const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
+const AdminDashboard = ({ userData, members, announcements, onLogout }: AdminDashboardProps) => {
+  console.log('AdminDashboard rendered with:', { userData, members: members?.length || 0, announcements: announcements?.length || 0 });
+  
+  // Safety check for required data
+  if (!userData || !userData.cycleData) {
+    console.log('Missing userData or cycleData, rendering fallback');
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold mb-2">Loading Admin Dashboard...</h2>
+          <p className="text-muted-foreground">Please wait while we load your data.</p>
+        </div>
+      </div>
+    );
+  }
+  
   const { toast } = useToast();
   const [showDisbursementDialog, setShowDisbursementDialog] = useState(false);
   const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
   const [showAnnouncementDialog, setShowAnnouncementDialog] = useState(false);
   const [editingMember, setEditingMember] = useState<string | null>(null);
   const [editedMemberData, setEditedMemberData] = useState<any>({});
+  // Safe fallbacks to avoid runtime errors when data is undefined
+  const safeMembers = Array.isArray(members) ? members : [];
+  const paidMembers = safeMembers.filter((m: any) => m && m.status === 'paid');
+  const pendingMembers = safeMembers.filter((m: any) => m && m.status === 'pending');
+  const safeDisbursements = Array.isArray(userData.disbursements) ? userData.disbursements : [];
+  const [recentPayments, setRecentPayments] = useState<any[]>([]);
 
-  // Mock admin data
-  const [adminData, setAdminData] = useState({
-    members: [
-      { id: 'SMCF-0001', name: 'John Kamau', phone: '+254722123456', status: 'paid', amount: 204, date: '2024-01-15' },
-      { id: 'SMCF-0002', name: 'Mary Wanjiku', phone: '+254733234567', status: 'paid', amount: 204, date: '2024-01-15' },
-      { id: 'SMCF-0003', name: 'Peter Mwangi', phone: '+254744345678', status: 'paid', amount: 204, date: '2024-01-16' },
-      { id: 'SMCF-0004', name: 'Grace Nyong', phone: '+254755456789', status: 'paid', amount: 204, date: '2024-01-16' },
-      { id: 'SMCF-0005', name: 'David Kiprotich', phone: '+254766567890', status: 'paid', amount: 204, date: '2024-01-17' },
-      { id: 'SMCF-0006', name: 'Sarah Wambui', phone: '+254777678901', status: 'paid', amount: 204, date: '2024-01-17' },
-      { id: 'SMCF-0007', name: 'James Ochieng', phone: '+254788789012', status: 'paid', amount: 204, date: '2024-01-18' },
-      { id: 'SMCF-0008', name: 'Faith Akinyi', phone: '+254799890123', status: 'paid', amount: 204, date: '2024-01-18' },
-      { id: 'SMCF-0009', name: 'Michael Kariuki', phone: '+254700901234', status: 'pending', amount: 0, date: null },
-      { id: 'SMCF-0010', name: 'Lucy Njeri', phone: '+254711012345', status: 'pending', amount: 0, date: null },
-      { id: 'SMCF-0011', name: 'Samuel Mutua', phone: '+254722123456', status: 'pending', amount: 0, date: null },
-      { id: 'SMCF-0012', name: 'Agnes Wanjala', phone: '+254733234567', status: 'pending', amount: 0, date: null },
-    ],
-    disbursements: [
-      { cycle: 14, recipient: 'John Kamau', amount: 2400, date: '2024-01-10', status: 'completed' },
-      { cycle: 13, recipient: 'Mary Wanjiku', amount: 2400, date: '2024-01-05', status: 'completed' },
-      { cycle: 12, recipient: 'Peter Mwangi', amount: 2400, date: '2023-12-31', status: 'completed' },
-    ]
-  });
+  // Polling for recent payments
+  const pollRef = useRef<NodeJS.Timeout | null>(null);
+  const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+
+  const fetchPayments = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/payments`);
+      const data = await res.json();
+      setRecentPayments(Array.isArray(data) ? data.slice(0,5) : []);
+    } catch (e) {
+      console.error('Could not fetch payments', e);
+      setRecentPayments([]);
+    }
+  };
+
+  useEffect(() => {
+    // initial fetch
+    fetchPayments();
+    // poll every 15 seconds
+    pollRef.current = setInterval(fetchPayments, 15000);
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
 
   const handleSendReminders = () => {
-    const pendingMembers = adminData.members.filter(m => m.status === 'pending');
+    const pendingMembers = safeMembers.filter(m => m.status === 'pending');
     toast({
       title: "Reminders Sent",
       description: `Payment reminders sent to ${pendingMembers.length} members`,
@@ -73,7 +102,7 @@ const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
   };
 
   const handleProcessPayout = () => {
-    if (cycleData.paidMembers < cycleData.totalMembers) {
+    if (userData.cycleData.paidMembers < userData.cycleData.totalMembers) {
       toast({
         title: "Cannot Process Payout",
         description: "All members must pay before disbursement",
@@ -84,7 +113,7 @@ const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
 
     toast({
       title: "Payout Initiated",
-      description: `KES ${cycleData.totalAmount.toLocaleString()} being sent to ${cycleData.nextRecipient}`,
+      description: `KES ${userData.cycleData.totalAmount.toLocaleString()} being sent to ${userData.cycleData.nextRecipient}`,
     });
   };
 
@@ -96,14 +125,20 @@ const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
   };
 
   const handleAddMember = (newMember: any) => {
-    setAdminData(prev => ({
-      ...prev,
-      members: [...prev.members, newMember]
-    }));
+    // mutate original array if provided, otherwise just push into safeMembers
+    if (Array.isArray(members)) {
+      members.push(newMember);
+    } else {
+      safeMembers.push(newMember);
+    }
+    toast({
+      title: "Member Added",
+      description: "New member has been added successfully",
+    });
   };
 
   const handleEditMember = (memberId: string) => {
-    const member = adminData.members.find(m => m.id === memberId);
+    const member = members.find(m => m.id === memberId);
     if (member) {
       setEditingMember(memberId);
       setEditedMemberData({ ...member });
@@ -111,12 +146,10 @@ const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
   };
 
   const handleSaveMember = (memberId: string) => {
-    setAdminData(prev => ({
-      ...prev,
-      members: prev.members.map(m => 
-        m.id === memberId ? { ...editedMemberData } : m
-      )
-    }));
+    const index = members.findIndex(m => m.id === memberId);
+    if (index !== -1) {
+      members[index] = { ...editedMemberData };
+    }
     setEditingMember(null);
     setEditedMemberData({});
     toast({
@@ -126,10 +159,10 @@ const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
   };
 
   const handleDeleteMember = (memberId: string) => {
-    setAdminData(prev => ({
-      ...prev,
-      members: prev.members.filter(m => m.id !== memberId)
-    }));
+    const index = members.findIndex(m => m.id === memberId);
+    if (index !== -1) {
+      members.splice(index, 1);
+    }
     toast({
       title: "Member Removed",
       description: "Member has been removed from the group",
@@ -137,29 +170,18 @@ const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
   };
 
   const handleTogglePaymentStatus = (memberId: string) => {
-    setAdminData(prev => ({
-      ...prev,
-      members: prev.members.map(member => {
-        if (member.id === memberId) {
-          const newStatus = member.status === 'paid' ? 'pending' : 'paid';
-          return {
-            ...member,
-            status: newStatus,
-            amount: newStatus === 'paid' ? 204 : 0,
-            date: newStatus === 'paid' ? new Date().toISOString().split('T')[0] : null
-          };
-        }
-        return member;
-      })
-    }));
-    
-    const member = adminData.members.find(m => m.id === memberId);
-    const newStatus = member?.status === 'paid' ? 'pending' : 'paid';
-    
-    toast({
-      title: "Payment Status Updated",
-      description: `${member?.name}'s payment status changed to ${newStatus}`,
-    });
+    const member = members.find(m => m.id === memberId);
+    if (member) {
+      const newStatus = member.status === 'paid' ? 'pending' : 'paid';
+      member.status = newStatus;
+      member.amount = newStatus === 'paid' ? 204 : 0;
+      member.date = newStatus === 'paid' ? new Date().toISOString().split('T')[0] : null;
+      
+      toast({
+        title: "Payment Status Updated",
+        description: `${member.name}'s payment status changed to ${newStatus}`,
+      });
+    }
   };
 
   const handleCancelEdit = () => {
@@ -167,8 +189,7 @@ const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
     setEditedMemberData({});
   };
 
-  const paidMembers = adminData.members.filter(m => m.status === 'paid');
-  const pendingMembers = adminData.members.filter(m => m.status === 'pending');
+  
 
   return (
     <div className="space-y-6">
@@ -188,9 +209,9 @@ const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
             </Button>
             <Button 
               onClick={handleProcessPayout} 
-              variant={cycleData.paidMembers === cycleData.totalMembers ? "financial" : "outline"}
+              variant={userData.cycleData.paidMembers === userData.cycleData.totalMembers ? "financial" : "outline"}
               size="sm"
-              disabled={cycleData.paidMembers < cycleData.totalMembers}
+              disabled={userData.cycleData.paidMembers < userData.cycleData.totalMembers}
             >
               <DollarSign className="w-4 h-4 mr-2" />
               Process Payout
@@ -220,10 +241,13 @@ const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
       </Card>
 
       <Tabs defaultValue="members" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="members">Member Management</TabsTrigger>
           <TabsTrigger value="payments">Payment Tracking</TabsTrigger>
           <TabsTrigger value="disbursements">Disbursements</TabsTrigger>
+          <TabsTrigger value="loans">Loans</TabsTrigger>
+          <TabsTrigger value="approvals">Approvals</TabsTrigger>
+          <TabsTrigger value="reports">Reports</TabsTrigger>
         </TabsList>
 
         <TabsContent value="members" className="space-y-6">
@@ -266,15 +290,15 @@ const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
 
           {/* Member List */}
           <Card>
-            <CardHeader>
+              <CardHeader>
               <CardTitle>All Members</CardTitle>
               <CardDescription>
-                Total: {adminData.members.length} members
+                Total: {safeMembers.length} members
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {adminData.members.map((member, index) => (
+                {safeMembers.map((member, index) => (
                   <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
                     {editingMember === member.id ? (
                       <div className="flex-1 space-y-3">
@@ -371,17 +395,17 @@ const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
                 Collection Progress
               </CardTitle>
               <CardDescription>
-                Cycle #{cycleData.currentCycle} • {cycleData.daysLeft} days remaining
+                Cycle #{userData.cycleData.currentCycle} • {userData.cycleData.daysLeft} days remaining
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span>Collection Progress</span>
-                  <span>{Math.round((cycleData.paidMembers / cycleData.totalMembers) * 100)}%</span>
+                  <span>{Math.round((userData.cycleData.paidMembers / userData.cycleData.totalMembers) * 100)}%</span>
                 </div>
                 <Progress 
-                  value={(cycleData.paidMembers / cycleData.totalMembers) * 100} 
+                  value={(userData.cycleData.paidMembers / userData.cycleData.totalMembers) * 100} 
                   className="h-3"
                 />
               </div>
@@ -389,19 +413,19 @@ const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-primary">
-                    {cycleData.paidMembers}/{cycleData.totalMembers}
+                    {userData.cycleData.paidMembers}/{userData.cycleData.totalMembers}
                   </div>
                   <div className="text-sm text-muted-foreground">Members</div>
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold text-financial-success">
-                    KES {cycleData.collectedAmount.toLocaleString()}
+                    KES {userData.cycleData.collectedAmount.toLocaleString()}
                   </div>
                   <div className="text-sm text-muted-foreground">Collected</div>
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold text-accent">
-                    KES {(cycleData.totalAmount - cycleData.collectedAmount).toLocaleString()}
+                    KES {(userData.cycleData.totalAmount - userData.cycleData.collectedAmount).toLocaleString()}
                   </div>
                   <div className="text-sm text-muted-foreground">Remaining</div>
                 </div>
@@ -412,18 +436,25 @@ const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
           {/* Recent Payments */}
           <Card>
             <CardHeader>
-              <CardTitle>Recent Payments</CardTitle>
-              <CardDescription>Latest contributions for this cycle</CardDescription>
+              <div className="flex items-center justify-between w-full">
+                <div>
+                  <CardTitle>Recent Payments</CardTitle>
+                  <CardDescription>Latest contributions for this cycle</CardDescription>
+                </div>
+                <div>
+                  <Button size="sm" variant="outline" onClick={fetchPayments}>Refresh</Button>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {paidMembers.slice(0, 5).map((payment, index) => (
+                {(recentPayments.length ? recentPayments : paidMembers.slice(0, 5)).map((payment, index) => (
                   <div key={index} className="flex items-center justify-between p-3 bg-financial-success/5 border border-financial-success/20 rounded-lg">
                     <div className="flex items-center gap-3">
                       <CheckCircle className="w-5 h-5 text-financial-success" />
                       <div>
-                        <div className="font-medium">{payment.name}</div>
-                        <div className="text-sm text-muted-foreground">{payment.phone}</div>
+                        <div className="font-medium">{payment.name || payment.member_id || payment.phone}</div>
+                        <div className="text-sm text-muted-foreground">{payment.phone || payment.mpesa_transaction_id || ''}</div>
                       </div>
                     </div>
                     <div className="text-right">
@@ -484,18 +515,18 @@ const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Recipient:</span>
-                  <span className="font-semibold">{cycleData.nextRecipient}</span>
+                  <span className="font-semibold">{userData.cycleData.nextRecipient}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Amount:</span>
                   <span className="font-semibold text-accent">
-                    KES {cycleData.totalAmount.toLocaleString()}
+                    KES {userData.cycleData.totalAmount.toLocaleString()}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Status:</span>
-                  <Badge variant={cycleData.paidMembers === cycleData.totalMembers ? 'default' : 'secondary'}>
-                    {cycleData.paidMembers === cycleData.totalMembers ? 'Ready' : 'Waiting for payments'}
+                  <Badge variant={userData.cycleData.paidMembers === userData.cycleData.totalMembers ? 'default' : 'secondary'}>
+                    {userData.cycleData.paidMembers === userData.cycleData.totalMembers ? 'Ready' : 'Waiting for payments'}
                   </Badge>
                 </div>
               </div>
@@ -510,7 +541,7 @@ const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {adminData.disbursements.map((disbursement, index) => (
+                {safeDisbursements.map((disbursement, index) => (
                   <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
                     <div className="flex items-center gap-3">
                       <CheckCircle className="w-5 h-5 text-financial-success" />
@@ -535,13 +566,24 @@ const AdminDashboard = ({ userData, cycleData }: AdminDashboardProps) => {
             </CardContent>
           </Card>
         </TabsContent>
+        <TabsContent value="loans" className="space-y-6">
+          <LoansTab />
+        </TabsContent>
+
+        <TabsContent value="approvals" className="space-y-6">
+          <ApprovalsTab />
+        </TabsContent>
+
+        <TabsContent value="reports" className="space-y-6">
+          <ReportsTab />
+        </TabsContent>
       </Tabs>
 
       {/* M-Pesa Disbursement Dialog */}
       <MpesaDisbursementDialog
         open={showDisbursementDialog}
         onOpenChange={setShowDisbursementDialog}
-        members={adminData.members}
+        members={safeMembers}
       />
 
       {/* Add Member Dialog */}

@@ -1,35 +1,143 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Wallet, Users, Shield, TrendingUp, Smartphone, Clock } from 'lucide-react';
 import smcfLogo from '@/assets/smcf-logo.png';
 import AuthDialog from '@/components/AuthDialog';
 import Dashboard from '@/components/Dashboard';
+import AdminDashboard from '@/components/AdminDashboard';
+// Test components removed; render the real AdminDashboard
+import DebugInfo from '@/components/DebugInfo';
 import OrganizationDialog from '@/components/OrganizationDialog';
 
 const Index = () => {
   const [showAuth, setShowAuth] = useState(false);
   const [showOrganization, setShowOrganization] = useState(false);
+  // userRole is simplified for UI: 'admin' means any administrative role (treasurer, secretary, etc.)
   const [userRole, setUserRole] = useState<'admin' | 'member' | null>(null);
   const [currentUser, setCurrentUser] = useState(null);
+  const [members, setMembers] = useState([]);
+  const [announcements, setAnnouncements] = useState([]);
 
-  const handleLogin = (role: 'admin' | 'member', userData: any) => {
-    setUserRole(role);
-    setCurrentUser(userData);
+  // Fetch data when admin logs in
+  useEffect(() => {
+    if (userRole === 'admin' && currentUser) {
+      // Fetch members and announcements for admin
+      fetch('http://localhost:4000/members')
+        .then(res => res.json())
+        .then(data => {
+          setMembers(data);
+          
+          // Update cycle data based on actual members
+          const paidMembers = data.filter(m => m.status === 'paid').length;
+          const totalMembers = data.length || 1;
+          const collectedAmount = paidMembers * 204;
+          const totalAmount = totalMembers * 204;
+          
+          setCurrentUser(prev => ({
+            ...prev,
+            cycleData: {
+              ...prev.cycleData,
+              paidMembers,
+              totalMembers,
+              collectedAmount,
+              totalAmount,
+              nextRecipient: data.find(m => m.status === 'pending')?.name || 'All Paid'
+            }
+          }));
+        })
+        .catch(err => console.error('Error fetching members:', err));
+      
+      fetch('http://localhost:4000/announcements')
+        .then(res => res.json())
+        .then(data => setAnnouncements(data))
+        .catch(err => console.error('Error fetching announcements:', err));
+    }
+  }, [userRole, currentUser?.phone]); // Use phone as dependency to avoid infinite loops
+
+  const handleLogin = (role: string, userData: any) => {
+    console.log('handleLogin called with:', { role, userData });
+
+    // Normalize role: treat several roles as admin for UI access
+    const adminRoles = new Set(['admin', 'treasurer', 'secretary', 'auditor', 'superadmin']);
+    const normalizedRole: 'admin' | 'member' = adminRoles.has(role) ? 'admin' : 'member';
+    setUserRole(normalizedRole);
+
+    // Add cycle data for admin users
+    if (normalizedRole === 'admin') {
+      const enhancedUserData = {
+        ...userData,
+        cycleData: {
+          currentCycle: 1,
+          daysLeft: 3,
+          paidMembers: 0,
+          totalMembers: 1,
+          collectedAmount: 0,
+          totalAmount: 204,
+          nextRecipient: 'No Active Members'
+        }
+      };
+      console.log('Setting admin user data:', enhancedUserData);
+      setCurrentUser(enhancedUserData);
+    } else {
+      console.log('Setting member user data:', userData);
+      setCurrentUser(userData);
+    }
+    
     setShowAuth(false);
+    console.log('Login process completed');
   };
 
   const handleLogout = () => {
     setUserRole(null);
     setCurrentUser(null);
+    setMembers([]);
+    setAnnouncements([]);
   };
 
   if (userRole && currentUser) {
+    console.log('Rendering user interface with:', { userRole, currentUser });
+    if (userRole === 'admin') {
+      console.log('Rendering admin dashboard');
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-primary/5">
+          <header className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-50">
+            <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <img src={smcfLogo} alt="SMCF Logo" className="w-10 h-10" />
+                <div>
+                  <h1 className="text-xl font-bold text-primary">SMCF Admin</h1>
+                  <p className="text-xs text-muted-foreground">Smart Money Cash Flow</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <span className="text-sm text-muted-foreground">Welcome, {currentUser.name}</span>
+                <Button onClick={handleLogout} variant="outline" size="sm">
+                  Logout
+                </Button>
+              </div>
+            </div>
+          </header>
+          <main className="container mx-auto px-4 py-8">
+            <AdminDashboard
+              userData={currentUser}
+              members={members}
+              announcements={announcements}
+              onLogout={handleLogout}
+            />
+          </main>
+        </div>
+      );
+    }
+    console.log('Rendering member dashboard');
     return <Dashboard userRole={userRole} userData={currentUser} onLogout={handleLogout} />;
   }
 
+  console.log('Main render - userRole:', userRole, 'currentUser:', currentUser, 'showAuth:', showAuth);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-primary/5">
+      <DebugInfo userRole={userRole} currentUser={currentUser} showAuth={showAuth} />
       {/* Header */}
       <header className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">

@@ -22,28 +22,65 @@ interface PaymentDialogProps {
   onPaymentSuccess: () => void;
   amount: number;
   memberData: any;
+  cycle: number; 
 }
 
-const PaymentDialog = ({ open, onOpenChange, onPaymentSuccess, amount, memberData }: PaymentDialogProps) => {
-  const [paymentStep, setPaymentStep] = useState<'confirm' | 'processing' | 'pin' | 'success'>('confirm');
-  const [pin, setPin] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
+const PaymentDialog = ({
+  open,
+  onOpenChange,
+  onPaymentSuccess,
+  amount,
+  memberData
+}: PaymentDialogProps) => {
   const { toast } = useToast();
+  const [paymentStep, setPaymentStep] = useState<'confirm' | 'processing' | 'pin' | 'success'>('confirm');
+  const [pin, setPin] = useState<string>('');
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
-  const handleInitiatePayment = () => {
-    setPaymentStep('processing');
-    setIsProcessing(true);
-    
-    // Simulate STK Push initiation
-    setTimeout(() => {
+  // ...existing code...
+const handleInitiatePayment = async () => {
+  setPaymentStep('processing');
+  setIsProcessing(true);
+
+  try {
+    const response = await fetch('http://localhost:4000/api/mpesa/stkpush', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        phone: memberData.phone,
+        amount: amount
+      }),
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.ResponseCode === "0") {
       setIsProcessing(false);
       setPaymentStep('pin');
       toast({
         title: "STK Push Sent",
-        description: "Check your phone for M-Pesa prompt",
+        description: "Check your phone for the M-Pesa prompt and enter your PIN.",
       });
-    }, 2000);
-  };
+    } else {
+      setIsProcessing(false);
+      setPaymentStep('confirm');
+      toast({
+        title: "Payment Error",
+        description: data.error?.errorMessage || "Failed to initiate payment. Please try again.",
+        variant: "destructive",
+      });
+    }
+  } catch (error) {
+    setIsProcessing(false);
+    setPaymentStep('confirm');
+    toast({
+      title: "Network Error",
+      description: "Could not connect to payment server.",
+      variant: "destructive",
+    });
+  }
+};
+// ...existing code...
 
   const handlePinSubmit = () => {
     if (!pin || pin.length < 4) {

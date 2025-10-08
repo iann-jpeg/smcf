@@ -21,6 +21,9 @@ import { useToast } from '@/hooks/use-toast';
 import MemberDashboard from '@/components/MemberDashboard';
 import AdminDashboard from '@/components/AdminDashboard';
 import PaymentDialog from '@/components/PaymentDialog';
+import io from 'socket.io-client';
+
+const socket = io('http://localhost:4000'); // Update if backend runs elsewhere
 
 interface DashboardProps {
   userRole: 'admin' | 'member';
@@ -44,6 +47,9 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
     paymentDeadline: '2024-01-20'
   });
 
+  const [announcements, setAnnouncements] = useState([]);
+  const [members, setMembers] = useState([]);
+
   const handleLogout = () => {
     toast({
       title: "Logged out successfully",
@@ -51,6 +57,19 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
     });
     onLogout();
   };
+
+  useEffect(() => {
+    socket.on('announcement:new', (announcement) => {
+      setAnnouncements((prev) => [announcement, ...prev]);
+    });
+    socket.on('member:new', (member) => {
+      setMembers((prev) => [member, ...prev]);
+    });
+    return () => {
+      socket.off('announcement:new');
+      socket.off('member:new');
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-primary/5">

@@ -84,16 +84,50 @@ const MpesaDisbursementDialog = ({
     setIsProcessing(true);
     setStep('processing');
 
-    // Simulate M-Pesa processing
-    setTimeout(() => {
-      setStep('success');
-      setIsProcessing(false);
-      toast({
-        title: "Disbursement Successful",
-        description: `KES ${amount} sent to ${selectedMemberData?.name}`,
+        setIsProcessing(true);
+    setStep('processing');
+
+    try {
+      const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+      const response = await fetch(`${API_BASE}/api/mpesa/stkpush`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: adminMpesaNumber,
+          amount: amount
+        }),
       });
-    }, 3000);
-  };
+
+      const data = await response.json();
+
+      if (response.ok && data.ResponseCode === "0") {
+        setTimeout(() => {
+          setStep('success');
+          setIsProcessing(false);
+          toast({
+            title: "Disbursement Successful",
+            description: `KES ${amount} sent to ${selectedMemberData?.name}`,
+          });
+        }, 3000);
+      } else {
+        setIsProcessing(false);
+        setStep('pin');
+        toast({
+          title: "Payment Error",
+          description: data.error?.errorMessage || "Failed to initiate payment. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      setIsProcessing(false);
+      setStep('pin');
+      toast({
+        title: "Network Error",
+        description: "Could not connect to payment server.",
+        variant: "destructive",
+      });
+    }
+  }; // <-- Add this closing brace to end handlePinSubmit
 
   const resetDialog = () => {
     setStep('setup');
@@ -182,7 +216,7 @@ const MpesaDisbursementDialog = ({
           </div>
         )}
 
-        {/* Step 2: Confirm */}
+       
         {step === 'confirm' && selectedMemberData && (
           <div className="space-y-4">
             <Card className="bg-mpesa-green/5 border-mpesa-green/20">

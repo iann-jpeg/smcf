@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import PaymentDialog from '@/components/PaymentDialog';
+import LoanRequestDialog from '@/components/LoanRequestDialog';
 
 interface MemberDashboardProps {
   userData: any;
@@ -23,18 +24,22 @@ interface MemberDashboardProps {
 
 const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
   const [showPayment, setShowPayment] = useState(false);
+  const [showLoanRequest, setShowLoanRequest] = useState(false);
   const { toast } = useToast();
+  const [paymentHistory, setPaymentHistory] = useState([
+    { cycle: 14, amount: 204, date: '2024-01-10', status: 'paid' },
+    { cycle: 13, amount: 204, date: '2024-01-05', status: 'paid' },
+    { cycle: 12, amount: 204, date: '2023-12-31', status: 'paid' },
+    { cycle: 11, amount: 204, date: '2023-12-26', status: 'paid' },
+    { cycle: 10, amount: 204, date: '2023-12-21', status: 'paid' },
+  ]);
+  const [currentCycle, setCurrentCycle] = useState(cycleData.currentCycle);
+  const [hasPaidThisCycle, setHasPaidThisCycle] = useState(false);
 
   // Mock member-specific data
   const memberData = {
-    hasPaidThisCycle: Math.random() > 0.3, // 70% chance of having paid
-    paymentHistory: [
-      { cycle: 14, amount: 204, date: '2024-01-10', status: 'paid' },
-      { cycle: 13, amount: 204, date: '2024-01-05', status: 'paid' },
-      { cycle: 12, amount: 204, date: '2023-12-31', status: 'paid' },
-      { cycle: 11, amount: 204, date: '2023-12-26', status: 'paid' },
-      { cycle: 10, amount: 204, date: '2023-12-21', status: 'paid' },
-    ],
+    hasPaidThisCycle,
+    paymentHistory,
     nextPayoutCycle: 18,
     totalContributed: 2800,
     totalReceived: 2400,
@@ -42,7 +47,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
   };
 
   const handleMakePayment = () => {
-    if (memberData.hasPaidThisCycle) {
+    if (hasPaidThisCycle) {
       toast({
         title: "Already Paid",
         description: "You have already contributed for this cycle",
@@ -54,99 +59,112 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
   };
 
   const handlePaymentSuccess = () => {
-    memberData.hasPaidThisCycle = true;
-      toast({
-        title: "Payment Successful",
-        description: "Your KES 204 contribution has been received",
-      });
+    setHasPaidThisCycle(true);
+    setPaymentHistory([
+      { cycle: currentCycle, amount: 204, date: new Date().toISOString().slice(0, 10), status: 'paid' },
+      ...paymentHistory,
+    ]);
+    toast({
+      title: "Payment Successful",
+      description: "Your KES 204 contribution has been received",
+    });
+    setShowPayment(false);
+  };
+
+  // Allow member to pay again for the next cycle
+  const handleNextCycle = () => {
+    setHasPaidThisCycle(false);
+    setCurrentCycle(currentCycle + 1);
     setShowPayment(false);
   };
 
   return (
     <div className="space-y-6">
       {/* Payment Status Alert */}
-      <Card className={`border-l-4 ${memberData.hasPaidThisCycle ? 'border-l-financial-success bg-financial-success/5' : 'border-l-financial-warning bg-financial-warning/5'}`}>
+      <Card className={`border-l-4 ${hasPaidThisCycle ? 'border-l-financial-success bg-financial-success/5' : 'border-l-financial-warning bg-financial-warning/5'}`}>
         <CardContent className="pt-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              {memberData.hasPaidThisCycle ? (
+              {hasPaidThisCycle ? (
                 <CheckCircle className="w-6 h-6 text-financial-success" />
               ) : (
                 <AlertCircle className="w-6 h-6 text-financial-warning" />
               )}
               <div>
                 <h3 className="font-semibold">
-                  {memberData.hasPaidThisCycle ? 'Payment Complete' : 'Payment Required'}
+                  {hasPaidThisCycle ? 'Payment Complete' : 'Payment Required'}
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  {memberData.hasPaidThisCycle 
-                    ? `You've contributed KES 204 for cycle #${cycleData.currentCycle}`
+                  {hasPaidThisCycle 
+                    ? `You've contributed KES 204 for cycle #${currentCycle}`
                     : `KES 204 payment due in ${cycleData.daysLeft} days`
                   }
                 </p>
               </div>
             </div>
-            {!memberData.hasPaidThisCycle && (
-              <Button onClick={handleMakePayment} variant="mpesa" size="sm">
-                <Phone className="w-4 h-4 mr-2" />
-                Pay via M-Pesa
-              </Button>
-            )}
+            <Button onClick={handleMakePayment} variant="mpesa" size="sm">
+              <Phone className="w-4 h-4 mr-2" />
+              {hasPaidThisCycle ? "Pay Next Cycle" : "Pay via M-Pesa"}
+            </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* M-Pesa Payment Section */}
-      {!memberData.hasPaidThisCycle && (
-        <Card className="border-mpesa-green bg-gradient-to-br from-mpesa-green/5 to-mpesa-green/10">
-          <CardHeader className="text-center">
-            <CardTitle className="flex items-center justify-center gap-2 text-mpesa-green">
-              <Phone className="w-6 h-6" />
-              Make Your KES 204 Contribution
-            </CardTitle>
-            <CardDescription className="text-lg">
-              Pay securely via M-Pesa Paybill or STK Push
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="bg-white/50 p-4 rounded-lg space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Amount:</span>
-                <span className="text-2xl font-bold text-mpesa-green">KES 204</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Destination:</span>
-                <span className="font-medium">SMCF Group Account</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Your Number:</span>
-                <span className="font-medium">{userData.phoneNumber}</span>
-              </div>
+      {/* M-Pesa Payment Section - Always visible */}
+      <Card className="border-mpesa-green bg-gradient-to-br from-mpesa-green/5 to-mpesa-green/10">
+        <CardHeader className="text-center">
+          <CardTitle className="flex items-center justify-center gap-2 text-mpesa-green">
+            <Phone className="w-6 h-6" />
+            Make Your KES 204 Contribution
+          </CardTitle>
+          <CardDescription className="text-lg">
+            Pay securely via M-Pesa STK Push directly to the organization Till
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="bg-white/50 p-4 rounded-lg space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">Amount:</span>
+              <span className="text-2xl font-bold text-mpesa-green">KES 204</span>
             </div>
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">Destination:</span>
+              <span className="font-medium">SMCF Group Till: <span className="font-bold">6938069</span></span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">Your Number:</span>
+              <span className="font-medium">{userData.phoneNumber}</span>
+            </div>
+          </div>
+          
+          <div className="text-center space-y-4">
+            <Button 
+              onClick={handleMakePayment} 
+              variant="mpesa" 
+              size="lg"
+              className="w-full text-lg font-semibold"
+            >
+              <Phone className="w-5 h-5 mr-2" />
+              {hasPaidThisCycle ? "Pay Next Cycle" : "Send M-Pesa Payment"}
+            </Button>
+              <div className="mt-3">
+                <Button variant="outline" className="w-full" onClick={() => setShowLoanRequest(true)}>
+                  Request a Loan
+                </Button>
+              </div>
             
-            <div className="text-center space-y-4">
-              <Button 
-                onClick={handleMakePayment} 
-                variant="mpesa" 
-                size="lg"
-                className="w-full text-lg font-semibold"
-              >
-                <Phone className="w-5 h-5 mr-2" />
-                Send M-Pesa Payment
-              </Button>
-              
-              <div className="text-xs text-muted-foreground space-y-1">
-                <p><strong>Multiple Payment Options:</strong></p>
-                <p>• <strong>M-Pesa Paybill:</strong> 6938069 (Recommended)</p>
-                <p>• <strong>Lipa na M-Pesa:</strong> Buy Goods & Services</p>
-                <p>• <strong>M-Pesa App:</strong> Business &gt; Lipa na M-Pesa &gt; Till 6938069</p>
-                <p>• <strong>USSD:</strong> *334# &gt; Lipa na M-Pesa &gt; Enter Till 6938069</p>
-                <p>• You'll receive confirmation SMS and receipt</p>
-              </div>
+            <div className="text-xs text-muted-foreground space-y-1">
+              <p><strong>Direct STK Push:</strong> You will receive an M-Pesa prompt to enter your PIN and pay to Till <strong>6938069</strong>.</p>
+              <p><strong>Multiple Payment Options:</strong></p>
+              <p>• <strong>M-Pesa Paybill:</strong> 6938069 (Recommended)</p>
+              <p>• <strong>Lipa na M-Pesa:</strong> Buy Goods & Services</p>
+              <p>• <strong>M-Pesa App:</strong> Business &gt; Lipa na M-Pesa &gt; Till 6938069</p>
+              <p>• <strong>USSD:</strong> *334# &gt; Lipa na M-Pesa &gt; Enter Till 6938069</p>
+              <p>• You'll receive confirmation SMS and receipt</p>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        </CardContent>
+      </Card>
 
       <Tabs defaultValue="overview" className="w-full">
         <TabsList className="grid w-full grid-cols-3">
@@ -213,7 +231,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-muted-foreground">Cycles to Wait:</span>
-                    <span className="font-semibold">{memberData.nextPayoutCycle - cycleData.currentCycle}</span>
+                    <span className="font-semibold">{memberData.nextPayoutCycle - currentCycle}</span>
                   </div>
                 </div>
               </CardContent>
@@ -228,7 +246,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                 Current Cycle Status
               </CardTitle>
               <CardDescription>
-                Cycle #{cycleData.currentCycle} - Started {cycleData.cycleStartDate}
+                Cycle #{currentCycle} - Started {cycleData.cycleStartDate}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -269,7 +287,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {memberData.paymentHistory.map((payment, index) => (
+                {paymentHistory.map((payment, index) => (
                   <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
                     <div className="flex items-center gap-3">
                       <CheckCircle className="w-5 h-5 text-financial-success" />
@@ -339,9 +357,30 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         onPaymentSuccess={handlePaymentSuccess}
         amount={204}
         memberData={userData}
+        cycle={currentCycle}
       />
+
+      <LoanRequestDialog
+        open={showLoanRequest}
+        onOpenChange={setShowLoanRequest}
+        memberId={userData.memberId}
+        memberPhone={userData.phoneNumber}
+        onSubmitted={() => {
+          toast({ title: 'Request Sent', description: 'Your loan request has been sent to admin.' });
+        }}
+      />
+
+      {/* Button to allow payment for next cycle after successful payment */}
+      {hasPaidThisCycle && (
+        <div className="text-center mt-4">
+          <Button variant="mpesa" size="lg" onClick={handleNextCycle}>
+            Pay for Next Cycle
+          </Button>
+        </div>
+      )}
     </div>
   );
 };
 
 export default MemberDashboard;
+// ...end of file...
