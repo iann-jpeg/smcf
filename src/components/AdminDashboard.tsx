@@ -65,8 +65,15 @@ const AdminDashboard = ({ userData, members, announcements, onLogout }: AdminDas
   const [editedMemberData, setEditedMemberData] = useState<any>({});
   // Safe fallbacks to avoid runtime errors when data is undefined
   const safeMembers = Array.isArray(members) ? members : [];
-  const paidMembers = safeMembers.filter((m: any) => m && m.status === 'paid');
-  const pendingMembers = safeMembers.filter((m: any) => m && m.status === 'pending');
+  // sort by position if present
+  const orderedMembers = [...safeMembers].sort((a: any, b: any) => {
+    if (a?.position != null && b?.position != null) return a.position - b.position;
+    if (a?.position != null) return -1;
+    if (b?.position != null) return 1;
+    return 0;
+  });
+  const paidMembers = orderedMembers.filter((m: any) => m && m.status === 'paid');
+  const pendingMembers = orderedMembers.filter((m: any) => m && m.status === 'pending');
   const safeDisbursements = Array.isArray(userData.disbursements) ? userData.disbursements : [];
   const [recentPayments, setRecentPayments] = useState<any[]>([]);
 
@@ -139,7 +146,7 @@ const AdminDashboard = ({ userData, members, announcements, onLogout }: AdminDas
   };
 
   const handleEditMember = (memberId: string) => {
-    const member = members.find(m => m.id === memberId);
+    const member = members.find((m:any) => (m._id || m.id) === memberId);
     if (member) {
       setEditingMember(memberId);
       setEditedMemberData({ ...member });
@@ -147,16 +154,17 @@ const AdminDashboard = ({ userData, members, announcements, onLogout }: AdminDas
   };
 
   const handleSaveMember = (memberId: string) => {
-    const index = members.findIndex(m => m.id === memberId);
-    if (index !== -1) {
-      members[index] = { ...editedMemberData };
-    }
-    setEditingMember(null);
-    setEditedMemberData({});
-    toast({
-      title: "Member Updated",
-      description: "Member information has been saved successfully",
-    });
+    const id = memberId;
+    fetch(`${API_BASE}/members/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(editedMemberData) })
+      .then(res => res.json())
+      .then(updated => {
+        // refresh page data simply
+        window.location.reload();
+      })
+      .catch(err => {
+        console.error('Save failed', err);
+        toast({ title: 'Save Failed', description: 'Could not save member', variant: 'destructive' });
+      });
   };
 
   const handleDeleteMember = (memberId: string) => {
@@ -171,23 +179,57 @@ const AdminDashboard = ({ userData, members, announcements, onLogout }: AdminDas
   };
 
   const handleTogglePaymentStatus = (memberId: string) => {
+    // kept for backward compatibility, but prefer togglePaymentStatusRemote
     const member = members.find(m => m.id === memberId);
     if (member) {
       const newStatus = member.status === 'paid' ? 'pending' : 'paid';
       member.status = newStatus;
-      member.amount = newStatus === 'paid' ? 204 : 0;
-      member.date = newStatus === 'paid' ? new Date().toISOString().split('T')[0] : null;
-      
-      toast({
-        title: "Payment Status Updated",
-        description: `${member.name}'s payment status changed to ${newStatus}`,
-      });
+      toast({ title: 'Payment Status Updated', description: `${member.name}'s payment status changed to ${newStatus}` });
     }
   };
 
   const handleCancelEdit = () => {
     setEditingMember(null);
     setEditedMemberData({});
+  };
+
+  const deleteMemberRemote = (member: any) => {
+    const id = member._id || member.id;
+    fetch(`${API_BASE}/members/${id}`, { method: 'DELETE' })
+      .then(() => window.location.reload())
+      .catch(err => toast({ title: 'Delete Failed', description: 'Could not delete member', variant: 'destructive' }));
+  };
+
+  const togglePaymentStatusRemote = (member: any) => {
+    const id = member._id || member.id;
+    const newStatus = member.status === 'paid' ? 'pending' : 'paid';
+    fetch(`${API_BASE}/members/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ status: newStatus }) })
+      .then(() => window.location.reload())
+      .catch(err => toast({ title: 'Update Failed', description: 'Could not update status', variant: 'destructive' }));
+  };
+
+  const moveMemberUp = (member: any) => {
+    const sorted = [...orderedMembers];
+    const idx = sorted.findIndex((m:any) => (m._id || m.id) === (member._id || member.id));
+    if (idx > 0) {
+      const above = sorted[idx-1];
+      const payload = [ { id: above._id || above.id, position: member.position || (idx+1) }, { id: member._id || member.id, position: above.position || idx } ];
+      fetch(`${API_BASE}/members/reorder`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) })
+        .then(() => window.location.reload())
+        .catch(err => toast({ title: 'Reorder Failed', description: 'Could not change order', variant: 'destructive' }));
+    }
+  };
+
+  const moveMemberDown = (member: any) => {
+    const sorted = [...orderedMembers];
+    const idx = sorted.findIndex((m:any) => (m._id || m.id) === (member._id || member.id));
+    if (idx !== -1 && idx < sorted.length - 1) {
+      const below = sorted[idx+1];
+      const payload = [ { id: below._id || below.id, position: member.position || (idx+1) }, { id: member._id || member.id, position: below.position || (idx+2) } ];
+      fetch(`${API_BASE}/members/reorder`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) })
+        .then(() => window.location.reload())
+        .catch(err => toast({ title: 'Reorder Failed', description: 'Could not change order', variant: 'destructive' }));
+    }
   };
 
   
@@ -299,8 +341,8 @@ const AdminDashboard = ({ userData, members, announcements, onLogout }: AdminDas
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {safeMembers.map((member, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                {orderedMembers.map((member, index) => (
+                  <div key={member._id || member.id || index} className="flex items-center justify-between p-3 border rounded-lg">
                     {editingMember === member.id ? (
                       <div className="flex-1 space-y-3">
                         <div className="grid grid-cols-2 gap-3">
@@ -340,9 +382,9 @@ const AdminDashboard = ({ userData, members, announcements, onLogout }: AdminDas
                             member.status === 'paid' ? 'bg-financial-success' : 'bg-financial-warning'
                           }`} />
                           <div>
-                            <div className="font-medium">{member.name}</div>
+                            <div className="font-medium">{member.name} {member.position ? `(#${member.position})` : ''}</div>
                             <div className="text-sm text-muted-foreground">
-                              {member.id} • {member.phone}
+                              {(member._id || member.id)} • {member.phone}
                             </div>
                           </div>
                         </div>
@@ -357,21 +399,23 @@ const AdminDashboard = ({ userData, members, announcements, onLogout }: AdminDas
                               </div>
                             )}
                           </div>
-                          <div className="flex gap-1">
+                          <div className="flex gap-1 items-center">
+                            <Button size="sm" variant="ghost" onClick={() => moveMemberUp(member)} title="Move up">↑</Button>
+                            <Button size="sm" variant="ghost" onClick={() => moveMemberDown(member)} title="Move down">↓</Button>
                             <Button 
                               size="sm" 
                               variant={member.status === 'paid' ? 'destructive' : 'default'}
-                              onClick={() => handleTogglePaymentStatus(member.id)}
+                              onClick={() => togglePaymentStatusRemote(member)}
                             >
                               {member.status === 'paid' ? 'Mark Pending' : 'Mark Paid'}
                             </Button>
-                            <Button size="sm" variant="ghost" onClick={() => handleEditMember(member.id)}>
+                            <Button size="sm" variant="ghost" onClick={() => handleEditMember(member._id || member.id)}>
                               <Edit className="w-3 h-3" />
                             </Button>
                             <Button 
                               size="sm" 
                               variant="ghost" 
-                              onClick={() => handleDeleteMember(member.id)}
+                              onClick={() => deleteMemberRemote(member)}
                               className="text-destructive hover:text-destructive"
                             >
                               <Trash2 className="w-3 h-3" />
