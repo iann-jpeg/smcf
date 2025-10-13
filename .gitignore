@@ -1,0 +1,43 @@
+# Global ignores for this workspace
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.tsbuildinfo
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+coverage/
+
+# Vite/React
+smart-money-flow-kenya/node_modules/
+smart-money-flow-kenya/dist/
+smart-money-flow-kenya/.vite/
+
+# Backend
+smcf-backend/node_modules/
+smcf-backend/.env
+smcf-backend/.env.*
+
+# Logs
+*.log
+logs/
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Misc
+*.lockb
+*.local
+*.swp
+*.swo
