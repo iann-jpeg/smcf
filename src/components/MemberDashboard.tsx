@@ -90,7 +90,22 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         const cycleData = await cycleRes.json();
         const payments = await paymentsRes.json();
         const loansData = await loansRes.json();
-        const announcementsData = await announcementsRes.json();
+
+        let announcementsData = [];
+        try {
+          if (announcementsRes.ok) {
+            announcementsData = await announcementsRes.json();
+            console.log("📢 Announcements response:", announcementsData);
+          } else {
+            console.error(
+              "❌ Announcements fetch failed:",
+              announcementsRes.status
+            );
+          }
+        } catch (err) {
+          console.error("❌ Error parsing announcements:", err);
+        }
+
         const freshMemberData = await memberRes.json();
 
         // Filter member's loans
@@ -108,7 +123,22 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
 
         // Update announcements
         if (Array.isArray(announcementsData)) {
+          console.log("📢 Fetched announcements:", announcementsData.length);
           setAnnouncements(announcementsData);
+        } else if (
+          announcementsData?.success &&
+          Array.isArray(announcementsData.data)
+        ) {
+          console.log(
+            "📢 Fetched announcements:",
+            announcementsData.data.length
+          );
+          setAnnouncements(announcementsData.data);
+        } else {
+          console.log(
+            "📢 No announcements or unexpected format:",
+            announcementsData
+          );
         }
 
         // Update cycle data silently only if changed
@@ -584,31 +614,78 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-primary mb-1">
-                    {currentCycleData?.paidMembers || 0}/
-                    {currentCycleData?.totalMembers || 0}
+              <div className="space-y-6">
+                {/* Collection Progress Bar */}
+                <div>
+                  <div className="flex justify-between mb-2">
+                    <span className="text-sm font-medium">
+                      Collection Progress
+                    </span>
+                    <span className="text-sm font-semibold text-primary">
+                      {currentCycleData?.totalMembers > 0
+                        ? Math.round(
+                            (currentCycleData.paidMembers /
+                              currentCycleData.totalMembers) *
+                              100
+                          )
+                        : 0}
+                      %
+                    </span>
                   </div>
-                  <div className="text-sm text-muted-foreground">
-                    Members Paid
+                  <div className="w-full bg-muted rounded-full h-3">
+                    <div
+                      className="bg-gradient-to-r from-financial-success to-financial-primary h-3 rounded-full transition-all duration-500"
+                      style={{
+                        width: `${
+                          currentCycleData?.totalMembers > 0
+                            ? (currentCycleData.paidMembers /
+                                currentCycleData.totalMembers) *
+                              100
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
+                  <div className="flex justify-between mt-2">
+                    <span className="text-xs text-muted-foreground">
+                      {currentCycleData?.paidMembers || 0} of{" "}
+                      {currentCycleData?.totalMembers || 0} members paid
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      KES{" "}
+                      {currentCycleData?.collectedAmount?.toLocaleString() || 0}{" "}
+                      / {currentCycleData?.totalAmount?.toLocaleString() || 0}
+                    </span>
                   </div>
                 </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-financial-success mb-1">
-                    KES{" "}
-                    {currentCycleData?.collectedAmount?.toLocaleString() || 0}
+
+                {/* Stats Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="text-center p-4 bg-primary/5 rounded-lg">
+                    <div className="text-2xl font-bold text-primary mb-1">
+                      {currentCycleData?.paidMembers || 0}/
+                      {currentCycleData?.totalMembers || 0}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Members Paid
+                    </div>
                   </div>
-                  <div className="text-sm text-muted-foreground">
-                    Amount Collected
+                  <div className="text-center p-4 bg-financial-success/5 rounded-lg">
+                    <div className="text-2xl font-bold text-financial-success mb-1">
+                      KES{" "}
+                      {currentCycleData?.collectedAmount?.toLocaleString() || 0}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Amount Collected
+                    </div>
                   </div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-financial-warning mb-1">
-                    {currentCycleData?.daysLeft || 0}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    Days Remaining
+                  <div className="text-center p-4 bg-financial-warning/5 rounded-lg">
+                    <div className="text-2xl font-bold text-financial-warning mb-1">
+                      {currentCycleData?.daysLeft || 0}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Days Remaining
+                    </div>
                   </div>
                 </div>
               </div>
