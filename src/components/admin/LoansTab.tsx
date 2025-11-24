@@ -167,7 +167,7 @@ const LoansTab = () => {
       toast({
         title: "Loan Disbursed",
         description: `KES ${selectedLoan.amount.toLocaleString()} has been marked as disbursed to ${
-          selectedLoan.member_id.name
+          selectedLoan.member_id?.name || "member"
         }`,
       });
     }
@@ -358,10 +358,10 @@ const LoansTab = () => {
                         <TableCell>
                           <div>
                             <div className="font-medium">
-                              {loan.member_id.name}
+                              {loan.member_id?.name || "Unknown Member"}
                             </div>
                             <div className="text-sm text-muted-foreground">
-                              {loan.member_id.phone}
+                              {loan.member_id?.phone || "N/A"}
                             </div>
                           </div>
                         </TableCell>
@@ -433,10 +433,10 @@ const LoansTab = () => {
                         <TableCell>
                           <div>
                             <div className="font-medium">
-                              {loan.member_id.name}
+                              {loan.member_id?.name || "Unknown Member"}
                             </div>
                             <div className="text-sm text-muted-foreground">
-                              {loan.member_id.phone}
+                              {loan.member_id?.phone || "N/A"}
                             </div>
                           </div>
                         </TableCell>
@@ -497,10 +497,10 @@ const LoansTab = () => {
                         <TableCell>
                           <div>
                             <div className="font-medium">
-                              {loan.member_id.name}
+                              {loan.member_id?.name || "Unknown Member"}
                             </div>
                             <div className="text-sm text-muted-foreground">
-                              {loan.member_id.phone}
+                              {loan.member_id?.phone || "N/A"}
                             </div>
                           </div>
                         </TableCell>
@@ -558,10 +558,10 @@ const LoansTab = () => {
                         <TableCell>
                           <div>
                             <div className="font-medium">
-                              {loan.member_id.name}
+                              {loan.member_id?.name || "Unknown Member"}
                             </div>
                             <div className="text-sm text-muted-foreground">
-                              {loan.member_id.phone}
+                              {loan.member_id?.phone || "N/A"}
                             </div>
                           </div>
                         </TableCell>
@@ -653,12 +653,12 @@ const LoansTab = () => {
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Member:</span>
                       <span className="font-medium">
-                        {selectedLoan.member_id.name}
+                        {selectedLoan.member_id?.name || "Unknown Member"}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Phone:</span>
-                      <span>{selectedLoan.member_id.phone}</span>
+                      <span>{selectedLoan.member_id?.phone || "N/A"}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Amount:</span>
