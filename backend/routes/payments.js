@@ -48,11 +48,12 @@ router.post("/", protect, async (req, res) => {
       status: "completed",
     });
 
-    // Update member payment status
+    // Update member payment status and increment total contributed
     await Member.findByIdAndUpdate(member_id, {
       payment_status: "paid",
       payment_date: new Date(),
       amount: amount || 204,
+      $inc: { total_contributed: amount || 204 },
     });
 
     // Update cycle collection stats

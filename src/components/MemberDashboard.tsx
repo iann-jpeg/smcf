@@ -46,6 +46,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
       collectedAmount: 0,
       totalAmount: 0,
       cycleStartDate: new Date().toLocaleDateString(),
+      nextRecipient: "Loading...",
     }
   );
   const [memberStats, setMemberStats] = useState({
@@ -66,8 +67,8 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
 
     const fetchData = async () => {
       try {
-        // Fetch all data in parallel
-        const [cycleRes, paymentsRes, loansRes, announcementsRes] =
+        // Fetch all data in parallel including fresh member data
+        const [cycleRes, paymentsRes, loansRes, announcementsRes, memberRes] =
           await Promise.all([
             fetch(`${API_BASE}/api/cycles/current`, {
               headers: { ...authService.getAuthHeaders() },
@@ -81,12 +82,16 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
             fetch(`${API_BASE}/api/announcements`, {
               headers: { ...authService.getAuthHeaders() },
             }),
+            fetch(`${API_BASE}/api/members/${userData._id}`, {
+              headers: { ...authService.getAuthHeaders() },
+            }),
           ]);
 
         const cycleData = await cycleRes.json();
         const payments = await paymentsRes.json();
         const loansData = await loansRes.json();
         const announcementsData = await announcementsRes.json();
+        const freshMemberData = await memberRes.json();
 
         // Filter member's loans
         const memberLoansList = Array.isArray(loansData)
@@ -109,6 +114,10 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         // Update cycle data silently only if changed
         if (cycleData.success) {
           setCurrentCycleData((prev) => {
+            const nextRecipientName =
+              cycleData.data.next_recipient?.name ||
+              cycleData.data.next_recipient_name ||
+              "No recipient assigned";
             const newData = {
               currentCycle: cycleData.data.cycle_number,
               daysLeft: cycleData.data.days_left,
@@ -119,6 +128,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
               cycleStartDate: new Date(
                 cycleData.data.start_date
               ).toLocaleDateString(),
+              nextRecipient: nextRecipientName,
             };
             if (JSON.stringify(prev) !== JSON.stringify(newData)) {
               return newData;
@@ -152,22 +162,31 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
           return prev;
         });
 
-        // Check if paid this cycle
-        const hasPaid = memberPayments.some(
-          (p) =>
-            p.cycle_number === cycleData.data?.cycle_number &&
-            p.status === "completed"
-        );
+        // Check if paid this cycle using payment_status from fresh member data
+        const hasPaid = freshMemberData.success
+          ? freshMemberData.data.payment_status === "paid"
+          : memberPayments.some(
+              (p) =>
+                p.cycle_number === cycleData.data?.cycle_number &&
+                p.status === "completed"
+            );
 
-        // Update stats silently only if changed
+        // Update stats using fresh member data
         setMemberStats((prev) => {
           const newStats = {
-            ...prev,
             hasPaidThisCycle: hasPaid,
-            totalContributed: memberPayments.reduce(
-              (sum, p) => sum + p.amount,
-              0
-            ),
+            nextPayoutCycle: freshMemberData.success
+              ? freshMemberData.data.next_payout_cycle || 0
+              : prev.nextPayoutCycle,
+            totalContributed: freshMemberData.success
+              ? freshMemberData.data.total_contributed || 0
+              : prev.totalContributed,
+            totalReceived: freshMemberData.success
+              ? freshMemberData.data.total_received || 0
+              : prev.totalReceived,
+            memberPosition: freshMemberData.success
+              ? freshMemberData.data.position || 0
+              : prev.memberPosition,
           };
           if (JSON.stringify(prev) !== JSON.stringify(newStats)) {
             return newStats;
@@ -890,13 +909,32 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
+                <div className="bg-primary/10 p-4 rounded-lg border border-primary/20">
+                  <h4 className="font-semibold text-primary mb-2">
+                    Next Person to Receive Payout
+                  </h4>
+                  <div className="flex items-center gap-2">
+                    <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center">
+                      <Wallet className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-lg">
+                        {currentCycleData.nextRecipient}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Will receive when cycle is fully collected
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="bg-accent/10 p-4 rounded-lg">
                   <h4 className="font-semibold text-accent mb-2">
-                    Next Payout
+                    Your Next Payout
                   </h4>
                   <p className="text-sm text-muted-foreground mb-3">
                     You will receive the group payout in cycle #
-                    {memberStats.nextPayoutCycle}
+                    {memberStats.nextPayoutCycle || "Not assigned"}
                   </p>
                   <div className="flex justify-between text-sm">
                     <span>Expected Amount:</span>
