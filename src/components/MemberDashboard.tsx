@@ -17,6 +17,7 @@ import {
   AlertCircle,
   Calendar,
   CheckCircle,
+  Megaphone,
   Phone,
   Receipt,
   TrendingUp,
@@ -35,6 +36,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
   const { toast } = useToast();
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [memberLoans, setMemberLoans] = useState<any[]>([]);
+  const [announcements, setAnnouncements] = useState<any[]>([]);
   const [currentCycleData, setCurrentCycleData] = useState(
     cycleData || {
       currentCycle: 0,
@@ -65,21 +67,26 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
     const fetchData = async () => {
       try {
         // Fetch all data in parallel
-        const [cycleRes, paymentsRes, loansRes] = await Promise.all([
-          fetch(`${API_BASE}/api/cycles/current`, {
-            headers: { ...authService.getAuthHeaders() },
-          }),
-          fetch(`${API_BASE}/api/payments`, {
-            headers: { ...authService.getAuthHeaders() },
-          }),
-          fetch(`${API_BASE}/api/loans`, {
-            headers: { ...authService.getAuthHeaders() },
-          }),
-        ]);
+        const [cycleRes, paymentsRes, loansRes, announcementsRes] =
+          await Promise.all([
+            fetch(`${API_BASE}/api/cycles/current`, {
+              headers: { ...authService.getAuthHeaders() },
+            }),
+            fetch(`${API_BASE}/api/payments`, {
+              headers: { ...authService.getAuthHeaders() },
+            }),
+            fetch(`${API_BASE}/api/loans`, {
+              headers: { ...authService.getAuthHeaders() },
+            }),
+            fetch(`${API_BASE}/api/announcements`, {
+              headers: { ...authService.getAuthHeaders() },
+            }),
+          ]);
 
         const cycleData = await cycleRes.json();
         const payments = await paymentsRes.json();
         const loansData = await loansRes.json();
+        const announcementsData = await announcementsRes.json();
 
         // Filter member's loans
         const memberLoansList = Array.isArray(loansData)
@@ -93,6 +100,11 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
           : [];
 
         setMemberLoans(memberLoansList);
+
+        // Update announcements
+        if (Array.isArray(announcementsData)) {
+          setAnnouncements(announcementsData);
+        }
 
         // Update cycle data silently only if changed
         if (cycleData.success) {
@@ -400,11 +412,16 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
 
       <Tabs defaultValue="overview" className="w-full">
         <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">
-          <TabsList className="inline-flex w-auto md:grid md:w-full md:grid-cols-4 min-w-max">
+          <TabsList className="inline-flex w-auto md:grid md:w-full md:grid-cols-5 min-w-max">
             <TabsTrigger
               value="overview"
               className="text-xs sm:text-sm whitespace-nowrap">
               Overview
+            </TabsTrigger>
+            <TabsTrigger
+              value="announcements"
+              className="text-xs sm:text-sm whitespace-nowrap">
+              Announcements
             </TabsTrigger>
             <TabsTrigger
               value="loans"
@@ -547,6 +564,103 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                   </div>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="announcements" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Megaphone className="w-5 h-5" />
+                Announcements & Reminders
+              </CardTitle>
+              <CardDescription>
+                Important updates and messages from the admin
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {announcements.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Megaphone className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p>No announcements at this time</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {announcements.map((announcement) => (
+                    <Card
+                      key={announcement._id}
+                      className={`border-l-4 ${
+                        announcement.priority === "high"
+                          ? "border-l-red-500 bg-red-50/50"
+                          : announcement.priority === "medium"
+                          ? "border-l-amber-500 bg-amber-50/50"
+                          : "border-l-blue-500 bg-blue-50/50"
+                      }`}>
+                      <CardContent className="pt-4 pb-4">
+                        <div className="flex items-start gap-3">
+                          <div
+                            className={`p-2 rounded-full ${
+                              announcement.priority === "high"
+                                ? "bg-red-100"
+                                : announcement.priority === "medium"
+                                ? "bg-amber-100"
+                                : "bg-blue-100"
+                            }`}>
+                            <Megaphone
+                              className={`w-4 h-4 ${
+                                announcement.priority === "high"
+                                  ? "text-red-600"
+                                  : announcement.priority === "medium"
+                                  ? "text-amber-600"
+                                  : "text-blue-600"
+                              }`}
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Badge
+                                variant={
+                                  announcement.priority === "high"
+                                    ? "destructive"
+                                    : announcement.priority === "medium"
+                                    ? "default"
+                                    : "secondary"
+                                }
+                                className="text-xs">
+                                {announcement.priority === "high"
+                                  ? "🔴 Urgent"
+                                  : announcement.priority === "medium"
+                                  ? "🟡 Important"
+                                  : "🟢 Info"}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(
+                                  announcement.created_at
+                                ).toLocaleDateString("en-US", {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </span>
+                            </div>
+                            <p className="text-sm sm:text-base text-gray-700 whitespace-pre-wrap">
+                              {announcement.message}
+                            </p>
+                            {announcement.sent_by && (
+                              <p className="text-xs text-muted-foreground mt-2">
+                                Sent by: {announcement.sent_by.name || "Admin"}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
