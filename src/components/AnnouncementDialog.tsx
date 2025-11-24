@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import API_BASE from "@/lib/api";
+import { authService } from "@/lib/authService";
 import { Megaphone, Send } from "lucide-react";
 import { useState } from "react";
 
@@ -46,18 +48,43 @@ const AnnouncementDialog = ({
 
     setIsLoading(true);
 
-    // Simulate sending announcement
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    try {
+      const res = await fetch(`${API_BASE}/api/announcements`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...authService.getAuthHeaders(),
+        },
+        body: JSON.stringify({
+          message: message.trim(),
+          priority,
+        }),
+      });
 
-    toast({
-      title: "Announcement Sent",
-      description: `Your ${priority} priority announcement has been sent to all 12 members`,
-    });
+      if (!res.ok) {
+        throw new Error("Failed to send announcement");
+      }
 
-    setMessage("");
-    setPriority("medium");
-    setIsLoading(false);
-    onOpenChange(false);
+      const data = await res.json();
+
+      toast({
+        title: "Announcement Sent",
+        description: `Your ${priority} priority announcement has been sent to all members`,
+      });
+
+      setMessage("");
+      setPriority("medium");
+      onOpenChange(false);
+    } catch (error) {
+      console.error("Error sending announcement:", error);
+      toast({
+        title: "Error",
+        description: "Failed to send announcement. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
