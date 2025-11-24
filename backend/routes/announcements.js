@@ -28,12 +28,22 @@ router.post("/", protect, adminOnly, async (req, res) => {
       created_by: req.admin._id,
     });
 
-    // Emit socket event
-    if (req.app.get("io")) {
-      req.app.get("io").emit("announcement:new", announcement);
+    // Populate the announcement before emitting
+    const populatedAnnouncement = await Announcement.findById(
+      announcement._id
+    ).populate("created_by", "name role");
+
+    // Emit socket event to all connected clients
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("announcementCreated", populatedAnnouncement);
+      console.log(
+        "📢 New announcement broadcasted:",
+        populatedAnnouncement.message
+      );
     }
 
-    res.status(201).json({ success: true, data: announcement });
+    res.status(201).json({ success: true, data: populatedAnnouncement });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

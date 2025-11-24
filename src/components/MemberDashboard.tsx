@@ -241,6 +241,34 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
           fetchData(); // Refresh data immediately
         }
       });
+
+      // Listen for new announcements
+      socket.on("announcementCreated", (announcement: any) => {
+        console.log("📢 New announcement received:", announcement);
+
+        // Add the new announcement to the list
+        setAnnouncements((prev) => [announcement, ...prev]);
+
+        // Show toast notification based on priority
+        const priorityEmojis = {
+          high: "🔴",
+          medium: "🟡",
+          low: "🟢",
+        };
+
+        toast({
+          title: `${
+            priorityEmojis[
+              announcement.priority as keyof typeof priorityEmojis
+            ] || "📢"
+          } New Announcement`,
+          description:
+            announcement.message.substring(0, 100) +
+            (announcement.message.length > 100 ? "..." : ""),
+          variant: announcement.priority === "high" ? "destructive" : "default",
+          duration: announcement.priority === "high" ? 10000 : 6000,
+        });
+      });
     }
 
     return () => {
@@ -252,6 +280,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         socket.off("memberUpdated");
         socket.off("cycleUpdated");
         socket.off("loanStatusUpdated");
+        socket.off("announcementCreated");
       }
     };
   }, [userData]);
@@ -649,9 +678,13 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                             <p className="text-sm sm:text-base text-gray-700 whitespace-pre-wrap">
                               {announcement.message}
                             </p>
-                            {announcement.sent_by && (
+                            {(announcement.created_by ||
+                              announcement.sent_by) && (
                               <p className="text-xs text-muted-foreground mt-2">
-                                Sent by: {announcement.sent_by.name || "Admin"}
+                                Sent by:{" "}
+                                {announcement.created_by?.name ||
+                                  announcement.sent_by?.name ||
+                                  "Admin"}
                               </p>
                             )}
                           </div>
