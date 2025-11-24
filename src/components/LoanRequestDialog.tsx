@@ -121,15 +121,17 @@ const LoanRequestDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Request a Loan</DialogTitle>
-          <DialogDescription>
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+        <DialogHeader className="space-y-2">
+          <DialogTitle className="text-base sm:text-lg">
+            Request a Loan
+          </DialogTitle>
+          <DialogDescription className="text-xs sm:text-sm">
             Fill in the details below and submit your loan request to the admin.
           </DialogDescription>
         </DialogHeader>
         <Card>
-          <CardContent className="space-y-3 pt-4">
+          <CardContent className="space-y-3 pt-3 sm:pt-4">
             <div>
               <Label>Loan Amount (KES)</Label>
               <Input

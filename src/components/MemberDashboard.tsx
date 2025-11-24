@@ -251,7 +251,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6 p-2 md:p-0">
       {/* Payment Status Alert */}
       <Card
         className={`border-l-4 ${
@@ -259,21 +259,21 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
             ? "border-l-financial-success bg-financial-success/5"
             : "border-l-financial-warning bg-financial-warning/5"
         }`}>
-        <CardContent className="pt-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+        <CardContent className="pt-4 md:pt-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2 md:gap-3">
               {memberStats.hasPaidThisCycle ? (
-                <CheckCircle className="w-6 h-6 text-financial-success" />
+                <CheckCircle className="w-5 h-5 md:w-6 md:h-6 text-financial-success flex-shrink-0" />
               ) : (
-                <AlertCircle className="w-6 h-6 text-financial-warning" />
+                <AlertCircle className="w-5 h-5 md:w-6 md:h-6 text-financial-warning flex-shrink-0" />
               )}
               <div>
-                <h3 className="font-semibold">
+                <h3 className="text-sm md:text-base font-semibold">
                   {memberStats.hasPaidThisCycle
                     ? "Payment Complete"
                     : "Payment Required"}
                 </h3>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-xs md:text-sm text-muted-foreground">
                   {memberStats.hasPaidThisCycle
                     ? `You've contributed KES 204 for cycle #${currentCycleData?.currentCycle}`
                     : `KES 204 payment due in ${
@@ -282,8 +282,12 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                 </p>
               </div>
             </div>
-            <Button onClick={handleMakePayment} variant="mpesa" size="sm">
-              <Phone className="w-4 h-4 mr-2" />
+            <Button
+              onClick={handleMakePayment}
+              variant="mpesa"
+              size="sm"
+              className="w-full sm:w-auto text-xs md:text-sm">
+              <Phone className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
               {memberStats.hasPaidThisCycle ? "Paid" : "Pay via M-Pesa"}
             </Button>
           </div>
