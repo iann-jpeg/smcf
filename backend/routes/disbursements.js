@@ -1,0 +1,159 @@
+import express from "express";
+import { adminOnly, protect } from "../middleware/auth.js";
+import Cycle from "../models/Cycle.js";
+import Disbursement from "../models/Disbursement.js";
+import Member from "../models/Member.js";
+
+const router = express.Router();
+
+// Get all disbursements
+router.get("/", protect, async (req, res) => {
+  try {
+    const disbursements = await Disbursement.find()
+      .populate("recipient_id", "name phone member_id")
+      .populate("cycle_id", "cycle_number")
+      .populate("initiated_by", "name")
+      .sort({ disbursement_date: -1 })
+      .limit(100);
+    res.json(disbursements);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get disbursements for specific cycle
+router.get("/cycle/:cycleNumber", protect, async (req, res) => {
+  try {
+    const cycle = await Cycle.findOne({ cycle_number: req.params.cycleNumber });
+    if (!cycle) {
+      return res.status(404).json({ success: false, error: "Cycle not found" });
+    }
+
+    const disbursements = await Disbursement.find({ cycle_id: cycle._id })
+      .populate("recipient_id", "name phone member_id")
+      .populate("initiated_by", "name")
+      .sort({ disbursement_date: -1 });
+
+    res.json(disbursements);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Process disbursement (admin only)
+router.post("/", protect, adminOnly, async (req, res) => {
+  try {
+    const { recipient_id, amount, phone, notes, cycle_number } = req.body;
+
+    // Validate inputs
+    if (!recipient_id || !amount || !phone) {
+      return res.status(400).json({
+        success: false,
+        error: "Recipient, amount, and phone are required",
+      });
+    }
+
+    // Get current cycle
+    let cycle;
+    if (cycle_number) {
+      cycle = await Cycle.findOne({ cycle_number });
+    } else {
+      cycle = await Cycle.findOne({ status: "active" });
+    }
+
+    if (!cycle) {
+      return res.status(404).json({
+        success: false,
+        error: "No active cycle found",
+      });
+    }
+
+    // Check if all members have paid
+    const totalMembers = await Member.countDocuments();
+    if (cycle.paid_members_count < totalMembers) {
+      return res.status(400).json({
+        success: false,
+        error: "Cannot disburse - not all members have paid",
+        paid: cycle.paid_members_count,
+        total: totalMembers,
+      });
+    }
+
+    // Create disbursement record
+    const disbursement = await Disbursement.create({
+      cycle_id: cycle._id,
+      recipient_id,
+      amount,
+      phone,
+      status: "processing",
+      initiated_by: req.user._id,
+      notes,
+    });
+
+    // In production, integrate with M-Pesa B2C API here
+    // For now, mark as completed
+    disbursement.status = "completed";
+    disbursement.mpesa_transaction_id = `DISB${Date.now()}`;
+    await disbursement.save();
+
+    // Update cycle status
+    cycle.disbursement_status = "completed";
+    cycle.disbursement_date = new Date();
+    cycle.recipient_id = recipient_id;
+    await cycle.save();
+
+    // Update member record
+    await Member.findByIdAndUpdate(recipient_id, {
+      $inc: { total_received: amount },
+      last_payout_date: new Date(),
+      last_payout_amount: amount,
+    });
+
+    // Emit socket event
+    if (req.app.get("io")) {
+      req.app.get("io").emit("disbursement:new", disbursement);
+      req.app.get("io").emit("cycle:updated", cycle);
+    }
+
+    const populatedDisbursement = await Disbursement.findById(disbursement._id)
+      .populate("recipient_id", "name phone member_id")
+      .populate("cycle_id", "cycle_number")
+      .populate("initiated_by", "name");
+
+    res.status(201).json({ success: true, data: populatedDisbursement });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Update disbursement status (admin only)
+router.put("/:id/status", protect, adminOnly, async (req, res) => {
+  try {
+    const { status, mpesa_transaction_id } = req.body;
+
+    const disbursement = await Disbursement.findByIdAndUpdate(
+      req.params.id,
+      { status, mpesa_transaction_id },
+      { new: true }
+    )
+      .populate("recipient_id", "name phone member_id")
+      .populate("cycle_id", "cycle_number");
+
+    if (!disbursement) {
+      return res
+        .status(404)
+        .json({ success: false, error: "Disbursement not found" });
+    }
+
+    // Emit socket event
+    if (req.app.get("io")) {
+      req.app.get("io").emit("disbursement:updated", disbursement);
+    }
+
+    res.json({ success: true, data: disbursement });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+export default router;

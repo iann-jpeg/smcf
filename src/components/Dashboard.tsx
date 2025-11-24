@@ -1,33 +1,19 @@
-import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  LogOut, 
-  Wallet, 
-  Users, 
-  Calendar, 
-  TrendingUp, 
-  AlertCircle, 
-  CheckCircle, 
-  Clock,
-  Settings,
-  DollarSign,
-  Phone
-} from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import MemberDashboard from '@/components/MemberDashboard';
-import AdminDashboard from '@/components/AdminDashboard';
-import PaymentDialog from '@/components/PaymentDialog';
-import io from 'socket.io-client';
-import API_BASE from '@/lib/api';
+import AdminDashboard from "@/components/AdminDashboard";
+import MemberDashboard from "@/components/MemberDashboard";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { useToast } from "@/hooks/use-toast";
+import API_BASE from "@/lib/api";
+import { Clock, LogOut } from "lucide-react";
+import { useEffect, useState } from "react";
+import io from "socket.io-client";
 
 const socket = io(API_BASE); // Uses VITE_API_URL or fallback
 
 interface DashboardProps {
-  userRole: 'admin' | 'member';
+  userRole: "admin" | "member";
   userData: any;
   onLogout: () => void;
 }
@@ -35,17 +21,19 @@ interface DashboardProps {
 const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
   const { toast } = useToast();
 
-  // Mock data for demonstration
+  // Cycle data from real API - will be passed from userData
   const [cycleData] = useState({
-    currentCycle: 15,
-    daysLeft: 3,
-    totalMembers: 12,
-    paidMembers: 8,
-    nextRecipient: 'Mary Wanjiku',
-    totalAmount: 2448, // 12 members × 204 KES
-    collectedAmount: 1632, // 8 members × 204 KES
-    cycleStartDate: '2024-01-15',
-    paymentDeadline: '2024-01-20'
+    currentCycle: userData?.cycleData?.currentCycle || 0,
+    daysLeft: userData?.cycleData?.daysLeft || 0,
+    totalMembers: userData?.cycleData?.totalMembers || 0,
+    paidMembers: userData?.cycleData?.paidMembers || 0,
+    nextRecipient: userData?.cycleData?.nextRecipient || "No Active Cycle",
+    totalAmount: userData?.cycleData?.totalAmount || 0,
+    collectedAmount: userData?.cycleData?.collectedAmount || 0,
+    cycleStartDate:
+      userData?.cycleData?.cycleStartDate || new Date().toLocaleDateString(),
+    paymentDeadline:
+      userData?.cycleData?.cycleEndDate || new Date().toLocaleDateString(),
   });
 
   const [announcements, setAnnouncements] = useState([]);
@@ -60,15 +48,15 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
   };
 
   useEffect(() => {
-    socket.on('announcement:new', (announcement) => {
+    socket.on("announcement:new", (announcement) => {
       setAnnouncements((prev) => [announcement, ...prev]);
     });
-    socket.on('member:new', (member) => {
+    socket.on("member:new", (member) => {
       setMembers((prev) => [member, ...prev]);
     });
     return () => {
-      socket.off('announcement:new');
-      socket.off('member:new');
+      socket.off("announcement:new");
+      socket.off("member:new");
     };
   }, []);
 
@@ -79,20 +67,22 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 bg-gradient-primary rounded-full flex items-center justify-center text-primary-foreground font-bold">
-              {userRole === 'admin' ? 'A' : 'M'}
+              {userRole === "admin" ? "A" : "M"}
             </div>
             <div>
               <h1 className="text-xl font-bold text-primary">
-                {userRole === 'admin' ? 'Admin Dashboard' : 'Member Dashboard'}
+                {userRole === "admin" ? "Admin Dashboard" : "Member Dashboard"}
               </h1>
               <p className="text-sm text-muted-foreground">
-                Welcome, {userData.name}
+                Welcome, {userData?.name || "User"}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <Badge variant={userRole === 'admin' ? 'default' : 'secondary'}>
-              {userRole === 'admin' ? 'Administrator' : `Member ${userData.memberId}`}
+            <Badge variant={userRole === "admin" ? "default" : "secondary"}>
+              {userRole === "admin"
+                ? "Administrator"
+                : `Member ${userData?.memberId || userData?.member_id || ""}`}
             </Badge>
             <Button onClick={handleLogout} variant="outline" size="sm">
               <LogOut className="w-4 h-4 mr-2" />
@@ -131,10 +121,13 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-financial-success mb-2">
-                {Math.round((cycleData.paidMembers / cycleData.totalMembers) * 100)}%
+                {Math.round(
+                  (cycleData.paidMembers / cycleData.totalMembers) * 100
+                )}
+                %
               </div>
-              <Progress 
-                value={(cycleData.paidMembers / cycleData.totalMembers) * 100} 
+              <Progress
+                value={(cycleData.paidMembers / cycleData.totalMembers) * 100}
                 className="h-2"
               />
               <div className="text-sm text-muted-foreground mt-2">
@@ -177,7 +170,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
         </div>
 
         {/* Role-specific Dashboard */}
-        {userRole === 'member' ? (
+        {userRole === "member" ? (
           <MemberDashboard userData={userData} cycleData={cycleData} />
         ) : (
           <AdminDashboard

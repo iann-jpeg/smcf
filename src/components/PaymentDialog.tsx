@@ -1,21 +1,24 @@
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Progress } from '@/components/ui/progress';
-import { 
-  Smartphone, 
-  Shield, 
-  CheckCircle, 
-  Clock,
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
+import { useToast } from "@/hooks/use-toast";
+import API_BASE from "@/lib/api";
+import {
   AlertCircle,
+  CheckCircle,
+  Clock,
   CreditCard,
-  Lock
-} from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import API_BASE from '@/lib/api';
+  Shield,
+  Smartphone,
+} from "lucide-react";
+import { useState } from "react";
 
 interface PaymentDialogProps {
   open: boolean;
@@ -23,7 +26,7 @@ interface PaymentDialogProps {
   onPaymentSuccess: () => void;
   amount: number;
   memberData: any;
-  cycle: number; 
+  cycle: number;
 }
 
 const PaymentDialog = ({
@@ -31,88 +34,147 @@ const PaymentDialog = ({
   onOpenChange,
   onPaymentSuccess,
   amount,
-  memberData
+  memberData,
 }: PaymentDialogProps) => {
   const { toast } = useToast();
-  const [paymentStep, setPaymentStep] = useState<'confirm' | 'processing' | 'pin' | 'success'>('confirm');
-  const [pin, setPin] = useState<string>('');
+  const [paymentStep, setPaymentStep] = useState<
+    "confirm" | "processing" | "waiting" | "success" | "failed"
+  >("confirm");
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [checkoutRequestID, setCheckoutRequestID] = useState<string>("");
+  const [transactionId, setTransactionId] = useState<string>("");
+  const [pollCount, setPollCount] = useState(0);
 
-  // ...existing code...
+  const handleInitiatePayment = async () => {
+    setPaymentStep("processing");
+    setIsProcessing(true);
 
-const handleInitiatePayment = async () => {
-  setPaymentStep('processing');
-  setIsProcessing(true);
-
-  try {
-  const response = await fetch(`${API_BASE}/api/mpesa/stkpush`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        phone: memberData.phone,
-        amount: amount
-      }),
-    });
-
-    const data = await response.json();
-
-    if (response.ok && data.ResponseCode === "0") {
-      setIsProcessing(false);
-      setPaymentStep('pin');
-      toast({
-        title: "STK Push Sent",
-        description: "Check your phone for the M-Pesa prompt and enter your PIN.",
+    try {
+      const token = localStorage.getItem("smcf_token");
+      const response = await fetch(`${API_BASE}/api/lipia/stk-push`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          phone: memberData.phone || memberData.phoneNumber,
+          amount: amount,
+          cycleNumber: memberData.currentCycle || 1,
+          description: `SMCF Contribution Payment`,
+        }),
       });
-    } else {
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setCheckoutRequestID(data.CheckoutRequestID);
+        setIsProcessing(false);
+        setPaymentStep("waiting");
+        setPollCount(0);
+
+        toast({
+          title: "STK Push Sent!",
+          description: `Check your phone (${
+            memberData.phone || memberData.phoneNumber
+          }) and enter your M-Pesa PIN`,
+        });
+
+        // Start polling for payment status
+        pollPaymentStatus(data.CheckoutRequestID);
+      } else {
+        setIsProcessing(false);
+        setPaymentStep("confirm");
+        toast({
+          title: "Payment Error",
+          description:
+            data.error ||
+            data.ResponseDescription ||
+            "Failed to initiate payment. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
       setIsProcessing(false);
-      setPaymentStep('confirm');
+      setPaymentStep("confirm");
       toast({
-        title: "Payment Error",
-        description: data.error?.errorMessage || "Failed to initiate payment. Please try again.",
+        title: "Network Error",
+        description: "Could not connect to payment server.",
         variant: "destructive",
       });
     }
-  } catch (error) {
-    setIsProcessing(false);
-    setPaymentStep('confirm');
-    toast({
-      title: "Network Error",
-      description: "Could not connect to payment server.",
-      variant: "destructive",
-    });
-  }
-};
-// ...existing code...
+  };
 
-  const handlePinSubmit = () => {
-    if (!pin || pin.length < 4) {
+  const pollPaymentStatus = async (requestID: string, count: number = 0) => {
+    if (count >= 20) {
+      // Stop polling after 20 attempts (60 seconds)
+      setPaymentStep("failed");
+      setIsProcessing(false);
       toast({
-        title: "Invalid PIN",
-        description: "Please enter your M-Pesa PIN",
-        variant: "destructive"
+        title: "Payment Timeout",
+        description:
+          "Payment request expired. Please try again or check your M-Pesa messages.",
+        variant: "destructive",
       });
       return;
     }
 
-    setIsProcessing(true);
-    
-    // Simulate payment processing
-    setTimeout(() => {
-      setIsProcessing(false);
-      setPaymentStep('success');
-      
-      // Wait a bit then call success callback
-      setTimeout(() => {
-        onPaymentSuccess();
-        resetDialog();
-      }, 2000);
-    }, 3000);
+    try {
+      const token = localStorage.getItem("smcf_token");
+      const response = await fetch(`${API_BASE}/api/lipia/query-status`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          checkoutRequestID: requestID,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.status === "completed") {
+        setTransactionId(data.MpesaReceiptNumber);
+        setPaymentStep("success");
+        setIsProcessing(false);
+
+        toast({
+          title: "Payment Successful!",
+          description: `KES ${amount} received. Receipt: ${data.MpesaReceiptNumber}`,
+        });
+
+        // Call success callback after a short delay
+        setTimeout(() => {
+          onPaymentSuccess();
+        }, 2000);
+      } else if (data.ResultCode && data.ResultCode !== "0") {
+        // Payment failed
+        setPaymentStep("failed");
+        setIsProcessing(false);
+        toast({
+          title: "Payment Failed",
+          description: data.ResultDescription || "Payment was not completed",
+          variant: "destructive",
+        });
+      } else {
+        // Still pending, poll again
+        setPollCount(count + 1);
+        setTimeout(() => pollPaymentStatus(requestID, count + 1), 3000);
+      }
+    } catch (error) {
+      console.error("Error polling payment status:", error);
+      // Continue polling on error
+      setTimeout(() => pollPaymentStatus(requestID, count + 1), 3000);
+    }
   };
 
   const resetDialog = () => {
-    setPaymentStep('confirm');
-    setPin('');
+    setPaymentStep("confirm");
     setIsProcessing(false);
+    setCheckoutRequestID("");
+    setTransactionId("");
+    setPollCount(0);
   };
 
   const handleClose = () => {
@@ -122,47 +184,51 @@ const handleInitiatePayment = async () => {
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Smartphone className="w-5 h-5 text-financial-success" />
-            M-Pesa Payment
+            Mobile Money Payment
           </DialogTitle>
           <DialogDescription>
-            Secure payment via M-Pesa STK Push
+            Secure payment via Lipia Online Payment Gateway
           </DialogDescription>
         </DialogHeader>
 
-        {paymentStep === 'confirm' && (
-          <div className="space-y-6">
+        {paymentStep === "confirm" && (
+          <div className="space-y-4">
             {/* Payment Details */}
             <Card>
-              <CardHeader className="pb-4">
-                <CardTitle className="text-lg">Payment Summary</CardTitle>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Payment Summary</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex justify-between">
+              <CardContent className="space-y-2 pt-2">
+                <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Member ID:</span>
                   <span className="font-semibold">{memberData.memberId}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Phone Number:</span>
                   <span className="font-semibold">{memberData.phone}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Contribution Amount:</span>
-                  <span className="text-xl font-bold text-financial-success">
+                  <span className="text-muted-foreground text-sm">
+                    Contribution Amount:
+                  </span>
+                  <span className="text-lg font-bold text-financial-success">
                     KES {amount.toLocaleString()}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Transaction Fee:</span>
-                  <span className="text-sm text-muted-foreground">FREE</span>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    Transaction Fee:
+                  </span>
+                  <span className="text-xs text-muted-foreground">FREE</span>
                 </div>
-                <hr />
+                <hr className="my-2" />
                 <div className="flex justify-between">
-                  <span className="font-semibold">Total to Pay:</span>
-                  <span className="text-xl font-bold text-primary">
+                  <span className="font-semibold text-sm">Total to Pay:</span>
+                  <span className="text-lg font-bold text-primary">
                     KES {amount.toLocaleString()}
                   </span>
                 </div>
@@ -170,30 +236,28 @@ const handleInitiatePayment = async () => {
             </Card>
 
             {/* Security Notice */}
-            <div className="bg-muted/50 p-4 rounded-lg">
-              <div className="flex items-center gap-2 mb-2">
+            <div className="bg-muted/50 p-3 rounded-lg">
+              <div className="flex items-center gap-2 mb-1">
                 <Shield className="w-4 h-4 text-primary" />
-                <span className="text-sm font-medium">Secure Payment</span>
+                <span className="text-xs font-medium">Secure Payment</span>
               </div>
               <p className="text-xs text-muted-foreground">
-                Your payment is processed securely through M-Pesa's encrypted STK Push service. 
-                No sensitive information is stored on our servers.
+                Processed securely through Lipia Online's encrypted gateway
               </p>
             </div>
 
-            <Button 
-              onClick={handleInitiatePayment} 
-              className="w-full" 
+            <Button
+              onClick={handleInitiatePayment}
+              className="w-full"
               variant="mpesa"
-              size="lg"
-            >
+              size="lg">
               <CreditCard className="w-4 h-4 mr-2" />
-              Pay KES {amount} via M-Pesa
+              Pay KES {amount} via Mobile Money
             </Button>
           </div>
         )}
 
-        {paymentStep === 'processing' && (
+        {paymentStep === "processing" && (
           <div className="space-y-6 text-center">
             <div className="animate-financial-pulse">
               <Smartphone className="w-16 h-16 text-financial-success mx-auto mb-4" />
@@ -213,77 +277,126 @@ const handleInitiatePayment = async () => {
           </div>
         )}
 
-        {paymentStep === 'pin' && (
+        {paymentStep === "waiting" && (
           <div className="space-y-6">
             <div className="text-center">
-              <div className="w-16 h-16 bg-financial-success/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Lock className="w-8 h-8 text-financial-success" />
+              <div className="animate-bounce">
+                <div className="w-16 h-16 bg-financial-success/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Smartphone className="w-8 h-8 text-financial-success animate-pulse" />
+                </div>
               </div>
-              <h3 className="text-lg font-semibold mb-2">Enter M-Pesa PIN</h3>
-              <p className="text-muted-foreground">
-                You should have received an M-Pesa prompt on {memberData.phone}
+              <h3 className="text-lg font-semibold mb-2">
+                Waiting for M-Pesa PIN
+              </h3>
+              <p className="text-muted-foreground mb-4">
+                Check your phone ({memberData.phone || memberData.phoneNumber})
+                and enter your M-Pesa PIN
               </p>
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full">
+                <Clock className="w-4 h-4 animate-spin text-primary" />
+                <span className="text-sm font-medium">
+                  Polling... ({pollCount}/20)
+                </span>
+              </div>
             </div>
 
             <Card>
               <CardContent className="pt-6">
                 <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="mpesa-pin">M-Pesa PIN</Label>
-                    <Input
-                      id="mpesa-pin"
-                      type="password"
-                      placeholder="Enter your M-Pesa PIN"
-                      value={pin}
-                      onChange={(e) => setPin(e.target.value)}
-                      maxLength={4}
-                      className="text-center text-xl tracking-widest"
-                    />
+                  <Progress value={(pollCount / 20) * 100} className="h-2" />
+
+                  <div className="bg-financial-success/10 p-4 rounded-lg space-y-2">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-financial-success" />
+                      <span className="text-sm font-medium">
+                        STK Push Sent Successfully
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      A payment prompt has been sent to your phone. Enter your
+                      M-Pesa PIN to complete the payment.
+                    </p>
                   </div>
-                  
+
+                  <div className="bg-muted/50 p-3 rounded-lg">
+                    <p className="text-xs text-muted-foreground">
+                      <strong>Steps to complete:</strong>
+                      <br />
+                      1. Check your phone for M-Pesa notification
+                      <br />
+                      2. Enter your M-Pesa PIN
+                      <br />
+                      3. Wait for confirmation
+                    </p>
+                  </div>
+
                   <div className="bg-financial-warning/10 p-3 rounded-lg">
                     <div className="flex items-center gap-2 mb-1">
                       <AlertCircle className="w-4 h-4 text-financial-warning" />
-                      <span className="text-sm font-medium">Security Reminder</span>
+                      <span className="text-sm font-medium">
+                        Security Reminder
+                      </span>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Never share your M-Pesa PIN with anyone. SMCF will never ask for your PIN.
+                      Never share your M-Pesa PIN with anyone. SMCF will never
+                      ask for your PIN directly.
                     </p>
                   </div>
                 </div>
               </CardContent>
             </Card>
+          </div>
+        )}
 
-            <Button 
-              onClick={handlePinSubmit} 
-              className="w-full" 
+        {paymentStep === "failed" && (
+          <div className="space-y-6 text-center">
+            <div className="animate-scale-in">
+              <div className="w-20 h-20 bg-destructive/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                <AlertCircle className="w-12 h-12 text-destructive" />
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-xl font-bold text-destructive mb-2">
+                Payment Failed
+              </h3>
+              <p className="text-muted-foreground mb-4">
+                The payment was not completed. Please try again.
+              </p>
+            </div>
+
+            <div className="bg-muted/50 p-4 rounded-lg text-left">
+              <p className="text-sm text-muted-foreground">
+                <strong>Common issues:</strong>
+                <br />• Insufficient M-Pesa balance
+                <br />• Wrong PIN entered
+                <br />• Request timed out
+                <br />• Network connectivity issues
+              </p>
+            </div>
+
+            <Button
+              onClick={() => {
+                resetDialog();
+                handleInitiatePayment();
+              }}
+              className="w-full"
               variant="financial"
-              size="lg"
-              disabled={isProcessing || pin.length < 4}
-            >
-              {isProcessing ? (
-                <>
-                  <Clock className="w-4 h-4 mr-2 animate-spin" />
-                  Processing Payment...
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="w-4 h-4 mr-2" />
-                  Confirm Payment
-                </>
-              )}
+              size="lg">
+              <CreditCard className="w-4 h-4 mr-2" />
+              Try Again
             </Button>
           </div>
         )}
 
-        {paymentStep === 'success' && (
+        {paymentStep === "success" && (
           <div className="space-y-6 text-center">
             <div className="animate-scale-in">
               <div className="w-20 h-20 bg-financial-success/10 rounded-full flex items-center justify-center mx-auto mb-4">
                 <CheckCircle className="w-12 h-12 text-financial-success" />
               </div>
             </div>
-            
+
             <div>
               <h3 className="text-xl font-bold text-financial-success mb-2">
                 Payment Successful!
@@ -297,8 +410,12 @@ const handleInitiatePayment = async () => {
               <CardContent className="pt-6">
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Transaction ID:</span>
-                    <span className="font-mono">MP{Date.now().toString().slice(-8)}</span>
+                    <span className="text-muted-foreground">
+                      Transaction ID:
+                    </span>
+                    <span className="font-mono text-xs">
+                      {transactionId || `MP${Date.now().toString().slice(-8)}`}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Amount:</span>
@@ -314,9 +431,17 @@ const handleInitiatePayment = async () => {
 
             <div className="bg-financial-success/10 p-4 rounded-lg">
               <p className="text-sm text-financial-success">
-                SMS receipt sent to {memberData.phone}
+                SMS receipt sent to {memberData.phone || memberData.phoneNumber}
               </p>
             </div>
+
+            <Button
+              onClick={handleClose}
+              className="w-full"
+              variant="outline"
+              size="lg">
+              Close
+            </Button>
           </div>
         )}
       </DialogContent>

@@ -1,73 +1,234 @@
-# Welcome to your Lovable project
+# SMCF - Smart Money Cash Flow Platform
 
-## Project info
+A digital table banking platform for managing group contributions, payments, and disbursements with M-Pesa integration.
 
-**URL**: https://lovable.dev/projects/adb2e3dc-6804-49c5-82ed-b2128c1691b4
+## 🚀 Features
 
-## How can I edit this code?
+- **Custom Authentication**: OTP-based login system
+- **Admin-Controlled Registration**: Members must be registered by admin before they can login
+- **Real-time Updates**: Socket.IO powered live notifications
+- **Payment Tracking**: Monitor contributions and payment status
+- **Loan Management**: Request and approve loans
+- **Announcements**: Broadcast messages to all members
+- **M-Pesa Integration**: Ready for M-Pesa payment integration
+- **Role-Based Access**: Admin and member roles with different permissions
 
-There are several ways of editing your application.
+## 📋 Architecture
 
-**Use Lovable**
+### Frontend
+- React 18 + TypeScript
+- Vite for build tooling
+- TailwindCSS + shadcn/ui components
+- Socket.IO client for real-time updates
+- React Router for navigation
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/adb2e3dc-6804-49c5-82ed-b2128c1691b4) and start prompting.
+### Backend
+- Node.js + Express
+- MongoDB for data storage
+- JWT authentication
+- Socket.IO for real-time communication
+- RESTful API design
 
-Changes made via Lovable will be committed automatically to this repo.
+## 🛠️ Quick Start
 
-**Use your preferred IDE**
+### Prerequisites
+- Node.js 18+ 
+- MongoDB (local or Atlas)
+- npm or yarn
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Easy Setup (Recommended)
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+1. **Clone the repository**
+```bash
+git clone <your-repo-url>
+cd smcf
+```
 
-Follow these steps:
+2. **Run the startup script**
+```bash
+./start.sh
+```
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+This will:
+- Check and start MongoDB
+- Install dependencies for both frontend and backend
+- Create environment files from examples
+- Start both servers
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+3. **Access the application**
+- Frontend: http://localhost:5173
+- Backend API: http://localhost:4000
+- API Docs: http://localhost:4000/
 
-# Step 3: Install the necessary dependencies.
-npm i
+### Manual Setup
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+See [SETUP_GUIDE.md](./SETUP_GUIDE.md) for detailed instructions.
+
+## 📖 Documentation
+
+- **[Complete Setup Guide](./SETUP_GUIDE.md)** - Detailed setup and deployment instructions
+- **[Backend API Documentation](./backend/README.md)** - API endpoints and usage
+- **[Authentication Flow](#authentication-flow)** - How authentication works
+
+## 🔐 Authentication Flow
+
+### Admin Registration & Login
+1. Create initial admin account via `/api/auth/setup-admin`
+2. Admin logs in using OTP verification
+3. Admin has full access to platform features
+
+### Member Registration & Login (Admin-Controlled)
+1. **Admin registers member** via admin dashboard
+   - Admin adds member's name, phone, and ID number
+   - System creates member account with `registered_by_admin: true`
+   - Member receives unique member ID (e.g., SMCF-0001)
+
+2. **Member attempts login**
+   - Member enters phone number
+   - Requests OTP
+   - System checks if member exists and was registered by admin
+   - If yes: OTP is sent and member can login
+   - If no: Login denied with message to contact admin
+
+3. **Member access**
+   - Once logged in, member can view dashboard, payments, and announcements
+   - Member can request loans
+   - Member cannot access admin functions
+
+## 🎯 Key Concepts
+
+### Admin-Controlled Registration
+- **Members cannot self-register** - This is intentional for security
+- Only admin can create new member accounts
+- This ensures all members are vetted before joining
+- Admin sets initial member details and position
+
+### Payment Cycle
+- Fixed contribution of KES 204 every 5 days
+- Admin tracks payment status (paid/pending)
+- Automated reminders for pending payments
+- Members receive funds in their assigned position
+
+## 🚦 Development
+
+### Start Development Servers
+
+**Both servers:**
+```bash
+./start.sh
+```
+
+**Backend only:**
+```bash
+cd backend
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+**Frontend only:**
+```bash
+npm run dev
+```
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Stop Servers
+```bash
+./stop.sh
+```
 
-**Use GitHub Codespaces**
+### Project Structure
+```
+smcf/
+├── backend/                 # Node.js/Express backend
+│   ├── models/             # MongoDB models
+│   ├── routes/             # API routes
+│   ├── middleware/         # Auth & other middleware
+│   └── server.js           # Main server file
+├── src/                    # React frontend
+│   ├── components/         # React components
+│   ├── pages/              # Page components
+│   ├── lib/                # Utilities and API client
+│   └── integrations/       # (Removed - was Supabase)
+├── start.sh                # Startup script
+├── stop.sh                 # Stop script
+└── SETUP_GUIDE.md         # Detailed setup guide
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## 🔧 Configuration
 
-## What technologies are used for this project?
+### Backend Environment Variables
+```env
+MONGODB_URI=mongodb://localhost:27017/smcf
+PORT=4000
+JWT_SECRET=your-secret-key
+ADMIN_PHONE=254759097157
+```
 
-This project is built with:
+### Frontend Environment Variables
+```env
+VITE_API_URL=http://localhost:4000
+```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## 📱 API Endpoints
 
-## How can I deploy this project?
+### Authentication
+- `POST /api/auth/send-otp` - Send OTP to phone
+- `POST /api/auth/verify-otp` - Verify OTP and login
+- `POST /api/auth/setup-admin` - Create initial admin
 
-Simply open [Lovable](https://lovable.dev/projects/adb2e3dc-6804-49c5-82ed-b2128c1691b4) and click on Share -> Publish.
+### Members (Admin only)
+- `GET /api/members` - Get all members
+- `POST /api/members` - Register new member
+- `PUT /api/members/:id` - Update member
+- `DELETE /api/members/:id` - Delete member
+- `POST /api/members/reorder` - Reorder members
 
-## Can I connect a custom domain to my Lovable project?
+### Payments
+- `GET /api/payments` - Get payment history
+- `POST /api/payments` - Record payment
 
-Yes, you can!
+### Announcements
+- `GET /api/announcements` - Get announcements
+- `POST /api/announcements` - Create announcement
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+### Loans
+- `GET /api/loans` - Get all loans
+- `POST /api/loans/request` - Request loan
+- `PUT /api/loans/:id/status` - Update loan status
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+## 🚀 Deployment
+
+See [SETUP_GUIDE.md](./SETUP_GUIDE.md) for production deployment instructions including:
+- Server setup (Ubuntu/VPS)
+- MongoDB configuration
+- Nginx reverse proxy
+- SSL certificates
+- PM2 process management
+- SMS gateway integration
+
+## 🔒 Security Features
+
+- JWT token authentication
+- OTP verification for login
+- Admin-controlled member registration
+- Role-based access control
+- Password hashing with bcrypt
+- Protected API endpoints
+- CORS configuration
+
+## 🤝 Contributing
+
+This is a proprietary project. For access or contributions, please contact the development team.
+
+## 📄 License
+
+Proprietary - SMCF Platform
+
+## 🆘 Support
+
+For issues or questions:
+- Check the [Setup Guide](./SETUP_GUIDE.md)
+- Review API documentation in `backend/README.md`
+- Check server logs: `tail -f backend.log` or `tail -f frontend.log`
+
+## 🎉 Credits
+
+Built with ❤️ for the SMCF community

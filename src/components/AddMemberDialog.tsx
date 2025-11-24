@@ -1,11 +1,25 @@
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { UserPlus, Phone, IdCard, User } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import API_BASE from "@/lib/api";
+import { authService } from "@/lib/authService";
+import { IdCard, Phone, User, UserPlus } from "lucide-react";
+import { useState } from "react";
 
 interface AddMemberDialogProps {
   open: boolean;
@@ -13,22 +27,32 @@ interface AddMemberDialogProps {
   onMemberAdded: (member: any) => void;
 }
 
-const AddMemberDialog = ({ open, onOpenChange, onMemberAdded }: AddMemberDialogProps) => {
+const AddMemberDialog = ({
+  open,
+  onOpenChange,
+  onMemberAdded,
+}: AddMemberDialogProps) => {
   const [memberData, setMemberData] = useState({
-    name: '',
-    phone: '',
-    idNumber: '',
-    initialContribution: '200'
+    name: "",
+    phone: "",
+    idNumber: "",
+    password: "",
+    initialContribution: "200",
   });
   const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
 
   const handleAddMember = async () => {
-    if (!memberData.name || !memberData.phone || !memberData.idNumber) {
+    if (
+      !memberData.name ||
+      !memberData.phone ||
+      !memberData.idNumber ||
+      !memberData.password
+    ) {
       toast({
         title: "Missing Information",
-        description: "Please fill in all required fields",
-        variant: "destructive"
+        description: "Please fill in all required fields including password",
+        variant: "destructive",
       });
       return;
     }
@@ -39,35 +63,57 @@ const AddMemberDialog = ({ open, onOpenChange, onMemberAdded }: AddMemberDialogP
         name: memberData.name,
         phone: memberData.phone,
         id_number: memberData.idNumber,
+        password: memberData.password,
         monthly_contribution: Number(memberData.initialContribution || 0),
-        status: 'pending',
+        status: "pending",
         amount: 0,
-        join_date: new Date().toISOString()
+        join_date: new Date().toISOString(),
       };
 
-      const res = await fetch(`${API_BASE}/members`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-      if (!res.ok) throw new Error('Failed to create member');
+      const res = await fetch(`${API_BASE}/members`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...authService.getAuthHeaders(),
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error("Failed to create member");
       const created = await res.json();
 
       // Notify parent and close
       onMemberAdded(created);
       setIsProcessing(false);
-      toast({ title: 'Member Added Successfully', description: `${created.name} has been added to the group` });
-      setMemberData({ name: '', phone: '', idNumber: '', initialContribution: '200' });
+      toast({
+        title: "Member Added Successfully",
+        description: `${created.name} has been added to the group`,
+      });
+      setMemberData({
+        name: "",
+        phone: "",
+        idNumber: "",
+        password: "",
+        initialContribution: "200",
+      });
       onOpenChange(false);
     } catch (err) {
-      console.error('Add member failed', err);
+      console.error("Add member failed", err);
       setIsProcessing(false);
-      toast({ title: 'Add Failed', description: 'Could not add member', variant: 'destructive' });
+      toast({
+        title: "Add Failed",
+        description: "Could not add member",
+        variant: "destructive",
+      });
     }
   };
 
   const resetForm = () => {
     setMemberData({
-      name: '',
-      phone: '',
-      idNumber: '',
-      initialContribution: '200'
+      name: "",
+      phone: "",
+      idNumber: "",
+      password: "",
+      initialContribution: "200",
     });
   };
 
@@ -78,7 +124,7 @@ const AddMemberDialog = ({ open, onOpenChange, onMemberAdded }: AddMemberDialogP
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <UserPlus className="w-5 h-5 text-primary" />
@@ -105,7 +151,9 @@ const AddMemberDialog = ({ open, onOpenChange, onMemberAdded }: AddMemberDialogP
                   id="member-name"
                   placeholder="e.g., John Kamau"
                   value={memberData.name}
-                  onChange={(e) => setMemberData(prev => ({ ...prev, name: e.target.value }))}
+                  onChange={(e) =>
+                    setMemberData((prev) => ({ ...prev, name: e.target.value }))
+                  }
                   className="pl-10"
                 />
               </div>
@@ -119,7 +167,12 @@ const AddMemberDialog = ({ open, onOpenChange, onMemberAdded }: AddMemberDialogP
                   id="member-phone"
                   placeholder="e.g., 0722123456"
                   value={memberData.phone}
-                  onChange={(e) => setMemberData(prev => ({ ...prev, phone: e.target.value }))}
+                  onChange={(e) =>
+                    setMemberData((prev) => ({
+                      ...prev,
+                      phone: e.target.value,
+                    }))
+                  }
                   className="pl-10"
                 />
               </div>
@@ -133,19 +186,47 @@ const AddMemberDialog = ({ open, onOpenChange, onMemberAdded }: AddMemberDialogP
                   id="member-id"
                   placeholder="e.g., 12345678"
                   value={memberData.idNumber}
-                  onChange={(e) => setMemberData(prev => ({ ...prev, idNumber: e.target.value }))}
+                  onChange={(e) =>
+                    setMemberData((prev) => ({
+                      ...prev,
+                      idNumber: e.target.value,
+                    }))
+                  }
                   className="pl-10"
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="initial-contribution">Monthly Contribution (KES)</Label>
+              <Label htmlFor="member-password">Password *</Label>
+              <Input
+                id="member-password"
+                type="password"
+                placeholder="Set initial password"
+                value={memberData.password}
+                onChange={(e) =>
+                  setMemberData((prev) => ({
+                    ...prev,
+                    password: e.target.value,
+                  }))
+                }
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="initial-contribution">
+                Monthly Contribution (KES)
+              </Label>
               <Input
                 id="initial-contribution"
                 type="number"
                 value={memberData.initialContribution}
-                onChange={(e) => setMemberData(prev => ({ ...prev, initialContribution: e.target.value }))}
+                onChange={(e) =>
+                  setMemberData((prev) => ({
+                    ...prev,
+                    initialContribution: e.target.value,
+                  }))
+                }
                 className="text-center font-semibold"
               />
             </div>
@@ -159,13 +240,12 @@ const AddMemberDialog = ({ open, onOpenChange, onMemberAdded }: AddMemberDialogP
               </div>
             </div>
 
-            <Button 
-              onClick={handleAddMember} 
-              className="w-full" 
+            <Button
+              onClick={handleAddMember}
+              className="w-full"
               variant="financial"
               size="lg"
-              disabled={isProcessing}
-            >
+              disabled={isProcessing}>
               {isProcessing ? (
                 <>
                   <div className="animate-spin w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full" />

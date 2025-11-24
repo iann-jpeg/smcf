@@ -1,36 +1,51 @@
-import { useState, useEffect, useRef } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Progress } from '@/components/ui/progress';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { 
-  Users, 
-  DollarSign, 
-  Settings, 
+import AddMemberDialog from "@/components/AddMemberDialog";
+import AnnouncementDialog from "@/components/AnnouncementDialog";
+import MpesaDisbursementDialog from "@/components/MpesaDisbursementDialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/hooks/use-toast";
+import API_BASE from "@/lib/api";
+import { authService } from "@/lib/authService";
+import {
   AlertTriangle,
   CheckCircle,
-  Clock,
-  TrendingUp,
-  Send,
-  UserPlus,
+  DollarSign,
   Download,
-  Wallet,
   Edit,
-  Trash2,
+  LogOut,
+  Megaphone,
   Save,
-  Megaphone
-} from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import API_BASE from '@/lib/api';
-import MpesaDisbursementDialog from '@/components/MpesaDisbursementDialog';
-import AddMemberDialog from '@/components/AddMemberDialog';
-import AnnouncementDialog from '@/components/AnnouncementDialog';
-import LoansTab from './admin/LoansTab';
-import ApprovalsTab from './admin/ApprovalsTab';
-import ReportsTab from './admin/ReportsTab';
+  Send,
+  Settings,
+  Trash2,
+  TrendingUp,
+  User,
+  UserPlus,
+  Wallet,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import ApprovalsTab from "./admin/ApprovalsTab";
+import LoansTab from "./admin/LoansTab";
+import ProfileSettings from "./admin/ProfileSettings";
+import ReportsTab from "./admin/ReportsTab";
 // ...existing code...
 
 interface AdminDashboardProps {
@@ -42,100 +57,380 @@ interface AdminDashboardProps {
   cycleData?: any;
 }
 
-const AdminDashboard = ({ userData, members, announcements, onLogout, refreshMembers }: AdminDashboardProps) => {
-  console.log('AdminDashboard rendered with:', { userData, members: members?.length || 0, announcements: announcements?.length || 0 });
-  
+const AdminDashboard = ({
+  userData,
+  members,
+  announcements,
+  onLogout,
+  refreshMembers,
+}: AdminDashboardProps) => {
+  console.log("AdminDashboard rendered with:", {
+    userData,
+    members: members?.length || 0,
+    announcements: announcements?.length || 0,
+  });
+
   // Safety check for required data
   if (!userData || !userData.cycleData) {
-    console.log('Missing userData or cycleData, rendering fallback');
+    console.log("Missing userData or cycleData, rendering fallback");
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
-          <h2 className="text-xl font-semibold mb-2">Loading Admin Dashboard...</h2>
-          <p className="text-muted-foreground">Please wait while we load your data.</p>
+          <h2 className="text-xl font-semibold mb-2">
+            Loading Admin Dashboard...
+          </h2>
+          <p className="text-muted-foreground">
+            Please wait while we load your data.
+          </p>
         </div>
       </div>
     );
   }
-  
+
   const { toast } = useToast();
   const [showDisbursementDialog, setShowDisbursementDialog] = useState(false);
   const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
   const [showAnnouncementDialog, setShowAnnouncementDialog] = useState(false);
+  const [showProfileDialog, setShowProfileDialog] = useState(false);
   const [editingMember, setEditingMember] = useState<string | null>(null);
   const [editedMemberData, setEditedMemberData] = useState<any>({});
+
+  // Real-time data states
+  const [recentPayments, setRecentPayments] = useState<any[]>([]);
+  const [disbursements, setDisbursements] = useState<any[]>([]);
+  const [loans, setLoans] = useState<any[]>([]);
+  const [currentCycle, setCurrentCycle] = useState<any>(null);
+  const [cycleStats, setCycleStats] = useState<any>(null);
+
   // Safe fallbacks to avoid runtime errors when data is undefined
   const safeMembers = Array.isArray(members) ? members : [];
   // sort by position if present
   const orderedMembers = [...safeMembers].sort((a: any, b: any) => {
-    if (a?.position != null && b?.position != null) return a.position - b.position;
+    if (a?.position != null && b?.position != null)
+      return a.position - b.position;
     if (a?.position != null) return -1;
     if (b?.position != null) return 1;
     return 0;
   });
-  const paidMembers = orderedMembers.filter((m: any) => m && m.status === 'paid');
-  const pendingMembers = orderedMembers.filter((m: any) => m && m.status === 'pending');
-  const safeDisbursements = Array.isArray(userData.disbursements) ? userData.disbursements : [];
-  const [recentPayments, setRecentPayments] = useState<any[]>([]);
+  const paidMembers = orderedMembers.filter(
+    (m: any) => m && m.payment_status === "paid"
+  );
+  const pendingMembers = orderedMembers.filter(
+    (m: any) => m && m.payment_status === "pending"
+  );
 
-  // Polling for recent payments
+  // Polling for real-time data
   const pollRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Silent background fetch without UI flicker
   const fetchPayments = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/payments`);
+      const res = await fetch(`${API_BASE}/api/payments`, {
+        headers: {
+          ...authService.getAuthHeaders(),
+        },
+      });
       const data = await res.json();
-      setRecentPayments(Array.isArray(data) ? data.slice(0,5) : []);
+      // Only update if data changed
+      setRecentPayments((prev) => {
+        const newData = Array.isArray(data) ? data.slice(0, 5) : [];
+        if (JSON.stringify(prev) !== JSON.stringify(newData)) {
+          return newData;
+        }
+        return prev;
+      });
     } catch (e) {
-      console.error('Could not fetch payments', e);
-      setRecentPayments([]);
+      console.error("Could not fetch payments", e);
+    }
+  };
+
+  const fetchDisbursements = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/disbursements`, {
+        headers: {
+          ...authService.getAuthHeaders(),
+        },
+      });
+      const data = await res.json();
+      // Only update if data changed
+      setDisbursements((prev) => {
+        const newData = Array.isArray(data) ? data.slice(0, 10) : [];
+        if (JSON.stringify(prev) !== JSON.stringify(newData)) {
+          return newData;
+        }
+        return prev;
+      });
+    } catch (e) {
+      console.error("Could not fetch disbursements", e);
+    }
+  };
+
+  const fetchLoans = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/loans`, {
+        headers: {
+          ...authService.getAuthHeaders(),
+        },
+      });
+      const data = await res.json();
+      // Only update if data changed
+      setLoans((prev) => {
+        const newData = Array.isArray(data) ? data : [];
+        if (JSON.stringify(prev) !== JSON.stringify(newData)) {
+          return newData;
+        }
+        return prev;
+      });
+    } catch (e) {
+      console.error("Could not fetch loans", e);
+    }
+  };
+
+  const fetchCurrentCycle = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/cycles/current`, {
+        headers: {
+          ...authService.getAuthHeaders(),
+        },
+      });
+      const data = await res.json();
+      // Only update if data changed
+      setCurrentCycle((prev) => {
+        if (JSON.stringify(prev) !== JSON.stringify(data)) {
+          return data;
+        }
+        return prev;
+      });
+    } catch (e) {
+      console.error("Could not fetch current cycle", e);
+    }
+  };
+
+  const fetchCycleStats = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/cycles/stats`, {
+        headers: {
+          ...authService.getAuthHeaders(),
+        },
+      });
+      const data = await res.json();
+      // Only update if data changed
+      setCycleStats((prev) => {
+        if (JSON.stringify(prev) !== JSON.stringify(data)) {
+          return data;
+        }
+        return prev;
+      });
+    } catch (e) {
+      console.error("Could not fetch cycle stats", e);
+    }
+  };
+
+  // Fetch all data silently in parallel
+  const fetchAllData = async () => {
+    // Fetch all in parallel for better performance
+    await Promise.all([
+      fetchPayments(),
+      fetchDisbursements(),
+      fetchLoans(),
+      fetchCurrentCycle(),
+      fetchCycleStats(),
+    ]);
+
+    // Refresh members silently
+    if (typeof refreshMembers === "function") {
+      await refreshMembers();
     }
   };
 
   useEffect(() => {
-    // initial fetch
-    fetchPayments();
-    // poll every 15 seconds
-    pollRef.current = setInterval(fetchPayments, 15000);
+    // Initial silent fetch
+    fetchAllData();
+
+    // Silent background polling every 20 seconds
+    pollRef.current = setInterval(() => {
+      // Silent refresh - no loading indicators
+      fetchAllData();
+    }, 20000);
+
+    // Socket.IO real-time event listeners
+    const socket = (window as any).socket;
+    if (socket) {
+      console.log("👂 Admin Dashboard listening for real-time updates");
+
+      // Listen for payment completion
+      socket.on("paymentCompleted", (data: any) => {
+        console.log("💰 Payment completed:", data);
+        toast({
+          title: "Payment Received!",
+          description: `Payment of KES ${data.amount} received from member`,
+        });
+        fetchAllData(); // Refresh data
+      });
+
+      // Listen for member updates
+      socket.on("memberUpdated", (data: any) => {
+        console.log("👤 Member updated:", data);
+        fetchAllData(); // Refresh data
+      });
+
+      // Listen for cycle updates
+      socket.on("cycleUpdated", (data: any) => {
+        console.log("🔄 Cycle updated:", data);
+        fetchAllData(); // Refresh data
+      });
+
+      // Listen for payment failures
+      socket.on("paymentFailed", (data: any) => {
+        console.log("❌ Payment failed:", data);
+        toast({
+          title: "Payment Failed",
+          description: `Payment from member failed: ${data.reason}`,
+          variant: "destructive",
+        });
+      });
+
+      // Listen for disbursement completion
+      socket.on("disbursementCompleted", (data: any) => {
+        console.log("💸 Disbursement completed:", data);
+        toast({
+          title: "Disbursement Successful!",
+          description: `KES ${data.amount} sent to ${data.memberName}`,
+        });
+        fetchAllData(); // Refresh data
+      });
+
+      // Listen for next recipient updates
+      socket.on("nextRecipientUpdated", (data: any) => {
+        console.log("➡️ Next recipient updated:", data);
+        toast({
+          title: "Next Recipient Updated",
+          description: `${
+            data.previousRecipient.name
+          } received payment. Next: ${
+            data.nextRecipient?.name || "All members paid"
+          }`,
+        });
+        fetchAllData(); // Refresh data
+      });
+    }
+
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
+
+      // Cleanup Socket.IO listeners
+      if (socket) {
+        socket.off("paymentCompleted");
+        socket.off("disbursementCompleted");
+        socket.off("memberUpdated");
+        socket.off("cycleUpdated");
+        socket.off("paymentFailed");
+        socket.off("nextRecipientUpdated");
+      }
     };
   }, []);
 
-  const handleSendReminders = () => {
-    const pendingMembers = safeMembers.filter(m => m.status === 'pending');
+  const handleSendReminders = async () => {
+    const pendingCount = pendingMembers.length;
+
+    // In production, this would send SMS reminders
+    // For now, just show a notification
     toast({
       title: "Reminders Sent",
-      description: `Payment reminders sent to ${pendingMembers.length} members`,
+      description: `Payment reminders sent to ${pendingCount} member${
+        pendingCount !== 1 ? "s" : ""
+      }`,
     });
+
+    // Could implement SMS sending here
+    // await fetch(`${API_BASE}/api/notifications/reminders`, {
+    //   method: 'POST',
+    //   headers: { ...authService.getAuthHeaders() }
+    // });
   };
 
-  const handleProcessPayout = () => {
-    if (userData.cycleData.paidMembers < userData.cycleData.totalMembers) {
+  const handleProcessPayout = async () => {
+    if (!currentCycle) {
       toast({
-        title: "Cannot Process Payout",
-        description: "All members must pay before disbursement",
-        variant: "destructive"
+        title: "Error",
+        description: "No active cycle found",
+        variant: "destructive",
       });
       return;
     }
 
-    toast({
-      title: "Payout Initiated",
-      description: `KES ${userData.cycleData.totalAmount.toLocaleString()} being sent to ${userData.cycleData.nextRecipient}`,
-    });
+    const totalMembers = safeMembers.length;
+    const paidCount = paidMembers.length;
+
+    if (paidCount < totalMembers) {
+      toast({
+        title: "Cannot Process Payout",
+        description: `Only ${paidCount}/${totalMembers} members have paid. All members must pay before disbursement.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Find next recipient (first pending member in order)
+    const nextRecipient = orderedMembers.find(
+      (m: any) =>
+        !m.last_payout_date ||
+        m.position === currentCycle.next_recipient_position
+    );
+
+    if (!nextRecipient) {
+      toast({
+        title: "Error",
+        description: "Could not determine next recipient",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setShowDisbursementDialog(true);
   };
 
   const handleExportData = () => {
+    // Generate CSV export of all data
+    const csvData = [
+      [
+        "Member ID",
+        "Name",
+        "Phone",
+        "Status",
+        "Total Contributed",
+        "Total Received",
+      ],
+      ...orderedMembers.map((m: any) => [
+        m.member_id,
+        m.name,
+        m.phone,
+        m.payment_status,
+        m.total_contributed || 0,
+        m.total_received || 0,
+      ]),
+    ];
+
+    const csvContent = csvData.map((row) => row.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `smcf-members-${new Date().toISOString().split("T")[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+
     toast({
-      title: "Export Started",
-      description: "Financial records are being prepared for download",
+      title: "Export Complete",
+      description: "Financial records have been downloaded",
     });
   };
 
   const handleAddMember = (newMember: any) => {
     // prefer to refresh from server when possible
-    if (typeof refreshMembers === 'function') {
+    if (typeof refreshMembers === "function") {
       refreshMembers();
     } else {
       // mutate original array if provided, otherwise just push into safeMembers
@@ -152,29 +447,55 @@ const AdminDashboard = ({ userData, members, announcements, onLogout, refreshMem
   };
 
   const handleEditMember = (memberId: string) => {
-    const member = members.find((m:any) => (m._id || m.id) === memberId);
+    const member = members.find((m: any) => (m._id || m.id) === memberId);
     if (member) {
       setEditingMember(memberId);
       setEditedMemberData({ ...member });
     }
   };
 
-  const handleSaveMember = (memberId: string) => {
-    const id = memberId;
-    fetch(`${API_BASE}/members/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(editedMemberData) })
-      .then(res => res.json())
-      .then(updated => {
-        if (typeof refreshMembers === 'function') refreshMembers();
-        else window.location.reload();
-      })
-      .catch(err => {
-        console.error('Save failed', err);
-        toast({ title: 'Save Failed', description: 'Could not save member', variant: 'destructive' });
+  const handleSaveMember = async (memberId: string) => {
+    try {
+      const id = memberId;
+      const res = await fetch(`${API_BASE}/api/members/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...authService.getAuthHeaders(),
+        },
+        body: JSON.stringify(editedMemberData),
       });
+
+      if (!res.ok) throw new Error("Failed to update member");
+
+      const updated = await res.json();
+
+      // Clear editing state immediately for smooth UX
+      setEditingMember(null);
+      setEditedMemberData({});
+
+      // Silent background refresh
+      if (typeof refreshMembers === "function") {
+        await refreshMembers();
+      }
+
+      // Show success notification after refresh completes
+      toast({
+        title: "Member Updated",
+        description: "Member information has been updated successfully",
+      });
+    } catch (err) {
+      console.error("Save failed", err);
+      toast({
+        title: "Save Failed",
+        description: "Could not save member",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleDeleteMember = (memberId: string) => {
-    const index = members.findIndex(m => m.id === memberId);
+    const index = members.findIndex((m) => m.id === memberId);
     if (index !== -1) {
       members.splice(index, 1);
     }
@@ -186,11 +507,14 @@ const AdminDashboard = ({ userData, members, announcements, onLogout, refreshMem
 
   const handleTogglePaymentStatus = (memberId: string) => {
     // kept for backward compatibility, but prefer togglePaymentStatusRemote
-    const member = members.find(m => m.id === memberId);
+    const member = members.find((m) => m.id === memberId);
     if (member) {
-      const newStatus = member.status === 'paid' ? 'pending' : 'paid';
+      const newStatus = member.status === "paid" ? "pending" : "paid";
       member.status = newStatus;
-      toast({ title: 'Payment Status Updated', description: `${member.name}'s payment status changed to ${newStatus}` });
+      toast({
+        title: "Payment Status Updated",
+        description: `${member.name}'s payment status changed to ${newStatus}`,
+      });
     }
   };
 
@@ -199,58 +523,231 @@ const AdminDashboard = ({ userData, members, announcements, onLogout, refreshMem
     setEditedMemberData({});
   };
 
-  const deleteMemberRemote = (member: any) => {
-    const id = member._id || member.id;
-    fetch(`${API_BASE}/members/${id}`, { method: 'DELETE' })
-      .then(() => {
-        if (typeof refreshMembers === 'function') refreshMembers();
-        else window.location.reload();
-      })
-      .catch(err => toast({ title: 'Delete Failed', description: 'Could not delete member', variant: 'destructive' }));
+  const deleteMemberRemote = async (member: any) => {
+    if (
+      !confirm(
+        `Are you sure you want to delete ${member.name}? This action cannot be undone.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const id = member._id || member.id;
+      const res = await fetch(`${API_BASE}/api/members/${id}`, {
+        method: "DELETE",
+        headers: {
+          ...authService.getAuthHeaders(),
+        },
+      });
+
+      if (!res.ok) throw new Error("Failed to delete member");
+
+      // Silent background refresh
+      if (typeof refreshMembers === "function") {
+        await refreshMembers();
+      }
+
+      // Show success notification after refresh
+      toast({
+        title: "Member Deleted",
+        description: `${member.name} has been removed from the group`,
+      });
+    } catch (err) {
+      console.error("Delete failed", err);
+      toast({
+        title: "Delete Failed",
+        description: "Could not delete member",
+        variant: "destructive",
+      });
+    }
   };
 
-  const togglePaymentStatusRemote = (member: any) => {
-    const id = member._id || member.id;
-    const newStatus = member.status === 'paid' ? 'pending' : 'paid';
-    fetch(`${API_BASE}/members/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ status: newStatus }) })
-      .then(() => {
-        if (typeof refreshMembers === 'function') refreshMembers();
-        else window.location.reload();
-      })
-      .catch(err => toast({ title: 'Update Failed', description: 'Could not update status', variant: 'destructive' }));
+  const togglePaymentStatusRemote = async (member: any) => {
+    try {
+      const id = member._id || member.id;
+      const newStatus = member.payment_status === "paid" ? "pending" : "paid";
+      const res = await fetch(`${API_BASE}/api/members/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...authService.getAuthHeaders(),
+        },
+        body: JSON.stringify({ payment_status: newStatus }),
+      });
+
+      if (!res.ok) throw new Error("Failed to update status");
+
+      // Silent background refresh
+      if (typeof refreshMembers === "function") {
+        await refreshMembers();
+      }
+
+      // Show notification after refresh
+      toast({
+        title: "Payment Status Updated",
+        description: `${member.name}'s payment status changed to ${newStatus}`,
+      });
+    } catch (err) {
+      console.error("Update failed", err);
+      toast({
+        title: "Update Failed",
+        description: "Could not update status",
+        variant: "destructive",
+      });
+    }
   };
 
-  const moveMemberUp = (member: any) => {
+  const moveMemberUp = async (member: any) => {
     const sorted = [...orderedMembers];
-    const idx = sorted.findIndex((m:any) => (m._id || m.id) === (member._id || member.id));
+    const idx = sorted.findIndex(
+      (m: any) => (m._id || m.id) === (member._id || member.id)
+    );
     if (idx > 0) {
-      const above = sorted[idx-1];
-      const payload = [ { id: above._id || above.id, position: member.position || (idx+1) }, { id: member._id || member.id, position: above.position || idx } ];
-      fetch(`${API_BASE}/members/reorder`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) })
-        .then(() => {
-          if (typeof refreshMembers === 'function') refreshMembers();
-          else window.location.reload();
-        })
-        .catch(err => toast({ title: 'Reorder Failed', description: 'Could not change order', variant: 'destructive' }));
+      try {
+        const above = sorted[idx - 1];
+        const payload = [
+          { id: above._id || above.id, position: member.position || idx + 1 },
+          { id: member._id || member.id, position: above.position || idx },
+        ];
+        const res = await fetch(`${API_BASE}/api/members/reorder`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...authService.getAuthHeaders(),
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) throw new Error("Failed to reorder");
+
+        // Silent background refresh
+        if (typeof refreshMembers === "function") {
+          await refreshMembers();
+        }
+
+        // Show notification after refresh
+        toast({
+          title: "Order Updated",
+          description: `${member.name} moved up in the queue`,
+        });
+      } catch (err) {
+        console.error("Reorder failed", err);
+        toast({
+          title: "Reorder Failed",
+          description: "Could not change order",
+          variant: "destructive",
+        });
+      }
     }
   };
 
-  const moveMemberDown = (member: any) => {
+  const moveMemberDown = async (member: any) => {
     const sorted = [...orderedMembers];
-    const idx = sorted.findIndex((m:any) => (m._id || m.id) === (member._id || member.id));
+    const idx = sorted.findIndex(
+      (m: any) => (m._id || m.id) === (member._id || member.id)
+    );
     if (idx !== -1 && idx < sorted.length - 1) {
-      const below = sorted[idx+1];
-      const payload = [ { id: below._id || below.id, position: member.position || (idx+1) }, { id: member._id || member.id, position: below.position || (idx+2) } ];
-      fetch(`${API_BASE}/members/reorder`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) })
-        .then(() => window.location.reload())
-        .catch(err => toast({ title: 'Reorder Failed', description: 'Could not change order', variant: 'destructive' }));
+      try {
+        const below = sorted[idx + 1];
+        const payload = [
+          { id: below._id || below.id, position: member.position || idx + 1 },
+          { id: member._id || member.id, position: below.position || idx + 2 },
+        ];
+        const res = await fetch(`${API_BASE}/api/members/reorder`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...authService.getAuthHeaders(),
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) throw new Error("Failed to reorder");
+
+        // Silent background refresh
+        if (typeof refreshMembers === "function") {
+          await refreshMembers();
+        }
+
+        // Show notification after refresh
+        toast({
+          title: "Order Updated",
+          description: `${member.name} moved down in the queue`,
+        });
+      } catch (err) {
+        console.error("Reorder failed", err);
+        toast({
+          title: "Reorder Failed",
+          description: "Could not change order",
+          variant: "destructive",
+        });
+      }
     }
   };
-
-  
 
   return (
     <div className="space-y-6">
+      {/* Header with Profile and Logout */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+          <p className="text-muted-foreground">
+            Welcome back, {userData?.name || "Admin"}
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            onClick={() => setShowProfileDialog(true)}
+            className="gap-2">
+            <User className="w-4 h-4" />
+            Profile
+          </Button>
+          <Button variant="destructive" onClick={onLogout} className="gap-2">
+            <LogOut className="w-4 h-4" />
+            Logout
+          </Button>
+        </div>
+      </div>
+
+      {/* Next Recipient Card */}
+      {currentCycle?.next_recipient && (
+        <Card className="border-l-4 border-l-financial-success bg-financial-success/5">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Wallet className="w-5 h-5 text-financial-success" />
+              Next in Line for Disbursement
+            </CardTitle>
+            <CardDescription>
+              Cycle #{currentCycle.cycle_number} - Ready for payout
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-lg border border-financial-success/20">
+              <div>
+                <p className="text-lg font-semibold">
+                  {currentCycle.next_recipient.name}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Member ID: {currentCycle.next_recipient.member_id}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Phone: {currentCycle.next_recipient.phone}
+                </p>
+              </div>
+              <Button
+                onClick={() => setShowDisbursementDialog(true)}
+                variant="financial"
+                size="lg">
+                <Send className="w-4 h-4 mr-2" />
+                Send Payment
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Admin Actions */}
       <Card className="border-l-4 border-l-accent bg-accent/5">
         <CardHeader>
@@ -265,12 +762,18 @@ const AdminDashboard = ({ userData, members, announcements, onLogout, refreshMem
               <Send className="w-4 h-4 mr-2" />
               Send Reminders
             </Button>
-            <Button 
-              onClick={handleProcessPayout} 
-              variant={userData.cycleData.paidMembers === userData.cycleData.totalMembers ? "financial" : "outline"}
+            <Button
+              onClick={handleProcessPayout}
+              variant={
+                userData.cycleData.paidMembers ===
+                userData.cycleData.totalMembers
+                  ? "financial"
+                  : "outline"
+              }
               size="sm"
-              disabled={userData.cycleData.paidMembers < userData.cycleData.totalMembers}
-            >
+              disabled={
+                userData.cycleData.paidMembers < userData.cycleData.totalMembers
+              }>
               <DollarSign className="w-4 h-4 mr-2" />
               Process Payout
             </Button>
@@ -278,19 +781,17 @@ const AdminDashboard = ({ userData, members, announcements, onLogout, refreshMem
               <Download className="w-4 h-4 mr-2" />
               Export Records
             </Button>
-            <Button 
+            <Button
               onClick={() => setShowAddMemberDialog(true)}
-              variant="outline" 
-              size="sm"
-            >
+              variant="outline"
+              size="sm">
               <UserPlus className="w-4 h-4 mr-2" />
               Add Member
             </Button>
-            <Button 
+            <Button
               onClick={() => setShowAnnouncementDialog(true)}
-              variant="secondary" 
-              size="sm"
-            >
+              variant="secondary"
+              size="sm">
               <Megaphone className="w-4 h-4 mr-2" />
               Send Announcement
             </Button>
@@ -299,7 +800,7 @@ const AdminDashboard = ({ userData, members, announcements, onLogout, refreshMem
       </Card>
 
       <Tabs defaultValue="members" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="members">Member Management</TabsTrigger>
           <TabsTrigger value="payments">Payment Tracking</TabsTrigger>
           <TabsTrigger value="disbursements">Disbursements</TabsTrigger>
@@ -309,6 +810,68 @@ const AdminDashboard = ({ userData, members, announcements, onLogout, refreshMem
         </TabsList>
 
         <TabsContent value="members" className="space-y-6">
+          {/* Cycle Overview */}
+          {currentCycle && (
+            <Card className="bg-gradient-to-br from-primary/5 to-accent/5 border-primary/20">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5" />
+                  Current Cycle #{currentCycle.cycle_number}
+                </CardTitle>
+                <CardDescription>
+                  Started:{" "}
+                  {new Date(currentCycle.start_date).toLocaleDateString()} |
+                  Status: {currentCycle.status}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div>
+                    <div className="text-sm text-muted-foreground">
+                      Collection Progress
+                    </div>
+                    <div className="text-2xl font-bold">
+                      {currentCycle.paid_members_count}/{safeMembers.length}
+                    </div>
+                    <Progress
+                      value={
+                        (currentCycle.paid_members_count / safeMembers.length) *
+                        100
+                      }
+                      className="mt-2"
+                    />
+                  </div>
+                  <div>
+                    <div className="text-sm text-muted-foreground">
+                      Amount Collected
+                    </div>
+                    <div className="text-2xl font-bold text-financial-success">
+                      KES{" "}
+                      {currentCycle.total_amount_collected?.toLocaleString() ||
+                        0}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-muted-foreground">
+                      Target Amount
+                    </div>
+                    <div className="text-2xl font-bold">
+                      KES {(safeMembers.length * 204).toLocaleString()}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-muted-foreground">
+                      Disbursement
+                    </div>
+                    <div className="text-xl font-bold">
+                      {currentCycle.disbursement_status || "Pending"}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Member Status Overview */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card>
@@ -340,7 +903,8 @@ const AdminDashboard = ({ userData, members, announcements, onLogout, refreshMem
                   {pendingMembers.length}
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  KES {(pendingMembers.length * 204).toLocaleString()} outstanding
+                  KES {(pendingMembers.length * 204).toLocaleString()}{" "}
+                  outstanding
                 </div>
               </CardContent>
             </Card>
@@ -348,7 +912,7 @@ const AdminDashboard = ({ userData, members, announcements, onLogout, refreshMem
 
           {/* Member List */}
           <Card>
-              <CardHeader>
+            <CardHeader>
               <CardTitle>All Members</CardTitle>
               <CardDescription>
                 Total: {safeMembers.length} members
@@ -357,35 +921,60 @@ const AdminDashboard = ({ userData, members, announcements, onLogout, refreshMem
             <CardContent>
               <div className="space-y-3">
                 {orderedMembers.map((member, index) => (
-                  <div key={member._id || member.id || index} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div
+                    key={member._id || member.id || index}
+                    className="flex items-center justify-between p-3 border rounded-lg">
                     {editingMember === member.id ? (
                       <div className="flex-1 space-y-3">
                         <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <Label htmlFor={`name-${member.id}`} className="text-xs">Name</Label>
+                            <Label
+                              htmlFor={`name-${member.id}`}
+                              className="text-xs">
+                              Name
+                            </Label>
                             <Input
                               id={`name-${member.id}`}
-                              value={editedMemberData.name || ''}
-                              onChange={(e) => setEditedMemberData(prev => ({...prev, name: e.target.value}))}
+                              value={editedMemberData.name || ""}
+                              onChange={(e) =>
+                                setEditedMemberData((prev) => ({
+                                  ...prev,
+                                  name: e.target.value,
+                                }))
+                              }
                               className="text-sm"
                             />
                           </div>
                           <div>
-                            <Label htmlFor={`phone-${member.id}`} className="text-xs">Phone</Label>
+                            <Label
+                              htmlFor={`phone-${member.id}`}
+                              className="text-xs">
+                              Phone
+                            </Label>
                             <Input
                               id={`phone-${member.id}`}
-                              value={editedMemberData.phone || ''}
-                              onChange={(e) => setEditedMemberData(prev => ({...prev, phone: e.target.value}))}
+                              value={editedMemberData.phone || ""}
+                              onChange={(e) =>
+                                setEditedMemberData((prev) => ({
+                                  ...prev,
+                                  phone: e.target.value,
+                                }))
+                              }
                               className="text-sm"
                             />
                           </div>
                         </div>
                         <div className="flex gap-2">
-                          <Button size="sm" onClick={() => handleSaveMember(member.id)}>
+                          <Button
+                            size="sm"
+                            onClick={() => handleSaveMember(member.id)}>
                             <Save className="w-3 h-3 mr-1" />
                             Save
                           </Button>
-                          <Button size="sm" variant="outline" onClick={handleCancelEdit}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={handleCancelEdit}>
                             Cancel
                           </Button>
                         </div>
@@ -393,20 +982,43 @@ const AdminDashboard = ({ userData, members, announcements, onLogout, refreshMem
                     ) : (
                       <>
                         <div className="flex items-center gap-3">
-                          <div className={`w-3 h-3 rounded-full ${
-                            member.status === 'paid' ? 'bg-financial-success' : 'bg-financial-warning'
-                          }`} />
+                          <div
+                            className={`w-3 h-3 rounded-full ${
+                              member.payment_status === "paid"
+                                ? "bg-financial-success"
+                                : "bg-financial-warning"
+                            }`}
+                          />
                           <div>
-                            <div className="font-medium">{member.name} {member.position ? `(#${member.position})` : ''}</div>
-                            <div className="text-sm text-muted-foreground">
-                              {(member._id || member.id)} • {member.phone}
+                            <div className="font-medium">
+                              {member.name}{" "}
+                              {member.position ? `(#${member.position})` : ""}
                             </div>
+                            <div className="text-sm text-muted-foreground">
+                              {member.member_id} • {member.phone}
+                            </div>
+                            {member.total_contributed > 0 && (
+                              <div className="text-xs text-muted-foreground">
+                                Contributed: KES{" "}
+                                {member.total_contributed?.toLocaleString() ||
+                                  0}{" "}
+                                | Received: KES{" "}
+                                {member.total_received?.toLocaleString() || 0}
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
                           <div className="text-right">
-                            <Badge variant={member.status === 'paid' ? 'default' : 'secondary'}>
-                              {member.status === 'paid' ? 'Paid' : 'Pending'}
+                            <Badge
+                              variant={
+                                member.payment_status === "paid"
+                                  ? "default"
+                                  : "secondary"
+                              }>
+                              {member.payment_status === "paid"
+                                ? "Paid"
+                                : "Pending"}
                             </Badge>
                             {member.date && (
                               <div className="text-xs text-muted-foreground mt-1">
@@ -415,24 +1027,45 @@ const AdminDashboard = ({ userData, members, announcements, onLogout, refreshMem
                             )}
                           </div>
                           <div className="flex gap-1 items-center">
-                            <Button size="sm" variant="ghost" onClick={() => moveMemberUp(member)} title="Move up">↑</Button>
-                            <Button size="sm" variant="ghost" onClick={() => moveMemberDown(member)} title="Move down">↓</Button>
-                            <Button 
-                              size="sm" 
-                              variant={member.status === 'paid' ? 'destructive' : 'default'}
-                              onClick={() => togglePaymentStatusRemote(member)}
-                            >
-                              {member.status === 'paid' ? 'Mark Pending' : 'Mark Paid'}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => moveMemberUp(member)}
+                              title="Move up">
+                              ↑
                             </Button>
-                            <Button size="sm" variant="ghost" onClick={() => handleEditMember(member._id || member.id)}>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => moveMemberDown(member)}
+                              title="Move down">
+                              ↓
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant={
+                                member.status === "paid"
+                                  ? "destructive"
+                                  : "default"
+                              }
+                              onClick={() => togglePaymentStatusRemote(member)}>
+                              {member.status === "paid"
+                                ? "Mark Pending"
+                                : "Mark Paid"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() =>
+                                handleEditMember(member._id || member.id)
+                              }>
                               <Edit className="w-3 h-3" />
                             </Button>
-                            <Button 
-                              size="sm" 
-                              variant="ghost" 
+                            <Button
+                              size="sm"
+                              variant="ghost"
                               onClick={() => deleteMemberRemote(member)}
-                              className="text-destructive hover:text-destructive"
-                            >
+                              className="text-destructive hover:text-destructive">
                               <Trash2 className="w-3 h-3" />
                             </Button>
                           </div>
@@ -448,50 +1081,81 @@ const AdminDashboard = ({ userData, members, announcements, onLogout, refreshMem
 
         <TabsContent value="payments" className="space-y-6">
           {/* Payment Progress */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="w-5 h-5" />
-                Collection Progress
-              </CardTitle>
-              <CardDescription>
-                Cycle #{userData.cycleData.currentCycle} • {userData.cycleData.daysLeft} days remaining
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Collection Progress</span>
-                  <span>{Math.round((userData.cycleData.paidMembers / userData.cycleData.totalMembers) * 100)}%</span>
-                </div>
-                <Progress 
-                  value={(userData.cycleData.paidMembers / userData.cycleData.totalMembers) * 100} 
-                  className="h-3"
-                />
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-primary">
-                    {userData.cycleData.paidMembers}/{userData.cycleData.totalMembers}
+          {currentCycle && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5" />
+                  Collection Progress - Cycle #{currentCycle.cycle_number}
+                </CardTitle>
+                <CardDescription>
+                  Started:{" "}
+                  {new Date(currentCycle.start_date).toLocaleDateString()} |
+                  Status: {currentCycle.status}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Collection Progress</span>
+                    <span>
+                      {safeMembers.length > 0
+                        ? Math.round(
+                            (currentCycle.paid_members_count /
+                              safeMembers.length) *
+                              100
+                          )
+                        : 0}
+                      %
+                    </span>
                   </div>
-                  <div className="text-sm text-muted-foreground">Members</div>
+                  <Progress
+                    value={
+                      safeMembers.length > 0
+                        ? (currentCycle.paid_members_count /
+                            safeMembers.length) *
+                          100
+                        : 0
+                    }
+                    className="h-3"
+                  />
                 </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-financial-success">
-                    KES {userData.cycleData.collectedAmount.toLocaleString()}
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-primary">
+                      {currentCycle.paid_members_count}/{safeMembers.length}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Members Paid
+                    </div>
                   </div>
-                  <div className="text-sm text-muted-foreground">Collected</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-accent">
-                    KES {(userData.cycleData.totalAmount - userData.cycleData.collectedAmount).toLocaleString()}
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-financial-success">
+                      KES{" "}
+                      {currentCycle.total_amount_collected?.toLocaleString() ||
+                        0}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Collected
+                    </div>
                   </div>
-                  <div className="text-sm text-muted-foreground">Remaining</div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-accent">
+                      KES{" "}
+                      {(
+                        safeMembers.length * 204 -
+                        (currentCycle.total_amount_collected || 0)
+                      ).toLocaleString()}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Remaining
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Recent Payments */}
           <Card>
@@ -499,22 +1163,41 @@ const AdminDashboard = ({ userData, members, announcements, onLogout, refreshMem
               <div className="flex items-center justify-between w-full">
                 <div>
                   <CardTitle>Recent Payments</CardTitle>
-                  <CardDescription>Latest contributions for this cycle</CardDescription>
+                  <CardDescription>
+                    Latest contributions for this cycle
+                  </CardDescription>
                 </div>
                 <div>
-                  <Button size="sm" variant="outline" onClick={fetchPayments}>Refresh</Button>
+                  <Button size="sm" variant="outline" onClick={fetchPayments}>
+                    Refresh
+                  </Button>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {(recentPayments.length ? recentPayments : paidMembers.slice(0, 5)).map((payment, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 bg-financial-success/5 border border-financial-success/20 rounded-lg">
+                {recentPayments.length === 0 && (
+                  <div className="text-center text-muted-foreground py-8">
+                    No payments recorded yet
+                  </div>
+                )}
+                {recentPayments.map((payment, index) => (
+                  <div
+                    key={payment._id || index}
+                    className="flex items-center justify-between p-3 bg-financial-success/5 border border-financial-success/20 rounded-lg">
                     <div className="flex items-center gap-3">
                       <CheckCircle className="w-5 h-5 text-financial-success" />
                       <div>
-                        <div className="font-medium">{payment.name || payment.member_id || payment.phone}</div>
-                        <div className="text-sm text-muted-foreground">{payment.phone || payment.mpesa_transaction_id || ''}</div>
+                        <div className="font-medium">
+                          {payment.member_id?.name || payment.phone}
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {payment.mpesa_transaction_id || payment.phone} •
+                          Cycle #{payment.cycle_number}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {new Date(payment.date).toLocaleString()}
+                        </div>
                       </div>
                     </div>
                     <div className="text-right">
@@ -551,11 +1234,10 @@ const AdminDashboard = ({ userData, members, announcements, onLogout, refreshMem
                     Send payments to any group member from your M-Pesa account
                   </p>
                 </div>
-                <Button 
+                <Button
                   onClick={() => setShowDisbursementDialog(true)}
                   variant="mpesa"
-                  size="sm"
-                >
+                  size="sm">
                   <Wallet className="w-4 h-4 mr-2" />
                   Send Payment
                 </Button>
@@ -564,59 +1246,103 @@ const AdminDashboard = ({ userData, members, announcements, onLogout, refreshMem
           </Card>
 
           {/* Next Disbursement */}
-          <Card className="border-l-4 border-l-accent bg-accent/5">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <DollarSign className="w-5 h-5" />
-                Next Disbursement
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Recipient:</span>
-                  <span className="font-semibold">{userData.cycleData.nextRecipient}</span>
+          {currentCycle && (
+            <Card className="border-l-4 border-l-accent bg-accent/5">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <DollarSign className="w-5 h-5" />
+                  Next Disbursement - Cycle #{currentCycle.cycle_number}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Recipient:</span>
+                    <span className="font-semibold">
+                      {currentCycle.recipient_id?.name || "TBD"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Amount:</span>
+                    <span className="font-semibold text-accent">
+                      KES {(safeMembers.length * 204).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Status:</span>
+                    <Badge
+                      variant={
+                        currentCycle.paid_members_count === safeMembers.length
+                          ? "default"
+                          : "secondary"
+                      }>
+                      {currentCycle.disbursement_status ||
+                        (currentCycle.paid_members_count === safeMembers.length
+                          ? "Ready"
+                          : `Waiting (${currentCycle.paid_members_count}/${safeMembers.length})`)}
+                    </Badge>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Amount:</span>
-                  <span className="font-semibold text-accent">
-                    KES {userData.cycleData.totalAmount.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Status:</span>
-                  <Badge variant={userData.cycleData.paidMembers === userData.cycleData.totalMembers ? 'default' : 'secondary'}>
-                    {userData.cycleData.paidMembers === userData.cycleData.totalMembers ? 'Ready' : 'Waiting for payments'}
-                  </Badge>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Disbursement History */}
           <Card>
             <CardHeader>
-              <CardTitle>Disbursement History</CardTitle>
-              <CardDescription>Previous payouts to members</CardDescription>
+              <div className="flex items-center justify-between w-full">
+                <div>
+                  <CardTitle>Disbursement History</CardTitle>
+                  <CardDescription>Previous payouts to members</CardDescription>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={fetchDisbursements}>
+                  Refresh
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {safeDisbursements.map((disbursement, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                {disbursements.length === 0 && (
+                  <div className="text-center text-muted-foreground py-8">
+                    No disbursements yet
+                  </div>
+                )}
+                {disbursements.map((disbursement, index) => (
+                  <div
+                    key={disbursement._id || index}
+                    className="flex items-center justify-between p-3 border rounded-lg">
                     <div className="flex items-center gap-3">
                       <CheckCircle className="w-5 h-5 text-financial-success" />
                       <div>
-                        <div className="font-medium">Cycle #{disbursement.cycle}</div>
+                        <div className="font-medium">
+                          {disbursement.recipient_id?.name || "Unknown"}
+                        </div>
                         <div className="text-sm text-muted-foreground">
-                          {disbursement.recipient} • {disbursement.date}
+                          Cycle #{disbursement.cycle_id?.cycle_number} •
+                          {disbursement.mpesa_transaction_id ||
+                            disbursement.phone}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {new Date(
+                            disbursement.disbursement_date
+                          ).toLocaleString()}
                         </div>
                       </div>
                     </div>
                     <div className="text-right">
                       <div className="font-semibold text-financial-success">
-                        KES {disbursement.amount.toLocaleString()}
+                        KES {disbursement.amount?.toLocaleString() || 0}
                       </div>
-                      <Badge variant="default" className="text-xs">
+                      <Badge
+                        variant={
+                          disbursement.status === "completed"
+                            ? "default"
+                            : "secondary"
+                        }
+                        className="text-xs">
                         {disbursement.status}
                       </Badge>
                     </div>
@@ -638,6 +1364,22 @@ const AdminDashboard = ({ userData, members, announcements, onLogout, refreshMem
           <ReportsTab />
         </TabsContent>
       </Tabs>
+
+      {/* Profile Dialog */}
+      <Dialog open={showProfileDialog} onOpenChange={setShowProfileDialog}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <User className="w-5 h-5" />
+              Admin Profile Settings
+            </DialogTitle>
+            <DialogDescription>
+              Manage your profile information and account security
+            </DialogDescription>
+          </DialogHeader>
+          <ProfileSettings adminData={userData} />
+        </DialogContent>
+      </Dialog>
 
       {/* M-Pesa Disbursement Dialog */}
       <MpesaDisbursementDialog
