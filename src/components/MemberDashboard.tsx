@@ -742,9 +742,11 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                                 <span className="font-medium">
                                   Requested on:
                                 </span>{" "}
-                                {new Date(
-                                  loan.request_date
-                                ).toLocaleDateString()}
+                                {loan.created_at
+                                  ? new Date(
+                                      loan.created_at
+                                    ).toLocaleDateString()
+                                  : "N/A"}
                               </p>
                               {loan.approval_date && (
                                 <p>
@@ -754,9 +756,11 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                                       : "Approved on"}
                                     :
                                   </span>{" "}
-                                  {new Date(
-                                    loan.approval_date
-                                  ).toLocaleDateString()}
+                                  {loan.approval_date
+                                    ? new Date(
+                                        loan.approval_date
+                                      ).toLocaleDateString()
+                                    : "N/A"}
                                 </p>
                               )}
                               {loan.disbursement_date && (
@@ -764,9 +768,11 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                                   <span className="font-medium">
                                     Disbursed on:
                                   </span>{" "}
-                                  {new Date(
-                                    loan.disbursement_date
-                                  ).toLocaleDateString()}
+                                  {loan.disbursement_date
+                                    ? new Date(
+                                        loan.disbursement_date
+                                      ).toLocaleDateString()
+                                    : "N/A"}
                                 </p>
                               )}
                               {loan.rejection_reason && (
