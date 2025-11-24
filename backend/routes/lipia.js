@@ -202,8 +202,14 @@ router.post("/query-status", protect, async (req, res) => {
  */
 router.post("/send-money", protect, async (req, res) => {
   try {
+    console.log(
+      "💰 Disbursement request received from:",
+      req.user?.name || req.user?._id
+    );
+
     // Check if user is admin
     if (req.user.role !== "admin" && !req.user.permissions?.canDisburseFunds) {
+      console.error("❌ Unauthorized disbursement attempt by:", req.user?.role);
       return res.status(403).json({
         success: false,
         error: "Unauthorized. Admin access required.",
@@ -212,26 +218,48 @@ router.post("/send-money", protect, async (req, res) => {
 
     const { recipientPhone, amount, recipientId, notes } = req.body;
 
+    console.log("📋 Disbursement details:", {
+      recipientPhone,
+      amount,
+      recipientId,
+      notes,
+    });
+
     if (!recipientPhone || !amount || !recipientId) {
+      console.error("❌ Missing required fields for disbursement");
       return res.status(400).json({
         success: false,
         error: "Recipient phone, amount, and recipientId are required",
       });
     }
 
+    // Validate amount
+    const parsedAmount = parseFloat(amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      console.error("❌ Invalid amount:", amount);
+      return res.status(400).json({
+        success: false,
+        error: "Invalid amount",
+      });
+    }
+
     // Get active cycle for cycle_number
     const activeCycle = await Cycle.findOne({ status: "active" });
     if (!activeCycle) {
+      console.error("❌ No active cycle found");
       return res.status(400).json({
         success: false,
         error: "No active cycle found",
       });
     }
 
+    console.log("✅ Active cycle found:", activeCycle.cycle_number);
+
     // Get admin's phone number for STK Push authorization
     // req.user is already the admin object from the protect middleware
     const admin = req.user;
     if (!admin) {
+      console.error("❌ Admin information not found in request");
       return res.status(400).json({
         success: false,
         error: "Admin information not found",
@@ -242,30 +270,43 @@ router.post("/send-money", protect, async (req, res) => {
     // This is the phone that will receive the STK Push to authorize disbursement
     const authorizationPhone = "0741255534";
 
+    console.log("📱 Authorization phone set to:", authorizationPhone);
+
     // Generate unique reference for the disbursement
     const reference = `SMCF-DISBURSEMENT-${Date.now()}`;
 
+    console.log("🔑 Generated reference:", reference);
+
     // Send STK Push to authorization phone for approval
+    console.log("📤 Initiating STK Push to authorization phone...");
+
     const result = await initiateLipiaPayment(
       authorizationPhone,
-      amount,
+      parsedAmount,
       reference,
-      `Authorize disbursement of KSh ${amount} to member`
+      `Authorize disbursement of KSh ${parsedAmount} to member`
     );
 
+    console.log("📥 Lipia response received:", result);
+
     if (!result.success) {
+      console.error("❌ Lipia STK Push failed:", result.error);
       return res.status(400).json({
         success: false,
-        error: result.error,
+        error: result.error || "Failed to initiate STK Push",
         responseDescription: result.responseDescription,
       });
     }
 
+    console.log("✅ STK Push initiated successfully");
+
     // Create PENDING disbursement record (will be completed after admin authorizes)
+    console.log("💾 Creating disbursement record...");
+
     const disbursement = await Payment.create({
       member_id: recipientId,
       phone: recipientPhone, // Recipient's phone (for records)
-      amount: parseFloat(amount),
+      amount: parsedAmount,
       cycle_number: activeCycle.cycle_number,
       status: "pending",
       payment_type: "disbursement",
@@ -276,10 +317,14 @@ router.post("/send-money", protect, async (req, res) => {
       notes: notes || `Disbursement to member`,
     });
 
+    console.log("✅ Disbursement record created:", disbursement._id);
+
     console.log(
       `📱 STK Push sent to ${authorizationPhone} for disbursement authorization`
     );
-    console.log(`💰 Amount: KSh ${amount} to recipient: ${recipientPhone}`);
+    console.log(
+      `💰 Amount: KSh ${parsedAmount} to recipient: ${recipientPhone}`
+    );
     console.log(`🔍 CheckoutRequestID: ${result.checkoutRequestID}`);
 
     res.json({
@@ -289,15 +334,16 @@ router.post("/send-money", protect, async (req, res) => {
       disbursementId: disbursement._id,
       adminPhone: authorizationPhone,
       recipientPhone: recipientPhone,
-      amount: parseFloat(amount),
+      amount: parsedAmount,
       CheckoutRequestID: result.checkoutRequestID,
       MerchantRequestID: result.merchantRequestID,
     });
   } catch (error) {
-    console.error("Send money error:", error);
+    console.error("❌ Send money error:", error);
+    console.error("Error stack:", error.stack);
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: error.message || "Internal server error during disbursement",
     });
   }
 });

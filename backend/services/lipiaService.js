@@ -32,6 +32,32 @@ export const initiateLipiaPayment = async (
   description = "SMCF Contribution Payment"
 ) => {
   try {
+    console.log("🚀 initiateLipiaPayment called with:", {
+      phone,
+      amount,
+      reference,
+      description,
+    });
+
+    // Validate API key
+    if (!LIPIA_API_KEY) {
+      console.error("❌ LIPIA_API_KEY is not configured!");
+      throw new Error(
+        "Payment gateway not configured. Please contact administrator."
+      );
+    }
+
+    // Validate inputs
+    if (!phone) {
+      throw new Error("Phone number is required");
+    }
+    if (!amount || amount <= 0) {
+      throw new Error("Valid amount is required");
+    }
+    if (!reference) {
+      throw new Error("Transaction reference is required");
+    }
+
     // Clean and format phone number to 254XXXXXXXXX
     let cleanedPhone = phone.toString().trim().replace(/\s+/g, ""); // Remove spaces
 

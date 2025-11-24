@@ -21,11 +21,31 @@ router.post("/", protect, adminOnly, async (req, res) => {
   try {
     const { title, message, priority } = req.body;
 
+    // Validate required fields
+    if (!message || message.trim() === "") {
+      return res.status(400).json({
+        success: false,
+        error: "Message is required",
+      });
+    }
+
+    // Get admin ID from req.admin or req.user (both are set by protect middleware)
+    const adminId = req.admin?._id || req.user?._id;
+
+    if (!adminId) {
+      return res.status(401).json({
+        success: false,
+        error: "Admin authentication failed",
+      });
+    }
+
+    console.log("📢 Creating announcement by admin:", adminId);
+
     const announcement = await Announcement.create({
-      title,
-      message,
+      title: title || "Announcement",
+      message: message.trim(),
       priority: priority || "medium",
-      created_by: req.admin._id,
+      created_by: adminId,
     });
 
     // Populate the announcement before emitting
@@ -33,18 +53,23 @@ router.post("/", protect, adminOnly, async (req, res) => {
       announcement._id
     ).populate("created_by", "name role");
 
+    console.log("✅ Announcement created:", populatedAnnouncement._id);
+
     // Emit socket event to all connected clients
     const io = req.app.get("io");
     if (io) {
       io.emit("announcementCreated", populatedAnnouncement);
       console.log(
         "📢 New announcement broadcasted:",
-        populatedAnnouncement.message
+        populatedAnnouncement.message.substring(0, 50)
       );
+    } else {
+      console.warn("⚠️ Socket.IO not available for broadcasting");
     }
 
     res.status(201).json({ success: true, data: populatedAnnouncement });
   } catch (error) {
+    console.error("❌ Announcement creation error:", error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
