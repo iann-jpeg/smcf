@@ -202,14 +202,17 @@ router.post("/query-status", protect, async (req, res) => {
  */
 router.post("/send-money", protect, async (req, res) => {
   try {
-    console.log(
-      "💰 Disbursement request received from:",
-      req.user?.name || req.user?._id
-    );
+    console.log("💰 Disbursement request received");
+    console.log("   User:", req.user?.name || req.user?._id);
+    console.log("   Role:", req.user?.role);
+    console.log("   UserRole:", req.userRole);
+    console.log("   Permissions:", req.user?.permissions);
 
-    // Check if user is admin
-    if (req.user.role !== "admin" && !req.user.permissions?.canDisburseFunds) {
-      console.error("❌ Unauthorized disbursement attempt by:", req.user?.role);
+    // Check if user is admin using userRole from middleware
+    if (req.userRole !== "admin") {
+      console.error("❌ Unauthorized disbursement attempt");
+      console.error("   UserRole:", req.userRole);
+      console.error("   User Role:", req.user?.role);
       return res.status(403).json({
         success: false,
         error: "Unauthorized. Admin access required.",

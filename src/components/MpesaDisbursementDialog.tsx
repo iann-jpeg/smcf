@@ -81,21 +81,36 @@ const MpesaDisbursementDialog = ({
     try {
       // Initiate disbursement - sends STK to admin's phone
       const token = localStorage.getItem("smcf_token");
+
+      const requestBody = {
+        recipientPhone: selectedMemberData?.phone,
+        amount: parseInt(amount),
+        recipientId: selectedMemberData?._id || selectedMemberData?.id,
+        notes: `SMCF Payout to ${selectedMemberData?.name}`,
+      };
+
+      console.log("💰 Initiating disbursement:", {
+        url: `${API_BASE}/api/lipia/send-money`,
+        body: requestBody,
+        hasToken: !!token,
+      });
+
       const response = await fetch(`${API_BASE}/api/lipia/send-money`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          recipientPhone: selectedMemberData?.phone,
-          amount: parseInt(amount),
-          recipientId: selectedMemberData?._id || selectedMemberData?.id,
-          notes: `SMCF Payout to ${selectedMemberData?.name}`,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
+
+      console.log("💰 Disbursement API Response:", {
+        status: response.status,
+        ok: response.ok,
+        data,
+      });
 
       if (response.ok && data.success) {
         // STK sent to admin successfully
@@ -113,6 +128,7 @@ const MpesaDisbursementDialog = ({
         // Start polling for status
         pollDisbursementStatus(data.transactionReference, data.disbursementId);
       } else {
+        console.error("❌ Disbursement failed:", data);
         setIsProcessing(false);
         setStep("failed");
         toast({
@@ -122,12 +138,13 @@ const MpesaDisbursementDialog = ({
           variant: "destructive",
         });
       }
-    } catch (error) {
+    } catch (error: any) {
+      console.error("❌ Disbursement error:", error);
       setIsProcessing(false);
       setStep("failed");
       toast({
         title: "Network Error",
-        description: "Could not connect to server.",
+        description: error.message || "Could not connect to server.",
         variant: "destructive",
       });
     }

@@ -29,11 +29,34 @@ export const protect = async (req, res, next) => {
         decoded.role === "treasurer"
       ) {
         req.admin = await Admin.findById(decoded.id);
+
+        if (!req.admin) {
+          return res.status(401).json({
+            success: false,
+            error: "Admin account not found",
+          });
+        }
+
         req.user = req.admin; // Set req.user for compatibility
         req.user.role = decoded.role; // Ensure role is set
         req.userRole = "admin";
+
+        console.log(
+          "✅ Admin authenticated:",
+          req.user.name,
+          "Role:",
+          decoded.role
+        );
       } else {
         req.member = await Member.findById(decoded.id);
+
+        if (!req.member) {
+          return res.status(401).json({
+            success: false,
+            error: "Member account not found",
+          });
+        }
+
         req.user = req.member; // Set req.user for compatibility
         req.user.role = decoded.role || "member"; // Ensure role is set
         req.userRole = "member";
@@ -41,6 +64,7 @@ export const protect = async (req, res, next) => {
 
       next();
     } catch (err) {
+      console.error("❌ Token verification failed:", err.message);
       return res.status(401).json({
         success: false,
         error: "Not authorized to access this route",
