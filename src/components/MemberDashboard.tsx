@@ -34,6 +34,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
   const [showLoanRequest, setShowLoanRequest] = useState(false);
   const { toast } = useToast();
   const [paymentHistory, setPaymentHistory] = useState([]);
+  const [memberLoans, setMemberLoans] = useState<any[]>([]);
   const [currentCycleData, setCurrentCycleData] = useState(
     cycleData || {
       currentCycle: 0,
@@ -64,17 +65,34 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
     const fetchData = async () => {
       try {
         // Fetch all data in parallel
-        const [cycleRes, paymentsRes] = await Promise.all([
+        const [cycleRes, paymentsRes, loansRes] = await Promise.all([
           fetch(`${API_BASE}/api/cycles/current`, {
             headers: { ...authService.getAuthHeaders() },
           }),
           fetch(`${API_BASE}/api/payments`, {
             headers: { ...authService.getAuthHeaders() },
           }),
+          fetch(`${API_BASE}/api/loans`, {
+            headers: { ...authService.getAuthHeaders() },
+          }),
         ]);
 
         const cycleData = await cycleRes.json();
         const payments = await paymentsRes.json();
+        const loansData = await loansRes.json();
+
+        // Filter member's loans
+        const memberLoansList = Array.isArray(loansData)
+          ? loansData.filter(
+              (loan) =>
+                loan.member_id?._id === userData._id ||
+                loan.member_id?._id === userData.id ||
+                loan.member_id === userData._id ||
+                loan.member_id === userData.id
+            )
+          : [];
+
+        setMemberLoans(memberLoansList);
 
         // Update cycle data silently only if changed
         if (cycleData.success) {
@@ -192,9 +210,11 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
           console.log("💰 Your loan status was updated:", data);
           const statusMessages: Record<string, string> = {
             approved: `Your loan of KES ${data.amount.toLocaleString()} has been approved!`,
-            rejected: `Your loan request for KES ${data.amount.toLocaleString()} was rejected`,
-            disbursed: `Your loan of KES ${data.amount.toLocaleString()} has been disbursed`,
-            repaid: `Your loan of KES ${data.amount.toLocaleString()} is marked as repaid`,
+            rejected: data.rejectionReason
+              ? `Your loan request was rejected. Reason: ${data.rejectionReason}`
+              : `Your loan request for KES ${data.amount.toLocaleString()} was rejected`,
+            disbursed: `Your loan of KES ${data.amount.toLocaleString()} has been disbursed to your M-Pesa!`,
+            repaid: `Your loan of KES ${data.amount.toLocaleString()} is marked as repaid. Thank you!`,
           };
 
           toast({
@@ -204,6 +224,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
             description:
               statusMessages[data.status] || `Loan status: ${data.status}`,
             variant: data.status === "rejected" ? "destructive" : "default",
+            duration: data.status === "rejected" ? 8000 : 5000, // Show rejection longer
           });
           fetchData(); // Refresh data immediately
         }
@@ -378,11 +399,31 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
       </Card>
 
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="history">Payment History</TabsTrigger>
-          <TabsTrigger value="payouts">Payouts</TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">
+          <TabsList className="inline-flex w-auto md:grid md:w-full md:grid-cols-4 min-w-max">
+            <TabsTrigger
+              value="overview"
+              className="text-xs sm:text-sm whitespace-nowrap">
+              Overview
+            </TabsTrigger>
+            <TabsTrigger
+              value="loans"
+              className="text-xs sm:text-sm whitespace-nowrap">
+              My Loans
+            </TabsTrigger>
+            <TabsTrigger
+              value="history"
+              className="text-xs sm:text-sm whitespace-nowrap">
+              <span className="hidden sm:inline">Payment History</span>
+              <span className="sm:hidden">History</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="payouts"
+              className="text-xs sm:text-sm whitespace-nowrap">
+              Payouts
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="overview" className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -506,6 +547,138 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                   </div>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="loans" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="w-5 h-5" />
+                My Loan Applications
+              </CardTitle>
+              <CardDescription>
+                Track your loan requests and their status
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {memberLoans.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <TrendingUp className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p>You haven't requested any loans yet</p>
+                  <Button
+                    onClick={() => setShowLoanRequest(true)}
+                    variant="outline"
+                    className="mt-4">
+                    Request Your First Loan
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {memberLoans.map((loan) => (
+                    <Card
+                      key={loan._id}
+                      className="border-l-4"
+                      style={{
+                        borderLeftColor:
+                          loan.status === "approved"
+                            ? "#10b981"
+                            : loan.status === "rejected"
+                            ? "#ef4444"
+                            : loan.status === "disbursed"
+                            ? "#3b82f6"
+                            : loan.status === "repaid"
+                            ? "#8b5cf6"
+                            : "#f59e0b",
+                      }}>
+                      <CardContent className="pt-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <h4 className="font-semibold text-base sm:text-lg">
+                                KES {loan.amount.toLocaleString()}
+                              </h4>
+                              <Badge
+                                variant={
+                                  loan.status === "approved" ||
+                                  loan.status === "disbursed"
+                                    ? "default"
+                                    : loan.status === "rejected"
+                                    ? "destructive"
+                                    : "secondary"
+                                }
+                                className="text-xs">
+                                {loan.status.charAt(0).toUpperCase() +
+                                  loan.status.slice(1)}
+                              </Badge>
+                            </div>
+                            <div className="space-y-1 text-sm text-muted-foreground">
+                              <p>
+                                <span className="font-medium">Purpose:</span>{" "}
+                                {loan.purpose}
+                              </p>
+                              <p>
+                                <span className="font-medium">
+                                  Interest Rate:
+                                </span>{" "}
+                                {loan.interest_rate}%
+                              </p>
+                              <p>
+                                <span className="font-medium">
+                                  Requested on:
+                                </span>{" "}
+                                {new Date(
+                                  loan.request_date
+                                ).toLocaleDateString()}
+                              </p>
+                              {loan.approval_date && (
+                                <p>
+                                  <span className="font-medium">
+                                    {loan.status === "rejected"
+                                      ? "Rejected on"
+                                      : "Approved on"}
+                                    :
+                                  </span>{" "}
+                                  {new Date(
+                                    loan.approval_date
+                                  ).toLocaleDateString()}
+                                </p>
+                              )}
+                              {loan.disbursement_date && (
+                                <p>
+                                  <span className="font-medium">
+                                    Disbursed on:
+                                  </span>{" "}
+                                  {new Date(
+                                    loan.disbursement_date
+                                  ).toLocaleDateString()}
+                                </p>
+                              )}
+                              {loan.rejection_reason && (
+                                <div className="mt-2 p-2 bg-destructive/10 border border-destructive/20 rounded">
+                                  <p className="text-destructive font-medium text-xs">
+                                    Rejection Reason:
+                                  </p>
+                                  <p className="text-destructive text-xs">
+                                    {loan.rejection_reason}
+                                  </p>
+                                </div>
+                              )}
+                              {loan.notes && (
+                                <div className="mt-2 p-2 bg-muted rounded">
+                                  <p className="font-medium text-xs">Notes:</p>
+                                  <p className="text-xs">{loan.notes}</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

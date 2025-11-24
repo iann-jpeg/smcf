@@ -72,11 +72,15 @@ router.put("/:id/status", protect, adminOnly, async (req, res) => {
         memberName: loan.member_id.name,
         status: loan.status,
         amount: loan.amount,
+        rejectionReason: loan.rejection_reason || null,
+        notes: loan.notes || null,
         timestamp: new Date(),
       });
 
       console.log(
-        `📢 Loan status updated: ${loan.status} for member ${loan.member_id.name}`
+        `📢 Loan status updated: ${loan.status} for member ${
+          loan.member_id.name
+        }${loan.rejection_reason ? ` - Reason: ${loan.rejection_reason}` : ""}`
       );
     }
 
