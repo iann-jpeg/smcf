@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -7,21 +7,30 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Megaphone, Send } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { Megaphone, Send } from "lucide-react";
+import { useState } from "react";
 
 interface AnnouncementDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-const AnnouncementDialog = ({ open, onOpenChange }: AnnouncementDialogProps) => {
-  const [message, setMessage] = useState('');
-  const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
+const AnnouncementDialog = ({
+  open,
+  onOpenChange,
+}: AnnouncementDialogProps) => {
+  const [message, setMessage] = useState("");
+  const [priority, setPriority] = useState<"low" | "medium" | "high">("medium");
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
@@ -30,51 +39,62 @@ const AnnouncementDialog = ({ open, onOpenChange }: AnnouncementDialogProps) => 
       toast({
         title: "Error",
         description: "Please enter an announcement message",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
 
     setIsLoading(true);
-    
+
     // Simulate sending announcement
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
     toast({
       title: "Announcement Sent",
       description: `Your ${priority} priority announcement has been sent to all 12 members`,
     });
-    
-    setMessage('');
-    setPriority('medium');
+
+    setMessage("");
+    setPriority("medium");
     setIsLoading(false);
     onOpenChange(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Megaphone className="w-5 h-5 text-primary" />
+          <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <Megaphone className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
             Send Announcement to All Members
           </DialogTitle>
           <DialogDescription>
-            Send important updates, reminders, or information to all SMCF members
+            Send important updates, reminders, or information to all SMCF
+            members
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="priority">Priority Level</Label>
-            <Select value={priority} onValueChange={(value: 'low' | 'medium' | 'high') => setPriority(value)}>
+            <Select
+              value={priority}
+              onValueChange={(value: "low" | "medium" | "high") =>
+                setPriority(value)
+              }>
               <SelectTrigger>
                 <SelectValue placeholder="Select priority" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="low">🟢 Low Priority - General Info</SelectItem>
-                <SelectItem value="medium">🟡 Medium Priority - Important Update</SelectItem>
-                <SelectItem value="high">🔴 High Priority - Urgent Notice</SelectItem>
+                <SelectItem value="low">
+                  🟢 Low Priority - General Info
+                </SelectItem>
+                <SelectItem value="medium">
+                  🟡 Medium Priority - Important Update
+                </SelectItem>
+                <SelectItem value="high">
+                  🔴 High Priority - Urgent Notice
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -94,7 +114,8 @@ const AnnouncementDialog = ({ open, onOpenChange }: AnnouncementDialogProps) => 
           <div className="bg-muted/50 p-4 rounded-lg">
             <h4 className="font-semibold mb-2 text-sm">Recipients</h4>
             <p className="text-sm text-muted-foreground">
-              This announcement will be sent to all <strong>12 active members</strong> via:
+              This announcement will be sent to all{" "}
+              <strong>12 active members</strong> via:
             </p>
             <ul className="text-sm text-muted-foreground mt-2 space-y-1">
               <li>• In-app notification on their dashboard</li>
@@ -105,17 +126,15 @@ const AnnouncementDialog = ({ open, onOpenChange }: AnnouncementDialogProps) => 
         </div>
 
         <DialogFooter>
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={() => onOpenChange(false)}
-            disabled={isLoading}
-          >
+            disabled={isLoading}>
             Cancel
           </Button>
-          <Button 
+          <Button
             onClick={handleSendAnnouncement}
-            disabled={isLoading || !message.trim()}
-          >
+            disabled={isLoading || !message.trim()}>
             {isLoading ? (
               <>Sending...</>
             ) : (

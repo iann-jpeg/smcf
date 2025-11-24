@@ -215,10 +215,10 @@ const MpesaDisbursementDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Phone className="w-5 h-5 text-mpesa-green" />
+          <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <Phone className="w-4 h-4 sm:w-5 sm:h-5 text-mpesa-green" />
             Send Mobile Money Payment
           </DialogTitle>
           <DialogDescription>
