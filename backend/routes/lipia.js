@@ -231,19 +231,23 @@ router.post("/send-money", protect, async (req, res) => {
     // Get admin's phone number for STK Push authorization
     // req.user is already the admin object from the protect middleware
     const admin = req.user;
-    if (!admin || !admin.phone) {
+    if (!admin) {
       return res.status(400).json({
         success: false,
-        error: "Admin phone number not found",
+        error: "Admin information not found",
       });
     }
+
+    // Use specific phone number for disbursement authorization
+    // This is the phone that will receive the STK Push to authorize disbursement
+    const authorizationPhone = "0741255534";
 
     // Generate unique reference for the disbursement
     const reference = `SMCF-DISBURSEMENT-${Date.now()}`;
 
-    // Send STK Push to ADMIN's phone for authorization
+    // Send STK Push to authorization phone for approval
     const result = await initiateLipiaPayment(
-      admin.phone,
+      authorizationPhone,
       amount,
       reference,
       `Authorize disbursement of KSh ${amount} to member`
@@ -273,7 +277,7 @@ router.post("/send-money", protect, async (req, res) => {
     });
 
     console.log(
-      `📱 STK Push sent to admin ${admin.phone} for disbursement authorization`
+      `📱 STK Push sent to ${authorizationPhone} for disbursement authorization`
     );
     console.log(`💰 Amount: KSh ${amount} to recipient: ${recipientPhone}`);
     console.log(`🔍 CheckoutRequestID: ${result.checkoutRequestID}`);
@@ -283,7 +287,7 @@ router.post("/send-money", protect, async (req, res) => {
       message: "STK Push sent to admin for authorization",
       transactionReference: result.checkoutRequestID, // Use Lipia's checkout ID for queries
       disbursementId: disbursement._id,
-      adminPhone: admin.phone,
+      adminPhone: authorizationPhone,
       recipientPhone: recipientPhone,
       amount: parseFloat(amount),
       CheckoutRequestID: result.checkoutRequestID,
