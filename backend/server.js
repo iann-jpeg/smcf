@@ -23,13 +23,18 @@ const app = express();
 const httpServer = createServer(app);
 
 // Initialize Socket.IO with proper CORS
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:8080",
+  "http://localhost:3000",
+  "https://smcf.app",
+  "https://www.smcf.app",
+  process.env.CLIENT_URL,
+].filter(Boolean);
+
 const io = new Server(httpServer, {
   cors: {
-    origin: [
-      "http://localhost:5173",
-      "http://localhost:8080",
-      "http://localhost:3000",
-    ],
+    origin: allowedOrigins,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     credentials: true,
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -42,11 +47,7 @@ app.set("io", io);
 // Middleware - CORS must be first
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "http://localhost:8080",
-      "http://localhost:3000",
-    ],
+    origin: allowedOrigins,
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
