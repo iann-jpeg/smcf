@@ -136,9 +136,7 @@ const ReportsTab = () => {
     <table>
       <thead>
         <tr>
-          <th>Member ID</th>
           <th>Name</th>
-          <th>Phone</th>
           <th>Position</th>
           <th>Status</th>
           <th>Contributed</th>
@@ -147,9 +145,7 @@ const ReportsTab = () => {
       <tbody>
         ${members.map(member => `
           <tr>
-            <td>${member.member_id || 'N/A'}</td>
             <td>${member.name || 'Unknown'}</td>
-            <td>${member.phone || 'N/A'}</td>
             <td>${member.position || '-'}</td>
             <td class="${member.payment_status === 'paid' ? 'status-paid' : 'status-pending'}">
               ${member.payment_status === 'paid' ? '✓ Paid' : '○ Pending'}
@@ -260,11 +256,9 @@ const ReportsTab = () => {
       const csvData = [
         ['SMCF Cycle Report', `Cycle #${currentCycle?.cycle_number || 'N/A'}`, `Generated: ${new Date().toLocaleString()}`],
         [],
-        ['Member ID', 'Name', 'Phone', 'Position', 'Status', 'Total Contributed', 'Total Received'],
+        ['Name', 'Position', 'Status', 'Total Contributed', 'Total Received'],
         ...members.map(m => [
-          m.member_id || 'N/A',
           m.name || 'Unknown',
-          m.phone || 'N/A',
           m.position || '-',
           m.payment_status || 'pending',
           m.total_contributed || 0,

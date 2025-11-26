@@ -37,18 +37,16 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [memberLoans, setMemberLoans] = useState<any[]>([]);
   const [announcements, setAnnouncements] = useState<any[]>([]);
-  const [currentCycleData, setCurrentCycleData] = useState(
-    cycleData || {
-      currentCycle: 0,
-      daysLeft: 0,
-      paidMembers: 0,
-      totalMembers: 0,
-      collectedAmount: 0,
-      totalAmount: 0,
-      cycleStartDate: new Date().toLocaleDateString(),
-      nextRecipient: "Loading...",
-    }
-  );
+  const [currentCycleData, setCurrentCycleData] = useState({
+    currentCycle: 0,
+    daysLeft: 0,
+    paidMembers: 0,
+    totalMembers: 0,
+    collectedAmount: 0,
+    totalAmount: 0,
+    cycleStartDate: new Date().toLocaleDateString(),
+    nextRecipient: "Loading...",
+  });
   const [memberStats, setMemberStats] = useState({
     hasPaidThisCycle: false,
     nextPayoutCycle: 0,
@@ -148,12 +146,16 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
               headers: { ...authService.getAuthHeaders() },
             });
             const membersData = await membersRes.json();
-            return Array.isArray(membersData) ? membersData.length : 0;
+            const count = Array.isArray(membersData) ? membersData.length : 0;
+            console.log("👥 Total members count:", count);
+            return count;
           } catch (err) {
             console.error("Error fetching members count:", err);
             return 0;
           }
         })();
+
+        console.log("💰 Payments data:", payments);
 
         // Calculate total collected from all payments
         const totalCollected = Array.isArray(payments) 
@@ -161,6 +163,8 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
               .filter(p => p.status === 'completed')
               .reduce((sum, p) => sum + (p.amount || 0), 0)
           : 0;
+
+        console.log("💵 Total collected:", totalCollected);
 
         // Count unique members who have paid
         const uniquePaidMembers = Array.isArray(payments)
@@ -171,49 +175,32 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
             ).size
           : 0;
 
-        // Update cycle data silently only if changed
-        if (cycleData.success && cycleData.data) {
-          setCurrentCycleData((prev) => {
-            const nextRecipientName =
-              cycleData.data.next_recipient?.name ||
-              cycleData.data.next_recipient_name ||
-              "No recipient assigned";
-            const newData = {
-              currentCycle: cycleData.data.cycle_number || 1,
-              daysLeft: cycleData.data.days_left || 0,
-              paidMembers: cycleData.data.paid_members_count || uniquePaidMembers,
-              totalMembers: totalMembersCount || 0,
-              collectedAmount: cycleData.data.total_amount_collected || totalCollected,
-              totalAmount: cycleData.data.expected_amount || (totalMembersCount * 204),
-              cycleStartDate: cycleData.data.start_date 
-                ? new Date(cycleData.data.start_date).toLocaleDateString()
-                : new Date().toLocaleDateString(),
-              nextRecipient: nextRecipientName,
-            };
-            if (JSON.stringify(prev) !== JSON.stringify(newData)) {
-              return newData;
-            }
-            return prev;
-          });
-        } else {
-          // No active cycle - show data from analytics
-          setCurrentCycleData((prev) => {
-            const newData = {
-              currentCycle: 1,
-              daysLeft: 0,
-              paidMembers: uniquePaidMembers,
-              totalMembers: totalMembersCount || 0,
-              collectedAmount: totalCollected,
-              totalAmount: (totalMembersCount * 204) || 0,
-              cycleStartDate: new Date().toLocaleDateString(),
-              nextRecipient: "No Active Cycle",
-            };
-            if (JSON.stringify(prev) !== JSON.stringify(newData)) {
-              return newData;
-            }
-            return prev;
-          });
-        }
+        console.log("✅ Unique paid members:", uniquePaidMembers);
+
+        // Update cycle data - always use fresh data from system
+        const newData = {
+          currentCycle: (cycleData.success && cycleData.data) ? (cycleData.data.cycle_number || 1) : 1,
+          daysLeft: (cycleData.success && cycleData.data) ? (cycleData.data.days_left || 0) : 0,
+          paidMembers: (cycleData.success && cycleData.data) 
+            ? (cycleData.data.paid_members_count || uniquePaidMembers) 
+            : uniquePaidMembers,
+          totalMembers: totalMembersCount || 0,
+          collectedAmount: (cycleData.success && cycleData.data) 
+            ? (cycleData.data.total_amount_collected || totalCollected) 
+            : totalCollected,
+          totalAmount: (cycleData.success && cycleData.data) 
+            ? (cycleData.data.expected_amount || (totalMembersCount * 204)) 
+            : (totalMembersCount * 204),
+          cycleStartDate: (cycleData.success && cycleData.data && cycleData.data.start_date) 
+            ? new Date(cycleData.data.start_date).toLocaleDateString()
+            : new Date().toLocaleDateString(),
+          nextRecipient: (cycleData.success && cycleData.data) 
+            ? (cycleData.data.next_recipient?.name || cycleData.data.next_recipient_name || "No recipient assigned")
+            : "No Active Cycle",
+        };
+        
+        console.log("📊 Updated cycle data:", newData);
+        setCurrentCycleData(newData);
 
         // Filter for this member's payments
         const memberPayments = Array.isArray(payments)

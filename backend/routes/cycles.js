@@ -82,6 +82,8 @@ router.get("/", protect, adminOnly, async (req, res) => {
 // Start new cycle (admin only)
 router.post("/start", protect, adminOnly, async (req, res) => {
   try {
+    const { recipient_id, member_number } = req.body;
+
     // Complete current cycle
     const currentCycle = await Cycle.findOne({ status: "active" });
     if (currentCycle) {
@@ -89,20 +91,36 @@ router.post("/start", protect, adminOnly, async (req, res) => {
       await currentCycle.save();
     }
 
-    // Determine next recipient
-    const lastRecipientPosition = currentCycle?.next_recipient
-      ? (await Member.findById(currentCycle.next_recipient))?.position || 0
-      : 0;
+    let recipient;
 
-    const nextRecipient = await Member.findOne({
-      position: { $gt: lastRecipientPosition },
-      status: "active",
-    }).sort({ position: 1 });
+    // If specific recipient_id or member_number provided, use that
+    if (recipient_id) {
+      recipient = await Member.findById(recipient_id);
+    } else if (member_number) {
+      recipient = await Member.findOne({ member_id: member_number });
+    } else {
+      // Determine next recipient automatically
+      const lastRecipientPosition = currentCycle?.next_recipient
+        ? (await Member.findById(currentCycle.next_recipient))?.position || 0
+        : 0;
 
-    // If no next recipient, cycle back to first member
-    const recipient =
-      nextRecipient ||
-      (await Member.findOne({ status: "active" }).sort({ position: 1 }));
+      const nextRecipient = await Member.findOne({
+        position: { $gt: lastRecipientPosition },
+        status: "active",
+      }).sort({ position: 1 });
+
+      // If no next recipient, cycle back to first member
+      recipient =
+        nextRecipient ||
+        (await Member.findOne({ status: "active" }).sort({ position: 1 }));
+    }
+
+    if (!recipient) {
+      return res.status(404).json({
+        success: false,
+        error: "No recipient found",
+      });
+    }
 
     const totalMembers = await Member.countDocuments({ status: "active" });
     const newCycleNumber = (currentCycle?.cycle_number || 0) + 1;
@@ -113,7 +131,7 @@ router.post("/start", protect, adminOnly, async (req, res) => {
       end_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000), // 5 days
       status: "active",
       total_members: totalMembers,
-      next_recipient: recipient?._id,
+      next_recipient: recipient._id,
     });
 
     // Reset all members payment status
@@ -127,7 +145,12 @@ router.post("/start", protect, adminOnly, async (req, res) => {
       req.app.get("io").emit("cycle:new", newCycle);
     }
 
-    res.status(201).json({ success: true, data: newCycle });
+    const populatedCycle = await newCycle.populate(
+      "next_recipient",
+      "name phone member_id position"
+    );
+
+    res.status(201).json({ success: true, data: populatedCycle });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

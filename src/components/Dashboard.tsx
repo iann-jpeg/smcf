@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import API_BASE from "@/lib/api";
+import { authService } from "@/lib/authService";
 import { Clock, LogOut } from "lucide-react";
 import { useEffect, useState } from "react";
 import io from "socket.io-client";
@@ -39,36 +40,87 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
   const [announcements, setAnnouncements] = useState([]);
   const [members, setMembers] = useState([]);
 
-  // Fetch fresh cycle data
+  // Fetch fresh cycle data and members count
   useEffect(() => {
-    const fetchCycleData = async () => {
+    const fetchData = async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/cycles/current`);
-        const data = await res.json();
+        // Fetch cycle and members in parallel
+        const [cycleRes, membersRes, paymentsRes] = await Promise.all([
+          fetch(`${API_BASE}/api/cycles/current`, {
+            headers: { ...authService.getAuthHeaders() },
+          }),
+          fetch(`${API_BASE}/api/members`, {
+            headers: { ...authService.getAuthHeaders() },
+          }),
+          fetch(`${API_BASE}/api/payments`, {
+            headers: { ...authService.getAuthHeaders() },
+          }),
+        ]);
         
-        if (data.success && data.data) {
-          const cycle = data.data;
+        const cycleData = await cycleRes.json();
+        const membersData = await membersRes.json();
+        const paymentsData = await paymentsRes.json();
+        
+        console.log("📊 Dashboard fetched data:", { cycleData, membersCount: membersData?.length, paymentsCount: paymentsData?.length });
+        
+        // Get total members count
+        const totalMembersCount = Array.isArray(membersData) ? membersData.length : 0;
+        setMembers(membersData);
+        
+        // Calculate total collected from payments
+        const totalCollected = Array.isArray(paymentsData) 
+          ? paymentsData
+              .filter(p => p.status === 'completed')
+              .reduce((sum, p) => sum + (p.amount || 0), 0)
+          : 0;
+
+        // Count unique paid members
+        const uniquePaidMembers = Array.isArray(paymentsData)
+          ? new Set(
+              paymentsData
+                .filter(p => p.status === 'completed')
+                .map(p => p.member_id?._id || p.member_id)
+            ).size
+          : 0;
+
+        console.log("📈 Calculated stats:", { totalMembersCount, totalCollected, uniquePaidMembers });
+        
+        if (cycleData.success && cycleData.data) {
+          const cycle = cycleData.data;
           setCycleData({
-            currentCycle: cycle.cycle_number || 0,
+            currentCycle: cycle.cycle_number || 1,
             daysLeft: cycle.days_left || 0,
-            totalMembers: cycle.total_members || 0,
-            paidMembers: cycle.paid_members_count || 0,
+            totalMembers: totalMembersCount || cycle.total_members || 0,
+            paidMembers: cycle.paid_members_count || uniquePaidMembers,
             nextRecipient: cycle.next_recipient?.name || cycle.next_recipient_name || "No Active Cycle",
-            totalAmount: cycle.expected_amount || 0,
-            collectedAmount: cycle.total_amount_collected || 0,
-            cycleStartDate: cycle.start_date ? new Date(cycle.start_date).toLocaleDateString() : "Not Started",
+            totalAmount: cycle.expected_amount || (totalMembersCount * 204),
+            collectedAmount: cycle.total_amount_collected || totalCollected,
+            cycleStartDate: cycle.start_date ? new Date(cycle.start_date).toLocaleDateString() : new Date().toLocaleDateString(),
             paymentDeadline: cycle.end_date ? new Date(cycle.end_date).toLocaleDateString() : "Not Set",
+          });
+        } else {
+          // No active cycle - use calculated data
+          setCycleData({
+            currentCycle: 1,
+            daysLeft: 0,
+            totalMembers: totalMembersCount,
+            paidMembers: uniquePaidMembers,
+            nextRecipient: "No Active Cycle",
+            totalAmount: totalMembersCount * 204,
+            collectedAmount: totalCollected,
+            cycleStartDate: new Date().toLocaleDateString(),
+            paymentDeadline: "Not Set",
           });
         }
       } catch (err) {
-        console.error("Failed to fetch cycle data:", err);
+        console.error("Failed to fetch data:", err);
       }
     };
 
-    fetchCycleData();
+    fetchData();
 
     // Refresh every 30 seconds
-    const interval = setInterval(fetchCycleData, 30000);
+    const interval = setInterval(fetchData, 30000);
 
     return () => clearInterval(interval);
   }, []);

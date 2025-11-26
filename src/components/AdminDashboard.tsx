@@ -957,6 +957,58 @@ const AdminDashboard = ({
             </CardContent>
           </Card>
 
+          {/* Start Cycle Button */}
+          <Card className="border-accent bg-accent/5">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold mb-1">Start New Cycle with Member #12</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Begin a new cycle and set the disbursement recipient
+                  </p>
+                </div>
+                <Button
+                  onClick={async () => {
+                    try {
+                      const response = await fetch(`${API_BASE}/api/cycles/start`, {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                          ...authService.getAuthHeaders(),
+                        },
+                        body: JSON.stringify({
+                          member_number: "SMCF-0012",
+                        }),
+                      });
+
+                      const data = await response.json();
+
+                      if (response.ok && data.success) {
+                        toast({
+                          title: "Cycle Started",
+                          description: `New cycle started with ${data.data.next_recipient?.name} as recipient`,
+                        });
+                        fetchCurrentCycle();
+                        fetchAllData();
+                      } else {
+                        throw new Error(data.error || "Failed to start cycle");
+                      }
+                    } catch (error: any) {
+                      toast({
+                        title: "Error",
+                        description: error.message || "Failed to start cycle",
+                        variant: "destructive",
+                      });
+                    }
+                  }}
+                  size="lg">
+                  <TrendingUp className="w-4 h-4 mr-2" />
+                  Start Cycle with Member #12
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Member Status Overview */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card>
