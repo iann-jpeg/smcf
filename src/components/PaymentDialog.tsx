@@ -18,7 +18,7 @@ import {
   Shield,
   Smartphone,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface PaymentDialogProps {
   open: boolean;
@@ -49,7 +49,7 @@ const PaymentDialog = ({
   const [hasPaidCurrentCycle, setHasPaidCurrentCycle] = useState(false);
 
   // Determine target cycle when dialog opens
-  useState(() => {
+  useEffect(() => {
     const checkPaymentStatus = async () => {
       try {
         const token = localStorage.getItem("smcf_token");
@@ -88,7 +88,7 @@ const PaymentDialog = ({
     if (open) {
       checkPaymentStatus();
     }
-  });
+  }, [open, cycle, memberData]);
 
   const handleInitiatePayment = async () => {
     setPaymentStep("processing");
