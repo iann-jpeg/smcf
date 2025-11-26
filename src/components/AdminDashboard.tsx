@@ -194,10 +194,15 @@ const AdminDashboard = ({
         },
       });
       const data = await res.json();
+      console.log("📊 Current cycle data:", data);
+      
+      // Extract the actual cycle data from the response
+      const cycleData = data.success ? data.data : data;
+      
       // Only update if data changed
       setCurrentCycle((prev) => {
-        if (JSON.stringify(prev) !== JSON.stringify(data)) {
-          return data;
+        if (JSON.stringify(prev) !== JSON.stringify(cycleData)) {
+          return cycleData;
         }
         return prev;
       });
@@ -1335,33 +1340,93 @@ const AdminDashboard = ({
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Recipient:</span>
-                    <span className="font-semibold">
-                      {currentCycle.recipient_id?.name || "TBD"}
-                    </span>
+                <div className="space-y-4">
+                  <div className="space-y-3">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Recipient:</span>
+                      <span className="font-semibold">
+                        {currentCycle.recipient_id?.name || "TBD"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Amount:</span>
+                      <span className="font-semibold text-accent">
+                        KES {(safeMembers.length * 204).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Status:</span>
+                      <Badge
+                        variant={
+                          currentCycle.disbursement_status === "completed"
+                            ? "default"
+                            : currentCycle.paid_members_count === safeMembers.length
+                            ? "default"
+                            : "secondary"
+                        }>
+                        {currentCycle.disbursement_status ||
+                          (currentCycle.paid_members_count === safeMembers.length
+                            ? "Ready"
+                            : `Waiting (${currentCycle.paid_members_count}/${safeMembers.length})`)}
+                      </Badge>
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Amount:</span>
-                    <span className="font-semibold text-accent">
-                      KES {(safeMembers.length * 204).toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Status:</span>
-                    <Badge
-                      variant={
-                        currentCycle.paid_members_count === safeMembers.length
-                          ? "default"
-                          : "secondary"
-                      }>
-                      {currentCycle.disbursement_status ||
-                        (currentCycle.paid_members_count === safeMembers.length
-                          ? "Ready"
-                          : `Waiting (${currentCycle.paid_members_count}/${safeMembers.length})`)}
-                    </Badge>
-                  </div>
+                  
+                  {/* Mark as Disbursed Button */}
+                  {currentCycle.disbursement_status !== "completed" && 
+                   currentCycle.recipient_id && (
+                    <Button
+                      onClick={async () => {
+                        try {
+                          const response = await fetch(`${API_BASE}/api/disbursements`, {
+                            method: "POST",
+                            headers: {
+                              "Content-Type": "application/json",
+                              ...authService.getAuthHeaders(),
+                            },
+                            body: JSON.stringify({
+                              cycle_id: currentCycle._id,
+                              recipient_id: currentCycle.recipient_id._id || currentCycle.recipient_id,
+                              amount: safeMembers.length * 204,
+                              method: "manual",
+                              status: "completed",
+                            }),
+                          });
+
+                          const data = await response.json();
+
+                          if (response.ok && data.success) {
+                            toast({
+                              title: "Disbursement Recorded",
+                              description: `Successfully marked disbursement to ${currentCycle.recipient_id?.name} as completed`,
+                            });
+                            fetchDisbursements();
+                            fetchCurrentCycle();
+                          } else {
+                            throw new Error(data.error || "Failed to record disbursement");
+                          }
+                        } catch (error: any) {
+                          toast({
+                            title: "Error",
+                            description: error.message || "Failed to record disbursement",
+                            variant: "destructive",
+                          });
+                        }
+                      }}
+                      className="w-full"
+                      variant="default"
+                      disabled={currentCycle.paid_members_count !== safeMembers.length}>
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      Mark as Disbursed
+                    </Button>
+                  )}
+                  
+                  {currentCycle.disbursement_status === "completed" && (
+                    <div className="flex items-center gap-2 text-financial-success text-sm">
+                      <CheckCircle className="w-4 h-4" />
+                      <span>Disbursement completed</span>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -1375,12 +1440,59 @@ const AdminDashboard = ({
                   <CardTitle>Disbursement History</CardTitle>
                   <CardDescription>Previous payouts to members</CardDescription>
                 </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={fetchDisbursements}>
-                  Refresh
-                </Button>
+                <div className="flex gap-2">
+                  {/* Quick Mark as Disbursed Button */}
+                  {currentCycle && currentCycle.recipient_id && currentCycle.disbursement_status !== "completed" && (
+                    <Button
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          const response = await fetch(`${API_BASE}/api/disbursements`, {
+                            method: "POST",
+                            headers: {
+                              "Content-Type": "application/json",
+                              ...authService.getAuthHeaders(),
+                            },
+                            body: JSON.stringify({
+                              cycle_id: currentCycle._id,
+                              recipient_id: currentCycle.recipient_id._id || currentCycle.recipient_id,
+                              amount: safeMembers.length * 204,
+                              method: "manual",
+                              status: "completed",
+                            }),
+                          });
+
+                          const data = await response.json();
+
+                          if (response.ok && data.success) {
+                            toast({
+                              title: "Disbursement Recorded",
+                              description: `Successfully marked disbursement to ${currentCycle.recipient_id?.name} as completed`,
+                            });
+                            fetchDisbursements();
+                            fetchCurrentCycle();
+                          } else {
+                            throw new Error(data.error || "Failed to record disbursement");
+                          }
+                        } catch (error: any) {
+                          toast({
+                            title: "Error",
+                            description: error.message || "Failed to record disbursement",
+                            variant: "destructive",
+                          });
+                        }
+                      }}>
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      Mark as Disbursed
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={fetchDisbursements}>
+                    Refresh
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
@@ -1403,7 +1515,8 @@ const AdminDashboard = ({
                         <div className="text-sm text-muted-foreground">
                           Cycle #{disbursement.cycle_id?.cycle_number} •
                           {disbursement.mpesa_transaction_id ||
-                            disbursement.phone}
+                            disbursement.phone ||
+                            "Manual"}
                         </div>
                         <div className="text-xs text-muted-foreground">
                           {new Date(

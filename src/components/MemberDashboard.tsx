@@ -155,23 +155,39 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
           }
         })();
 
+        // Calculate total collected from all payments
+        const totalCollected = Array.isArray(payments) 
+          ? payments
+              .filter(p => p.status === 'completed')
+              .reduce((sum, p) => sum + (p.amount || 0), 0)
+          : 0;
+
+        // Count unique members who have paid
+        const uniquePaidMembers = Array.isArray(payments)
+          ? new Set(
+              payments
+                .filter(p => p.status === 'completed')
+                .map(p => p.member_id?._id || p.member_id)
+            ).size
+          : 0;
+
         // Update cycle data silently only if changed
-        if (cycleData.success) {
+        if (cycleData.success && cycleData.data) {
           setCurrentCycleData((prev) => {
             const nextRecipientName =
               cycleData.data.next_recipient?.name ||
               cycleData.data.next_recipient_name ||
               "No recipient assigned";
             const newData = {
-              currentCycle: cycleData.data.cycle_number || 0,
+              currentCycle: cycleData.data.cycle_number || 1,
               daysLeft: cycleData.data.days_left || 0,
-              paidMembers: cycleData.data.paid_members_count || 0,
-              totalMembers: cycleData.data.total_members || totalMembersCount || 0,
-              collectedAmount: cycleData.data.total_amount_collected || 0,
-              totalAmount: cycleData.data.expected_amount || (totalMembersCount * 204) || 0,
+              paidMembers: cycleData.data.paid_members_count || uniquePaidMembers,
+              totalMembers: totalMembersCount || 0,
+              collectedAmount: cycleData.data.total_amount_collected || totalCollected,
+              totalAmount: cycleData.data.expected_amount || (totalMembersCount * 204),
               cycleStartDate: cycleData.data.start_date 
                 ? new Date(cycleData.data.start_date).toLocaleDateString()
-                : "Not Started",
+                : new Date().toLocaleDateString(),
               nextRecipient: nextRecipientName,
             };
             if (JSON.stringify(prev) !== JSON.stringify(newData)) {
@@ -180,12 +196,17 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
             return prev;
           });
         } else {
-          // If no active cycle, still update with member count
+          // No active cycle - show data from analytics
           setCurrentCycleData((prev) => {
             const newData = {
-              ...prev,
-              totalMembers: totalMembersCount || prev.totalMembers || 0,
-              totalAmount: (totalMembersCount * 204) || prev.totalAmount || 0,
+              currentCycle: 1,
+              daysLeft: 0,
+              paidMembers: uniquePaidMembers,
+              totalMembers: totalMembersCount || 0,
+              collectedAmount: totalCollected,
+              totalAmount: (totalMembersCount * 204) || 0,
+              cycleStartDate: new Date().toLocaleDateString(),
+              nextRecipient: "No Active Cycle",
             };
             if (JSON.stringify(prev) !== JSON.stringify(newData)) {
               return newData;

@@ -39,6 +39,7 @@ router.post("/login", async (req, res) => {
           name: admin.name,
           phone: admin.phone,
           role: admin.role,
+          is_active: admin.is_active,
           permissions: admin.permissions,
         },
       });
@@ -142,6 +143,7 @@ router.post("/setup-admin", async (req, res) => {
         name: admin.name,
         phone: admin.phone,
         role: admin.role,
+        is_active: admin.is_active,
       },
     });
   } catch (error) {
