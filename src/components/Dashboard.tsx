@@ -21,8 +21,8 @@ interface DashboardProps {
 const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
   const { toast } = useToast();
 
-  // Cycle data from real API - will be passed from userData
-  const [cycleData] = useState({
+  // Cycle data from real API - will be fetched and updated
+  const [cycleData, setCycleData] = useState({
     currentCycle: userData?.cycleData?.currentCycle || 0,
     daysLeft: userData?.cycleData?.daysLeft || 0,
     totalMembers: userData?.cycleData?.totalMembers || 0,
@@ -38,6 +38,40 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
 
   const [announcements, setAnnouncements] = useState([]);
   const [members, setMembers] = useState([]);
+
+  // Fetch fresh cycle data
+  useEffect(() => {
+    const fetchCycleData = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/cycles/current`);
+        const data = await res.json();
+        
+        if (data.success && data.data) {
+          const cycle = data.data;
+          setCycleData({
+            currentCycle: cycle.cycle_number || 0,
+            daysLeft: cycle.days_left || 0,
+            totalMembers: cycle.total_members || 0,
+            paidMembers: cycle.paid_members_count || 0,
+            nextRecipient: cycle.next_recipient?.name || cycle.next_recipient_name || "No Active Cycle",
+            totalAmount: cycle.expected_amount || 0,
+            collectedAmount: cycle.total_amount_collected || 0,
+            cycleStartDate: cycle.start_date ? new Date(cycle.start_date).toLocaleDateString() : "Not Started",
+            paymentDeadline: cycle.end_date ? new Date(cycle.end_date).toLocaleDateString() : "Not Set",
+          });
+        }
+      } catch (err) {
+        console.error("Failed to fetch cycle data:", err);
+      }
+    };
+
+    fetchCycleData();
+
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchCycleData, 30000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const handleLogout = () => {
     toast({
@@ -121,13 +155,13 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-financial-success mb-2">
-                {Math.round(
-                  (cycleData.paidMembers / cycleData.totalMembers) * 100
-                )}
+                {cycleData.totalMembers > 0
+                  ? Math.round((cycleData.paidMembers / cycleData.totalMembers) * 100)
+                  : 0}
                 %
               </div>
               <Progress
-                value={(cycleData.paidMembers / cycleData.totalMembers) * 100}
+                value={cycleData.totalMembers > 0 ? (cycleData.paidMembers / cycleData.totalMembers) * 100 : 0}
                 className="h-2"
               />
               <div className="text-sm text-muted-foreground mt-2">

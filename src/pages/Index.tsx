@@ -143,16 +143,24 @@ const Index = () => {
             const cycle = cycleData.data;
             setCurrentUser((prev) => {
               if (!prev) return prev;
+              
+              // Safe date parsing with validation
+              const parseDate = (dateStr: any) => {
+                if (!dateStr) return "Not Set";
+                const date = new Date(dateStr);
+                return isNaN(date.getTime()) ? "Not Set" : date.toLocaleDateString();
+              };
+              
               const newCycleData = {
-                currentCycle: cycle.cycle_number,
-                daysLeft: cycle.days_left,
-                paidMembers: cycle.paid_members_count,
-                totalMembers: cycle.total_members,
-                collectedAmount: cycle.total_amount_collected,
-                totalAmount: cycle.expected_amount,
+                currentCycle: cycle.cycle_number || 0,
+                daysLeft: cycle.days_left || 0,
+                paidMembers: cycle.paid_members_count || 0,
+                totalMembers: cycle.total_members || 0,
+                collectedAmount: cycle.total_amount_collected || 0,
+                totalAmount: cycle.expected_amount || 0,
                 nextRecipient: cycle.next_recipient?.name || "TBD",
-                cycleStartDate: new Date(cycle.start_date).toLocaleDateString(),
-                cycleEndDate: new Date(cycle.end_date).toLocaleDateString(),
+                cycleStartDate: parseDate(cycle.start_date),
+                cycleEndDate: parseDate(cycle.end_date),
               };
               // Only update if cycle data changed
               if (
@@ -228,6 +236,8 @@ const Index = () => {
           collectedAmount: 0,
           totalAmount: 0,
           nextRecipient: "No Active Cycle",
+          cycleStartDate: "Not Started",
+          cycleEndDate: "Not Set",
         },
       };
       console.log("Setting admin user data:", enhancedUserData);

@@ -567,32 +567,75 @@ const AdminDashboard = ({
     try {
       const id = member._id || member.id;
       const newStatus = member.payment_status === "paid" ? "pending" : "paid";
-      const res = await fetch(`${API_BASE}/api/members/${id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          ...authService.getAuthHeaders(),
-        },
-        body: JSON.stringify({ payment_status: newStatus }),
-      });
 
-      if (!res.ok) throw new Error("Failed to update status");
+      if (newStatus === "paid") {
+        // When marking as paid, create a proper payment record
+        const paymentRes = await fetch(`${API_BASE}/api/payments`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...authService.getAuthHeaders(),
+          },
+          body: JSON.stringify({
+            member_id: id,
+            amount: 204,
+            phone: member.phone,
+            mpesa_transaction_id: `ADMIN-${Date.now()}`,
+            payment_method: "admin_manual",
+            cycle_number: currentCycle?.cycle_number || 1,
+          }),
+        });
 
-      // Silent background refresh
+        if (!paymentRes.ok) {
+          const error = await paymentRes.json();
+          throw new Error(error.error || "Failed to record payment");
+        }
+
+        const paymentData = await paymentRes.json();
+
+        toast({
+          title: "Payment Recorded",
+          description: `KES 204 contribution recorded for ${member.name}. Member status updated to PAID.`,
+        });
+      } else {
+        // When marking as pending, just update the member status
+        const res = await fetch(`${API_BASE}/api/members/${id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            ...authService.getAuthHeaders(),
+          },
+          body: JSON.stringify({ 
+            payment_status: newStatus,
+            payment_date: null,
+            amount: 0
+          }),
+        });
+
+        if (!res.ok) throw new Error("Failed to update status");
+
+        toast({
+          title: "Status Changed",
+          description: `${member.name}'s payment status changed to ${newStatus}`,
+        });
+      }
+
+      // Refresh all data to reflect changes across the system
       if (typeof refreshMembers === "function") {
         await refreshMembers();
       }
 
-      // Show notification after refresh
-      toast({
-        title: "Payment Status Updated",
-        description: `${member.name}'s payment status changed to ${newStatus}`,
-      });
-    } catch (err) {
+      // Refresh cycle data
+      await fetchCurrentCycle();
+      
+      // Refresh payments data
+      await fetchPayments();
+
+    } catch (err: any) {
       console.error("Update failed", err);
       toast({
         title: "Update Failed",
-        description: "Could not update status",
+        description: err.message || "Could not update payment status",
         variant: "destructive",
       });
     }
@@ -848,66 +891,66 @@ const AdminDashboard = ({
 
         <TabsContent value="members" className="space-y-6">
           {/* Cycle Overview */}
-          {currentCycle && (
-            <Card className="bg-gradient-to-br from-primary/5 to-accent/5 border-primary/20">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5" />
-                  Current Cycle #{currentCycle.cycle_number}
-                </CardTitle>
-                <CardDescription>
-                  Started:{" "}
-                  {new Date(currentCycle.start_date).toLocaleDateString()} |
-                  Status: {currentCycle.status}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div>
-                    <div className="text-sm text-muted-foreground">
-                      Collection Progress
-                    </div>
-                    <div className="text-2xl font-bold">
-                      {currentCycle.paid_members_count}/{safeMembers.length}
-                    </div>
-                    <Progress
-                      value={
-                        (currentCycle.paid_members_count / safeMembers.length) *
-                        100
-                      }
-                      className="mt-2"
-                    />
+          <Card className="bg-gradient-to-br from-primary/5 to-accent/5 border-primary/20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="w-5 h-5" />
+                Current Cycle #{currentCycle?.cycle_number || currentCycle?.data?.cycle_number || userData?.cycleData?.currentCycle || '—'}
+              </CardTitle>
+              <CardDescription>
+                Started: {currentCycle?.start_date 
+                  ? new Date(currentCycle.start_date).toLocaleDateString()
+                  : currentCycle?.data?.start_date 
+                    ? new Date(currentCycle.data.start_date).toLocaleDateString()
+                    : userData?.cycleData?.cycleStartDate || 'Not Started'
+                } | Status: {currentCycle?.status || currentCycle?.data?.status || 'Inactive'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <div className="text-sm text-muted-foreground">
+                    Collection Progress
                   </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">
-                      Amount Collected
-                    </div>
-                    <div className="text-2xl font-bold text-financial-success">
-                      KES{" "}
-                      {currentCycle.total_amount_collected?.toLocaleString() ||
-                        0}
-                    </div>
+                  <div className="text-2xl font-bold">
+                    {currentCycle?.paid_members_count || currentCycle?.data?.paid_members_count || paidMembers.length}/{safeMembers.length || 14}
                   </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">
-                      Target Amount
-                    </div>
-                    <div className="text-2xl font-bold">
-                      KES {(safeMembers.length * 204).toLocaleString()}
-                    </div>
+                  <Progress
+                    value={
+                      safeMembers.length > 0
+                        ? ((currentCycle?.paid_members_count || currentCycle?.data?.paid_members_count || paidMembers.length) / safeMembers.length) * 100
+                        : 0
+                    }
+                    className="mt-2"
+                  />
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">
+                    Amount Collected
                   </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">
-                      Disbursement
-                    </div>
-                    <div className="text-xl font-bold">
-                      {currentCycle.disbursement_status || "Pending"}
-                    </div>
+                  <div className="text-2xl font-bold text-financial-success">
+                    KES {(currentCycle?.total_amount_collected || currentCycle?.data?.total_amount_collected || userData?.cycleData?.collectedAmount || 0).toLocaleString()}
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          )}
+                <div>
+                  <div className="text-sm text-muted-foreground">
+                    Target Amount
+                  </div>
+                  <div className="text-2xl font-bold">
+                    KES {((safeMembers.length || 14) * 204).toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">
+                    Disbursement
+                  </div>
+                  <div className="text-xl font-bold">
+                    {currentCycle?.disbursement_status || currentCycle?.data?.disbursement_status || "Pending"}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Member Status Overview */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

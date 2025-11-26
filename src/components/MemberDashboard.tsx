@@ -141,6 +141,20 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
           );
         }
 
+        // Fetch total members count from members endpoint if not in cycle data
+        const totalMembersCount = await (async () => {
+          try {
+            const membersRes = await fetch(`${API_BASE}/api/members`, {
+              headers: { ...authService.getAuthHeaders() },
+            });
+            const membersData = await membersRes.json();
+            return Array.isArray(membersData) ? membersData.length : 0;
+          } catch (err) {
+            console.error("Error fetching members count:", err);
+            return 0;
+          }
+        })();
+
         // Update cycle data silently only if changed
         if (cycleData.success) {
           setCurrentCycleData((prev) => {
@@ -149,16 +163,29 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
               cycleData.data.next_recipient_name ||
               "No recipient assigned";
             const newData = {
-              currentCycle: cycleData.data.cycle_number,
-              daysLeft: cycleData.data.days_left,
-              paidMembers: cycleData.data.paid_members_count,
-              totalMembers: cycleData.data.total_members,
-              collectedAmount: cycleData.data.total_amount_collected,
-              totalAmount: cycleData.data.expected_amount,
-              cycleStartDate: new Date(
-                cycleData.data.start_date
-              ).toLocaleDateString(),
+              currentCycle: cycleData.data.cycle_number || 0,
+              daysLeft: cycleData.data.days_left || 0,
+              paidMembers: cycleData.data.paid_members_count || 0,
+              totalMembers: cycleData.data.total_members || totalMembersCount || 0,
+              collectedAmount: cycleData.data.total_amount_collected || 0,
+              totalAmount: cycleData.data.expected_amount || (totalMembersCount * 204) || 0,
+              cycleStartDate: cycleData.data.start_date 
+                ? new Date(cycleData.data.start_date).toLocaleDateString()
+                : "Not Started",
               nextRecipient: nextRecipientName,
+            };
+            if (JSON.stringify(prev) !== JSON.stringify(newData)) {
+              return newData;
+            }
+            return prev;
+          });
+        } else {
+          // If no active cycle, still update with member count
+          setCurrentCycleData((prev) => {
+            const newData = {
+              ...prev,
+              totalMembers: totalMembersCount || prev.totalMembers || 0,
+              totalAmount: (totalMembersCount * 204) || prev.totalAmount || 0,
             };
             if (JSON.stringify(prev) !== JSON.stringify(newData)) {
               return newData;
@@ -265,6 +292,18 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         fetchData(); // Refresh data immediately
       });
 
+      // Listen for any payment (not just this member's)
+      socket.on("payment:new", (data: any) => {
+        console.log("💰 New payment detected:", data);
+        fetchData(); // Refresh cycle stats
+      });
+
+      // Listen for member additions/removals
+      socket.on("member:new", (data: any) => {
+        console.log("👤 New member added:", data);
+        fetchData(); // Refresh to update total members count
+      });
+
       // Listen for loan status updates
       socket.on("loanStatusUpdated", (data: any) => {
         if (data.memberId === userData._id || data.memberId === userData.id) {
@@ -330,19 +369,14 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         socket.off("cycleUpdated");
         socket.off("loanStatusUpdated");
         socket.off("announcementCreated");
+        socket.off("payment:new");
+        socket.off("member:new");
       }
     };
   }, [userData]);
 
   const handleMakePayment = () => {
-    if (memberStats.hasPaidThisCycle) {
-      toast({
-        title: "Already Paid",
-        description: "You have already contributed for this cycle",
-        variant: "destructive",
-      });
-      return;
-    }
+    // Allow payment even if already paid - will be recorded for next cycle
     setShowPayment(true);
   };
 
@@ -395,11 +429,11 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
             </div>
             <Button
               onClick={handleMakePayment}
-              variant="mpesa"
+              variant={memberStats.hasPaidThisCycle ? "default" : "mpesa"}
               size="sm"
               className="w-full sm:w-auto text-xs md:text-sm">
               <Phone className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
-              {memberStats.hasPaidThisCycle ? "Paid" : "Pay via M-Pesa"}
+              {memberStats.hasPaidThisCycle ? "Pay for Next Cycle" : "Pay via M-Pesa"}
             </Button>
           </div>
         </CardContent>
@@ -443,13 +477,17 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
               onClick={handleMakePayment}
               variant="mpesa"
               size="lg"
-              className="w-full text-lg font-semibold"
-              disabled={memberStats.hasPaidThisCycle}>
+              className="w-full text-lg font-semibold">
               <Phone className="w-5 h-5 mr-2" />
               {memberStats.hasPaidThisCycle
                 ? "Paid for This Cycle"
                 : "Send M-Pesa Payment"}
             </Button>
+            {memberStats.hasPaidThisCycle && (
+              <p className="text-xs text-center text-muted-foreground">
+                ✓ Already paid for Cycle #{currentCycleData?.currentCycle}. Click to pay for future cycles.
+              </p>
+            )}
             <div className="mt-3">
               <Button
                 variant="outline"

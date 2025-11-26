@@ -35,6 +35,7 @@ const PaymentDialog = ({
   onPaymentSuccess,
   amount,
   memberData,
+  cycle,
 }: PaymentDialogProps) => {
   const { toast } = useToast();
   const [paymentStep, setPaymentStep] = useState<
@@ -44,6 +45,50 @@ const PaymentDialog = ({
   const [checkoutRequestID, setCheckoutRequestID] = useState<string>("");
   const [transactionId, setTransactionId] = useState<string>("");
   const [pollCount, setPollCount] = useState(0);
+  const [targetCycle, setTargetCycle] = useState(cycle);
+  const [hasPaidCurrentCycle, setHasPaidCurrentCycle] = useState(false);
+
+  // Determine target cycle when dialog opens
+  useState(() => {
+    const checkPaymentStatus = async () => {
+      try {
+        const token = localStorage.getItem("smcf_token");
+        const memberId = memberData._id || memberData.id;
+        
+        // Fetch member's current payment status
+        const response = await fetch(`${API_BASE}/api/members/${memberId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          const isPaid = data.success ? data.data.payment_status === "paid" : false;
+          setHasPaidCurrentCycle(isPaid);
+          
+          // If already paid, set target to next cycle
+          if (isPaid) {
+            setTargetCycle(cycle + 1);
+            toast({
+              title: "Advance Payment",
+              description: `You've already paid for Cycle #${cycle}. This payment will be for Cycle #${cycle + 1}`,
+              duration: 5000,
+            });
+          } else {
+            setTargetCycle(cycle);
+          }
+        }
+      } catch (error) {
+        console.error("Error checking payment status:", error);
+        setTargetCycle(cycle);
+      }
+    };
+    
+    if (open) {
+      checkPaymentStatus();
+    }
+  });
 
   const handleInitiatePayment = async () => {
     setPaymentStep("processing");
@@ -60,8 +105,8 @@ const PaymentDialog = ({
         body: JSON.stringify({
           phone: memberData.phone || memberData.phoneNumber,
           amount: amount,
-          cycleNumber: memberData.currentCycle || 1,
-          description: `SMCF Contribution Payment`,
+          cycleNumber: targetCycle,
+          description: `SMCF Contribution Payment - Cycle #${targetCycle}`,
         }),
       });
 
@@ -211,6 +256,15 @@ const PaymentDialog = ({
                   <span className="text-muted-foreground">Phone Number:</span>
                   <span className="font-semibold">{memberData.phone}</span>
                 </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Payment For:</span>
+                  <span className="font-semibold text-primary">Cycle #{targetCycle}</span>
+                </div>
+                {hasPaidCurrentCycle && (
+                  <div className="bg-financial-success/10 p-2 rounded text-xs text-financial-success">
+                    ✓ Advance payment - You've already paid for Cycle #{cycle}
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-muted-foreground text-sm">
                     Contribution Amount:
@@ -402,8 +456,13 @@ const PaymentDialog = ({
                 Payment Successful!
               </h3>
               <p className="text-muted-foreground mb-4">
-                Your KES {amount} contribution has been received
+                Your KES {amount} contribution for Cycle #{targetCycle} has been received
               </p>
+              {hasPaidCurrentCycle && (
+                <p className="text-xs text-muted-foreground">
+                  This was an advance payment for Cycle #{targetCycle}
+                </p>
+              )}
             </div>
 
             <Card>
