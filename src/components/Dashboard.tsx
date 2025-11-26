@@ -85,6 +85,10 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
 
         console.log("📈 Calculated stats:", { totalMembersCount, totalCollected, uniquePaidMembers });
         
+        if (totalMembersCount === 0) {
+          console.warn("⚠️ No members found! membersData:", membersData);
+        }
+        
         if (cycleData.success && cycleData.data) {
           const cycle = cycleData.data;
           setCycleData({
@@ -100,7 +104,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
           });
         } else {
           // No active cycle - use calculated data
-          setCycleData({
+          const newCycleData = {
             currentCycle: 1,
             daysLeft: 0,
             totalMembers: totalMembersCount,
@@ -110,7 +114,9 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
             collectedAmount: totalCollected,
             cycleStartDate: new Date().toLocaleDateString(),
             paymentDeadline: "Not Set",
-          });
+          };
+          console.log("🔄 Setting cycle data (no active cycle):", newCycleData);
+          setCycleData(newCycleData);
         }
       } catch (err) {
         console.error("Failed to fetch data:", err);

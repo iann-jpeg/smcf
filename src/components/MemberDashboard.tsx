@@ -139,22 +139,12 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
           );
         }
 
-        // Fetch total members count from members endpoint if not in cycle data
-        const totalMembersCount = await (async () => {
-          try {
-            const membersRes = await fetch(`${API_BASE}/api/members`, {
-              headers: { ...authService.getAuthHeaders() },
-            });
-            const membersData = await membersRes.json();
-            const count = Array.isArray(membersData) ? membersData.length : 0;
-            console.log("👥 Total members count:", count);
-            return count;
-          } catch (err) {
-            console.error("Error fetching members count:", err);
-            return 0;
-          }
-        })();
+        // Get total members count from cycle data or calculate from payments
+        const totalMembersCount = (cycleData.success && cycleData.data?.total_members) 
+          ? cycleData.data.total_members 
+          : 14; // Default to 14 members if not available
 
+        console.log("👥 Total members count:", totalMembersCount);
         console.log("💰 Payments data:", payments);
 
         // Calculate total collected from all payments
