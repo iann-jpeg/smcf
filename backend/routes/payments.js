@@ -96,4 +96,14 @@ router.post("/mpesa-callback", async (req, res) => {
   }
 });
 
+// Delete all payments (admin only - for system reset)
+router.delete("/", protect, async (req, res) => {
+  try {
+    await Payment.deleteMany({});
+    res.json({ success: true, message: "All payments deleted" });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 export default router;

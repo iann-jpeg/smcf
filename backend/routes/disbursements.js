@@ -156,4 +156,14 @@ router.put("/:id/status", protect, adminOnly, async (req, res) => {
   }
 });
 
+// Delete all disbursements (admin only - for system reset)
+router.delete("/", protect, adminOnly, async (req, res) => {
+  try {
+    await Disbursement.deleteMany({});
+    res.json({ success: true, message: "All disbursements deleted" });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 export default router;

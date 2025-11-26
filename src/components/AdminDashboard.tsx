@@ -794,11 +794,59 @@ const AdminDashboard = ({
                 </p>
               </div>
               <Button
-                onClick={() => setShowDisbursementDialog(true)}
+                onClick={async () => {
+                  try {
+                    const recipientId = currentCycle.next_recipient?._id || currentCycle.recipient_id?._id || currentCycle.recipient_id;
+                    const recipientPhone = currentCycle.next_recipient?.phone;
+                    const cycleId = currentCycle._id || currentCycle.id;
+                    const disbursementAmount = safeMembers.length * 204;
+
+                    if (!recipientId || !cycleId || !recipientPhone) {
+                      throw new Error("Missing recipient information");
+                    }
+
+                    const response = await fetch(`${API_BASE}/api/disbursements`, {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                        ...authService.getAuthHeaders(),
+                      },
+                      body: JSON.stringify({
+                        cycle_id: cycleId,
+                        recipient_id: recipientId,
+                        phone: recipientPhone,
+                        amount: disbursementAmount,
+                        method: "manual",
+                        status: "completed",
+                      }),
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok && data.success) {
+                      toast({
+                        title: "Disbursement Recorded",
+                        description: `KES ${disbursementAmount.toLocaleString()} marked as disbursed to ${currentCycle.next_recipient?.name || 'recipient'}`,
+                      });
+                      fetchDisbursements();
+                      fetchCurrentCycle();
+                      fetchAllData();
+                    } else {
+                      throw new Error(data.error || "Failed to record disbursement");
+                    }
+                  } catch (error: any) {
+                    console.error("Disbursement error:", error);
+                    toast({
+                      title: "Error",
+                      description: error.message || "Failed to record disbursement",
+                      variant: "destructive",
+                    });
+                  }
+                }}
                 variant="financial"
                 size="lg">
-                <Send className="w-4 h-4 mr-2" />
-                Send Payment
+                <CheckCircle className="w-4 h-4 mr-2" />
+                Mark as Disbursed
               </Button>
             </div>
           </CardContent>
@@ -957,53 +1005,94 @@ const AdminDashboard = ({
             </CardContent>
           </Card>
 
-          {/* Start Cycle Button */}
-          <Card className="border-accent bg-accent/5">
+          {/* System Reset & Start Fresh */}
+          <Card className="border-red-500 bg-red-50 dark:bg-red-950/20">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="font-semibold mb-1">Start New Cycle with Member #12</h3>
+                  <h3 className="font-semibold mb-1 text-red-700 dark:text-red-400">Reset System & Start from Cycle #1</h3>
                   <p className="text-sm text-muted-foreground">
-                    Begin a new cycle and set the disbursement recipient
+                    Clear all payments, disbursements, and cycles. Start fresh from Cycle #1 with Member #1
                   </p>
                 </div>
                 <Button
                   onClick={async () => {
+                    if (!window.confirm("⚠️ WARNING: This will DELETE all payments, disbursements, and cycles. Are you sure?")) {
+                      return;
+                    }
                     try {
-                      const response = await fetch(`${API_BASE}/api/cycles/start`, {
+                      // Delete all payments
+                      await fetch(`${API_BASE}/api/payments`, {
+                        method: "DELETE",
+                        headers: { ...authService.getAuthHeaders() },
+                      });
+
+                      // Delete all disbursements  
+                      await fetch(`${API_BASE}/api/disbursements`, {
+                        method: "DELETE",
+                        headers: { ...authService.getAuthHeaders() },
+                      });
+
+                      // Delete all cycles
+                      await fetch(`${API_BASE}/api/cycles`, {
+                        method: "DELETE",
+                        headers: { ...authService.getAuthHeaders() },
+                      });
+
+                      // Reset all members' payment status
+                      const members = await fetch(`${API_BASE}/api/members`, {
+                        headers: { ...authService.getAuthHeaders() },
+                      }).then(r => r.json());
+
+                      for (const member of members) {
+                        await fetch(`${API_BASE}/api/members/${member._id}`, {
+                          method: "PUT",
+                          headers: {
+                            "Content-Type": "application/json",
+                            ...authService.getAuthHeaders(),
+                          },
+                          body: JSON.stringify({
+                            payment_status: "pending",
+                            total_contributed: 0,
+                            total_received: 0,
+                          }),
+                        });
+                      }
+
+                      // Start fresh cycle #1 with first member
+                      const firstMember = members.sort((a, b) => a.position - b.position)[0];
+                      await fetch(`${API_BASE}/api/cycles/start`, {
                         method: "POST",
                         headers: {
                           "Content-Type": "application/json",
                           ...authService.getAuthHeaders(),
                         },
                         body: JSON.stringify({
-                          member_number: "SMCF-0012",
+                          recipient_id: firstMember._id,
                         }),
                       });
 
-                      const data = await response.json();
-
-                      if (response.ok && data.success) {
-                        toast({
-                          title: "Cycle Started",
-                          description: `New cycle started with ${data.data.next_recipient?.name} as recipient`,
-                        });
-                        fetchCurrentCycle();
-                        fetchAllData();
-                      } else {
-                        throw new Error(data.error || "Failed to start cycle");
-                      }
+                      toast({
+                        title: "System Reset Complete",
+                        description: "All data cleared. Starting fresh from Cycle #1",
+                      });
+                      
+                      // Refresh all data
+                      setTimeout(() => {
+                        window.location.reload();
+                      }, 1500);
                     } catch (error: any) {
                       toast({
                         title: "Error",
-                        description: error.message || "Failed to start cycle",
+                        description: error.message || "Failed to reset system",
                         variant: "destructive",
                       });
                     }
                   }}
-                  size="lg">
+                  size="lg"
+                  variant="destructive">
                   <TrendingUp className="w-4 h-4 mr-2" />
-                  Start Cycle with Member #12
+                  Reset & Start Fresh
                 </Button>
               </div>
             </CardContent>

@@ -200,4 +200,14 @@ router.get("/:cycleNumber/stats", protect, async (req, res) => {
   }
 });
 
+// Delete all cycles (admin only - for system reset)
+router.delete("/", protect, adminOnly, async (req, res) => {
+  try {
+    await Cycle.deleteMany({});
+    res.json({ success: true, message: "All cycles deleted" });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 export default router;
