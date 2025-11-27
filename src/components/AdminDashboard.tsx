@@ -1150,17 +1150,17 @@ const AdminDashboard = ({
                   <div
                     key={member._id || member.id || index}
                     className="flex items-center justify-between p-3 border rounded-lg">
-                    {editingMember === member.id ? (
+                    {editingMember === (member._id || member.id) ? (
                       <div className="flex-1 space-y-3">
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <Label
-                              htmlFor={`name-${member.id}`}
+                              htmlFor={`name-${member._id || member.id}`}
                               className="text-xs">
                               Name
                             </Label>
                             <Input
-                              id={`name-${member.id}`}
+                              id={`name-${member._id || member.id}`}
                               value={editedMemberData.name || ""}
                               onChange={(e) =>
                                 setEditedMemberData((prev) => ({
@@ -1173,12 +1173,12 @@ const AdminDashboard = ({
                           </div>
                           <div>
                             <Label
-                              htmlFor={`phone-${member.id}`}
+                              htmlFor={`phone-${member._id || member.id}`}
                               className="text-xs">
                               Phone
                             </Label>
                             <Input
-                              id={`phone-${member.id}`}
+                              id={`phone-${member._id || member.id}`}
                               value={editedMemberData.phone || ""}
                               onChange={(e) =>
                                 setEditedMemberData((prev) => ({
@@ -1193,7 +1193,7 @@ const AdminDashboard = ({
                         <div className="flex gap-2">
                           <Button
                             size="sm"
-                            onClick={() => handleSaveMember(member.id)}>
+                            onClick={() => handleSaveMember(member._id || member.id)}>
                             <Save className="w-3 h-3 mr-1" />
                             Save
                           </Button>
