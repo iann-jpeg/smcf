@@ -38,6 +38,32 @@ router.post("/request", protect, async (req, res) => {
   }
 });
 
+// Delete all loans (admin only)
+router.delete("/", protect, adminOnly, async (req, res) => {
+  try {
+    const result = await Loan.deleteMany({});
+    console.log(`🗑️ Cleared all loans: ${result.deletedCount} loans deleted`);
+
+    // Emit Socket.IO event for real-time updates
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("loansCleared", {
+        deletedCount: result.deletedCount,
+        timestamp: new Date(),
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `All loans cleared successfully. ${result.deletedCount} loans deleted.`,
+      deletedCount: result.deletedCount,
+    });
+  } catch (error) {
+    console.error("Error clearing loans:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Approve/Reject loan (admin only)
 router.put("/:id/status", protect, adminOnly, async (req, res) => {
   try {

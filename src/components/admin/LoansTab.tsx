@@ -35,6 +35,7 @@ import {
   DollarSign,
   HandCoins,
   Loader2,
+  Trash2,
   XCircle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -67,6 +68,7 @@ const LoansTab = () => {
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [showDisbursementDialog, setShowDisbursementDialog] = useState(false);
+  const [showClearDialog, setShowClearDialog] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
@@ -180,6 +182,40 @@ const LoansTab = () => {
         title: "Loan Repaid",
         description: `Loan marked as fully repaid`,
       });
+    }
+  };
+
+  const handleClearAllLoans = async () => {
+    setIsProcessing(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/loans`, {
+        method: "DELETE",
+        headers: {
+          ...authService.getAuthHeaders(),
+        },
+      });
+
+      const result = await res.json();
+
+      if (result.success) {
+        toast({
+          title: "Success",
+          description: "All loans have been cleared",
+        });
+        fetchLoans();
+        setShowClearDialog(false);
+      } else {
+        throw new Error(result.error || "Failed to clear loans");
+      }
+    } catch (e: any) {
+      console.error(e);
+      toast({
+        title: "Error",
+        description: e.message || "Could not clear loans",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -311,9 +347,19 @@ const LoansTab = () => {
                 Review and manage member loan requests
               </CardDescription>
             </div>
-            <Button onClick={fetchLoans} variant="outline" size="sm">
-              Refresh
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={fetchLoans} variant="outline" size="sm">
+                Refresh
+              </Button>
+              <Button
+                onClick={() => setShowClearDialog(true)}
+                variant="destructive"
+                size="sm"
+                disabled={loans.length === 0}>
+                <Trash2 className="w-4 h-4 mr-2" />
+                Clear All Loans
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -629,6 +675,49 @@ const LoansTab = () => {
                 <Loader2 className="w-4 h-4 animate-spin mr-2" />
               ) : null}
               Reject Loan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Clear All Loans Confirmation Dialog */}
+      <Dialog open={showClearDialog} onOpenChange={setShowClearDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Clear All Loans</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete all loans? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="bg-red-50 border border-red-200 p-4 rounded-lg">
+            <p className="text-red-800 text-sm">
+              ⚠️ <strong>Warning:</strong> This will permanently delete all loan records including:
+            </p>
+            <ul className="list-disc list-inside text-red-700 text-sm mt-2 space-y-1">
+              <li>Pending loan requests ({pendingLoans.length})</li>
+              <li>Approved loans ({approvedLoans.length})</li>
+              <li>Active/disbursed loans ({disbursedLoans.length})</li>
+              <li>Completed loans ({completedLoans.length})</li>
+            </ul>
+            <p className="text-red-800 text-sm mt-3 font-semibold">
+              Total: {loans.length} loan records will be deleted
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowClearDialog(false)}
+              disabled={isProcessing}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleClearAllLoans}
+              disabled={isProcessing}>
+              {isProcessing ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : null}
+              Clear All Loans
             </Button>
           </DialogFooter>
         </DialogContent>
