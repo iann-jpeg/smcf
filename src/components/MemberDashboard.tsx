@@ -384,7 +384,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
     setMemberStats((prev) => ({ ...prev, hasPaidThisCycle: true }));
     toast({
       title: "Payment Successful",
-      description: "Your KES 204 contribution has been received",
+      description: "Your KES 224 contribution has been received",
     });
     setShowPayment(false);
 
@@ -419,8 +419,8 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                 </h3>
                 <p className="text-xs md:text-sm text-muted-foreground">
                   {memberStats.hasPaidThisCycle
-                    ? `You've contributed KES 204 for cycle #${currentCycleData?.currentCycle}`
-                    : `KES 204 payment due in ${
+                    ? `You've contributed KES 224 for cycle #${currentCycleData?.currentCycle}`
+                    : `KES 224 payment due in ${
                         currentCycleData?.daysLeft || 0
                       } days`}
                 </p>
@@ -443,7 +443,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         <CardHeader className="text-center">
           <CardTitle className="flex items-center justify-center gap-2 text-mpesa-green">
             <Phone className="w-6 h-6" />
-            Make Your KES 204 Contribution
+            Make Your KES 224 Contribution
           </CardTitle>
           <CardDescription className="text-lg">
             Pay securely via M-Pesa STK Push directly to the organization Till
@@ -454,7 +454,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">Amount:</span>
               <span className="text-2xl font-bold text-mpesa-green">
-                KES 204
+                KES 224
               </span>
             </div>
             <div className="flex justify-between items-center">

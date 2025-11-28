@@ -598,7 +598,7 @@ const AdminDashboard = ({
 
         toast({
           title: "Payment Recorded",
-          description: `KES 204 contribution recorded for ${member.name}. Member status updated to PAID.`,
+          description: `KES 224 contribution recorded for ${member.name}. Member status updated to PAID.`,
         });
       } else {
         // When marking as pending, just update the member status

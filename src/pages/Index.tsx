@@ -393,7 +393,7 @@ const Index = () => {
               Digital Table Banking
             </h2>
             <p className="text-base sm:text-xl md:text-2xl text-muted-foreground mb-6 sm:mb-8">
-              Automated KES 204 contributions every 5 days.{" "}
+              Automated KES 224 contributions every 5 days.{" "}
               <br className="hidden sm:block" />
               Secure M-Pesa integration. Real-time tracking.
             </p>
@@ -419,7 +419,7 @@ const Index = () => {
             <Card className="text-center hover:shadow-financial transition-all duration-300">
               <CardContent className="pt-4 sm:pt-6">
                 <div className="text-2xl sm:text-3xl font-bold text-financial-success mb-2">
-                  KES 204
+                  KES 224
                 </div>
                 <div className="text-xs sm:text-sm text-muted-foreground">
                   Every 5 Days
@@ -527,9 +527,9 @@ const Index = () => {
               },
               {
                 step: 2,
-                title: "Contribute KES 204",
+                title: "Contribute KES 224",
                 description:
-                  "Every 5 days, contribute KES 204 via secure M-Pesa paybill 6938069 or STK Push payment.",
+                  "Every 5 days, contribute KES 224 via secure M-Pesa paybill 6938069 or STK Push payment.",
               },
               {
                 step: 3,
@@ -570,8 +570,11 @@ const Index = () => {
           <p className="text-muted-foreground mb-4">
             Smart Money Cash Flow - Digital Table Banking Platform
           </p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground mb-2">
             Secure • Automated • Transparent • Kenyan-Made
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Contact: <a href="tel:+254759097157" className="hover:text-primary">+254 759 097 157</a>
           </p>
         </div>
       </footer>
