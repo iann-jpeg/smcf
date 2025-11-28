@@ -20,6 +20,7 @@ import {
   Megaphone,
   Phone,
   Receipt,
+  Trash2,
   TrendingUp,
   Wallet,
 } from "lucide-react";
@@ -732,13 +733,34 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         <TabsContent value="announcements" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Megaphone className="w-5 h-5" />
-                Announcements & Reminders
-              </CardTitle>
-              <CardDescription>
-                Important updates and messages from the admin
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Megaphone className="w-5 h-5" />
+                    Announcements & Reminders
+                  </CardTitle>
+                  <CardDescription>
+                    Important updates and messages from the admin
+                  </CardDescription>
+                </div>
+                {announcements.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (confirm('Are you sure you want to clear all announcements? This will only clear them from your view.')) {
+                        setAnnouncements([]);
+                        toast({
+                          title: "Announcements Cleared",
+                          description: "All announcements have been cleared from your view",
+                        });
+                      }
+                    }}>
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Clear All
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               {announcements.length === 0 ? (
@@ -971,13 +993,34 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         <TabsContent value="history" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Receipt className="w-5 h-5" />
-                Payment History
-              </CardTitle>
-              <CardDescription>
-                Your contribution history for all cycles
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Receipt className="w-5 h-5" />
+                    Payment History
+                  </CardTitle>
+                  <CardDescription>
+                    Your contribution history for all cycles
+                  </CardDescription>
+                </div>
+                {paymentHistory.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (confirm('Are you sure you want to clear your payment history view? This will only clear it from your view.')) {
+                        setPaymentHistory([]);
+                        toast({
+                          title: "Payment History Cleared",
+                          description: "Payment history has been cleared from your view",
+                        });
+                      }
+                    }}>
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Clear All
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">

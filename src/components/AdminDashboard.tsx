@@ -212,23 +212,8 @@ const AdminDashboard = ({
   };
 
   const fetchCycleStats = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/cycles/stats`, {
-        headers: {
-          ...authService.getAuthHeaders(),
-        },
-      });
-      const data = await res.json();
-      // Only update if data changed
-      setCycleStats((prev) => {
-        if (JSON.stringify(prev) !== JSON.stringify(data)) {
-          return data;
-        }
-        return prev;
-      });
-    } catch (e) {
-      console.error("Could not fetch cycle stats", e);
-    }
+    // Stats are now calculated from cycle data, no separate endpoint needed
+    // This function is kept for backward compatibility but does nothing
   };
 
   // Fetch all data silently in parallel
@@ -462,13 +447,26 @@ const AdminDashboard = ({
   const handleSaveMember = async (memberId: string) => {
     try {
       const id = memberId;
+      
+      // Prepare payload, only include password if it's not empty
+      const payload: any = {
+        name: editedMemberData.name,
+        phone: editedMemberData.phone,
+        monthly_contribution: Number(editedMemberData.monthly_contribution) || 0,
+      };
+      
+      // Only include password if it's been changed (not empty)
+      if (editedMemberData.password && editedMemberData.password.trim() !== "") {
+        payload.password = editedMemberData.password;
+      }
+      
       const res = await fetch(`${API_BASE}/api/members/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
           ...authService.getAuthHeaders(),
         },
-        body: JSON.stringify(editedMemberData),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) throw new Error("Failed to update member");
@@ -1184,6 +1182,45 @@ const AdminDashboard = ({
                                 setEditedMemberData((prev) => ({
                                   ...prev,
                                   phone: e.target.value,
+                                }))
+                              }
+                              className="text-sm"
+                            />
+                          </div>
+                          <div>
+                            <Label
+                              htmlFor={`amount-${member._id || member.id}`}
+                              className="text-xs">
+                              Monthly Contribution (KES)
+                            </Label>
+                            <Input
+                              id={`amount-${member._id || member.id}`}
+                              type="number"
+                              value={editedMemberData.monthly_contribution || ""}
+                              onChange={(e) =>
+                                setEditedMemberData((prev) => ({
+                                  ...prev,
+                                  monthly_contribution: e.target.value,
+                                }))
+                              }
+                              className="text-sm"
+                            />
+                          </div>
+                          <div>
+                            <Label
+                              htmlFor={`password-${member._id || member.id}`}
+                              className="text-xs">
+                              Password (leave blank to keep current)
+                            </Label>
+                            <Input
+                              id={`password-${member._id || member.id}`}
+                              type="password"
+                              placeholder="Enter new password"
+                              value={editedMemberData.password || ""}
+                              onChange={(e) =>
+                                setEditedMemberData((prev) => ({
+                                  ...prev,
+                                  password: e.target.value,
                                 }))
                               }
                               className="text-sm"

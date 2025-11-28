@@ -70,7 +70,7 @@ const AddMemberDialog = ({
         join_date: new Date().toISOString(),
       };
 
-      const res = await fetch(`${API_BASE}/members`, {
+      const res = await fetch(`${API_BASE}/api/members`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
