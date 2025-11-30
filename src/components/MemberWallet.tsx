@@ -69,12 +69,21 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
       const summaryData = await summaryRes.json();
       const transactionsData = await transactionsRes.json();
 
+      console.log("📊 Wallet summary fetched:", summaryData);
+      console.log("📋 Transactions fetched:", transactionsData);
+
       if (summaryData.success) {
+        console.log("✅ Updating summary state:", summaryData.data);
         setSummary(summaryData.data);
+      } else {
+        console.error("❌ Failed to fetch summary:", summaryData);
       }
 
       if (transactionsData.success) {
+        console.log("✅ Updating transactions state:", transactionsData.data.length, "transactions");
         setTransactions(transactionsData.data);
+      } else {
+        console.error("❌ Failed to fetch transactions:", transactionsData);
       }
     } catch (error) {
       console.error("Error fetching wallet data:", error);
@@ -136,12 +145,22 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
       
       if (data.type === "wallet_deposit") {
         console.log("💰 Wallet deposit completed! Updating UI...");
+        
+        // Clear any active balance poller
+        if ((window as any).balancePoller) {
+          clearInterval((window as any).balancePoller);
+          console.log("🛑 Cleared balance poller interval");
+        }
+        
         setIsProcessing(false);
         setShowDepositDialog(false);
         setDepositAmount("");
         
-        // Fetch updated data
-        fetchWalletData();
+        // Fetch updated data with a small delay to ensure backend has updated
+        setTimeout(() => {
+          console.log("🔄 Fetching updated wallet data after deposit...");
+          fetchWalletData();
+        }, 500);
         
         const amount = data.payment?.amount || data.amount || '';
         console.log("💵 Deposit amount:", amount);
@@ -263,9 +282,9 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
         const initialBalance = summary?.currentBalance || 0;
         console.log("💰 Initial balance before deposit:", initialBalance);
         
-        // Poll wallet data every 3 seconds to detect balance change
+        // Poll wallet data every 2 seconds to detect balance change faster
         let pollCount = 0;
-        const maxPolls = 30; // 30 * 3 = 90 seconds
+        const maxPolls = 30; // 30 * 2 = 60 seconds
         const balancePoller = setInterval(async () => {
           pollCount++;
           console.log(`🔄 Checking wallet balance (${pollCount}/${maxPolls})...`);
@@ -283,7 +302,14 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
               setIsProcessing(false);
               setShowDepositDialog(false);
               setDepositAmount("");
-              fetchWalletData();
+              
+              // Update summary immediately with new data
+              console.log("🔄 Updating summary with new balance data");
+              setSummary(data.data);
+              
+              // Fetch full wallet data including transactions
+              await fetchWalletData();
+              
               toast({
                 title: "Deposit Confirmed! ✅",
                 description: `KES ${amount} has been added to your wallet`,
@@ -306,7 +332,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
           } catch (error) {
             console.error("Error checking balance:", error);
           }
-        }, 3000); // Check every 3 seconds
+        }, 2000); // Check every 2 seconds for faster detection
         
         // Cleanup function to clear interval
         (window as any).balancePoller = balancePoller;

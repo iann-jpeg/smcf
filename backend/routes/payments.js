@@ -209,13 +209,13 @@ async function pollLipiaPaymentStatus(
   app,
   attempts = 0
 ) {
-  const maxAttempts = 90; // Poll for 90 seconds (M-Pesa can take time)
+  const maxAttempts = 60; // Poll for 60 seconds - faster detection
 
   if (attempts >= maxAttempts) {
-    console.log("⏱️ Payment polling timeout after 90 seconds:", reference);
+    console.log("⏱️ Payment polling timeout after 60 seconds:", reference);
     const payment = await Payment.findByIdAndUpdate(paymentId, {
       status: "failed",
-      notes: "Payment timed out - no response from M-Pesa after 90 seconds",
+      notes: "Payment timed out - no response from M-Pesa after 60 seconds",
     }, { new: true });
     
     // Emit socket event for timeout
@@ -277,10 +277,9 @@ async function pollLipiaPaymentStatus(
         notes: `Wallet deposit via M-Pesa - ${reference}`,
       });
 
-      // Update member's total contributed and total savings
+      // Update member's total_savings
       await Member.findByIdAndUpdate(memberId, {
         $inc: { 
-          total_contributed: amount,
           total_savings: amount 
         },
       });
@@ -317,7 +316,16 @@ async function pollLipiaPaymentStatus(
           member: member.name,
         });
         
-        console.log("✅ Socket.IO events emitted successfully");
+        // Emit savingDeposit event for admin dashboard
+        console.log("🔔 Emitting savingDeposit event for admin");
+        io.emit("savingDeposit", {
+          memberId: memberId.toString(),
+          member: member.name,
+          amount,
+          newBalance: balanceAfter,
+        });
+        
+        console.log("✅ All Socket.IO events emitted successfully");
       } else {
         console.error("⚠️ Socket.IO not available - events not emitted");
       }
@@ -464,6 +472,122 @@ router.get("/debug/latest-deposits", protect, async (req, res) => {
   }
 });
 
+// Lipia Online webhook/callback endpoint
+router.post("/lipia-callback", async (req, res) => {
+  try {
+    console.log("📥 Lipia callback received:", JSON.stringify(req.body, null, 2));
+    
+    const { reference, status, amount, phone, mpesa_ref } = req.body;
+    
+    if (!reference) {
+      return res.status(400).json({ success: false, error: "Reference is required" });
+    }
+    
+    // Find payment by transaction reference
+    const payment = await Payment.findOne({ transaction_reference: reference });
+    
+    if (!payment) {
+      console.log("⚠️ Payment not found for reference:", reference);
+      return res.json({ success: false, error: "Payment not found" });
+    }
+    
+    console.log("✅ Found payment:", payment._id, "Current status:", payment.status);
+    
+    // Only process if payment is still pending
+    if (payment.status !== "pending") {
+      console.log("⚠️ Payment already processed with status:", payment.status);
+      return res.json({ success: true, message: "Already processed" });
+    }
+    
+    // Update payment based on callback status
+    if (status === "SUCCESS" || status === "success" || status === "completed") {
+      console.log("✅ Payment successful, updating records...");
+      
+      payment.status = "completed";
+      payment.mpesa_transaction_id = mpesa_ref || reference;
+      await payment.save();
+      
+      // If this is a wallet deposit, create Saving record
+      if (payment.type === "wallet_deposit") {
+        const Saving = (await import("../models/Saving.js")).default;
+        const Member = (await import("../models/Member.js")).default;
+        
+        const member = await Member.findById(payment.member_id);
+        const lastSaving = await Saving.findOne({ member_id: payment.member_id }).sort({ created_at: -1 });
+        const balanceBefore = lastSaving ? lastSaving.balance_after : 0;
+        const balanceAfter = balanceBefore + payment.amount;
+        
+        const savingRecord = await Saving.create({
+          member_id: payment.member_id,
+          amount: payment.amount,
+          transaction_type: "deposit",
+          balance_before: balanceBefore,
+          balance_after: balanceAfter,
+          status: "completed",
+          payment_method: "mpesa",
+          transaction_ref: mpesa_ref || reference,
+          notes: `Wallet deposit via M-Pesa - ${reference}`,
+        });
+        
+        // Update member's total_savings
+        await Member.findByIdAndUpdate(payment.member_id, {
+          $inc: { total_savings: payment.amount },
+        });
+        
+        console.log("✅ Wallet deposit completed via callback:", {
+          member: member.name,
+          amount: payment.amount,
+          newBalance: balanceAfter,
+        });
+        
+        // Emit Socket.IO events
+        const io = req.app.get("io");
+        if (io) {
+          io.emit("payment:completed", {
+            memberId: payment.member_id.toString(),
+            payment: { _id: payment._id, amount: payment.amount, status: "completed" },
+            amount: payment.amount,
+            type: "wallet_deposit",
+          });
+          
+          io.emit("saving:new", {
+            memberId: payment.member_id.toString(),
+            saving: savingRecord,
+            member: member.name,
+          });
+          
+          io.emit("savingDeposit", {
+            memberId: payment.member_id.toString(),
+            amount: payment.amount,
+          });
+        }
+      }
+      
+      return res.json({ success: true, message: "Payment processed successfully" });
+    } else {
+      console.log("❌ Payment failed via callback");
+      payment.status = "failed";
+      payment.notes = `Payment failed: ${status}`;
+      await payment.save();
+      
+      // Emit failure event
+      const io = req.app.get("io");
+      if (io) {
+        io.emit("payment:failed", {
+          paymentId: payment._id,
+          memberId: payment.member_id,
+          message: "Payment failed",
+        });
+      }
+      
+      return res.json({ success: true, message: "Payment marked as failed" });
+    }
+  } catch (error) {
+    console.error("❌ Error processing Lipia callback:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // M-Pesa callback endpoint (for production integration)
 router.post("/mpesa-callback", async (req, res) => {
   try {
@@ -472,6 +596,81 @@ router.post("/mpesa-callback", async (req, res) => {
     // Update payment status, member status, etc.
     res.json({ success: true });
   } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Manual payment completion endpoint (for debugging/testing)
+router.post("/manual-complete/:paymentId", protect, async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    const payment = await Payment.findById(paymentId);
+    
+    if (!payment) {
+      return res.status(404).json({ success: false, error: "Payment not found" });
+    }
+    
+    if (payment.status === "completed") {
+      return res.json({ success: true, message: "Payment already completed" });
+    }
+    
+    console.log("🔧 Manually completing payment:", paymentId);
+    
+    // Mark as completed
+    payment.status = "completed";
+    payment.mpesa_transaction_id = payment.transaction_reference;
+    await payment.save();
+    
+    // If wallet deposit, create Saving record
+    if (payment.type === "wallet_deposit") {
+      const Saving = (await import("../models/Saving.js")).default;
+      const Member = (await import("../models/Member.js")).default;
+      
+      const member = await Member.findById(payment.member_id);
+      const lastSaving = await Saving.findOne({ member_id: payment.member_id }).sort({ created_at: -1 });
+      const balanceBefore = lastSaving ? lastSaving.balance_after : 0;
+      const balanceAfter = balanceBefore + payment.amount;
+      
+      const savingRecord = await Saving.create({
+        member_id: payment.member_id,
+        amount: payment.amount,
+        transaction_type: "deposit",
+        balance_before: balanceBefore,
+        balance_after: balanceAfter,
+        status: "completed",
+        payment_method: "mpesa",
+        transaction_ref: payment.mpesa_transaction_id,
+        notes: `Manual wallet deposit completion - ${payment.transaction_reference}`,
+      });
+      
+      await Member.findByIdAndUpdate(payment.member_id, {
+        $inc: { 
+          total_contributed: payment.amount,
+          total_savings: payment.amount 
+        },
+      });
+      
+      // Emit events
+      const io = req.app.get("io");
+      if (io) {
+        io.emit("payment:completed", {
+          memberId: payment.member_id,
+          payment,
+          amount: payment.amount,
+          type: "wallet_deposit",
+        });
+        
+        io.emit("saving:new", {
+          memberId: payment.member_id.toString(),
+          saving: savingRecord,
+          member: member.name,
+        });
+      }
+    }
+    
+    res.json({ success: true, message: "Payment completed manually", payment });
+  } catch (error) {
+    console.error("Error manually completing payment:", error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

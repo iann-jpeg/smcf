@@ -53,8 +53,18 @@ const AdminSavingsTab = () => {
       const membersData = await membersRes.json();
       const withdrawalsData = await withdrawalsRes.json();
 
+      console.log("📊 Admin savings data received:", membersData);
+      console.log("📊 Members with savings count:", membersData.data?.length);
+      
       if (membersData.success) {
+        console.log("✅ Setting members with savings:", membersData.data);
         setMembersWithSavings(membersData.data);
+        
+        // Log totals for debugging
+        const totalBalance = membersData.data.reduce((sum: number, m: any) => sum + (m.currentBalance || 0), 0);
+        const totalDeps = membersData.data.reduce((sum: number, m: any) => sum + (m.totalDeposits || 0), 0);
+        const totalInt = membersData.data.reduce((sum: number, m: any) => sum + (m.totalInterestEarned || 0), 0);
+        console.log("💰 Calculated totals - Balance:", totalBalance, "Deposits:", totalDeps, "Interest:", totalInt);
       }
 
       if (withdrawalsData.success) {
@@ -88,6 +98,18 @@ const AdminSavingsTab = () => {
         console.log("💰 New deposit received");
         fetchSavingsData();
       });
+
+      socket.on("saving:new", () => {
+        console.log("💰 New saving transaction");
+        fetchSavingsData();
+      });
+
+      socket.on("payment:completed", (data: any) => {
+        if (data.type === "wallet_deposit") {
+          console.log("💰 Wallet deposit completed in admin view");
+          fetchSavingsData();
+        }
+      });
     }
 
     return () => {
@@ -96,6 +118,8 @@ const AdminSavingsTab = () => {
         socket.off("withdrawalRequest");
         socket.off("withdrawalStatusUpdated");
         socket.off("savingDeposit");
+        socket.off("saving:new");
+        socket.off("payment:completed");
       }
     };
   }, []);

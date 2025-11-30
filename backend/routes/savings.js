@@ -10,29 +10,32 @@ router.get("/summary", protect, async (req, res) => {
   try {
     const memberId = req.member ? req.member._id : req.admin._id;
 
-    // Get all savings transactions for this member
-    const transactions = await Saving.find({ member_id: memberId }).sort({
+    // Get all completed savings transactions for this member
+    const transactions = await Saving.find({ 
+      member_id: memberId,
+      status: "completed"
+    }).sort({
       created_at: -1,
     });
 
-    // Calculate current balance
+    // Calculate current balance from most recent completed transaction
     const currentBalance =
       transactions.length > 0
         ? transactions[0].balance_after
         : 0;
 
-    // Calculate totals
+    // Calculate totals only from completed transactions
     const totalDeposits = transactions
       .filter((t) => t.transaction_type === "deposit")
       .reduce((sum, t) => sum + t.amount, 0);
 
     const totalWithdrawals = transactions
-      .filter((t) => t.transaction_type === "withdrawal")
+      .filter((t) => t.transaction_type === "withdrawal" && t.status === "completed")
       .reduce((sum, t) => sum + t.amount, 0);
 
     const totalInterestEarned = transactions
       .filter((t) => t.transaction_type === "interest")
-      .reduce((sum, t) => sum + t.interest_amount, 0);
+      .reduce((sum, t) => sum + (t.interest_amount || 0), 0);
 
     res.json({
       success: true,
@@ -284,10 +287,13 @@ router.get("/admin/all", protect, adminOnly, async (req, res) => {
       "name member_id phone total_savings position"
     );
 
-    // Get savings summary for each member
+    // Get savings summary for each member (only completed transactions)
     const membersWithSavings = await Promise.all(
       members.map(async (member) => {
-        const transactions = await Saving.find({ member_id: member._id }).sort({
+        const transactions = await Saving.find({ 
+          member_id: member._id,
+          status: "completed"
+        }).sort({
           created_at: -1,
         });
 
@@ -300,7 +306,7 @@ router.get("/admin/all", protect, adminOnly, async (req, res) => {
 
         const totalInterestEarned = transactions
           .filter((t) => t.transaction_type === "interest")
-          .reduce((sum, t) => sum + t.interest_amount, 0);
+          .reduce((sum, t) => sum + (t.interest_amount || 0), 0);
 
         return {
           _id: member._id,
