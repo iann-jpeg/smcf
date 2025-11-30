@@ -1,6 +1,7 @@
 import AddMemberDialog from "@/components/AddMemberDialog";
 import AnnouncementDialog from "@/components/AnnouncementDialog";
 import MpesaDisbursementDialog from "@/components/MpesaDisbursementDialog";
+import SavingsTab from "@/components/admin/SavingsTab";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -985,7 +986,7 @@ Thank you for your cooperation! 🙏`;
 
       <Tabs defaultValue="members" className="w-full">
         <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">
-          <TabsList className="inline-flex w-auto md:grid md:w-full md:grid-cols-6 min-w-max">
+          <TabsList className="inline-flex w-auto md:grid md:w-full md:grid-cols-7 min-w-max">
             <TabsTrigger
               value="members"
               className="text-xs sm:text-sm whitespace-nowrap">
@@ -997,6 +998,11 @@ Thank you for your cooperation! 🙏`;
               className="text-xs sm:text-sm whitespace-nowrap">
               <span className="hidden sm:inline">Payment Tracking</span>
               <span className="sm:hidden">Payments</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="savings"
+              className="text-xs sm:text-sm whitespace-nowrap">
+              Savings
             </TabsTrigger>
             <TabsTrigger
               value="disbursements"
@@ -1557,6 +1563,10 @@ Thank you for your cooperation! 🙏`;
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="savings" className="space-y-6">
+          <SavingsTab />
         </TabsContent>
 
         <TabsContent value="disbursements" className="space-y-6">

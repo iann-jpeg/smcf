@@ -1,5 +1,6 @@
 import LoanRequestDialog from "@/components/LoanRequestDialog";
 import PaymentDialog from "@/components/PaymentDialog";
+import MemberWallet from "@/components/MemberWallet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -525,7 +526,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
 
       <Tabs defaultValue="overview" className="w-full">
         <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">
-          <TabsList className="inline-flex w-auto md:grid md:w-full md:grid-cols-5 min-w-max">
+          <TabsList className="inline-flex w-auto md:grid md:w-full md:grid-cols-6 min-w-max">
             <TabsTrigger
               value="overview"
               className="text-xs sm:text-sm whitespace-nowrap">
@@ -535,6 +536,11 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
               value="announcements"
               className="text-xs sm:text-sm whitespace-nowrap">
               Announcements
+            </TabsTrigger>
+            <TabsTrigger
+              value="wallet"
+              className="text-xs sm:text-sm whitespace-nowrap">
+              Wallet
             </TabsTrigger>
             <TabsTrigger
               value="loans"
@@ -848,6 +854,10 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="wallet" className="space-y-4">
+          <MemberWallet />
         </TabsContent>
 
         <TabsContent value="loans" className="space-y-4">

@@ -81,6 +81,10 @@ const memberSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  total_savings: {
+    type: Number,
+    default: 0,
+  },
   registered_by_admin: {
     type: Boolean,
     default: true,

@@ -18,6 +18,7 @@ import lipiaRoutes from "./routes/lipia.js";
 import loanRoutes from "./routes/loans.js";
 import memberRoutes from "./routes/members.js";
 import paymentRoutes from "./routes/payments.js";
+import savingsRoutes from "./routes/savings.js";
 
 const app = express();
 const httpServer = createServer(app);
@@ -102,6 +103,7 @@ app.use("/api/disbursements", disbursementRoutes);
 app.use("/api/announcements", announcementRoutes);
 app.use("/announcements", announcementRoutes); // Backward compatibility
 app.use("/api/loans", loanRoutes);
+app.use("/api/savings", savingsRoutes);
 
 // Health check endpoint
 app.get("/health", (req, res) => {
