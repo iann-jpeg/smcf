@@ -99,6 +99,18 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
       return;
     }
 
+    // Get phone number from userData or authService
+    const phoneNumber = userData?.phone || authService.getUser()?.phone;
+
+    if (!phoneNumber) {
+      toast({
+        title: "Phone Number Missing",
+        description: "Please update your profile with a phone number",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsProcessing(true);
     try {
       // Initiate STK Push payment
@@ -115,7 +127,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
         },
         body: JSON.stringify({
           amount,
-          phone: userData.phone,
+          phone: phoneNumber,
           type: "wallet_deposit",
           notes: `Wallet deposit - KES ${amount}`,
         }),

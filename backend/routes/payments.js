@@ -90,6 +90,32 @@ router.post("/stk-push", protect, async (req, res) => {
     const { amount, phone, type, notes } = req.body;
     const memberId = req.user._id;
 
+    if (!phone) {
+      return res.status(400).json({
+        success: false,
+        error: "Phone number is required",
+      });
+    }
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Valid amount is required",
+      });
+    }
+
+    // Get member details
+    const member = await Member.findById(memberId);
+    if (!member) {
+      return res.status(404).json({
+        success: false,
+        error: "Member not found",
+      });
+    }
+
+    // Generate unique reference
+    const reference = `WD${Date.now()}-${memberId.toString().slice(-6)}`;
+
     // Store pending payment record
     const payment = await Payment.create({
       member_id: memberId,
@@ -98,45 +124,150 @@ router.post("/stk-push", protect, async (req, res) => {
       payment_method: "mpesa",
       status: "pending",
       type: type || "wallet_deposit",
-      notes,
+      notes: notes || `Wallet deposit by ${member.name}`,
+      transaction_reference: reference,
     });
 
-    // In production, integrate with actual M-Pesa STK Push API
-    // For now, simulate successful STK push initiation
-    const checkoutRequestId = `WS${Date.now()}`;
+    console.log("💰 Initiating wallet deposit STK Push:", {
+      member: member.name,
+      phone,
+      amount,
+      reference,
+    });
 
-    // Simulate STK Push (in production, call actual M-Pesa API here)
-    setTimeout(async () => {
-      // Simulate successful payment
-      payment.status = "completed";
-      payment.mpesa_transaction_id = `MPX${Date.now()}`;
-      await payment.save();
+    // Use Lipia API for actual M-Pesa STK Push
+    const lipiaService = await import("../services/lipiaService.js");
+    const lipiaResponse = await lipiaService.initiateLipiaPayment(
+      phone,
+      amount,
+      reference,
+      `SMCF Wallet Deposit - ${member.name}`
+    );
 
-      // Update member's wallet/savings
+    console.log("✅ Lipia STK Push initiated:", lipiaResponse);
+
+    // Update payment with Lipia details
+    payment.checkout_request_id = lipiaResponse.checkoutRequestId;
+    payment.merchant_request_id = lipiaResponse.merchantRequestId;
+    await payment.save();
+
+    // Start polling for payment status
+    pollLipiaPaymentStatus(payment._id, reference, memberId, amount, req.app);
+
+    res.json({
+      success: true,
+      message: "STK Push sent to your phone",
+      CheckoutRequestID: lipiaResponse.checkoutRequestId,
+      paymentId: payment._id,
+      reference,
+    });
+  } catch (error) {
+    console.error("❌ STK Push error:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Failed to initiate payment",
+    });
+  }
+});
+
+// Poll Lipia payment status
+async function pollLipiaPaymentStatus(
+  paymentId,
+  reference,
+  memberId,
+  amount,
+  app,
+  attempts = 0
+) {
+  const maxAttempts = 60; // Poll for 60 seconds
+
+  if (attempts >= maxAttempts) {
+    console.log("⏱️ Payment polling timeout:", reference);
+    await Payment.findByIdAndUpdate(paymentId, {
+      status: "failed",
+      notes: "Payment timeout - no response from M-Pesa",
+    });
+    return;
+  }
+
+  try {
+    const lipiaService = await import("../services/lipiaService.js");
+    const status = await lipiaService.queryLipiaPaymentStatus(reference);
+
+    console.log(`📊 Payment status check ${attempts + 1}/${maxAttempts}:`, {
+      reference,
+      status: status.status,
+    });
+
+    if (status.status === "completed" || status.status === "success") {
+      // Payment successful
+      const payment = await Payment.findByIdAndUpdate(
+        paymentId,
+        {
+          status: "completed",
+          mpesa_transaction_id: status.transactionId || reference,
+        },
+        { new: true }
+      );
+
+      // Update member's wallet
       await Member.findByIdAndUpdate(memberId, {
         $inc: { total_contributed: amount },
       });
 
+      console.log("✅ Wallet deposit completed:", {
+        member: memberId,
+        amount,
+        reference,
+      });
+
       // Emit socket event
-      if (req.app.get("io")) {
-        req.app.get("io").emit("payment:completed", {
+      if (app && app.get("io")) {
+        app.get("io").emit("payment:completed", {
           memberId,
           payment,
-          checkoutRequestId,
+          type: "wallet_deposit",
         });
       }
-    }, 3000); // Simulate 3 second delay
-
-    res.json({
-      success: true,
-      message: "STK Push sent",
-      CheckoutRequestID: checkoutRequestId,
-      paymentId: payment._id,
-    });
+    } else if (status.status === "failed" || status.status === "cancelled") {
+      // Payment failed
+      await Payment.findByIdAndUpdate(paymentId, {
+        status: "failed",
+        notes: status.message || "Payment failed",
+      });
+      console.log("❌ Payment failed:", reference);
+    } else {
+      // Still pending, poll again after 1 second
+      setTimeout(
+        () =>
+          pollLipiaPaymentStatus(
+            paymentId,
+            reference,
+            memberId,
+            amount,
+            app,
+            attempts + 1
+          ),
+        1000
+      );
+    }
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("Error polling payment status:", error);
+    // Continue polling despite errors
+    setTimeout(
+      () =>
+        pollLipiaPaymentStatus(
+          paymentId,
+          reference,
+          memberId,
+          amount,
+          app,
+          attempts + 1
+        ),
+      1000
+    );
   }
-});
+}
 
 // Check payment status
 router.get("/check-status/:checkoutRequestId", protect, async (req, res) => {
