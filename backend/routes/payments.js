@@ -179,20 +179,21 @@ async function pollLipiaPaymentStatus(
   app,
   attempts = 0
 ) {
-  const maxAttempts = 60; // Poll for 60 seconds
+  const maxAttempts = 90; // Poll for 90 seconds (M-Pesa can take time)
 
   if (attempts >= maxAttempts) {
-    console.log("⏱️ Payment polling timeout:", reference);
+    console.log("⏱️ Payment polling timeout after 90 seconds:", reference);
     const payment = await Payment.findByIdAndUpdate(paymentId, {
       status: "failed",
-      notes: "Payment cancelled or timed out",
+      notes: "Payment timed out - no response from M-Pesa after 90 seconds",
     }, { new: true });
     
     // Emit socket event for timeout
+    console.log("🔔 Emitting payment:failed event for timeout");
     app.get("io").emit("payment:failed", {
       paymentId,
       memberId,
-      message: "Payment cancelled or timed out",
+      message: "Payment timed out. If you entered your PIN, your wallet will update automatically.",
     });
     return;
   }
@@ -253,6 +254,7 @@ async function pollLipiaPaymentStatus(
 
       console.log("✅ Wallet deposit completed:", {
         member: member.name,
+        memberId,
         amount,
         reference,
         newBalance: balanceAfter,
@@ -260,17 +262,22 @@ async function pollLipiaPaymentStatus(
 
       // Emit socket events for real-time updates
       if (app && app.get("io")) {
+        console.log("🔔 Emitting payment:completed event");
         app.get("io").emit("payment:completed", {
           memberId,
           payment,
+          amount,
           type: "wallet_deposit",
         });
 
+        console.log("🔔 Emitting saving:new event");
         app.get("io").emit("saving:new", {
           memberId,
           saving: savingRecord,
           member: member.name,
         });
+      } else {
+        console.error("⚠️ Socket.IO not available - events not emitted");
       }
     } else if (status.status === "failed" || status.status === "cancelled") {
       // Payment failed

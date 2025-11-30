@@ -32,6 +32,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { io } from "socket.io-client";
 
 interface MemberWalletProps {
   userData: any;
@@ -86,67 +87,96 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
     // Refresh every 30 seconds
     const interval = setInterval(fetchWalletData, 30000);
 
-    // Listen for real-time updates
-    const socket = (window as any).socket;
-    if (socket) {
-      // Withdrawal status updates
-      socket.on("withdrawalStatusUpdated", (data: any) => {
-        console.log("💰 Withdrawal status updated:", data);
-        fetchWalletData();
-        
-        if (data.status === "completed") {
-          toast({
-            title: "Withdrawal Approved ✅",
-            description: `KES ${data.amount.toLocaleString()} has been deducted from your wallet`,
-          });
-        } else if (data.status === "failed") {
-          toast({
-            title: "Withdrawal Rejected",
-            description: "Your withdrawal request was rejected. Balance restored.",
-            variant: "destructive",
-          });
-        }
-      });
+    // Create Socket.IO connection
+    console.log("🔌 Connecting to Socket.IO at:", API_BASE);
+    const socket = io(API_BASE, {
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5
+    });
 
-      // Payment completed (for wallet deposits)
-      socket.on("payment:completed", (data: any) => {
-        if (data.type === "wallet_deposit") {
-          console.log("💰 Wallet deposit completed:", data);
-          setIsProcessing(false);
-          fetchWalletData();
-          toast({
-            title: "Deposit Confirmed! ✅",
-            description: `Your wallet has been updated successfully`,
-          });
-        }
-      });
+    socket.on("connect", () => {
+      console.log("✅ Socket.IO connected:", socket.id);
+    });
 
-      // Payment failed
-      socket.on("payment:failed", (data: any) => {
-        console.log("❌ Payment failed:", data);
-        setIsProcessing(false);
+    socket.on("disconnect", () => {
+      console.log("❌ Socket.IO disconnected");
+    });
+
+    // Withdrawal status updates
+    socket.on("withdrawalStatusUpdated", (data: any) => {
+      console.log("💰 Withdrawal status updated:", data);
+      fetchWalletData();
+      
+      if (data.status === "completed") {
         toast({
-          title: "Payment Failed",
-          description: data.message || "Payment was cancelled or failed. Please try again.",
+          title: "Withdrawal Approved ✅",
+          description: `KES ${data.amount.toLocaleString()} has been deducted from your wallet`,
+        });
+      } else if (data.status === "failed") {
+        toast({
+          title: "Withdrawal Rejected",
+          description: "Your withdrawal request was rejected. Balance restored.",
           variant: "destructive",
         });
-      });
+      }
+    });
 
-      // Saving record created
-      socket.on("saving:new", (data: any) => {
-        console.log("💰 New saving record:", data);
+    // Payment completed (for wallet deposits)
+    socket.on("payment:completed", (data: any) => {
+      console.log("📥 Received payment:completed event:", data);
+      if (data.type === "wallet_deposit") {
+        console.log("💰 Wallet deposit completed:", data);
+        setIsProcessing(false);
+        setShowDepositDialog(false);
+        setDepositAmount("");
         fetchWalletData();
-      });
-    }
+        
+        const amount = data.payment?.amount || data.amount || '';
+        toast({
+          title: "Deposit Confirmed! ✅",
+          description: amount ? `KES ${amount} has been added to your wallet` : `Your wallet has been updated successfully`,
+        });
+      }
+    });
+
+    // Payment failed
+    socket.on("payment:failed", (data: any) => {
+      console.log("📥 Received payment:failed event:", data);
+      
+      // Only show error if we're still processing
+      if (isProcessing) {
+        setIsProcessing(false);
+        setShowDepositDialog(false);
+        setDepositAmount("");
+        
+        const isCancelled = data.message?.includes("cancelled") || 
+                          data.message?.includes("timeout") ||
+                          data.message?.includes("timed out");
+        
+        toast({
+          title: isCancelled ? "Payment Cancelled" : "Payment Failed",
+          description: isCancelled 
+            ? "You cancelled the M-Pesa prompt. No money was deducted from your account."
+            : data.message || "Transaction could not be completed. Please try again.",
+          variant: "destructive",
+        });
+      }
+    });
+
+    // Saving record created
+    socket.on("saving:new", (data: any) => {
+      console.log("💰 New saving record:", data);
+      fetchWalletData();
+    });
 
     return () => {
       clearInterval(interval);
-      if (socket) {
-        socket.off("withdrawalStatusUpdated");
-        socket.off("payment:completed");
-        socket.off("payment:failed");
-        socket.off("saving:new");
-      }
+      socket.off("withdrawalStatusUpdated");
+      socket.off("payment:completed");
+      socket.off("payment:failed");
+      socket.off("saving:new");
+      socket.disconnect();
     };
   }, []);
 
@@ -206,17 +236,20 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
         // Don't rely on polling - Socket.IO will handle status updates
         // Just wait for Socket.IO events
         console.log("✅ STK Push sent, waiting for Socket.IO updates...");
+        console.log("🔍 CheckoutRequestID:", data.CheckoutRequestID);
         
-        // Set a timeout to stop processing if no response after 60 seconds
+        // Set a timeout to stop processing if no response after 95 seconds
+        // (Backend polls for 90 seconds, give it 5 extra seconds)
         setTimeout(() => {
           if (isProcessing) {
+            console.log("⏱️ Frontend timeout reached");
             setIsProcessing(false);
             toast({
-              title: "Payment Timeout",
-              description: "Payment verification is taking longer than expected. If payment was successful, your wallet will be updated automatically.",
+              title: "Still Processing",
+              description: "Payment verification is taking longer than expected. Your wallet will update automatically if payment succeeds.",
             });
           }
-        }, 60000); // 60 seconds
+        }, 95000); // 95 seconds
 
         /* Commented out polling - relying on Socket.IO instead
         const checkoutRequestId = data.CheckoutRequestID;
