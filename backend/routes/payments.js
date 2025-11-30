@@ -146,23 +146,53 @@ router.post("/stk-push", protect, async (req, res) => {
 
     console.log("✅ Lipia STK Push initiated:", lipiaResponse);
 
-    // Update payment with Lipia details
-    payment.checkout_request_id = lipiaResponse.checkoutRequestId;
-    payment.merchant_request_id = lipiaResponse.merchantRequestId;
+    // Check if Lipia API call was successful
+    if (!lipiaResponse.success) {
+      throw new Error(lipiaResponse.error || "Failed to initiate STK Push");
+    }
+
+    // Update payment with Lipia details (handle both checkoutRequestID and checkoutRequestId)
+    const checkoutRequestId = lipiaResponse.checkoutRequestID || lipiaResponse.checkoutRequestId;
+    const merchantRequestId = lipiaResponse.merchantRequestID || lipiaResponse.merchantRequestId;
+    
+    payment.checkout_request_id = checkoutRequestId || reference;
+    payment.merchant_request_id = merchantRequestId;
     await payment.save();
 
+    console.log("💾 Payment record updated:", {
+      paymentId: payment._id,
+      checkout_request_id: payment.checkout_request_id,
+      merchant_request_id: payment.merchant_request_id,
+    });
+
     // Start polling for payment status
+    console.log("🚀 Starting payment polling for:", {
+      paymentId: payment._id,
+      reference,
+      memberId,
+      amount,
+      checkoutRequestId,
+    });
     pollLipiaPaymentStatus(payment._id, reference, memberId, amount, req.app);
 
     res.json({
       success: true,
       message: "STK Push sent to your phone",
-      CheckoutRequestID: lipiaResponse.checkoutRequestId,
+      CheckoutRequestID: checkoutRequestId || reference,
       paymentId: payment._id,
       reference,
     });
   } catch (error) {
     console.error("❌ STK Push error:", error);
+    
+    // Update payment record as failed
+    if (payment) {
+      await Payment.findByIdAndUpdate(payment._id, {
+        status: "failed",
+        notes: error.message || "Failed to initiate STK Push",
+      });
+    }
+    
     res.status(500).json({
       success: false,
       error: error.message || "Failed to initiate payment",
@@ -205,7 +235,10 @@ async function pollLipiaPaymentStatus(
     console.log(`📊 Payment status check ${attempts + 1}/${maxAttempts}:`, {
       reference,
       status: status.status,
+      success: status.success,
       resultCode: status.resultCode,
+      resultDesc: status.resultDescription,
+      error: status.error,
     });
 
     if (status.status === "completed" || status.status === "success") {
@@ -262,44 +295,70 @@ async function pollLipiaPaymentStatus(
 
       // Emit socket events for real-time updates
       if (app && app.get("io")) {
-        console.log("🔔 Emitting payment:completed event");
-        app.get("io").emit("payment:completed", {
-          memberId,
-          payment,
+        const io = app.get("io");
+        console.log("🔔 Emitting payment:completed event to all connected clients");
+        console.log("🔔 Event data:", { memberId: memberId.toString(), type: "wallet_deposit", amount });
+        
+        // Emit to ALL clients (broadcast)
+        io.emit("payment:completed", {
+          memberId: memberId.toString(),
+          payment: {
+            _id: payment._id.toString(),
+            amount: payment.amount,
+            status: payment.status,
+          },
           amount,
           type: "wallet_deposit",
         });
 
-        console.log("🔔 Emitting saving:new event");
-        app.get("io").emit("saving:new", {
-          memberId,
+        io.emit("saving:new", {
+          memberId: memberId.toString(),
           saving: savingRecord,
           member: member.name,
         });
+        
+        console.log("✅ Socket.IO events emitted successfully");
       } else {
         console.error("⚠️ Socket.IO not available - events not emitted");
       }
     } else if (status.status === "failed" || status.status === "cancelled") {
-      // Payment failed
-      const payment = await Payment.findByIdAndUpdate(paymentId, {
-        status: "failed",
-        notes: status.resultDescription || status.message || "Payment cancelled or failed",
-      }, { new: true });
-      
-      console.log("❌ Payment failed:", {
-        reference,
-        reason: status.resultDescription || status.message,
-      });
-      
-      // Emit socket event for failed payment
-      if (app && app.get("io")) {
-        app.get("io").emit("payment:failed", {
-          paymentId,
-          memberId,
-          message: status.resultDescription || status.message || "Payment cancelled or failed",
+      // Only treat as truly failed if we got a definitive FAILED status from Lipia
+      // Not if it's just an API error
+      if (status.success !== false) {
+        const payment = await Payment.findByIdAndUpdate(paymentId, {
+          status: "failed",
+          notes: status.resultDescription || status.message || "Payment cancelled or failed",
+        }, { new: true });
+        
+        console.log("❌ Payment definitively failed:", {
+          reference,
+          reason: status.resultDescription || status.message,
         });
+        
+        // Emit socket event for failed payment
+        if (app && app.get("io")) {
+          app.get("io").emit("payment:failed", {
+            paymentId,
+            memberId,
+            message: status.resultDescription || status.message || "Payment cancelled or failed",
+          });
+        }
+      } else {
+        // It's an API error, keep polling
+        console.log("⚠️ API error but not treating as payment failure, continuing...");
+        setTimeout(
+          () =>
+            pollLipiaPaymentStatus(
+              paymentId,
+              reference,
+              memberId,
+              amount,
+              app,
+              attempts + 1
+            ),
+          2000 // Wait 2 seconds before retrying after error
+        );
       }
-      console.log("❌ Payment failed:", reference);
     } else {
       // Still pending, poll again after 1 second
       setTimeout(
@@ -357,6 +416,7 @@ router.get("/check-status/:checkoutRequestId", protect, async (req, res) => {
       id: payment._id,
       status: payment.status,
       amount: payment.amount,
+      notes: payment.notes,
     });
 
     res.json({
@@ -371,6 +431,35 @@ router.get("/check-status/:checkoutRequestId", protect, async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Error checking payment status:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Debug endpoint - check latest wallet deposits
+router.get("/debug/latest-deposits", protect, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const payments = await Payment.find({
+      member_id: userId,
+      type: "wallet_deposit",
+    })
+      .sort({ created_at: -1 })
+      .limit(5);
+
+    res.json({
+      success: true,
+      count: payments.length,
+      payments: payments.map(p => ({
+        _id: p._id,
+        amount: p.amount,
+        status: p.status,
+        reference: p.transaction_reference,
+        checkout_id: p.checkout_request_id,
+        notes: p.notes,
+        created_at: p.created_at,
+      })),
+    });
+  } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });

@@ -145,13 +145,17 @@ export const initiateLipiaPayment = async (
       throw new Error(errorMessage);
     }
 
-    // Return normalized response
+    // Return normalized response with both formats for compatibility
+    const checkoutRequestId = data.data?.TransactionReference || data.data?.CheckoutRequestID || data.data?.checkoutRequestId;
+    const merchantRequestId = data.data?.MerchantRequestID || data.data?.merchantRequestId;
+    
     return {
       success: true,
       data: data.data,
-      checkoutRequestID:
-        data.data?.TransactionReference || data.data?.CheckoutRequestID,
-      merchantRequestID: data.data?.MerchantRequestID,
+      checkoutRequestID: checkoutRequestId,
+      checkoutRequestId: checkoutRequestId,  // Also provide lowercase version
+      merchantRequestID: merchantRequestId,
+      merchantRequestId: merchantRequestId,  // Also provide lowercase version
       responseCode: data.data?.ResponseCode || "0",
       responseDescription:
         data.data?.ResponseDescription || data.message || "Success",
@@ -188,36 +192,63 @@ export const queryLipiaPaymentStatus = async (transactionReference) => {
 
     const data = await response.json();
 
+    console.log("📥 Lipia status response (full):", JSON.stringify(data, null, 2));
+    console.log("🔍 Response structure - data.data:", data.data);
+    console.log("🔍 Response structure - data.data.response:", data.data?.response);
+
     if (!data.success) {
+      console.log("⚠️ Lipia API returned success: false, message:", data.message);
+      // Don't throw error for pending/not found - just return pending status
+      if (data.message?.includes("not found") || data.message?.includes("pending")) {
+        return {
+          success: true,
+          status: "pending",
+          message: "Payment still processing"
+        };
+      }
       throw new Error(data.message || "Payment query failed");
     }
 
-    const paymentData = data.data.response;
+    // Handle different response structures
+    const paymentData = data.data?.response || data.data || {};
+    console.log("📊 Payment data extracted:", paymentData);
 
-    // Map status to our internal format
+    // Map status to our internal format - check multiple possible fields
+    const rawStatus = paymentData.Status || paymentData.status || paymentData.ResultCode;
+    console.log("🔍 Raw status value:", rawStatus);
+    
     let status = "pending";
-    if (paymentData.Status === "SUCCESS") {
+    if (rawStatus === "SUCCESS" || rawStatus === "0" || paymentData.ResultCode === "0") {
       status = "completed";
-    } else if (paymentData.Status === "FAILED") {
+      console.log("✅ Payment SUCCESS detected");
+    } else if (rawStatus === "FAILED" || rawStatus === "1" || paymentData.ResultCode === "1") {
       status = "failed";
+      console.log("❌ Payment FAILED detected");
+    } else if (rawStatus === "CANCELLED" || paymentData.ResultCode === "1032") {
+      status = "cancelled";
+      console.log("❌ Payment CANCELLED by user");
+    } else {
+      console.log("⏳ Payment still PENDING, Status:", rawStatus);
     }
 
     return {
       success: true,
       data: paymentData,
       status: status,
-      resultCode: paymentData.ResultCode,
-      resultDescription: paymentData.ResultDesc,
-      mpesaReceiptNumber: paymentData.MpesaReceiptNumber,
-      transactionDate: paymentData.TransactionDate,
-      phoneNumber: paymentData.Phone,
-      amount: paymentData.Amount,
+      resultCode: paymentData.ResultCode || rawStatus,
+      resultDescription: paymentData.ResultDesc || paymentData.ResultDescription || "Processing",
+      mpesaReceiptNumber: paymentData.MpesaReceiptNumber || paymentData.mpesaReceiptNumber,
+      transactionId: paymentData.TransactionID || paymentData.transactionId || paymentData.MpesaReceiptNumber,
+      transactionDate: paymentData.TransactionDate || paymentData.transactionDate,
+      phoneNumber: paymentData.Phone || paymentData.phone,
+      amount: paymentData.Amount || paymentData.amount,
     };
   } catch (error) {
     console.error("Lipia payment query error:", error);
     return {
       success: false,
       error: error.message,
+      status: "pending", // Don't declare as failed, keep checking
       status: "failed",
     };
   }

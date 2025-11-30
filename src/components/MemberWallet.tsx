@@ -97,10 +97,16 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
 
     socket.on("connect", () => {
       console.log("✅ Socket.IO connected:", socket.id);
+      console.log("🔍 Socket connected - ready to receive events");
     });
 
     socket.on("disconnect", () => {
       console.log("❌ Socket.IO disconnected");
+    });
+
+    // Test listener - to verify socket is working
+    socket.on("test", (data: any) => {
+      console.log("🧪 Test event received:", data);
     });
 
     // Withdrawal status updates
@@ -125,14 +131,21 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
     // Payment completed (for wallet deposits)
     socket.on("payment:completed", (data: any) => {
       console.log("📥 Received payment:completed event:", data);
+      console.log("📥 Event type:", data.type);
+      console.log("📥 Current processing state:", isProcessing);
+      
       if (data.type === "wallet_deposit") {
-        console.log("💰 Wallet deposit completed:", data);
+        console.log("💰 Wallet deposit completed! Updating UI...");
         setIsProcessing(false);
         setShowDepositDialog(false);
         setDepositAmount("");
+        
+        // Fetch updated data
         fetchWalletData();
         
         const amount = data.payment?.amount || data.amount || '';
+        console.log("💵 Deposit amount:", amount);
+        
         toast({
           title: "Deposit Confirmed! ✅",
           description: amount ? `KES ${amount} has been added to your wallet` : `Your wallet has been updated successfully`,
@@ -143,6 +156,8 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
     // Payment failed
     socket.on("payment:failed", (data: any) => {
       console.log("📥 Received payment:failed event:", data);
+      console.log("📥 Failure message:", data.message);
+      console.log("📥 Current processing state:", isProcessing);
       
       // Only show error if we're still processing
       if (isProcessing) {
@@ -150,17 +165,23 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
         setShowDepositDialog(false);
         setDepositAmount("");
         
-        const isCancelled = data.message?.includes("cancelled") || 
-                          data.message?.includes("timeout") ||
-                          data.message?.includes("timed out");
+        const message = data.message || "";
+        const isCancelled = message.includes("cancelled") || 
+                          message.includes("timeout") ||
+                          message.includes("timed out") ||
+                          message.includes("no response");
+        
+        console.log("📥 Is cancelled:", isCancelled);
         
         toast({
           title: isCancelled ? "Payment Cancelled" : "Payment Failed",
           description: isCancelled 
-            ? "You cancelled the M-Pesa prompt. No money was deducted from your account."
-            : data.message || "Transaction could not be completed. Please try again.",
+            ? "You cancelled the M-Pesa prompt or it timed out. No money was deducted from your account."
+            : `Error: ${message}` || "Transaction could not be completed. Please try again.",
           variant: "destructive",
         });
+      } else {
+        console.log("⚠️ Ignoring payment:failed event - not in processing state");
       }
     });
 
@@ -172,6 +193,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
 
     return () => {
       clearInterval(interval);
+      socket.off("test");
       socket.off("withdrawalStatusUpdated");
       socket.off("payment:completed");
       socket.off("payment:failed");
@@ -233,23 +255,61 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
           description: "Please enter your M-Pesa PIN on your phone",
         });
 
-        // Don't rely on polling - Socket.IO will handle status updates
-        // Just wait for Socket.IO events
+        // Wait for Socket.IO events AND periodically check wallet balance
         console.log("✅ STK Push sent, waiting for Socket.IO updates...");
         console.log("🔍 CheckoutRequestID:", data.CheckoutRequestID);
         
-        // Set a timeout to stop processing if no response after 95 seconds
-        // (Backend polls for 90 seconds, give it 5 extra seconds)
-        setTimeout(() => {
-          if (isProcessing) {
-            console.log("⏱️ Frontend timeout reached");
-            setIsProcessing(false);
-            toast({
-              title: "Still Processing",
-              description: "Payment verification is taking longer than expected. Your wallet will update automatically if payment succeeds.",
+        // Get initial balance from current summary state
+        const initialBalance = summary?.currentBalance || 0;
+        console.log("💰 Initial balance before deposit:", initialBalance);
+        
+        // Poll wallet data every 3 seconds to detect balance change
+        let pollCount = 0;
+        const maxPolls = 30; // 30 * 3 = 90 seconds
+        const balancePoller = setInterval(async () => {
+          pollCount++;
+          console.log(`🔄 Checking wallet balance (${pollCount}/${maxPolls})...`);
+          
+          try {
+            const res = await fetch(`${API_BASE}/api/savings/summary`, {
+              headers: { ...authService.getAuthHeaders() },
             });
+            const data = await res.json();
+            
+            if (data.success && data.data && data.data.currentBalance > initialBalance) {
+              console.log("✅ Balance increased! Deposit successful");
+              console.log(`💰 New balance: ${data.data.currentBalance} (was ${initialBalance})`);
+              clearInterval(balancePoller);
+              setIsProcessing(false);
+              setShowDepositDialog(false);
+              setDepositAmount("");
+              fetchWalletData();
+              toast({
+                title: "Deposit Confirmed! ✅",
+                description: `KES ${amount} has been added to your wallet`,
+              });
+            } else if (pollCount >= maxPolls) {
+              console.log("⏱️ Balance check timeout");
+              clearInterval(balancePoller);
+              setIsProcessing(false);
+              setShowDepositDialog(false);
+              setDepositAmount("");
+              
+              // One final refresh
+              fetchWalletData();
+              
+              toast({
+                title: "Check Your Wallet",
+                description: "If you completed the M-Pesa payment, your balance should update within 2 minutes. Refresh this page if needed.",
+              });
+            }
+          } catch (error) {
+            console.error("Error checking balance:", error);
           }
-        }, 95000); // 95 seconds
+        }, 3000); // Check every 3 seconds
+        
+        // Cleanup function to clear interval
+        (window as any).balancePoller = balancePoller;
 
         /* Commented out polling - relying on Socket.IO instead
         const checkoutRequestId = data.CheckoutRequestID;
