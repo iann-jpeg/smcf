@@ -323,20 +323,101 @@ const AdminDashboard = ({
   const handleSendReminders = async () => {
     const pendingCount = pendingMembers.length;
 
-    // In production, this would send SMS reminders
-    // For now, just show a notification
-    toast({
-      title: "Reminders Sent",
-      description: `Payment reminders sent to ${pendingCount} member${
-        pendingCount !== 1 ? "s" : ""
-      }`,
-    });
+    if (pendingCount === 0) {
+      toast({
+        title: "All Paid",
+        description: "All members have already paid for this cycle!",
+      });
+      return;
+    }
 
-    // Could implement SMS sending here
-    // await fetch(`${API_BASE}/api/notifications/reminders`, {
-    //   method: 'POST',
-    //   headers: { ...authService.getAuthHeaders() }
-    // });
+    // Calculate days remaining
+    let daysRemaining = 0;
+    if (currentCycle?.start_date) {
+      const startDate = new Date(currentCycle.start_date);
+      const endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + 5); // 5-day cycle
+      const today = new Date();
+      daysRemaining = Math.max(
+        0,
+        Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+      );
+    }
+
+    // Generate WhatsApp message
+    const cycleNumber = currentCycle?.cycle_number || 1;
+    const unpaidList = pendingMembers
+      .map((m: any, index: number) => `${index + 1}. ${m.name}`)
+      .join("\n");
+
+    // Group message for SMART MOVES CASH FLOW WhatsApp group
+    const groupMessage = `🔔 *SMCF Payment Reminder - Cycle #${cycleNumber}* 🔔
+
+⏰ *${daysRemaining} ${daysRemaining === 1 ? "day" : "days"} remaining* to send your contribution!
+
+💰 *Amount Due:* KES 224
+
+📋 *Members who haven't paid yet:*
+${unpaidList}
+
+⚠️ Please send your contribution before the deadline to avoid penalties.
+
+Thank you for your cooperation! 🙏`;
+
+    // Individual DM message
+    const individualMessage = (memberName: string) => `🔔 *SMCF Payment Reminder - Cycle #${cycleNumber}* 🔔
+
+Hi ${memberName},
+
+⏰ You have *${daysRemaining} ${daysRemaining === 1 ? "day" : "days"} remaining* to send your contribution!
+
+💰 *Amount Due:* KES 224
+
+⚠️ Please send your contribution before the deadline to avoid penalties.
+
+Thank you for your cooperation! 🙏`;
+
+    // Open group message first
+    const groupNumber = "254759097157";
+    const encodedGroupMessage = encodeURIComponent(groupMessage);
+    const groupWhatsappUrl = `https://wa.me/${groupNumber}?text=${encodedGroupMessage}`;
+    window.open(groupWhatsappUrl, "_blank");
+
+    // Open individual DMs with a slight delay between each
+    pendingMembers.forEach((member: any, index: number) => {
+      if (member.phone) {
+        // Clean phone number (remove spaces, dashes, etc.)
+        let cleanPhone = member.phone.replace(/[\s\-\(\)]/g, "");
+        
+        // Add country code if not present
+        if (!cleanPhone.startsWith("254") && !cleanPhone.startsWith("+254")) {
+          // Remove leading 0 if present
+          if (cleanPhone.startsWith("0")) {
+            cleanPhone = "254" + cleanPhone.substring(1);
+          } else {
+            cleanPhone = "254" + cleanPhone;
+          }
+        }
+        
+        // Remove + if present
+        cleanPhone = cleanPhone.replace("+", "");
+        
+        const personalMessage = individualMessage(member.name);
+        const encodedPersonalMessage = encodeURIComponent(personalMessage);
+        const personalWhatsappUrl = `https://wa.me/${cleanPhone}?text=${encodedPersonalMessage}`;
+        
+        // Delay each window opening by 2 seconds to avoid browser blocking
+        setTimeout(() => {
+          window.open(personalWhatsappUrl, "_blank");
+        }, (index + 1) * 2000);
+      }
+    });
+    
+    toast({
+      title: "Opening WhatsApp",
+      description: `Opening ${pendingCount + 1} WhatsApp tabs (1 group + ${pendingCount} personal DMs). Please allow pop-ups if blocked.`,
+      duration: 5000,
+    });
   };
 
   const handleProcessPayout = async () => {
@@ -964,12 +1045,12 @@ const AdminDashboard = ({
                     Collection Progress
                   </div>
                   <div className="text-2xl font-bold">
-                    {currentCycle?.paid_members_count || currentCycle?.data?.paid_members_count || paidMembers.length}/{safeMembers.length || 14}
+                    {paidMembers.length}/{safeMembers.length}
                   </div>
                   <Progress
                     value={
                       safeMembers.length > 0
-                        ? ((currentCycle?.paid_members_count || currentCycle?.data?.paid_members_count || paidMembers.length) / safeMembers.length) * 100
+                        ? (paidMembers.length / safeMembers.length) * 100
                         : 0
                     }
                     className="mt-2"
@@ -1364,7 +1445,7 @@ const AdminDashboard = ({
                     <span>
                       {safeMembers.length > 0
                         ? Math.round(
-                            (currentCycle.paid_members_count /
+                            (paidMembers.length /
                               safeMembers.length) *
                               100
                           )
@@ -1375,7 +1456,7 @@ const AdminDashboard = ({
                   <Progress
                     value={
                       safeMembers.length > 0
-                        ? (currentCycle.paid_members_count /
+                        ? (paidMembers.length /
                             safeMembers.length) *
                           100
                         : 0
@@ -1387,7 +1468,7 @@ const AdminDashboard = ({
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
                   <div className="text-center">
                     <div className="text-2xl font-bold text-primary">
-                      {currentCycle.paid_members_count}/{safeMembers.length}
+                      {paidMembers.length}/{safeMembers.length}
                     </div>
                     <div className="text-sm text-muted-foreground">
                       Members Paid

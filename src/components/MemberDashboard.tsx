@@ -172,16 +172,14 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         const newData = {
           currentCycle: (cycleData.success && cycleData.data) ? (cycleData.data.cycle_number || 1) : 1,
           daysLeft: (cycleData.success && cycleData.data) ? (cycleData.data.days_left || 0) : 0,
-          paidMembers: (cycleData.success && cycleData.data) 
-            ? (cycleData.data.paid_members_count || uniquePaidMembers) 
-            : uniquePaidMembers,
+          paidMembers: uniquePaidMembers, // Always use calculated count from actual payments
           totalMembers: totalMembersCount || 0,
           collectedAmount: (cycleData.success && cycleData.data) 
             ? (cycleData.data.total_amount_collected || totalCollected) 
             : totalCollected,
           totalAmount: (cycleData.success && cycleData.data) 
-            ? (cycleData.data.expected_amount || (totalMembersCount * 204)) 
-            : (totalMembersCount * 204),
+            ? (cycleData.data.expected_amount || (totalMembersCount * 224)) 
+            : (totalMembersCount * 224),
           cycleStartDate: (cycleData.success && cycleData.data && cycleData.data.start_date) 
             ? new Date(cycleData.data.start_date).toLocaleDateString()
             : new Date().toLocaleDateString(),
