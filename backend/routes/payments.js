@@ -210,23 +210,55 @@ async function pollLipiaPaymentStatus(
         { new: true }
       );
 
-      // Update member's wallet
+      // Get member details
+      const member = await Member.findById(memberId);
+
+      // Create Saving record for wallet deposit
+      const Saving = (await import("../models/Saving.js")).default;
+
+      // Get current balance
+      const lastSaving = await Saving.findOne({ member_id: memberId }).sort({
+        created_at: -1,
+      });
+      const balanceBefore = lastSaving ? lastSaving.balance_after : 0;
+      const balanceAfter = balanceBefore + amount;
+
+      const savingRecord = await Saving.create({
+        member_id: memberId,
+        amount: amount,
+        transaction_type: "deposit",
+        balance_before: balanceBefore,
+        balance_after: balanceAfter,
+        status: "completed",
+        payment_method: "mpesa",
+        transaction_ref: status.transactionId || reference,
+        notes: `Wallet deposit via M-Pesa - ${reference}`,
+      });
+
+      // Update member's total contributed
       await Member.findByIdAndUpdate(memberId, {
         $inc: { total_contributed: amount },
       });
 
       console.log("✅ Wallet deposit completed:", {
-        member: memberId,
+        member: member.name,
         amount,
         reference,
+        newBalance: balanceAfter,
       });
 
-      // Emit socket event
+      // Emit socket events for real-time updates
       if (app && app.get("io")) {
         app.get("io").emit("payment:completed", {
           memberId,
           payment,
           type: "wallet_deposit",
+        });
+
+        app.get("io").emit("saving:new", {
+          memberId,
+          saving: savingRecord,
+          member: member.name,
         });
       }
     } else if (status.status === "failed" || status.status === "cancelled") {
