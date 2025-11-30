@@ -84,6 +84,91 @@ router.post("/", protect, async (req, res) => {
   }
 });
 
+// Initiate STK Push for wallet deposit
+router.post("/stk-push", protect, async (req, res) => {
+  try {
+    const { amount, phone, type, notes } = req.body;
+    const memberId = req.user._id;
+
+    // Store pending payment record
+    const payment = await Payment.create({
+      member_id: memberId,
+      amount,
+      phone,
+      payment_method: "mpesa",
+      status: "pending",
+      type: type || "wallet_deposit",
+      notes,
+    });
+
+    // In production, integrate with actual M-Pesa STK Push API
+    // For now, simulate successful STK push initiation
+    const checkoutRequestId = `WS${Date.now()}`;
+
+    // Simulate STK Push (in production, call actual M-Pesa API here)
+    setTimeout(async () => {
+      // Simulate successful payment
+      payment.status = "completed";
+      payment.mpesa_transaction_id = `MPX${Date.now()}`;
+      await payment.save();
+
+      // Update member's wallet/savings
+      await Member.findByIdAndUpdate(memberId, {
+        $inc: { total_contributed: amount },
+      });
+
+      // Emit socket event
+      if (req.app.get("io")) {
+        req.app.get("io").emit("payment:completed", {
+          memberId,
+          payment,
+          checkoutRequestId,
+        });
+      }
+    }, 3000); // Simulate 3 second delay
+
+    res.json({
+      success: true,
+      message: "STK Push sent",
+      CheckoutRequestID: checkoutRequestId,
+      paymentId: payment._id,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Check payment status
+router.get("/check-status/:checkoutRequestId", protect, async (req, res) => {
+  try {
+    const { checkoutRequestId } = req.params;
+
+    // Find payment by checkout request ID (in production, query M-Pesa API)
+    // For now, find recent payment by user
+    const payment = await Payment.findOne({
+      member_id: req.user._id,
+    }).sort({ date: -1 });
+
+    if (!payment) {
+      return res.json({
+        status: "pending",
+        message: "Payment not found",
+      });
+    }
+
+    res.json({
+      status: payment.status,
+      message:
+        payment.status === "completed"
+          ? "Payment successful"
+          : "Processing payment",
+      payment,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // M-Pesa callback endpoint (for production integration)
 router.post("/mpesa-callback", async (req, res) => {
   try {

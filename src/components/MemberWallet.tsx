@@ -101,7 +101,13 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
 
     setIsProcessing(true);
     try {
-      const res = await fetch(`${API_BASE}/api/savings/deposit`, {
+      // Initiate STK Push payment
+      toast({
+        title: "Initiating Payment",
+        description: "Please check your phone for M-Pesa prompt...",
+      });
+
+      const res = await fetch(`${API_BASE}/api/payments/stk-push`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -109,8 +115,9 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
         },
         body: JSON.stringify({
           amount,
-          payment_method: "mpesa",
-          notes: `Wallet deposit`,
+          phone: userData.phone,
+          type: "wallet_deposit",
+          notes: `Wallet deposit - KES ${amount}`,
         }),
       });
 
@@ -118,22 +125,64 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
 
       if (data.success) {
         toast({
-          title: "Deposit Successful",
-          description: data.message,
+          title: "Payment Request Sent",
+          description: "Please enter your M-Pesa PIN on your phone",
         });
-        setShowDepositDialog(false);
-        setDepositAmount("");
-        fetchWalletData();
+
+        // Poll for payment status
+        const checkoutRequestId = data.CheckoutRequestID;
+        let attempts = 0;
+        const maxAttempts = 30; // 30 seconds
+
+        const pollPayment = setInterval(async () => {
+          attempts++;
+
+          try {
+            const statusRes = await fetch(
+              `${API_BASE}/api/payments/check-status/${checkoutRequestId}`,
+              {
+                headers: { ...authService.getAuthHeaders() },
+              }
+            );
+
+            const statusData = await statusRes.json();
+
+            if (statusData.status === "completed") {
+              clearInterval(pollPayment);
+              toast({
+                title: "Deposit Successful!",
+                description: `KES ${amount} has been added to your wallet`,
+              });
+              setShowDepositDialog(false);
+              setDepositAmount("");
+              setIsProcessing(false);
+              fetchWalletData();
+            } else if (
+              statusData.status === "failed" ||
+              attempts >= maxAttempts
+            ) {
+              clearInterval(pollPayment);
+              toast({
+                title: "Payment Failed",
+                description:
+                  statusData.message || "Payment was cancelled or timed out",
+                variant: "destructive",
+              });
+              setIsProcessing(false);
+            }
+          } catch (error) {
+            console.error("Error checking payment status:", error);
+          }
+        }, 1000);
       } else {
-        throw new Error(data.error || "Deposit failed");
+        throw new Error(data.error || "Failed to initiate payment");
       }
     } catch (error: any) {
       toast({
-        title: "Deposit Failed",
+        title: "Payment Failed",
         description: error.message,
         variant: "destructive",
       });
-    } finally {
       setIsProcessing(false);
     }
   };

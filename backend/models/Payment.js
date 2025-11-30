@@ -41,9 +41,16 @@ const paymentSchema = new mongoose.Schema({
     enum: ["pending", "completed", "failed"],
     default: "pending",
   },
+  type: {
+    type: String,
+    enum: ["cycle_payment", "wallet_deposit", "loan_repayment", "other"],
+    default: "cycle_payment",
+  },
+  notes: {
+    type: String,
+  },
   cycle_number: {
     type: Number,
-    required: true,
   },
   date: {
     type: Date,
