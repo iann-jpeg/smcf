@@ -84,7 +84,7 @@ const ReportsTab = () => {
 </head>
 <body>
   <div class="header">
-    <h1>SMCF - Smart Money Cash Flow</h1>
+    <h1>SMCF - Smart Moves Cash Flow</h1>
     <p>Cycle Report #${cycle?.cycle_number || 'N/A'}</p>
     <p>Generated on: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p>
   </div>
@@ -214,7 +214,7 @@ const ReportsTab = () => {
   </div>
 
   <div class="footer">
-    <p><strong>SMCF - Smart Money Cash Flow</strong></p>
+    <p><strong>SMCF - Smart Moves Cash Flow</strong></p>
     <p>Digital Table Banking Platform | Automated Contributions | Secure Transactions</p>
     <p>This report is confidential and intended for authorized personnel only.</p>
   </div>
@@ -254,7 +254,7 @@ const ReportsTab = () => {
     try {
       // Generate CSV data
       const csvData = [
-        ['SMCF Cycle Report', `Cycle #${currentCycle?.cycle_number || 'N/A'}`, `Generated: ${new Date().toLocaleString()}`],
+        ['SMCF - Smart Moves Cash Flow', `Cycle #${currentCycle?.cycle_number || 'N/A'}`, `Generated: ${new Date().toLocaleString()}`],
         [],
         ['Name', 'Position', 'Status', 'Total Contributed', 'Total Received'],
         ...members.map(m => [

@@ -1,4 +1,4 @@
-# SMCF - Smart Money Cash Flow Platform
+# SMCF - Smart Moves Cash Flow Platform
 
 A digital table banking platform for managing group contributions, payments, and disbursements with M-Pesa integration.
 

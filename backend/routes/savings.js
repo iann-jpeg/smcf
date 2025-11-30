@@ -212,20 +212,43 @@ router.put("/:id/status", protect, adminOnly, async (req, res) => {
       });
     }
 
-    saving.status = status;
-    saving.processed_by = req.admin._id;
-    await saving.save();
-
-    // If withdrawal is completed, update member's total savings
-    if (status === "completed" && saving.transaction_type === "withdrawal") {
-      await Member.findByIdAndUpdate(saving.member_id, {
-        $inc: { total_savings: -saving.amount },
+    if (saving.status !== "pending") {
+      return res.status(400).json({
+        success: false,
+        error: "Transaction has already been processed",
       });
     }
 
-    // If withdrawal is failed, revert balance
-    if (status === "failed" && saving.transaction_type === "withdrawal") {
-      saving.balance_after = saving.balance_before;
+    // Handle withdrawal approval/rejection
+    if (saving.transaction_type === "withdrawal") {
+      if (status === "completed") {
+        // Deduct from member's total savings
+        await Member.findByIdAndUpdate(saving.member_id, {
+          $inc: { total_savings: -saving.amount },
+        });
+
+        // Balance was already set during withdrawal request, just update status
+        saving.status = "completed";
+        saving.processed_by = req.admin._id;
+        saving.processed_at = new Date();
+        await saving.save();
+
+        console.log(`✅ Withdrawal approved: KES ${saving.amount} deducted from member ${saving.member_id}`);
+      } else if (status === "failed") {
+        // Revert the balance back to before withdrawal
+        saving.balance_after = saving.balance_before;
+        saving.status = "failed";
+        saving.processed_by = req.admin._id;
+        saving.processed_at = new Date();
+        await saving.save();
+
+        console.log(`❌ Withdrawal rejected: Balance restored for member ${saving.member_id}`);
+      }
+    } else {
+      // For other transaction types, just update status
+      saving.status = status;
+      saving.processed_by = req.admin._id;
+      saving.processed_at = new Date();
       await saving.save();
     }
 
@@ -236,6 +259,8 @@ router.put("/:id/status", protect, adminOnly, async (req, res) => {
         savingId,
         memberId: saving.member_id,
         status,
+        amount: saving.amount,
+        newBalance: saving.balance_after,
         timestamp: new Date(),
       });
     }
@@ -243,7 +268,7 @@ router.put("/:id/status", protect, adminOnly, async (req, res) => {
     res.json({
       success: true,
       data: saving,
-      message: `Withdrawal ${status}`,
+      message: `Withdrawal ${status}. ${status === 'completed' ? `KES ${saving.amount.toLocaleString()} deducted from wallet.` : 'Balance restored.'}`,
     });
   } catch (error) {
     console.error("Error updating withdrawal status:", error);

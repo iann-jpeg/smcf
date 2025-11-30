@@ -1,6 +1,6 @@
 # SMCF Custom Backend
 
-This is the custom backend for the SMCF (Smart Money Cash Flow) platform, replacing Supabase with a self-hosted solution.
+This is the custom backend for the SMCF (Smart Moves Cash Flow) platform, replacing Supabase with a self-hosted solution.
 
 ## Features
 

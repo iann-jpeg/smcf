@@ -857,7 +857,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         </TabsContent>
 
         <TabsContent value="wallet" className="space-y-4">
-          <MemberWallet />
+          <MemberWallet userData={userData} />
         </TabsContent>
 
         <TabsContent value="loans" className="space-y-4">

@@ -183,9 +183,16 @@ async function pollLipiaPaymentStatus(
 
   if (attempts >= maxAttempts) {
     console.log("⏱️ Payment polling timeout:", reference);
-    await Payment.findByIdAndUpdate(paymentId, {
+    const payment = await Payment.findByIdAndUpdate(paymentId, {
       status: "failed",
-      notes: "Payment timeout - no response from M-Pesa",
+      notes: "Payment cancelled or timed out",
+    }, { new: true });
+    
+    // Emit socket event for timeout
+    app.get("io").emit("payment:failed", {
+      paymentId,
+      memberId,
+      message: "Payment cancelled or timed out",
     });
     return;
   }
@@ -197,6 +204,7 @@ async function pollLipiaPaymentStatus(
     console.log(`📊 Payment status check ${attempts + 1}/${maxAttempts}:`, {
       reference,
       status: status.status,
+      resultCode: status.resultCode,
     });
 
     if (status.status === "completed" || status.status === "success") {
@@ -235,9 +243,12 @@ async function pollLipiaPaymentStatus(
         notes: `Wallet deposit via M-Pesa - ${reference}`,
       });
 
-      // Update member's total contributed
+      // Update member's total contributed and total savings
       await Member.findByIdAndUpdate(memberId, {
-        $inc: { total_contributed: amount },
+        $inc: { 
+          total_contributed: amount,
+          total_savings: amount 
+        },
       });
 
       console.log("✅ Wallet deposit completed:", {
@@ -263,10 +274,24 @@ async function pollLipiaPaymentStatus(
       }
     } else if (status.status === "failed" || status.status === "cancelled") {
       // Payment failed
-      await Payment.findByIdAndUpdate(paymentId, {
+      const payment = await Payment.findByIdAndUpdate(paymentId, {
         status: "failed",
-        notes: status.message || "Payment failed",
+        notes: status.resultDescription || status.message || "Payment cancelled or failed",
+      }, { new: true });
+      
+      console.log("❌ Payment failed:", {
+        reference,
+        reason: status.resultDescription || status.message,
       });
+      
+      // Emit socket event for failed payment
+      if (app && app.get("io")) {
+        app.get("io").emit("payment:failed", {
+          paymentId,
+          memberId,
+          message: status.resultDescription || status.message || "Payment cancelled or failed",
+        });
+      }
       console.log("❌ Payment failed:", reference);
     } else {
       // Still pending, poll again after 1 second
@@ -306,28 +331,39 @@ router.get("/check-status/:checkoutRequestId", protect, async (req, res) => {
   try {
     const { checkoutRequestId } = req.params;
 
-    // Find payment by checkout request ID (in production, query M-Pesa API)
-    // For now, find recent payment by user
+    console.log("🔍 Checking payment status for:", checkoutRequestId);
+
+    // Find payment by checkout request ID
     const payment = await Payment.findOne({
-      member_id: req.user._id,
-    }).sort({ date: -1 });
+      checkout_request_id: checkoutRequestId,
+    });
 
     if (!payment) {
+      console.log("⚠️ Payment not found for checkout request ID:", checkoutRequestId);
       return res.json({
         status: "pending",
-        message: "Payment not found",
+        message: "Payment record not found, still processing...",
       });
     }
+
+    console.log("✅ Payment found:", {
+      id: payment._id,
+      status: payment.status,
+      amount: payment.amount,
+    });
 
     res.json({
       status: payment.status,
       message:
         payment.status === "completed"
           ? "Payment successful"
-          : "Processing payment",
+          : payment.status === "failed"
+          ? payment.notes || "Payment failed"
+          : "Processing payment...",
       payment,
     });
   } catch (error) {
+    console.error("❌ Error checking payment status:", error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

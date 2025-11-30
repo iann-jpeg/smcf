@@ -56,6 +56,9 @@ const savingSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Admin",
     },
+    processed_at: {
+      type: Date,
+    },
     created_at: {
       type: Date,
       default: Date.now,

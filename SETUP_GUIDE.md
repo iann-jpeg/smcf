@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide will help you set up the SMCF (Smart Money Cash Flow) platform with a custom backend, replacing Supabase with a self-hosted Node.js/Express/MongoDB solution.
+This guide will help you set up the SMCF (Smart Moves Cash Flow) platform with a custom backend, replacing Supabase with a self-hosted Node.js/Express/MongoDB solution.
 
 ## Architecture
 

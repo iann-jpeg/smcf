@@ -85,7 +85,69 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
 
     // Refresh every 30 seconds
     const interval = setInterval(fetchWalletData, 30000);
-    return () => clearInterval(interval);
+
+    // Listen for real-time updates
+    const socket = (window as any).socket;
+    if (socket) {
+      // Withdrawal status updates
+      socket.on("withdrawalStatusUpdated", (data: any) => {
+        console.log("💰 Withdrawal status updated:", data);
+        fetchWalletData();
+        
+        if (data.status === "completed") {
+          toast({
+            title: "Withdrawal Approved ✅",
+            description: `KES ${data.amount.toLocaleString()} has been deducted from your wallet`,
+          });
+        } else if (data.status === "failed") {
+          toast({
+            title: "Withdrawal Rejected",
+            description: "Your withdrawal request was rejected. Balance restored.",
+            variant: "destructive",
+          });
+        }
+      });
+
+      // Payment completed (for wallet deposits)
+      socket.on("payment:completed", (data: any) => {
+        if (data.type === "wallet_deposit") {
+          console.log("💰 Wallet deposit completed:", data);
+          setIsProcessing(false);
+          fetchWalletData();
+          toast({
+            title: "Deposit Confirmed! ✅",
+            description: `Your wallet has been updated successfully`,
+          });
+        }
+      });
+
+      // Payment failed
+      socket.on("payment:failed", (data: any) => {
+        console.log("❌ Payment failed:", data);
+        setIsProcessing(false);
+        toast({
+          title: "Payment Failed",
+          description: data.message || "Payment was cancelled or failed. Please try again.",
+          variant: "destructive",
+        });
+      });
+
+      // Saving record created
+      socket.on("saving:new", (data: any) => {
+        console.log("💰 New saving record:", data);
+        fetchWalletData();
+      });
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (socket) {
+        socket.off("withdrawalStatusUpdated");
+        socket.off("payment:completed");
+        socket.off("payment:failed");
+        socket.off("saving:new");
+      }
+    };
   }, []);
 
   const handleDeposit = async () => {
@@ -148,6 +210,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
 
         const pollPayment = setInterval(async () => {
           attempts++;
+          console.log(`🔄 Polling payment status (attempt ${attempts}/${maxAttempts})...`);
 
           try {
             const statusRes = await fetch(
@@ -157,33 +220,82 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
               }
             );
 
+            if (!statusRes.ok) {
+              console.log(`⏳ Payment not found yet (attempt ${attempts}/${maxAttempts})`);
+              // Only fail after max attempts
+              if (attempts >= maxAttempts) {
+                clearInterval(pollPayment);
+                toast({
+                  title: "Payment Pending",
+                  description: "Payment verification is taking longer than expected. Your deposit will be processed automatically.",
+                });
+                setIsProcessing(false);
+                setShowDepositDialog(false);
+                setDepositAmount("");
+                // Refresh wallet data
+                setTimeout(fetchWalletData, 2000);
+              }
+              return;
+            }
+
             const statusData = await statusRes.json();
+            console.log("📊 Payment status:", statusData);
 
             if (statusData.status === "completed") {
               clearInterval(pollPayment);
               toast({
-                title: "Deposit Successful!",
+                title: "Deposit Successful! ✅",
                 description: `KES ${amount} has been added to your wallet`,
               });
               setShowDepositDialog(false);
               setDepositAmount("");
               setIsProcessing(false);
               fetchWalletData();
-            } else if (
-              statusData.status === "failed" ||
-              attempts >= maxAttempts
-            ) {
+            } else if (statusData.status === "failed" || statusData.status === "cancelled") {
               clearInterval(pollPayment);
+              
+              // Check if it was a user cancellation or actual failure
+              const message = statusData.message || statusData.payment?.notes || "";
+              const isCancelled = message.toLowerCase().includes("cancelled") || 
+                                message.toLowerCase().includes("timeout") ||
+                                message.toLowerCase().includes("no response") ||
+                                statusData.status === "cancelled";
+              
               toast({
-                title: "Payment Failed",
-                description:
-                  statusData.message || "Payment was cancelled or timed out",
+                title: isCancelled ? "Payment Cancelled ❌" : "Payment Failed",
+                description: isCancelled 
+                  ? "You did not complete the M-Pesa prompt on your phone. No money was deducted from your account."
+                  : message || "Transaction could not be completed. Please try again.",
                 variant: "destructive",
               });
               setIsProcessing(false);
+              setShowDepositDialog(false);
+              setDepositAmount("");
+            } else if (attempts >= maxAttempts) {
+              clearInterval(pollPayment);
+              toast({
+                title: "Payment Processing ⏳",
+                description: "Payment verification is taking longer than expected. Your wallet will update automatically once confirmed.",
+              });
+              setIsProcessing(false);
+              setShowDepositDialog(false);
+              setDepositAmount("");
+              setTimeout(fetchWalletData, 3000);
             }
           } catch (error) {
-            console.error("Error checking payment status:", error);
+            console.error("❌ Error checking payment status:", error);
+            // Only show error after max attempts
+            if (attempts >= maxAttempts) {
+              clearInterval(pollPayment);
+              toast({
+                title: "Payment Processing",
+                description: "Verifying your payment. Wallet will update shortly.",
+              });
+              setIsProcessing(false);
+              setShowDepositDialog(false);
+              setDepositAmount("");
+              setTimeout(fetchWalletData, 3000);
+            }
           }
         }, 1000);
       } else {

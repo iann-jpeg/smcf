@@ -23,7 +23,7 @@ const OrganizationDialog = ({ open, onOpenChange }: OrganizationDialogProps) => 
             🏦 Organization Description
           </DialogTitle>
           <DialogDescription className="text-lg font-semibold text-primary">
-            SMART MONEY CASH FLOW (SMCF)
+            SMART MOVES CASH FLOW (SMCF)
           </DialogDescription>
         </DialogHeader>
 
@@ -31,7 +31,7 @@ const OrganizationDialog = ({ open, onOpenChange }: OrganizationDialogProps) => 
           <Card>
             <CardContent className="pt-6">
               <p className="text-base leading-relaxed mb-4">
-                SMART MONEY CASH FLOW (SMCF) is a registered table banking group based in Kenya, 
+                SMART MOVES CASH FLOW (SMCF) is a registered table banking group based in Kenya, 
                 focused on promoting collective financial empowerment and accountability among its members. 
                 The group operates on a structured money cycle system where members contribute a fixed 
                 amount periodically, and the pooled funds are disbursed to individuals in a rotating manner.

@@ -305,7 +305,7 @@ const Index = () => {
                 <div>
                   <h1 className="text-xl font-bold text-primary">SMCF Admin</h1>
                   <p className="text-xs text-muted-foreground">
-                    Smart Money Cash Flow
+                    Smart Moves Cash Flow
                   </p>
                 </div>
               </div>
@@ -371,7 +371,7 @@ const Index = () => {
                 SMCF
               </h1>
               <p className="text-[10px] sm:text-xs text-muted-foreground">
-                Smart Money Cash Flow
+                Smart Moves Cash Flow
               </p>
             </div>
           </div>
@@ -568,7 +568,7 @@ const Index = () => {
             <span className="text-xl font-bold">SMCF</span>
           </div>
           <p className="text-muted-foreground mb-4">
-            Smart Money Cash Flow - Digital Table Banking Platform
+            Smart Moves Cash Flow - Digital Table Banking Platform
           </p>
           <p className="text-sm text-muted-foreground mb-2">
             Secure • Automated • Transparent • Kenyan-Made

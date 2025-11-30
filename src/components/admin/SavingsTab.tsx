@@ -70,7 +70,34 @@ const AdminSavingsTab = () => {
 
     // Refresh every 30 seconds
     const interval = setInterval(fetchSavingsData, 30000);
-    return () => clearInterval(interval);
+
+    // Listen for real-time withdrawal requests and status updates
+    const socket = (window as any).socket;
+    if (socket) {
+      socket.on("withdrawalRequest", () => {
+        console.log("💰 New withdrawal request received");
+        fetchSavingsData();
+      });
+
+      socket.on("withdrawalStatusUpdated", () => {
+        console.log("💰 Withdrawal status updated");
+        fetchSavingsData();
+      });
+
+      socket.on("savingDeposit", () => {
+        console.log("💰 New deposit received");
+        fetchSavingsData();
+      });
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (socket) {
+        socket.off("withdrawalRequest");
+        socket.off("withdrawalStatusUpdated");
+        socket.off("savingDeposit");
+      }
+    };
   }, []);
 
   const handleWithdrawalAction = async (
