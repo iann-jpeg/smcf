@@ -91,7 +91,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         const payments = await paymentsRes.json();
         const loansData = await loansRes.json();
 
-        let announcementsData = [];
+        let announcementsData: any = [];
         try {
           if (announcementsRes.ok) {
             announcementsData = await announcementsRes.json();
