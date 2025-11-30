@@ -203,7 +203,22 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
           description: "Please enter your M-Pesa PIN on your phone",
         });
 
-        // Poll for payment status
+        // Don't rely on polling - Socket.IO will handle status updates
+        // Just wait for Socket.IO events
+        console.log("✅ STK Push sent, waiting for Socket.IO updates...");
+        
+        // Set a timeout to stop processing if no response after 60 seconds
+        setTimeout(() => {
+          if (isProcessing) {
+            setIsProcessing(false);
+            toast({
+              title: "Payment Timeout",
+              description: "Payment verification is taking longer than expected. If payment was successful, your wallet will be updated automatically.",
+            });
+          }
+        }, 60000); // 60 seconds
+
+        /* Commented out polling - relying on Socket.IO instead
         const checkoutRequestId = data.CheckoutRequestID;
         let attempts = 0;
         const maxAttempts = 30; // 30 seconds
@@ -297,7 +312,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
               setTimeout(fetchWalletData, 3000);
             }
           }
-        }, 1000);
+        }, 1000); */
       } else {
         throw new Error(data.error || "Failed to initiate payment");
       }
