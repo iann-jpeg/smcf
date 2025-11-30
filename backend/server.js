@@ -28,6 +28,9 @@ const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:8080",
   "http://localhost:3000",
+  "https://localhost", // For Capacitor Android app
+  "capacitor://localhost", // For iOS Capacitor
+  "ionic://localhost", // For older Ionic apps
   "https://smcf.app",
   "https://www.smcf.app",
   process.env.CLIENT_URL,
