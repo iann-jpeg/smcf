@@ -53,7 +53,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
       try {
         console.log("🔄 Starting data fetch for userRole:", userRole);
 
-        // Fetch cycle data AND members for everyone to ensure progress bars match
+        // Fetch cycle data, members, AND payments for everyone to ensure progress bars match
         const requests = [
           fetch(`${API_BASE}/api/cycles/current`, {
             headers: { ...authService.getAuthHeaders() },
@@ -61,23 +61,18 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
           fetch(`${API_BASE}/api/members`, {
             headers: { ...authService.getAuthHeaders() },
           }),
+          fetch(`${API_BASE}/api/payments`, {
+            headers: { ...authService.getAuthHeaders() },
+          }),
         ];
-
-        // Also fetch payments if admin (for admin-specific features)
-        if (userRole === "admin") {
-          requests.push(
-            fetch(`${API_BASE}/api/payments`, {
-              headers: { ...authService.getAuthHeaders() },
-            })
-          );
-        }
 
         const responses = await Promise.all(requests);
 
-        if (!responses[0].ok || !responses[1].ok) {
+        if (!responses[0].ok || !responses[1].ok || !responses[2].ok) {
           console.error("❌ API request failed:", {
             cycleStatus: responses[0].status,
             membersStatus: responses[1].status,
+            paymentsStatus: responses[2].status,
           });
           setIsLoadingData(false);
           return;
@@ -85,8 +80,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
 
         const cycleData = await responses[0].json();
         const membersResponse = await responses[1].json();
-        const paymentsData =
-          userRole === "admin" && responses[2] ? await responses[2].json() : [];
+        const paymentsResponse = await responses[2].json();
 
         console.log("📊 Dashboard raw responses:", {
           userRole,
@@ -98,6 +92,9 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
           membersCount: Array.isArray(membersResponse)
             ? membersResponse.length
             : membersResponse?.data?.length || 0,
+          paymentsCount: Array.isArray(paymentsResponse)
+            ? paymentsResponse.length
+            : 0,
         });
 
         // Extract members array from response (handle both array and object with data property)
@@ -116,34 +113,50 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
           membersData = membersResponse.members;
         }
 
-        console.log("👥 Extracted members data:", {
-          count: membersData.length,
-          sample: membersData.slice(0, 2).map((m: any) => ({
-            name: m?.name,
-            payment_status: m?.payment_status,
-          })),
+        // Extract payments array
+        const paymentsData = Array.isArray(paymentsResponse)
+          ? paymentsResponse
+          : [];
+
+        console.log("👥 Extracted data:", {
+          membersCount: membersData.length,
+          paymentsCount: paymentsData.length,
         });
 
         // Always update members array for accurate progress calculation
         setMembers(membersData);
 
-        // Calculate paid members from actual member data (same as AdminDashboard)
-        const paidMembersFromData = membersData.filter(
-          (m: any) => m && m.payment_status === "paid"
-        );
+        // IMPORTANT: Calculate paid members from PAYMENTS (same as MemberDashboard bottom bar)
+        // This is more accurate than member.payment_status field
+        const uniquePaidMembers = Array.isArray(paymentsData)
+          ? new Set(
+              paymentsData
+                .filter((p: any) => p.status === "completed")
+                .map((p: any) => p.member_id?._id || p.member_id)
+            ).size
+          : 0;
 
-        // IMPORTANT: Use real-time member data for accurate progress
+        // Calculate total collected from payments
+        const totalCollected = Array.isArray(paymentsData)
+          ? paymentsData
+              .filter((p: any) => p.status === "completed")
+              .reduce((sum: number, p: any) => sum + (p.amount || 0), 0)
+          : cycleData?.data?.total_amount_collected || 0;
+
+        // Use real-time data for accurate progress
         const totalMembersCount = membersData.length;
-        const paidMembersCount = paidMembersFromData.length;
-        const totalCollected = cycleData?.data?.total_amount_collected || 0;
+        const paidMembersCount = uniquePaidMembers; // Use payment-based count (86%)
         const expectedAmount = totalMembersCount * 224;
 
-        console.log("📈 Calculated stats from member data:", {
+        console.log("📈 Calculated stats from PAYMENTS data:", {
           totalMembersCount,
           paidMembersCount,
+          percentage:
+            totalMembersCount > 0
+              ? Math.round((paidMembersCount / totalMembersCount) * 100)
+              : 0,
           totalCollected,
           expectedAmount,
-          paidMembersNames: paidMembersFromData.map((m: any) => m?.name),
         });
 
         if (cycleData.success && cycleData.data) {
