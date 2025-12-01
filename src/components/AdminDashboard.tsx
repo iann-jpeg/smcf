@@ -98,6 +98,7 @@ const AdminDashboard = ({
 
   // Real-time data states
   const [recentPayments, setRecentPayments] = useState<any[]>([]);
+  const [allPayments, setAllPayments] = useState<any[]>([]); // Store ALL payments for calculation
   const [disbursements, setDisbursements] = useState<any[]>([]);
   const [loans, setLoans] = useState<any[]>([]);
   const [currentCycle, setCurrentCycle] = useState<any>(null);
@@ -116,8 +117,8 @@ const AdminDashboard = ({
   
   // Calculate paid members from actual completed payments (more accurate than member status)
   const currentCycleNumber = currentCycle?.cycle_number;
-  const completedPayments = Array.isArray(recentPayments) 
-    ? recentPayments.filter((p: any) => 
+  const completedPayments = Array.isArray(allPayments) 
+    ? allPayments.filter((p: any) => 
         p.status === "completed" && 
         (!currentCycleNumber || p.cycle_number === currentCycleNumber)
       )
@@ -155,9 +156,19 @@ const AdminDashboard = ({
         },
       });
       const data = await res.json();
-      // Only update if data changed
+      const allPaymentsData = Array.isArray(data) ? data : [];
+      
+      // Store ALL payments for calculation
+      setAllPayments((prev) => {
+        if (JSON.stringify(prev) !== JSON.stringify(allPaymentsData)) {
+          return allPaymentsData;
+        }
+        return prev;
+      });
+      
+      // Store recent 5 for display
       setRecentPayments((prev) => {
-        const newData = Array.isArray(data) ? data.slice(0, 5) : [];
+        const newData = allPaymentsData.slice(0, 5);
         if (JSON.stringify(prev) !== JSON.stringify(newData)) {
           return newData;
         }

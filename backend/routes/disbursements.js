@@ -68,16 +68,51 @@ router.post("/", protect, adminOnly, async (req, res) => {
       });
     }
 
-    // Check if all members have paid
-    const totalMembers = await Member.countDocuments();
-    if (cycle.paid_members_count < totalMembers) {
+    // Check if all members have paid - calculate from actual completed payments
+    const Payment = (await import("../models/Payment.js")).default;
+    
+    // Get all members (not just active, since we count all in frontend)
+    const allMembers = await Member.find();
+    const totalMembers = allMembers.length;
+    
+    console.log("🔍 Disbursement validation for cycle #" + cycle.cycle_number);
+    console.log("   Total members:", totalMembers);
+    
+    // Get ALL completed payments (regardless of cycle_number for now)
+    const allCompletedPayments = await Payment.find({
+      status: "completed",
+    });
+    
+    console.log("   All completed payments:", allCompletedPayments.length);
+    
+    // Count unique members who have made completed payments
+    const uniquePaidMembers = new Set(
+      allCompletedPayments.map((p) => {
+        const memberId = p.member_id?._id || p.member_id;
+        return memberId ? memberId.toString() : null;
+      }).filter(id => id !== null)
+    ).size;
+    
+    console.log("   Unique paid members (all payments):", uniquePaidMembers);
+    console.log("   Cycle stored count:", cycle.paid_members_count);
+    console.log("   Validation result:", uniquePaidMembers >= totalMembers ? "✅ PASS" : "❌ FAIL");
+    
+    // Validate that enough members have paid
+    if (uniquePaidMembers < totalMembers) {
+      console.error(`❌ Not enough members paid: ${uniquePaidMembers}/${totalMembers}`);
       return res.status(400).json({
         success: false,
-        error: "Cannot disburse - not all members have paid",
-        paid: cycle.paid_members_count,
-        total: totalMembers,
+        error: `Cannot disburse - only ${uniquePaidMembers}/${totalMembers} members have paid`,
+        details: {
+          paid: uniquePaidMembers,
+          total: totalMembers,
+          cycleNumber: cycle.cycle_number,
+          paymentsFound: allCompletedPayments.length,
+        }
       });
     }
+    
+    console.log("✅ All members have paid, proceeding with disbursement");
 
     // Create disbursement record
     const disbursement = await Disbursement.create({
