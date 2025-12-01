@@ -113,12 +113,35 @@ const AdminDashboard = ({
     if (b?.position != null) return 1;
     return 0;
   });
+  
+  // Calculate paid members from actual completed payments (more accurate than member status)
+  const currentCycleNumber = currentCycle?.cycle_number;
+  const completedPayments = Array.isArray(recentPayments) 
+    ? recentPayments.filter((p: any) => 
+        p.status === "completed" && 
+        (!currentCycleNumber || p.cycle_number === currentCycleNumber)
+      )
+    : [];
+  const uniquePaidMemberIds = new Set(
+    completedPayments.map((p: any) => p.member_id?._id || p.member_id)
+  );
+  const paidMembersCount = uniquePaidMemberIds.size;
+  
+  // Also keep the old calculation for backward compatibility
   const paidMembers = orderedMembers.filter(
     (m: any) => m && m.payment_status === "paid"
   );
   const pendingMembers = orderedMembers.filter(
     (m: any) => m && m.payment_status === "pending"
   );
+  
+  console.log("💰 AdminDashboard payment calculation:", {
+    totalMembers: safeMembers.length,
+    paidMembersFromStatus: paidMembers.length,
+    paidMembersFromPayments: paidMembersCount,
+    completedPaymentsCount: completedPayments.length,
+    currentCycleNumber,
+  });
 
   // Polling for real-time data
   const pollRef = useRef<NodeJS.Timeout | null>(null);
@@ -238,11 +261,11 @@ const AdminDashboard = ({
     // Initial silent fetch
     fetchAllData();
 
-    // Silent background polling every 20 seconds
+    // Silent background polling every 10 seconds for faster updates
     pollRef.current = setInterval(() => {
       // Silent refresh - no loading indicators
       fetchAllData();
-    }, 20000);
+    }, 10000);
 
     // Socket.IO real-time event listeners
     const socket = (window as any).socket;
@@ -289,6 +312,23 @@ const AdminDashboard = ({
         console.log("👤 AdminDashboard received: member:new", data);
         fetchAllData(); // Refresh data
       });
+
+      // Listen for new disbursements
+      socket.on("disbursement:new", (data: any) => {
+        console.log("💸 AdminDashboard received: disbursement:new", data);
+        toast({
+          title: "Disbursement Processed!",
+          description: `KES ${data.amount} sent to ${data.recipient_id?.name || "member"}`,
+        });
+        fetchDisbursements(); // Refresh disbursements
+        fetchCurrentCycle(); // Refresh current cycle
+      });
+
+      // Listen for disbursement updates
+      socket.on("disbursement:updated", (data: any) => {
+        console.log("💸 AdminDashboard received: disbursement:updated", data);
+        fetchDisbursements(); // Refresh disbursements
+      });
     }
 
     return () => {
@@ -301,6 +341,8 @@ const AdminDashboard = ({
         socket.off("cycle:updated");
         socket.off("payment:failed");
         socket.off("member:new");
+        socket.off("disbursement:new");
+        socket.off("disbursement:updated");
       }
     };
   }, []);
@@ -416,7 +458,7 @@ Thank you for your cooperation! 🙏`;
     }
 
     const totalMembers = safeMembers.length;
-    const paidCount = paidMembers.length;
+    const paidCount = paidMembersCount; // Use payment-based count for accuracy
 
     if (paidCount < totalMembers) {
       toast({
@@ -1613,14 +1655,14 @@ Thank you for your cooperation! 🙏`;
                         variant={
                           currentCycle.disbursement_status === "completed"
                             ? "default"
-                            : currentCycle.paid_members_count === safeMembers.length
+                            : paidMembersCount === safeMembers.length
                             ? "default"
                             : "secondary"
                         }>
                         {currentCycle.disbursement_status ||
-                          (currentCycle.paid_members_count === safeMembers.length
+                          (paidMembersCount === safeMembers.length
                             ? "Ready"
-                            : `Waiting (${currentCycle.paid_members_count}/${safeMembers.length})`)}
+                            : `Waiting (${paidMembersCount}/${safeMembers.length})`)}
                       </Badge>
                     </div>
                   </div>
@@ -1668,9 +1710,14 @@ Thank you for your cooperation! 🙏`;
                       }}
                       className="w-full"
                       variant="default"
-                      disabled={currentCycle.paid_members_count !== safeMembers.length}>
+                      disabled={paidMembersCount !== safeMembers.length}>
                       <CheckCircle className="w-4 h-4 mr-2" />
                       Mark as Disbursed
+                      {paidMembersCount !== safeMembers.length && (
+                        <span className="ml-2 text-xs">
+                          ({paidMembersCount}/{safeMembers.length} paid)
+                        </span>
+                      )}
                     </Button>
                   )}
                   
