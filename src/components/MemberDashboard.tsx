@@ -270,7 +270,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
     fetchData();
 
     // Silent background refresh every 20 seconds
-    const interval = setInterval(fetchData, 20000);
+    const interval = setInterval(fetchData, 10000); // Poll every 10 seconds for faster updates
 
     // Socket.IO real-time event listeners
     const socket = (window as any).socket;

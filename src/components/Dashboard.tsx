@@ -211,8 +211,8 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
   useEffect(() => {
     fetchData();
 
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchData, 30000);
+    // Refresh every 10 seconds for faster updates
+    const interval = setInterval(fetchData, 10000);
 
     // Fallback timeout - if data doesn't load within 5 seconds, stop showing loading state
     const timeout = setTimeout(() => {

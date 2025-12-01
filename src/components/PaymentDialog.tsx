@@ -151,14 +151,14 @@ const PaymentDialog = ({
   };
 
   const pollPaymentStatus = async (requestID: string, count: number = 0) => {
-    if (count >= 20) {
-      // Stop polling after 20 attempts (60 seconds)
+    if (count >= 30) {
+      // Stop polling after 30 attempts (60 seconds with 2s interval)
       setPaymentStep("failed");
       setIsProcessing(false);
       toast({
-        title: "Payment Timeout",
+        title: "Payment Verification Timeout",
         description:
-          "Payment request expired. Please try again or check your M-Pesa messages.",
+          "Could not verify payment status. If you completed the payment, it will reflect shortly. Please refresh the page.",
         variant: "destructive",
       });
       return;
@@ -218,14 +218,14 @@ const PaymentDialog = ({
           variant: "destructive",
         });
       } else {
-        // Still pending, poll again
+        // Still pending, poll again with 2 second interval
         setPollCount(count + 1);
-        setTimeout(() => pollPaymentStatus(requestID, count + 1), 3000);
+        setTimeout(() => pollPaymentStatus(requestID, count + 1), 2000);
       }
     } catch (error) {
       console.error("Error polling payment status:", error);
-      // Continue polling on error
-      setTimeout(() => pollPaymentStatus(requestID, count + 1), 3000);
+      // Continue polling on error with 2 second interval
+      setTimeout(() => pollPaymentStatus(requestID, count + 1), 2000);
     }
   };
 

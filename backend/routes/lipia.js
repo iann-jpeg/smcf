@@ -115,19 +115,31 @@ router.post("/query-status", protect, async (req, res) => {
       });
     }
 
-    // Update payment status if completed
-    if (result.status === "completed" && result.mpesaReceiptNumber) {
+    // Update payment status if completed - check multiple success indicators
+    if (result.status === "completed" || result.resultCode === "0" || result.mpesaReceiptNumber) {
+      console.log("💳 Attempting to complete payment with checkoutRequestID:", checkoutRequestID);
+      
       const payment = await Payment.findOneAndUpdate(
         { checkout_request_id: checkoutRequestID },
         {
           status: "completed",
-          mpesa_transaction_id: result.mpesaReceiptNumber,
-          transaction_date: result.transactionDate,
+          mpesa_transaction_id: result.mpesaReceiptNumber || checkoutRequestID,
+          transaction_date: result.transactionDate || new Date(),
         },
         { new: true }
       );
 
-      if (payment && payment.status === "completed") {
+      if (!payment) {
+        console.error("❌ Payment not found with checkout_request_id:", checkoutRequestID);
+        return res.json({
+          success: true,
+          status: result.status,
+          ResultCode: result.resultCode,
+          message: "Payment record not found",
+        });
+      }
+
+      if (payment.status === "completed") {
         console.log("✅ Payment completed via query-status:", {
           paymentId: payment._id,
           type: payment.type,
