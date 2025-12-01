@@ -152,9 +152,11 @@ router.post("/stk-push", protect, async (req, res) => {
     }
 
     // Update payment with Lipia details (handle both checkoutRequestID and checkoutRequestId)
-    const checkoutRequestId = lipiaResponse.checkoutRequestID || lipiaResponse.checkoutRequestId;
-    const merchantRequestId = lipiaResponse.merchantRequestID || lipiaResponse.merchantRequestId;
-    
+    const checkoutRequestId =
+      lipiaResponse.checkoutRequestID || lipiaResponse.checkoutRequestId;
+    const merchantRequestId =
+      lipiaResponse.merchantRequestID || lipiaResponse.merchantRequestId;
+
     payment.checkout_request_id = checkoutRequestId || reference;
     payment.merchant_request_id = merchantRequestId;
     await payment.save();
@@ -165,15 +167,22 @@ router.post("/stk-push", protect, async (req, res) => {
       merchant_request_id: payment.merchant_request_id,
     });
 
-    // Start polling for payment status
+    // Start polling for payment status using checkoutRequestId from Lipia
     console.log("🚀 Starting payment polling for:", {
       paymentId: payment._id,
       reference,
+      checkoutRequestId,
       memberId,
       amount,
-      checkoutRequestId,
     });
-    pollLipiaPaymentStatus(payment._id, reference, memberId, amount, req.app);
+    pollLipiaPaymentStatus(
+      payment._id,
+      checkoutRequestId,
+      reference,
+      memberId,
+      amount,
+      req.app
+    );
 
     res.json({
       success: true,
@@ -184,7 +193,7 @@ router.post("/stk-push", protect, async (req, res) => {
     });
   } catch (error) {
     console.error("❌ STK Push error:", error);
-    
+
     // Update payment record as failed
     if (payment) {
       await Payment.findByIdAndUpdate(payment._id, {
@@ -192,7 +201,7 @@ router.post("/stk-push", protect, async (req, res) => {
         notes: error.message || "Failed to initiate STK Push",
       });
     }
-    
+
     res.status(500).json({
       success: false,
       error: error.message || "Failed to initiate payment",
@@ -203,6 +212,7 @@ router.post("/stk-push", protect, async (req, res) => {
 // Poll Lipia payment status
 async function pollLipiaPaymentStatus(
   paymentId,
+  checkoutRequestId,
   reference,
   memberId,
   amount,
@@ -212,27 +222,39 @@ async function pollLipiaPaymentStatus(
   const maxAttempts = 60; // Poll for 60 seconds - faster detection
 
   if (attempts >= maxAttempts) {
-    console.log("⏱️ Payment polling timeout after 60 seconds:", reference);
-    const payment = await Payment.findByIdAndUpdate(paymentId, {
-      status: "failed",
-      notes: "Payment timed out - no response from M-Pesa after 60 seconds",
-    }, { new: true });
-    
+    console.log("⏱️ Payment polling timeout after 60 seconds:", {
+      checkoutRequestId,
+      reference,
+    });
+    const payment = await Payment.findByIdAndUpdate(
+      paymentId,
+      {
+        status: "failed",
+        notes: "Payment timed out - no response from M-Pesa after 60 seconds",
+      },
+      { new: true }
+    );
+
     // Emit socket event for timeout
     console.log("🔔 Emitting payment:failed event for timeout");
     app.get("io").emit("payment:failed", {
       paymentId,
       memberId,
-      message: "Payment timed out. If you entered your PIN, your wallet will update automatically.",
+      message:
+        "Payment timed out. If you entered your PIN, your wallet will update automatically.",
     });
     return;
   }
 
   try {
     const lipiaService = await import("../services/lipiaService.js");
-    const status = await lipiaService.queryLipiaPaymentStatus(reference);
+    // Use checkoutRequestId from Lipia, not our custom reference
+    const status = await lipiaService.queryLipiaPaymentStatus(
+      checkoutRequestId
+    );
 
     console.log(`📊 Payment status check ${attempts + 1}/${maxAttempts}:`, {
+      checkoutRequestId,
       reference,
       status: status.status,
       success: status.success,
@@ -279,8 +301,8 @@ async function pollLipiaPaymentStatus(
 
       // Update member's total_savings
       await Member.findByIdAndUpdate(memberId, {
-        $inc: { 
-          total_savings: amount 
+        $inc: {
+          total_savings: amount,
         },
       });
 
@@ -295,9 +317,15 @@ async function pollLipiaPaymentStatus(
       // Emit socket events for real-time updates
       if (app && app.get("io")) {
         const io = app.get("io");
-        console.log("🔔 Emitting payment:completed event to all connected clients");
-        console.log("🔔 Event data:", { memberId: memberId.toString(), type: "wallet_deposit", amount });
-        
+        console.log(
+          "🔔 Emitting payment:completed event to all connected clients"
+        );
+        console.log("🔔 Event data:", {
+          memberId: memberId.toString(),
+          type: "wallet_deposit",
+          amount,
+        });
+
         // Emit to ALL clients (broadcast)
         io.emit("payment:completed", {
           memberId: memberId.toString(),
@@ -315,7 +343,7 @@ async function pollLipiaPaymentStatus(
           saving: savingRecord,
           member: member.name,
         });
-        
+
         // Emit savingDeposit event for admin dashboard
         console.log("🔔 Emitting savingDeposit event for admin");
         io.emit("savingDeposit", {
@@ -324,7 +352,7 @@ async function pollLipiaPaymentStatus(
           amount,
           newBalance: balanceAfter,
         });
-        
+
         console.log("✅ All Socket.IO events emitted successfully");
       } else {
         console.error("⚠️ Socket.IO not available - events not emitted");
@@ -333,31 +361,44 @@ async function pollLipiaPaymentStatus(
       // Only treat as truly failed if we got a definitive FAILED status from Lipia
       // Not if it's just an API error
       if (status.success !== false) {
-        const payment = await Payment.findByIdAndUpdate(paymentId, {
-          status: "failed",
-          notes: status.resultDescription || status.message || "Payment cancelled or failed",
-        }, { new: true });
-        
+        const payment = await Payment.findByIdAndUpdate(
+          paymentId,
+          {
+            status: "failed",
+            notes:
+              status.resultDescription ||
+              status.message ||
+              "Payment cancelled or failed",
+          },
+          { new: true }
+        );
+
         console.log("❌ Payment definitively failed:", {
           reference,
           reason: status.resultDescription || status.message,
         });
-        
+
         // Emit socket event for failed payment
         if (app && app.get("io")) {
           app.get("io").emit("payment:failed", {
             paymentId,
             memberId,
-            message: status.resultDescription || status.message || "Payment cancelled or failed",
+            message:
+              status.resultDescription ||
+              status.message ||
+              "Payment cancelled or failed",
           });
         }
       } else {
         // It's an API error, keep polling
-        console.log("⚠️ API error but not treating as payment failure, continuing...");
+        console.log(
+          "⚠️ API error but not treating as payment failure, continuing..."
+        );
         setTimeout(
           () =>
             pollLipiaPaymentStatus(
               paymentId,
+              checkoutRequestId,
               reference,
               memberId,
               amount,
@@ -373,6 +414,7 @@ async function pollLipiaPaymentStatus(
         () =>
           pollLipiaPaymentStatus(
             paymentId,
+            checkoutRequestId,
             reference,
             memberId,
             amount,
@@ -389,6 +431,7 @@ async function pollLipiaPaymentStatus(
       () =>
         pollLipiaPaymentStatus(
           paymentId,
+          checkoutRequestId,
           reference,
           memberId,
           amount,
@@ -413,7 +456,10 @@ router.get("/check-status/:checkoutRequestId", protect, async (req, res) => {
     });
 
     if (!payment) {
-      console.log("⚠️ Payment not found for checkout request ID:", checkoutRequestId);
+      console.log(
+        "⚠️ Payment not found for checkout request ID:",
+        checkoutRequestId
+      );
       return res.json({
         status: "pending",
         message: "Payment record not found, still processing...",
@@ -457,7 +503,7 @@ router.get("/debug/latest-deposits", protect, async (req, res) => {
     res.json({
       success: true,
       count: payments.length,
-      payments: payments.map(p => ({
+      payments: payments.map((p) => ({
         _id: p._id,
         amount: p.amount,
         status: p.status,
@@ -475,48 +521,64 @@ router.get("/debug/latest-deposits", protect, async (req, res) => {
 // Lipia Online webhook/callback endpoint
 router.post("/lipia-callback", async (req, res) => {
   try {
-    console.log("📥 Lipia callback received:", JSON.stringify(req.body, null, 2));
-    
+    console.log(
+      "📥 Lipia callback received:",
+      JSON.stringify(req.body, null, 2)
+    );
+
     const { reference, status, amount, phone, mpesa_ref } = req.body;
-    
+
     if (!reference) {
-      return res.status(400).json({ success: false, error: "Reference is required" });
+      return res
+        .status(400)
+        .json({ success: false, error: "Reference is required" });
     }
-    
+
     // Find payment by transaction reference
     const payment = await Payment.findOne({ transaction_reference: reference });
-    
+
     if (!payment) {
       console.log("⚠️ Payment not found for reference:", reference);
       return res.json({ success: false, error: "Payment not found" });
     }
-    
-    console.log("✅ Found payment:", payment._id, "Current status:", payment.status);
-    
+
+    console.log(
+      "✅ Found payment:",
+      payment._id,
+      "Current status:",
+      payment.status
+    );
+
     // Only process if payment is still pending
     if (payment.status !== "pending") {
       console.log("⚠️ Payment already processed with status:", payment.status);
       return res.json({ success: true, message: "Already processed" });
     }
-    
+
     // Update payment based on callback status
-    if (status === "SUCCESS" || status === "success" || status === "completed") {
+    if (
+      status === "SUCCESS" ||
+      status === "success" ||
+      status === "completed"
+    ) {
       console.log("✅ Payment successful, updating records...");
-      
+
       payment.status = "completed";
       payment.mpesa_transaction_id = mpesa_ref || reference;
       await payment.save();
-      
+
       // If this is a wallet deposit, create Saving record
       if (payment.type === "wallet_deposit") {
         const Saving = (await import("../models/Saving.js")).default;
         const Member = (await import("../models/Member.js")).default;
-        
+
         const member = await Member.findById(payment.member_id);
-        const lastSaving = await Saving.findOne({ member_id: payment.member_id }).sort({ created_at: -1 });
+        const lastSaving = await Saving.findOne({
+          member_id: payment.member_id,
+        }).sort({ created_at: -1 });
         const balanceBefore = lastSaving ? lastSaving.balance_after : 0;
         const balanceAfter = balanceBefore + payment.amount;
-        
+
         const savingRecord = await Saving.create({
           member_id: payment.member_id,
           amount: payment.amount,
@@ -528,48 +590,55 @@ router.post("/lipia-callback", async (req, res) => {
           transaction_ref: mpesa_ref || reference,
           notes: `Wallet deposit via M-Pesa - ${reference}`,
         });
-        
+
         // Update member's total_savings
         await Member.findByIdAndUpdate(payment.member_id, {
           $inc: { total_savings: payment.amount },
         });
-        
+
         console.log("✅ Wallet deposit completed via callback:", {
           member: member.name,
           amount: payment.amount,
           newBalance: balanceAfter,
         });
-        
+
         // Emit Socket.IO events
         const io = req.app.get("io");
         if (io) {
           io.emit("payment:completed", {
             memberId: payment.member_id.toString(),
-            payment: { _id: payment._id, amount: payment.amount, status: "completed" },
+            payment: {
+              _id: payment._id,
+              amount: payment.amount,
+              status: "completed",
+            },
             amount: payment.amount,
             type: "wallet_deposit",
           });
-          
+
           io.emit("saving:new", {
             memberId: payment.member_id.toString(),
             saving: savingRecord,
             member: member.name,
           });
-          
+
           io.emit("savingDeposit", {
             memberId: payment.member_id.toString(),
             amount: payment.amount,
           });
         }
       }
-      
-      return res.json({ success: true, message: "Payment processed successfully" });
+
+      return res.json({
+        success: true,
+        message: "Payment processed successfully",
+      });
     } else {
       console.log("❌ Payment failed via callback");
       payment.status = "failed";
       payment.notes = `Payment failed: ${status}`;
       await payment.save();
-      
+
       // Emit failure event
       const io = req.app.get("io");
       if (io) {
@@ -579,7 +648,7 @@ router.post("/lipia-callback", async (req, res) => {
           message: "Payment failed",
         });
       }
-      
+
       return res.json({ success: true, message: "Payment marked as failed" });
     }
   } catch (error) {
@@ -605,32 +674,36 @@ router.post("/manual-complete/:paymentId", protect, async (req, res) => {
   try {
     const { paymentId } = req.params;
     const payment = await Payment.findById(paymentId);
-    
+
     if (!payment) {
-      return res.status(404).json({ success: false, error: "Payment not found" });
+      return res
+        .status(404)
+        .json({ success: false, error: "Payment not found" });
     }
-    
+
     if (payment.status === "completed") {
       return res.json({ success: true, message: "Payment already completed" });
     }
-    
+
     console.log("🔧 Manually completing payment:", paymentId);
-    
+
     // Mark as completed
     payment.status = "completed";
     payment.mpesa_transaction_id = payment.transaction_reference;
     await payment.save();
-    
+
     // If wallet deposit, create Saving record
     if (payment.type === "wallet_deposit") {
       const Saving = (await import("../models/Saving.js")).default;
       const Member = (await import("../models/Member.js")).default;
-      
+
       const member = await Member.findById(payment.member_id);
-      const lastSaving = await Saving.findOne({ member_id: payment.member_id }).sort({ created_at: -1 });
+      const lastSaving = await Saving.findOne({
+        member_id: payment.member_id,
+      }).sort({ created_at: -1 });
       const balanceBefore = lastSaving ? lastSaving.balance_after : 0;
       const balanceAfter = balanceBefore + payment.amount;
-      
+
       const savingRecord = await Saving.create({
         member_id: payment.member_id,
         amount: payment.amount,
@@ -642,14 +715,14 @@ router.post("/manual-complete/:paymentId", protect, async (req, res) => {
         transaction_ref: payment.mpesa_transaction_id,
         notes: `Manual wallet deposit completion - ${payment.transaction_reference}`,
       });
-      
+
       await Member.findByIdAndUpdate(payment.member_id, {
-        $inc: { 
+        $inc: {
           total_contributed: payment.amount,
-          total_savings: payment.amount 
+          total_savings: payment.amount,
         },
       });
-      
+
       // Emit events
       const io = req.app.get("io");
       if (io) {
@@ -659,7 +732,7 @@ router.post("/manual-complete/:paymentId", protect, async (req, res) => {
           amount: payment.amount,
           type: "wallet_deposit",
         });
-        
+
         io.emit("saving:new", {
           memberId: payment.member_id.toString(),
           saving: savingRecord,
@@ -667,7 +740,7 @@ router.post("/manual-complete/:paymentId", protect, async (req, res) => {
         });
       }
     }
-    
+
     res.json({ success: true, message: "Payment completed manually", payment });
   } catch (error) {
     console.error("Error manually completing payment:", error);

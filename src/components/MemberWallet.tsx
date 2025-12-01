@@ -17,17 +17,23 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import API_BASE from "@/lib/api";
 import { authService } from "@/lib/authService";
 import {
+  AlertCircle,
   ArrowDownLeft,
   ArrowUpRight,
+  CheckCircle,
   Clock,
+  CreditCard,
   DollarSign,
   Loader2,
   PiggyBank,
+  Shield,
+  Smartphone,
   TrendingUp,
   Wallet,
 } from "lucide-react";
@@ -52,6 +58,10 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
   const [depositAmount, setDepositAmount] = useState("");
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [withdrawNotes, setWithdrawNotes] = useState("");
+  const [paymentStep, setPaymentStep] = useState<
+    "confirm" | "processing" | "waiting"
+  >("confirm");
+  const [pollCount, setPollCount] = useState(0);
   const { toast } = useToast();
 
   const fetchWalletData = async () => {
@@ -101,10 +111,17 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
           ) {
             console.log("✅ My wallet deposit completed!");
 
-            // Close the dialog if it's still open
+            // Clear poll interval
+            if ((window as any).walletPollInterval) {
+              clearInterval((window as any).walletPollInterval);
+            }
+
+            // Close the dialog and reset state
             setShowDepositDialog(false);
             setDepositAmount("");
             setIsProcessing(false);
+            setPaymentStep("confirm");
+            setPollCount(0);
 
             // Fetch updated wallet data
             fetchWalletData();
@@ -124,9 +141,16 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
           if (data.memberId === userData?._id) {
             console.log("❌ My payment failed!");
 
+            // Clear poll interval
+            if ((window as any).walletPollInterval) {
+              clearInterval((window as any).walletPollInterval);
+            }
+
             setShowDepositDialog(false);
             setDepositAmount("");
             setIsProcessing(false);
+            setPaymentStep("confirm");
+            setPollCount(0);
 
             toast({
               title: "Payment Failed",
@@ -162,6 +186,16 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
     return () => clearInterval(interval);
   }, [userData?._id]);
 
+  const resetDepositDialog = () => {
+    setPaymentStep("confirm");
+    setIsProcessing(false);
+    setDepositAmount("");
+    setPollCount(0);
+    if ((window as any).walletPollInterval) {
+      clearInterval((window as any).walletPollInterval);
+    }
+  };
+
   const handleDeposit = async () => {
     const amount = parseFloat(depositAmount);
     if (!amount || amount <= 0) {
@@ -185,14 +219,10 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
       return;
     }
 
+    setPaymentStep("processing");
     setIsProcessing(true);
-    try {
-      // Initiate STK Push payment - backend will handle all polling and detection
-      toast({
-        title: "Initiating Payment",
-        description: "Please check your phone for M-Pesa prompt...",
-      });
 
+    try {
       const res = await fetch(`${API_BASE}/api/payments/stk-push`, {
         method: "POST",
         headers: {
@@ -210,33 +240,29 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
       const data = await res.json();
 
       if (data.success) {
+        setPaymentStep("waiting");
+        setIsProcessing(false);
+        setPollCount(0);
+
         toast({
           title: "STK Push Sent! 📱",
           description: `Check your phone (${phoneNumber}) and enter your M-Pesa PIN`,
           duration: 5000,
         });
 
-        setShowDepositDialog(false);
-        setDepositAmount("");
+        // Start poll counter animation (visual only, backend handles actual polling)
+        const pollInterval = setInterval(() => {
+          setPollCount((prev) => {
+            if (prev >= 60) {
+              clearInterval(pollInterval);
+              return 60;
+            }
+            return prev + 1;
+          });
+        }, 1000);
 
-        // Show waiting notification
-        toast({
-          title: "Waiting for Payment ⏳",
-          description:
-            "Processing your payment. This may take up to 60 seconds.",
-          duration: 8000,
-        });
-
-        // Backend is now handling all polling and will emit Socket.IO events
-        // The useEffect Socket.IO listener will handle the updates automatically
-        // Just keep the dialog processing state until we get the Socket event
-        // User can continue using the app while payment processes
-
-        // Auto-refresh wallet data after a delay
-        setTimeout(() => {
-          fetchWalletData();
-          setIsProcessing(false);
-        }, 5000);
+        // Store interval for cleanup
+        (window as any).walletPollInterval = pollInterval;
       } else {
         throw new Error(data.error || "Failed to initiate payment");
       }
@@ -498,48 +524,187 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
       </Card>
 
       {/* Deposit Dialog */}
-      <Dialog open={showDepositDialog} onOpenChange={setShowDepositDialog}>
-        <DialogContent>
+      <Dialog
+        open={showDepositDialog}
+        onOpenChange={(open) => {
+          setShowDepositDialog(open);
+          if (!open) {
+            setTimeout(resetDepositDialog, 300);
+          }
+        }}>
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Deposit to Wallet</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Smartphone className="w-5 h-5 text-financial-success" />
+              Wallet Deposit
+            </DialogTitle>
             <DialogDescription>
-              Add money to your savings wallet. Earn 3% monthly interest!
+              {paymentStep === "confirm" &&
+                "Add money to your savings wallet via M-Pesa"}
+              {paymentStep === "processing" &&
+                "Sending STK Push to your phone..."}
+              {paymentStep === "waiting" && "Complete payment on your phone"}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="depositAmount">Amount (KES)</Label>
-              <Input
-                id="depositAmount"
-                type="number"
-                placeholder="Enter amount"
-                value={depositAmount}
-                onChange={(e) => setDepositAmount(e.target.value)}
-                min="1"
-              />
+
+          {/* Confirm Step */}
+          {paymentStep === "confirm" && (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="depositAmount">Amount (KES)</Label>
+                <Input
+                  id="depositAmount"
+                  type="number"
+                  placeholder="Enter amount"
+                  value={depositAmount}
+                  onChange={(e) => setDepositAmount(e.target.value)}
+                  min="1"
+                />
+              </div>
+
+              <Card>
+                <CardContent className="pt-4 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Phone Number:</span>
+                    <span className="font-semibold">{userData?.phone}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground text-sm">
+                      Deposit Amount:
+                    </span>
+                    <span className="text-lg font-bold text-financial-success">
+                      KES {depositAmount || "0"}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg text-sm">
+                <p className="text-blue-800">
+                  💡 <strong>Earn 3% monthly interest</strong> on your savings!
+                </p>
+              </div>
+
+              <div className="bg-muted/50 p-3 rounded-lg">
+                <div className="flex items-center gap-2 mb-1">
+                  <Shield className="w-4 h-4 text-primary" />
+                  <span className="text-xs font-medium">Secure Payment</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Processed securely through Lipia Online's encrypted gateway
+                </p>
+              </div>
+
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowDepositDialog(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleDeposit}
+                  disabled={isProcessing}
+                  variant="mpesa">
+                  <CreditCard className="w-4 h-4 mr-2" />
+                  Pay via M-Pesa
+                </Button>
+              </DialogFooter>
             </div>
-            <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg text-sm">
-              <p className="text-blue-800">
-                💡 <strong>Earn 3% monthly interest</strong> on your savings!
-              </p>
-              <p className="text-blue-700 mt-1">
-                Payment Method: M-Pesa Paybill 6938069
-              </p>
+          )}
+
+          {/* Processing Step */}
+          {paymentStep === "processing" && (
+            <div className="space-y-6 text-center py-4">
+              <div className="animate-financial-pulse">
+                <Smartphone className="w-16 h-16 text-financial-success mx-auto mb-4" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold mb-2">
+                  Initiating Payment
+                </h3>
+                <p className="text-muted-foreground mb-4">
+                  Sending STK Push to {userData?.phone}...
+                </p>
+                <Progress value={50} className="h-2" />
+              </div>
+              <div className="bg-muted/50 p-4 rounded-lg">
+                <p className="text-sm text-muted-foreground">
+                  Please wait while we send the payment request to your phone
+                </p>
+              </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowDepositDialog(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleDeposit} disabled={isProcessing}>
-              {isProcessing ? (
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-              ) : null}
-              Confirm Deposit
-            </Button>
-          </DialogFooter>
+          )}
+
+          {/* Waiting Step */}
+          {paymentStep === "waiting" && (
+            <div className="space-y-6">
+              <div className="text-center">
+                <div className="animate-bounce">
+                  <div className="w-16 h-16 bg-financial-success/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Smartphone className="w-8 h-8 text-financial-success animate-pulse" />
+                  </div>
+                </div>
+                <h3 className="text-lg font-semibold mb-2">
+                  Waiting for M-Pesa PIN
+                </h3>
+                <p className="text-muted-foreground mb-4">
+                  Check your phone ({userData?.phone}) and enter your M-Pesa PIN
+                </p>
+                <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full">
+                  <Clock className="w-4 h-4 animate-spin text-primary" />
+                  <span className="text-sm font-medium">
+                    Polling... ({pollCount}/60)
+                  </span>
+                </div>
+              </div>
+
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="space-y-4">
+                    <Progress value={(pollCount / 60) * 100} className="h-2" />
+
+                    <div className="bg-financial-success/10 p-4 rounded-lg space-y-2">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 text-financial-success" />
+                        <span className="text-sm font-medium">
+                          STK Push Sent Successfully
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        A payment prompt has been sent to your phone. Enter your
+                        M-Pesa PIN to complete the deposit.
+                      </p>
+                    </div>
+
+                    <div className="bg-muted/50 p-3 rounded-lg">
+                      <p className="text-xs text-muted-foreground">
+                        <strong>Steps to complete:</strong>
+                        <br />
+                        1. Check your phone for M-Pesa notification
+                        <br />
+                        2. Enter your M-Pesa PIN
+                        <br />
+                        3. Wait for confirmation
+                      </p>
+                    </div>
+
+                    <div className="bg-financial-warning/10 p-3 rounded-lg">
+                      <div className="flex items-center gap-2 mb-1">
+                        <AlertCircle className="w-4 h-4 text-financial-warning" />
+                        <span className="text-sm font-medium">
+                          Security Reminder
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Never share your M-Pesa PIN with anyone. SMCF will never
+                        ask for your PIN directly.
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
