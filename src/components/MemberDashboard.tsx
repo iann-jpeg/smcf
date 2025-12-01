@@ -276,10 +276,12 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
     const socket = (window as any).socket;
     if (socket && userData) {
       console.log("👂 Member Dashboard listening for real-time updates");
+      console.log("🔌 Socket connected:", socket.connected);
+      console.log("🆔 Socket ID:", socket.id);
 
       // Listen for payment completion (new event name)
       socket.on("payment:completed", (data: any) => {
-        console.log("💰 Payment completed event:", data);
+        console.log("💰 MemberDashboard received: payment:completed", data);
         toast({
           title: "Payment Confirmed!",
           description: `Payment of KES ${data.amount} has been confirmed`,
@@ -289,19 +291,19 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
 
       // Listen for any new payment
       socket.on("payment:new", (data: any) => {
-        console.log("💰 New payment detected:", data);
+        console.log("💰 MemberDashboard received: payment:new", data);
         fetchData(); // Refresh cycle stats
       });
 
       // Listen for cycle updates (new event name)
       socket.on("cycle:updated", (data: any) => {
-        console.log("🔄 Cycle updated:", data);
+        console.log("🔄 MemberDashboard received: cycle:updated", data);
         fetchData(); // Refresh data immediately
       });
 
       // Listen for member additions/removals
       socket.on("member:new", (data: any) => {
-        console.log("👤 New member added:", data);
+        console.log("👤 MemberDashboard received: member:new", data);
         fetchData(); // Refresh to update total members count
       });
 

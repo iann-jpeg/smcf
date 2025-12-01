@@ -33,8 +33,11 @@ const allowedOrigins = [
   "ionic://localhost", // For older Ionic apps
   "https://smcf.app",
   "https://www.smcf.app",
+  "https://smcf-finance.vercel.app", // Vercel deployment
   process.env.CLIENT_URL,
 ].filter(Boolean);
+
+console.log("🔓 Allowed CORS origins:", allowedOrigins);
 
 const io = new Server(httpServer, {
   cors: {
@@ -87,10 +90,13 @@ connectDB();
 
 // Socket.IO connection handling
 io.on("connection", (socket) => {
-  console.log("Client connected:", socket.id);
+  console.log("✅ Socket.IO client connected:", socket.id);
+  console.log("📍 Client origin:", socket.handshake.headers.origin);
+  console.log("👥 Total connected clients:", io.engine.clientsCount);
 
-  socket.on("disconnect", () => {
-    console.log("Client disconnected:", socket.id);
+  socket.on("disconnect", (reason) => {
+    console.log("❌ Socket.IO client disconnected:", socket.id, "Reason:", reason);
+    console.log("👥 Remaining clients:", io.engine.clientsCount);
   });
 });
 

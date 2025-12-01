@@ -19,6 +19,23 @@ const socket = io(API_BASE, {
   reconnectionAttempts: 5,
 });
 
+// Attach to window for debugging and access from other components
+(window as any).socket = socket;
+
+// Log socket connection status
+socket.on("connect", () => {
+  console.log("✅ Socket.IO connected to backend:", API_BASE);
+  console.log("🔌 Socket ID:", socket.id);
+});
+
+socket.on("disconnect", (reason) => {
+  console.warn("⚠️ Socket.IO disconnected:", reason);
+});
+
+socket.on("connect_error", (error) => {
+  console.error("❌ Socket.IO connection error:", error.message);
+});
+
 interface DashboardProps {
   userRole: "admin" | "member";
   userData: any;
@@ -220,25 +237,30 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
   };
 
   useEffect(() => {
+    console.log("🎧 Dashboard: Setting up Socket.IO listeners");
+    
     socket.on("announcement:new", (announcement) => {
+      console.log("📢 Dashboard received: announcement:new", announcement);
       setAnnouncements((prev) => [announcement, ...prev]);
     });
     socket.on("member:new", (member) => {
+      console.log("👤 Dashboard received: member:new", member);
       setMembers((prev) => [member, ...prev]);
     });
     socket.on("payment:completed", (data) => {
-      console.log("💰 Payment completed, refreshing Dashboard stats");
+      console.log("💰 Dashboard received: payment:completed", data);
       fetchData(); // Refresh cycle stats
     });
     socket.on("payment:new", (data) => {
-      console.log("💰 New payment, refreshing Dashboard stats");
+      console.log("💰 Dashboard received: payment:new", data);
       fetchData(); // Refresh cycle stats
     });
     socket.on("cycle:updated", (data) => {
-      console.log("🔄 Cycle updated, refreshing Dashboard stats");
+      console.log("🔄 Dashboard received: cycle:updated", data);
       fetchData(); // Refresh cycle stats
     });
     return () => {
+      console.log("🧹 Dashboard: Cleaning up Socket.IO listeners");
       socket.off("announcement:new");
       socket.off("member:new");
       socket.off("payment:completed");
