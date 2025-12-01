@@ -53,7 +53,7 @@ router.post("/stk-push", protect, async (req, res) => {
       amount: parseFloat(amount),
       cycle_number: cycleNumber,
       status: "pending",
-      type: "cycle_contribution", // Explicitly mark as cycle contribution
+      type: "cycle_payment", // Explicitly mark as cycle payment
       mpesa_transaction_id: reference,
       checkout_request_id: result.checkoutRequestID,
       merchant_request_id: result.merchantRequestID,

@@ -395,9 +395,9 @@ async function pollLipiaPaymentStatus(
         } else {
           console.error("⚠️ Socket.IO not available - events not emitted");
         }
-      } else if (paymentType === "cycle_contribution") {
-        // Handle cycle contribution
-        console.log("✅ Cycle contribution completed:", {
+      } else if (paymentType === "cycle_payment") {
+        // Handle cycle payment
+        console.log("✅ Cycle payment completed:", {
           member: member.name,
           amount,
           cycleNumber: payment.cycle_number,
@@ -447,7 +447,7 @@ async function pollLipiaPaymentStatus(
               cycle_number: payment.cycle_number,
             },
             amount,
-            type: "cycle_contribution",
+            type: "cycle_payment",
           });
 
           io.emit("payment:new", payment);
@@ -785,8 +785,8 @@ router.post("/lipia-callback", async (req, res) => {
           });
         }
       } else {
-        // Regular cycle contribution payment
-        console.log("✅ Cycle contribution completed via callback:", {
+        // Regular cycle payment
+        console.log("✅ Cycle payment completed via callback:", {
           member: member?.name,
           amount: payment.amount,
           cycleNumber: payment.cycle_number,
@@ -828,7 +828,7 @@ router.post("/lipia-callback", async (req, res) => {
               cycle_number: payment.cycle_number,
             },
             amount: payment.amount,
-            type: "cycle_contribution",
+            type: "cycle_payment",
           });
 
           io.emit("payment:new", payment);
