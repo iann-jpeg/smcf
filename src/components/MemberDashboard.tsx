@@ -277,36 +277,26 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
     if (socket && userData) {
       console.log("👂 Member Dashboard listening for real-time updates");
 
-      // Listen for payment completion for this member
-      socket.on("paymentCompleted", (data: any) => {
-        if (data.memberId === userData._id || data.memberId === userData.id) {
-          console.log("💰 Your payment was confirmed:", data);
-          toast({
-            title: "Payment Confirmed!",
-            description: `Your payment of KES ${data.amount} has been confirmed`,
-          });
-          fetchData(); // Refresh data immediately
-        }
-      });
-
-      // Listen for member updates for this member
-      socket.on("memberUpdated", (data: any) => {
-        if (data.memberId === userData._id || data.memberId === userData.id) {
-          console.log("👤 Your profile was updated:", data);
-          fetchData(); // Refresh data immediately
-        }
-      });
-
-      // Listen for cycle updates
-      socket.on("cycleUpdated", (data: any) => {
-        console.log("🔄 Cycle updated:", data);
+      // Listen for payment completion (new event name)
+      socket.on("payment:completed", (data: any) => {
+        console.log("💰 Payment completed event:", data);
+        toast({
+          title: "Payment Confirmed!",
+          description: `Payment of KES ${data.amount} has been confirmed`,
+        });
         fetchData(); // Refresh data immediately
       });
 
-      // Listen for any payment (not just this member's)
+      // Listen for any new payment
       socket.on("payment:new", (data: any) => {
         console.log("💰 New payment detected:", data);
         fetchData(); // Refresh cycle stats
+      });
+
+      // Listen for cycle updates (new event name)
+      socket.on("cycle:updated", (data: any) => {
+        console.log("🔄 Cycle updated:", data);
+        fetchData(); // Refresh data immediately
       });
 
       // Listen for member additions/removals
@@ -375,12 +365,11 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
 
       // Cleanup Socket.IO listeners
       if (socket) {
-        socket.off("paymentCompleted");
-        socket.off("memberUpdated");
-        socket.off("cycleUpdated");
+        socket.off("payment:completed");
+        socket.off("payment:new");
+        socket.off("cycle:updated");
         socket.off("loanStatusUpdated");
         socket.off("announcementCreated");
-        socket.off("payment:new");
         socket.off("member:new");
       }
     };

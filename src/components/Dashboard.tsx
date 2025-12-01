@@ -46,8 +46,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
   const [isLoadingData, setIsLoadingData] = useState(true);
 
   // Fetch fresh cycle data and members count
-  useEffect(() => {
-    const fetchData = async () => {
+  const fetchData = async () => {
       try {
         console.log("🔄 Starting data fetch for userRole:", userRole);
 
@@ -190,8 +189,9 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
         console.error("❌ Failed to fetch data:", err);
         setIsLoadingData(false);
       }
-    };
+  };
 
+  useEffect(() => {
     fetchData();
 
     // Refresh every 30 seconds
@@ -226,9 +226,24 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
     socket.on("member:new", (member) => {
       setMembers((prev) => [member, ...prev]);
     });
+    socket.on("payment:completed", (data) => {
+      console.log("💰 Payment completed, refreshing Dashboard stats");
+      fetchData(); // Refresh cycle stats
+    });
+    socket.on("payment:new", (data) => {
+      console.log("💰 New payment, refreshing Dashboard stats");
+      fetchData(); // Refresh cycle stats
+    });
+    socket.on("cycle:updated", (data) => {
+      console.log("🔄 Cycle updated, refreshing Dashboard stats");
+      fetchData(); // Refresh cycle stats
+    });
     return () => {
       socket.off("announcement:new");
       socket.off("member:new");
+      socket.off("payment:completed");
+      socket.off("payment:new");
+      socket.off("cycle:updated");
     };
   }, []);
 
