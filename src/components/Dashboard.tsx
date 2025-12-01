@@ -126,22 +126,39 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
         // Always update members array for accurate progress calculation
         setMembers(membersData);
 
-        // IMPORTANT: Calculate paid members from PAYMENTS (same as MemberDashboard bottom bar)
-        // This is more accurate than member.payment_status field
-        const uniquePaidMembers = Array.isArray(paymentsData)
-          ? new Set(
-              paymentsData
-                .filter((p: any) => p.status === "completed")
-                .map((p: any) => p.member_id?._id || p.member_id)
-            ).size
-          : 0;
+        // Get current cycle number to filter payments
+        const currentCycleNumber =
+          cycleData?.data?.cycle_number ||
+          cycleData?.data?.currentCycle ||
+          userData?.cycleData?.currentCycle ||
+          1;
 
-        // Calculate total collected from payments
-        const totalCollected = Array.isArray(paymentsData)
-          ? paymentsData
-              .filter((p: any) => p.status === "completed")
-              .reduce((sum: number, p: any) => sum + (p.amount || 0), 0)
-          : cycleData?.data?.total_amount_collected || 0;
+        console.log("🔢 Current cycle number:", currentCycleNumber);
+
+        // IMPORTANT: Calculate paid members from PAYMENTS for CURRENT CYCLE (same as MemberDashboard bottom bar)
+        // This is more accurate than member.payment_status field
+        const currentCyclePayments = Array.isArray(paymentsData)
+          ? paymentsData.filter(
+              (p: any) => p.cycle_number === currentCycleNumber
+            )
+          : [];
+
+        const uniquePaidMembers =
+          currentCyclePayments.length > 0
+            ? new Set(
+                currentCyclePayments
+                  .filter((p: any) => p.status === "completed")
+                  .map((p: any) => p.member_id?._id || p.member_id)
+              ).size
+            : 0;
+
+        // Calculate total collected from payments for CURRENT CYCLE
+        const totalCollected =
+          currentCyclePayments.length > 0
+            ? currentCyclePayments
+                .filter((p: any) => p.status === "completed")
+                .reduce((sum: number, p: any) => sum + (p.amount || 0), 0)
+            : cycleData?.data?.total_amount_collected || 0;
 
         // Use real-time data for accurate progress
         const totalMembersCount = membersData.length;
@@ -149,6 +166,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
         const expectedAmount = totalMembersCount * 224;
 
         console.log("📈 Calculated stats from PAYMENTS data:", {
+          currentCycleNumber,
           totalMembersCount,
           paidMembersCount,
           percentage:
@@ -157,6 +175,10 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
               : 0,
           totalCollected,
           expectedAmount,
+          currentCyclePayments: currentCyclePayments.length,
+          completedPayments: currentCyclePayments.filter(
+            (p: any) => p.status === "completed"
+          ).length,
         });
 
         if (cycleData.success && cycleData.data) {
