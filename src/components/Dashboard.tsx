@@ -28,19 +28,17 @@ interface DashboardProps {
 const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
   const { toast } = useToast();
 
-  // Cycle data from real API - will be fetched and updated
+  // Cycle data from real API - will be fetched and updated (don't use userData prop - it might be stale)
   const [cycleData, setCycleData] = useState({
-    currentCycle: userData?.cycleData?.currentCycle || 0,
-    daysLeft: userData?.cycleData?.daysLeft || 0,
-    totalMembers: userData?.cycleData?.totalMembers || 0,
-    paidMembers: userData?.cycleData?.paidMembers || 0,
-    nextRecipient: userData?.cycleData?.nextRecipient || "No Active Cycle",
-    totalAmount: userData?.cycleData?.totalAmount || 0,
-    collectedAmount: userData?.cycleData?.collectedAmount || 0,
-    cycleStartDate:
-      userData?.cycleData?.cycleStartDate || new Date().toLocaleDateString(),
-    paymentDeadline:
-      userData?.cycleData?.cycleEndDate || new Date().toLocaleDateString(),
+    currentCycle: null as number | null,
+    daysLeft: 0,
+    totalMembers: 0,
+    paidMembers: 0,
+    nextRecipient: "Loading...",
+    totalAmount: 0,
+    collectedAmount: 0,
+    cycleStartDate: "Loading...",
+    paymentDeadline: "Loading...",
   });
 
   const [announcements, setAnnouncements] = useState([]);
@@ -126,39 +124,29 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
         // Always update members array for accurate progress calculation
         setMembers(membersData);
 
-        // Get current cycle number to filter payments
-        const currentCycleNumber =
-          cycleData?.data?.cycle_number ||
-          cycleData?.data?.currentCycle ||
-          userData?.cycleData?.currentCycle ||
-          1;
-
-        console.log("🔢 Current cycle number:", currentCycleNumber);
-
-        // IMPORTANT: Calculate paid members from PAYMENTS for CURRENT CYCLE (same as MemberDashboard bottom bar)
-        // This is more accurate than member.payment_status field
-        const currentCyclePayments = Array.isArray(paymentsData)
-          ? paymentsData.filter(
-              (p: any) => p.cycle_number === currentCycleNumber
-            )
-          : [];
-
-        const uniquePaidMembers =
-          currentCyclePayments.length > 0
-            ? new Set(
-                currentCyclePayments
-                  .filter((p: any) => p.status === "completed")
-                  .map((p: any) => p.member_id?._id || p.member_id)
-              ).size
-            : 0;
-
-        // Calculate total collected from payments for CURRENT CYCLE
-        const totalCollected =
-          currentCyclePayments.length > 0
-            ? currentCyclePayments
+        // Calculate paid members from ALL PAYMENTS (same logic as MemberDashboard)
+        // Count unique members who have paid (completed payments only)
+        const uniquePaidMembers = Array.isArray(paymentsData)
+          ? new Set(
+              paymentsData
                 .filter((p: any) => p.status === "completed")
-                .reduce((sum: number, p: any) => sum + (p.amount || 0), 0)
-            : cycleData?.data?.total_amount_collected || 0;
+                .map((p: any) => p.member_id?._id || p.member_id)
+            ).size
+          : 0;
+
+        // Calculate total collected from ALL completed payments
+        const totalCollected = Array.isArray(paymentsData)
+          ? paymentsData
+              .filter((p: any) => p.status === "completed")
+              .reduce((sum: number, p: any) => sum + (p.amount || 0), 0)
+          : 0;
+
+        console.log("💰 Payment calculation (ALL PAYMENTS):", {
+          totalPayments: paymentsData.length,
+          completedPayments: paymentsData.filter((p: any) => p.status === "completed").length,
+          uniquePaidMembers,
+          totalCollected,
+        });
 
         // Use real-time data for accurate progress
         const totalMembersCount = membersData.length;
@@ -166,7 +154,6 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
         const expectedAmount = totalMembersCount * 224;
 
         console.log("📈 Calculated stats from PAYMENTS data:", {
-          currentCycleNumber,
           totalMembersCount,
           paidMembersCount,
           percentage:
@@ -175,10 +162,6 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
               : 0,
           totalCollected,
           expectedAmount,
-          currentCyclePayments: currentCyclePayments.length,
-          completedPayments: currentCyclePayments.filter(
-            (p: any) => p.status === "completed"
-          ).length,
         });
 
         if (cycleData.success && cycleData.data) {
@@ -208,8 +191,15 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
           setCycleData(newCycleData);
         } else {
           // No active cycle - still use real member data
+          console.log("⚠️ No active cycle found in database");
+          console.log("📊 Using fallback with real member/payment data:", {
+            totalMembers: totalMembersCount,
+            paidMembers: paidMembersCount,
+            totalCollected,
+          });
+          
           const newCycleData = {
-            currentCycle: 1,
+            currentCycle: 1, // Default to cycle 1 if no active cycle
             daysLeft: 0,
             totalMembers: totalMembersCount, // Use actual member count
             paidMembers: paidMembersCount, // Use actual paid count
@@ -220,7 +210,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
             paymentDeadline: "Not Set",
           };
           console.log(
-            "🔄 No active cycle, using real member data:",
+            "✅ Setting fallback cycle data with real counts:",
             newCycleData
           );
           setCycleData(newCycleData);
@@ -305,13 +295,19 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-primary mb-2">
-                #{cycleData.currentCycle}
-              </div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Clock className="w-4 h-4" />
-                {cycleData.daysLeft} days left
-              </div>
+              {isLoadingData ? (
+                <div className="text-sm text-muted-foreground">Loading...</div>
+              ) : (
+                <>
+                  <div className="text-2xl font-bold text-primary mb-2">
+                    #{cycleData.currentCycle || 1}
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Clock className="w-4 h-4" />
+                    {cycleData.daysLeft} days left
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -358,12 +354,18 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-accent mb-2">
-                KES {cycleData.collectedAmount.toLocaleString()}
-              </div>
-              <div className="text-sm text-muted-foreground">
-                of KES {cycleData.totalAmount.toLocaleString()}
-              </div>
+              {isLoadingData ? (
+                <div className="text-sm text-muted-foreground">Loading...</div>
+              ) : (
+                <>
+                  <div className="text-2xl font-bold text-accent mb-2">
+                    KES {cycleData.collectedAmount.toLocaleString()}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    of KES {cycleData.totalAmount.toLocaleString()}
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -374,12 +376,18 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-primary mb-2">
-                {cycleData.nextRecipient}
-              </div>
-              <div className="text-sm text-muted-foreground">
-                Awaiting full collection
-              </div>
+              {isLoadingData ? (
+                <div className="text-sm text-muted-foreground">Loading...</div>
+              ) : (
+                <>
+                  <div className="text-2xl font-bold text-primary mb-2">
+                    {cycleData.nextRecipient}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    Awaiting full collection
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>
