@@ -248,60 +248,45 @@ const AdminDashboard = ({
     const socket = (window as any).socket;
     if (socket) {
       console.log("👂 Admin Dashboard listening for real-time updates");
+      console.log("🔌 Socket connected:", socket.connected);
+      console.log("🆔 Socket ID:", socket.id);
 
-      // Listen for payment completion
-      socket.on("paymentCompleted", (data: any) => {
-        console.log("💰 Payment completed:", data);
+      // Listen for payment completion (new event name)
+      socket.on("payment:completed", (data: any) => {
+        console.log("💰 AdminDashboard received: payment:completed", data);
         toast({
           title: "Payment Received!",
-          description: `Payment of KES ${data.amount} received from member`,
+          description: `Payment of KES ${data.amount} received`,
         });
         fetchAllData(); // Refresh data
       });
 
-      // Listen for member updates
-      socket.on("memberUpdated", (data: any) => {
-        console.log("👤 Member updated:", data);
+      // Listen for new payments
+      socket.on("payment:new", (data: any) => {
+        console.log("💰 AdminDashboard received: payment:new", data);
         fetchAllData(); // Refresh data
       });
 
-      // Listen for cycle updates
-      socket.on("cycleUpdated", (data: any) => {
-        console.log("🔄 Cycle updated:", data);
-        fetchAllData(); // Refresh data
+      // Listen for cycle updates (new event name)
+      socket.on("cycle:updated", (data: any) => {
+        console.log("🔄 AdminDashboard received: cycle:updated", data);
+        fetchCurrentCycle(); // Refresh cycle data specifically
+        fetchAllData(); // Refresh all data
       });
 
       // Listen for payment failures
-      socket.on("paymentFailed", (data: any) => {
-        console.log("❌ Payment failed:", data);
+      socket.on("payment:failed", (data: any) => {
+        console.log("❌ AdminDashboard received: payment:failed", data);
         toast({
           title: "Payment Failed",
-          description: `Payment from member failed: ${data.reason}`,
+          description: `Payment failed: ${data.message || "Unknown error"}`,
           variant: "destructive",
         });
       });
 
-      // Listen for disbursement completion
-      socket.on("disbursementCompleted", (data: any) => {
-        console.log("💸 Disbursement completed:", data);
-        toast({
-          title: "Disbursement Successful!",
-          description: `KES ${data.amount} sent to ${data.memberName}`,
-        });
-        fetchAllData(); // Refresh data
-      });
-
-      // Listen for next recipient updates
-      socket.on("nextRecipientUpdated", (data: any) => {
-        console.log("➡️ Next recipient updated:", data);
-        toast({
-          title: "Next Recipient Updated",
-          description: `${
-            data.previousRecipient.name
-          } received payment. Next: ${
-            data.nextRecipient?.name || "All members paid"
-          }`,
-        });
+      // Listen for member additions
+      socket.on("member:new", (data: any) => {
+        console.log("👤 AdminDashboard received: member:new", data);
         fetchAllData(); // Refresh data
       });
     }
@@ -311,12 +296,11 @@ const AdminDashboard = ({
 
       // Cleanup Socket.IO listeners
       if (socket) {
-        socket.off("paymentCompleted");
-        socket.off("disbursementCompleted");
-        socket.off("memberUpdated");
-        socket.off("cycleUpdated");
-        socket.off("paymentFailed");
-        socket.off("nextRecipientUpdated");
+        socket.off("payment:completed");
+        socket.off("payment:new");
+        socket.off("cycle:updated");
+        socket.off("payment:failed");
+        socket.off("member:new");
       }
     };
   }, []);
@@ -879,7 +863,7 @@ Thank you for your cooperation! 🙏`;
                     const recipientId = currentCycle.next_recipient?._id || currentCycle.recipient_id?._id || currentCycle.recipient_id;
                     const recipientPhone = currentCycle.next_recipient?.phone;
                     const cycleId = currentCycle._id || currentCycle.id;
-                    const disbursementAmount = safeMembers.length * 204;
+                    const disbursementAmount = safeMembers.length * 224;
 
                     if (!recipientId || !cycleId || !recipientPhone) {
                       throw new Error("Missing recipient information");
@@ -1494,7 +1478,7 @@ Thank you for your cooperation! 🙏`;
                     <div className="text-2xl font-bold text-accent">
                       KES{" "}
                       {(
-                        safeMembers.length * 204 -
+                        safeMembers.length * 224 -
                         (currentCycle.total_amount_collected || 0)
                       ).toLocaleString()}
                     </div>
@@ -1620,7 +1604,7 @@ Thank you for your cooperation! 🙏`;
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Amount:</span>
                       <span className="font-semibold text-accent">
-                        KES {(safeMembers.length * 204).toLocaleString()}
+                        KES {(safeMembers.length * 224).toLocaleString()}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -1656,7 +1640,7 @@ Thank you for your cooperation! 🙏`;
                             body: JSON.stringify({
                               cycle_id: currentCycle._id,
                               recipient_id: currentCycle.recipient_id._id || currentCycle.recipient_id,
-                              amount: safeMembers.length * 204,
+                              amount: safeMembers.length * 224,
                               method: "manual",
                               status: "completed",
                             }),
@@ -1725,7 +1709,7 @@ Thank you for your cooperation! 🙏`;
                             body: JSON.stringify({
                               cycle_id: currentCycle._id,
                               recipient_id: currentCycle.recipient_id._id || currentCycle.recipient_id,
-                              amount: safeMembers.length * 204,
+                              amount: safeMembers.length * 224,
                               method: "manual",
                               status: "completed",
                             }),
