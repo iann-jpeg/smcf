@@ -157,7 +157,17 @@ router.post("/stk-push", protect, async (req, res) => {
     const merchantRequestId =
       lipiaResponse.merchantRequestID || lipiaResponse.merchantRequestId;
 
-    payment.checkout_request_id = checkoutRequestId || reference;
+    if (!checkoutRequestId) {
+      console.error(
+        "❌ No checkoutRequestId received from Lipia:",
+        lipiaResponse
+      );
+      throw new Error(
+        "Failed to get valid checkout request ID from payment gateway"
+      );
+    }
+
+    payment.checkout_request_id = checkoutRequestId;
     payment.merchant_request_id = merchantRequestId;
     await payment.save();
 

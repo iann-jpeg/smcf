@@ -11,7 +11,13 @@ import { Clock, LogOut } from "lucide-react";
 import { useEffect, useState } from "react";
 import io from "socket.io-client";
 
-const socket = io(API_BASE); // Uses VITE_API_URL or fallback
+// Initialize socket with proper config
+const socket = io(API_BASE, {
+  transports: ["websocket", "polling"],
+  reconnection: true,
+  reconnectionDelay: 1000,
+  reconnectionAttempts: 5,
+});
 
 interface DashboardProps {
   userRole: "admin" | "member";
@@ -44,51 +50,76 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch cycle and members in parallel
-        const [cycleRes, membersRes, paymentsRes] = await Promise.all([
+        // Only admins need members and payments data
+        // Members only need cycle data
+        const requests = [
           fetch(`${API_BASE}/api/cycles/current`, {
             headers: { ...authService.getAuthHeaders() },
           }),
-          fetch(`${API_BASE}/api/members`, {
-            headers: { ...authService.getAuthHeaders() },
-          }),
-          fetch(`${API_BASE}/api/payments`, {
-            headers: { ...authService.getAuthHeaders() },
-          }),
-        ]);
-        
-        const cycleData = await cycleRes.json();
-        const membersData = await membersRes.json();
-        const paymentsData = await paymentsRes.json();
-        
-        console.log("📊 Dashboard fetched data:", { cycleData, membersCount: membersData?.length, paymentsCount: paymentsData?.length });
-        
-        // Get total members count
-        const totalMembersCount = Array.isArray(membersData) ? membersData.length : 0;
-        setMembers(membersData);
-        
-        // Calculate total collected from payments
-        const totalCollected = Array.isArray(paymentsData) 
-          ? paymentsData
-              .filter(p => p.status === 'completed')
-              .reduce((sum, p) => sum + (p.amount || 0), 0)
-          : 0;
+        ];
 
-        // Count unique paid members
-        const uniquePaidMembers = Array.isArray(paymentsData)
-          ? new Set(
-              paymentsData
-                .filter(p => p.status === 'completed')
-                .map(p => p.member_id?._id || p.member_id)
-            ).size
-          : 0;
-
-        console.log("📈 Calculated stats:", { totalMembersCount, totalCollected, uniquePaidMembers });
-        
-        if (totalMembersCount === 0) {
-          console.warn("⚠️ No members found! membersData:", membersData);
+        // Only fetch members and payments if admin
+        if (userRole === "admin") {
+          requests.push(
+            fetch(`${API_BASE}/api/members`, {
+              headers: { ...authService.getAuthHeaders() },
+            }),
+            fetch(`${API_BASE}/api/payments`, {
+              headers: { ...authService.getAuthHeaders() },
+            })
+          );
         }
-        
+
+        const responses = await Promise.all(requests);
+        const cycleData = await responses[0].json();
+        const membersData =
+          userRole === "admin" ? await responses[1]?.json() : [];
+        const paymentsData =
+          userRole === "admin" ? await responses[2]?.json() : [];
+
+        console.log("📊 Dashboard fetched data:", {
+          userRole,
+          cycleData,
+          membersCount: Array.isArray(membersData) ? membersData.length : 0,
+          paymentsCount: Array.isArray(paymentsData) ? paymentsData.length : 0,
+        });
+
+        // Get total members count (from cycle data for members, from actual list for admin)
+        const totalMembersCount =
+          userRole === "admin"
+            ? Array.isArray(membersData)
+              ? membersData.length
+              : 0
+            : cycleData?.data?.total_members || 0;
+
+        if (userRole === "admin") {
+          setMembers(membersData);
+        }
+
+        // Calculate total collected from payments (admin only)
+        const totalCollected =
+          userRole === "admin" && Array.isArray(paymentsData)
+            ? paymentsData
+                .filter((p) => p.status === "completed")
+                .reduce((sum, p) => sum + (p.amount || 0), 0)
+            : cycleData?.data?.total_amount_collected || 0;
+
+        // Count unique paid members (admin only)
+        const uniquePaidMembers =
+          userRole === "admin" && Array.isArray(paymentsData)
+            ? new Set(
+                paymentsData
+                  .filter((p) => p.status === "completed")
+                  .map((p) => p.member_id?._id || p.member_id)
+              ).size
+            : cycleData?.data?.paid_members_count || 0;
+
+        console.log("📈 Calculated stats:", {
+          totalMembersCount,
+          totalCollected,
+          uniquePaidMembers,
+        });
+
         if (cycleData.success && cycleData.data) {
           const cycle = cycleData.data;
           setCycleData({
@@ -96,11 +127,18 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
             daysLeft: cycle.days_left || 0,
             totalMembers: totalMembersCount || cycle.total_members || 0,
             paidMembers: uniquePaidMembers, // Always use calculated count from actual payments
-            nextRecipient: cycle.next_recipient?.name || cycle.next_recipient_name || "No Active Cycle",
-            totalAmount: cycle.expected_amount || (totalMembersCount * 224),
+            nextRecipient:
+              cycle.next_recipient?.name ||
+              cycle.next_recipient_name ||
+              "No Active Cycle",
+            totalAmount: cycle.expected_amount || totalMembersCount * 224,
             collectedAmount: cycle.total_amount_collected || totalCollected,
-            cycleStartDate: cycle.start_date ? new Date(cycle.start_date).toLocaleDateString() : new Date().toLocaleDateString(),
-            paymentDeadline: cycle.end_date ? new Date(cycle.end_date).toLocaleDateString() : "Not Set",
+            cycleStartDate: cycle.start_date
+              ? new Date(cycle.start_date).toLocaleDateString()
+              : new Date().toLocaleDateString(),
+            paymentDeadline: cycle.end_date
+              ? new Date(cycle.end_date).toLocaleDateString()
+              : "Not Set",
           });
         } else {
           // No active cycle - use calculated data
@@ -214,12 +252,18 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
             <CardContent>
               <div className="text-2xl font-bold text-financial-success mb-2">
                 {cycleData.totalMembers > 0
-                  ? Math.round((cycleData.paidMembers / cycleData.totalMembers) * 100)
+                  ? Math.round(
+                      (cycleData.paidMembers / cycleData.totalMembers) * 100
+                    )
                   : 0}
                 %
               </div>
               <Progress
-                value={cycleData.totalMembers > 0 ? (cycleData.paidMembers / cycleData.totalMembers) * 100 : 0}
+                value={
+                  cycleData.totalMembers > 0
+                    ? (cycleData.paidMembers / cycleData.totalMembers) * 100
+                    : 0
+                }
                 className="h-2"
               />
               <div className="text-sm text-muted-foreground mt-2">
