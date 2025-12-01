@@ -305,91 +305,158 @@ async function pollLipiaPaymentStatus(
 
       console.log("👤 Processing payment for member:", member.name);
 
-      // Create Saving record for wallet deposit
-      const Saving = (await import("../models/Saving.js")).default;
+      // Check payment type
+      const paymentType = payment.type || "wallet_deposit";
 
-      // Get current balance
-      const lastSaving = await Saving.findOne({ member_id: memberId }).sort({
-        created_at: -1,
-      });
-      const balanceBefore = lastSaving ? lastSaving.balance_after : 0;
-      const balanceAfter = balanceBefore + amount;
+      if (paymentType === "wallet_deposit") {
+        // Create Saving record for wallet deposit
+        const Saving = (await import("../models/Saving.js")).default;
 
-      console.log("💰 Updating wallet balance:", {
-        before: balanceBefore,
-        deposit: amount,
-        after: balanceAfter,
-      });
+        // Get current balance
+        const lastSaving = await Saving.findOne({ member_id: memberId }).sort({
+          created_at: -1,
+        });
+        const balanceBefore = lastSaving ? lastSaving.balance_after : 0;
+        const balanceAfter = balanceBefore + amount;
 
-      const savingRecord = await Saving.create({
-        member_id: memberId,
-        amount: amount,
-        transaction_type: "deposit",
-        balance_before: balanceBefore,
-        balance_after: balanceAfter,
-        status: "completed",
-        payment_method: "mpesa",
-        transaction_ref: status.transactionId || reference,
-        notes: `Wallet deposit via M-Pesa - ${reference}`,
-      });
-
-      // Update member's total_savings
-      await Member.findByIdAndUpdate(memberId, {
-        $inc: {
-          total_savings: amount,
-        },
-      });
-
-      console.log("✅ Wallet deposit completed:", {
-        member: member.name,
-        memberId,
-        amount,
-        reference,
-        newBalance: balanceAfter,
-      });
-
-      // Emit socket events for real-time updates
-      if (app && app.get("io")) {
-        const io = app.get("io");
-        console.log(
-          "🔔 Emitting payment:completed event to all connected clients"
-        );
-        console.log("🔔 Event data:", {
-          memberId: memberId.toString(),
-          type: "wallet_deposit",
-          amount,
+        console.log("💰 Updating wallet balance:", {
+          before: balanceBefore,
+          deposit: amount,
+          after: balanceAfter,
         });
 
-        // Emit to ALL clients (broadcast)
-        io.emit("payment:completed", {
-          memberId: memberId.toString(),
-          payment: {
-            _id: payment._id.toString(),
-            amount: payment.amount,
-            status: payment.status,
+        const savingRecord = await Saving.create({
+          member_id: memberId,
+          amount: amount,
+          transaction_type: "deposit",
+          balance_before: balanceBefore,
+          balance_after: balanceAfter,
+          status: "completed",
+          payment_method: "mpesa",
+          transaction_ref: status.transactionId || reference,
+          notes: `Wallet deposit via M-Pesa - ${reference}`,
+        });
+
+        // Update member's total_savings
+        await Member.findByIdAndUpdate(memberId, {
+          $inc: {
+            total_savings: amount,
           },
-          amount,
-          type: "wallet_deposit",
         });
 
-        io.emit("saving:new", {
-          memberId: memberId.toString(),
-          saving: savingRecord,
+        console.log("✅ Wallet deposit completed:", {
           member: member.name,
-        });
-
-        // Emit savingDeposit event for admin dashboard
-        console.log("🔔 Emitting savingDeposit event for admin");
-        io.emit("savingDeposit", {
-          memberId: memberId.toString(),
-          member: member.name,
+          memberId,
           amount,
+          reference,
           newBalance: balanceAfter,
         });
 
-        console.log("✅ All Socket.IO events emitted successfully");
-      } else {
-        console.error("⚠️ Socket.IO not available - events not emitted");
+        // Emit socket events for real-time updates
+        if (app && app.get("io")) {
+          const io = app.get("io");
+          console.log(
+            "🔔 Emitting payment:completed event to all connected clients"
+          );
+          console.log("🔔 Event data:", {
+            memberId: memberId.toString(),
+            type: "wallet_deposit",
+            amount,
+          });
+
+          // Emit to ALL clients (broadcast)
+          io.emit("payment:completed", {
+            memberId: memberId.toString(),
+            payment: {
+              _id: payment._id.toString(),
+              amount: payment.amount,
+              status: payment.status,
+            },
+            amount,
+            type: "wallet_deposit",
+          });
+
+          io.emit("saving:new", {
+            memberId: memberId.toString(),
+            saving: savingRecord,
+            member: member.name,
+          });
+
+          // Emit savingDeposit event for admin dashboard
+          console.log("🔔 Emitting savingDeposit event for admin");
+          io.emit("savingDeposit", {
+            memberId: memberId.toString(),
+            member: member.name,
+            amount,
+            newBalance: balanceAfter,
+          });
+
+          console.log("✅ All Socket.IO events emitted successfully");
+        } else {
+          console.error("⚠️ Socket.IO not available - events not emitted");
+        }
+      } else if (paymentType === "cycle_contribution") {
+        // Handle cycle contribution
+        console.log("✅ Cycle contribution completed:", {
+          member: member.name,
+          amount,
+          cycleNumber: payment.cycle_number,
+        });
+
+        // Update member payment status
+        await Member.findByIdAndUpdate(memberId, {
+          payment_status: "paid",
+          payment_date: new Date(),
+          amount: amount,
+          $inc: { total_contributed: amount },
+        });
+
+        // Update cycle collection stats
+        const Cycle = (await import("../models/Cycle.js")).default;
+        const cycle = await Cycle.findOne({ cycle_number: payment.cycle_number });
+        if (cycle) {
+          const payments = await Payment.find({
+            cycle_number: payment.cycle_number,
+            status: "completed",
+          });
+          const paidCount = new Set(payments.map((p) => p.member_id.toString())).size;
+          const totalCollected = payments.reduce((sum, p) => sum + p.amount, 0);
+
+          cycle.paid_members_count = paidCount;
+          cycle.total_amount_collected = totalCollected;
+          await cycle.save();
+
+          console.log("📊 Updated cycle stats:", {
+            cycleNumber: cycle.cycle_number,
+            paidCount,
+            totalCollected,
+          });
+        }
+
+        // Emit Socket.IO events for cycle payment
+        if (app && app.get("io")) {
+          const io = app.get("io");
+          console.log("🔔 Emitting cycle payment events");
+
+          io.emit("payment:completed", {
+            memberId: memberId.toString(),
+            payment: {
+              _id: payment._id.toString(),
+              amount: payment.amount,
+              status: payment.status,
+              cycle_number: payment.cycle_number,
+            },
+            amount,
+            type: "cycle_contribution",
+          });
+
+          io.emit("payment:new", payment);
+          if (cycle) {
+            io.emit("cycle:updated", cycle);
+          }
+
+          console.log("✅ Cycle payment events emitted");
+        }
       }
     } else if (status.status === "failed" || status.status === "cancelled") {
       // Only treat as truly failed if we got a definitive FAILED status from Lipia
@@ -656,12 +723,13 @@ router.post("/lipia-callback", async (req, res) => {
       payment.mpesa_transaction_id = mpesa_ref || reference;
       await payment.save();
 
+      const Member = (await import("../models/Member.js")).default;
+      const member = await Member.findById(payment.member_id);
+
       // If this is a wallet deposit, create Saving record
       if (payment.type === "wallet_deposit") {
         const Saving = (await import("../models/Saving.js")).default;
-        const Member = (await import("../models/Member.js")).default;
 
-        const member = await Member.findById(payment.member_id);
         const lastSaving = await Saving.findOne({
           member_id: payment.member_id,
         }).sort({ created_at: -1 });
@@ -715,6 +783,58 @@ router.post("/lipia-callback", async (req, res) => {
             memberId: payment.member_id.toString(),
             amount: payment.amount,
           });
+        }
+      } else {
+        // Regular cycle contribution payment
+        console.log("✅ Cycle contribution completed via callback:", {
+          member: member?.name,
+          amount: payment.amount,
+          cycleNumber: payment.cycle_number,
+        });
+
+        // Update member payment status
+        await Member.findByIdAndUpdate(payment.member_id, {
+          payment_status: "paid",
+          payment_date: new Date(),
+          amount: payment.amount,
+          $inc: { total_contributed: payment.amount },
+        });
+
+        // Update cycle collection stats
+        const Cycle = (await import("../models/Cycle.js")).default;
+        const cycle = await Cycle.findOne({ cycle_number: payment.cycle_number });
+        if (cycle) {
+          const payments = await Payment.find({
+            cycle_number: payment.cycle_number,
+            status: "completed",
+          });
+          const paidCount = new Set(payments.map((p) => p.member_id.toString())).size;
+          const totalCollected = payments.reduce((sum, p) => sum + p.amount, 0);
+
+          cycle.paid_members_count = paidCount;
+          cycle.total_amount_collected = totalCollected;
+          await cycle.save();
+        }
+
+        // Emit Socket.IO events for cycle payment
+        const io = req.app.get("io");
+        if (io) {
+          io.emit("payment:completed", {
+            memberId: payment.member_id.toString(),
+            payment: {
+              _id: payment._id,
+              amount: payment.amount,
+              status: "completed",
+              cycle_number: payment.cycle_number,
+            },
+            amount: payment.amount,
+            type: "cycle_contribution",
+          });
+
+          io.emit("payment:new", payment);
+          if (cycle) {
+            io.emit("cycle:updated", cycle);
+          }
         }
       }
 
