@@ -1,6 +1,6 @@
 import LoanRequestDialog from "@/components/LoanRequestDialog";
-import PaymentDialog from "@/components/PaymentDialog";
 import MemberWallet from "@/components/MemberWallet";
+import PaymentDialog from "@/components/PaymentDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -142,17 +142,18 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         }
 
         // Get total members count from cycle data or calculate from payments
-        const totalMembersCount = (cycleData.success && cycleData.data?.total_members) 
-          ? cycleData.data.total_members 
-          : 14; // Default to 14 members if not available
+        const totalMembersCount =
+          cycleData.success && cycleData.data?.total_members
+            ? cycleData.data.total_members
+            : 14; // Default to 14 members if not available
 
         console.log("👥 Total members count:", totalMembersCount);
         console.log("💰 Payments data:", payments);
 
         // Calculate total collected from all payments
-        const totalCollected = Array.isArray(payments) 
+        const totalCollected = Array.isArray(payments)
           ? payments
-              .filter(p => p.status === 'completed')
+              .filter((p) => p.status === "completed")
               .reduce((sum, p) => sum + (p.amount || 0), 0)
           : 0;
 
@@ -162,8 +163,8 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         const uniquePaidMembers = Array.isArray(payments)
           ? new Set(
               payments
-                .filter(p => p.status === 'completed')
-                .map(p => p.member_id?._id || p.member_id)
+                .filter((p) => p.status === "completed")
+                .map((p) => p.member_id?._id || p.member_id)
             ).size
           : 0;
 
@@ -171,24 +172,36 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
 
         // Update cycle data - always use fresh data from system
         const newData = {
-          currentCycle: (cycleData.success && cycleData.data) ? (cycleData.data.cycle_number || 1) : 1,
-          daysLeft: (cycleData.success && cycleData.data) ? (cycleData.data.days_left || 0) : 0,
+          currentCycle:
+            cycleData.success && cycleData.data
+              ? cycleData.data.cycle_number || 1
+              : 1,
+          daysLeft:
+            cycleData.success && cycleData.data
+              ? cycleData.data.days_left || 0
+              : 0,
           paidMembers: uniquePaidMembers, // Always use calculated count from actual payments
           totalMembers: totalMembersCount || 0,
-          collectedAmount: (cycleData.success && cycleData.data) 
-            ? (cycleData.data.total_amount_collected || totalCollected) 
-            : totalCollected,
-          totalAmount: (cycleData.success && cycleData.data) 
-            ? (cycleData.data.expected_amount || (totalMembersCount * 224)) 
-            : (totalMembersCount * 224),
-          cycleStartDate: (cycleData.success && cycleData.data && cycleData.data.start_date) 
-            ? new Date(cycleData.data.start_date).toLocaleDateString()
-            : new Date().toLocaleDateString(),
-          nextRecipient: (cycleData.success && cycleData.data) 
-            ? (cycleData.data.next_recipient?.name || cycleData.data.next_recipient_name || "No recipient assigned")
-            : "No Active Cycle",
+          collectedAmount:
+            cycleData.success && cycleData.data
+              ? cycleData.data.total_amount_collected || totalCollected
+              : totalCollected,
+          totalAmount:
+            cycleData.success && cycleData.data
+              ? cycleData.data.expected_amount || totalMembersCount * 224
+              : totalMembersCount * 224,
+          cycleStartDate:
+            cycleData.success && cycleData.data && cycleData.data.start_date
+              ? new Date(cycleData.data.start_date).toLocaleDateString()
+              : new Date().toLocaleDateString(),
+          nextRecipient:
+            cycleData.success && cycleData.data
+              ? cycleData.data.next_recipient?.name ||
+                cycleData.data.next_recipient_name ||
+                "No recipient assigned"
+              : "No Active Cycle",
         };
-        
+
         console.log("📊 Updated cycle data:", newData);
         setCurrentCycleData(newData);
 
@@ -431,7 +444,9 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
               size="sm"
               className="w-full sm:w-auto text-xs md:text-sm">
               <Phone className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
-              {memberStats.hasPaidThisCycle ? "Pay for Next Cycle" : "Pay via M-Pesa"}
+              {memberStats.hasPaidThisCycle
+                ? "Pay for Next Cycle"
+                : "Pay via M-Pesa"}
             </Button>
           </div>
         </CardContent>
@@ -483,7 +498,8 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
             </Button>
             {memberStats.hasPaidThisCycle && (
               <p className="text-xs text-center text-muted-foreground">
-                ✓ Already paid for Cycle #{currentCycleData?.currentCycle}. Click to pay for future cycles.
+                ✓ Already paid for Cycle #{currentCycleData?.currentCycle}.
+                Click to pay for future cycles.
               </p>
             )}
             <div className="mt-3">
@@ -752,11 +768,16 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      if (confirm('Are you sure you want to clear all announcements? This will only clear them from your view.')) {
+                      if (
+                        confirm(
+                          "Are you sure you want to clear all announcements? This will only clear them from your view."
+                        )
+                      ) {
                         setAnnouncements([]);
                         toast({
                           title: "Announcements Cleared",
-                          description: "All announcements have been cleared from your view",
+                          description:
+                            "All announcements have been cleared from your view",
                         });
                       }
                     }}>
@@ -1016,11 +1037,16 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      if (confirm('Are you sure you want to clear your payment history view? This will only clear it from your view.')) {
+                      if (
+                        confirm(
+                          "Are you sure you want to clear your payment history view? This will only clear it from your view."
+                        )
+                      ) {
                         setPaymentHistory([]);
                         toast({
                           title: "Payment History Cleared",
-                          description: "Payment history has been cleared from your view",
+                          description:
+                            "Payment history has been cleared from your view",
                         });
                       }
                     }}>
