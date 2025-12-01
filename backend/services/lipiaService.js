@@ -294,7 +294,6 @@ export const queryLipiaPaymentStatus = async (transactionReference) => {
       success: false,
       error: error.message,
       status: "pending", // Don't declare as failed, keep checking
-      status: "failed",
     };
   }
 };

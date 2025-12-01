@@ -90,6 +90,8 @@ router.post("/query-status", protect, async (req, res) => {
     const { checkoutRequestID, transactionReference } = req.body;
     const reference = transactionReference || checkoutRequestID;
 
+    console.log("🔍 Query-status request:", { checkoutRequestID, transactionReference, reference });
+
     if (!reference) {
       return res.status(400).json({
         success: false,
@@ -98,6 +100,13 @@ router.post("/query-status", protect, async (req, res) => {
     }
 
     const result = await queryLipiaPaymentStatus(reference);
+
+    console.log("📊 Query-status result:", {
+      success: result.success,
+      status: result.status,
+      resultCode: result.resultCode,
+      mpesaReceipt: result.mpesaReceiptNumber,
+    });
 
     if (!result.success) {
       return res.status(400).json({
@@ -249,7 +258,7 @@ router.post("/query-status", protect, async (req, res) => {
     res.json({
       success: true,
       status: result.status,
-      ResultCode: result.resultCode,
+      ResultCode: result.status === "completed" ? "0" : result.resultCode,
       ResultDescription: result.resultDescription,
       MpesaReceiptNumber: result.mpesaReceiptNumber,
       TransactionDate: result.transactionDate,

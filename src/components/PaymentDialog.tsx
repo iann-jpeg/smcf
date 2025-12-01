@@ -179,22 +179,37 @@ const PaymentDialog = ({
 
       const data = await response.json();
 
-      if (data.success && data.status === "completed") {
-        setTransactionId(data.MpesaReceiptNumber);
+      console.log("💳 Payment status poll #" + (count + 1) + ":", {
+        success: data.success,
+        status: data.status,
+        ResultCode: data.ResultCode,
+        MpesaReceiptNumber: data.MpesaReceiptNumber,
+      });
+
+      // Check for successful payment
+      if (data.success && 
+          (data.status === "completed" || 
+           data.ResultCode === "0" || 
+           data.ResultCode === 0 ||
+           data.MpesaReceiptNumber)) {
+        setTransactionId(data.MpesaReceiptNumber || "SUCCESS");
         setPaymentStep("success");
         setIsProcessing(false);
 
         toast({
           title: "Payment Successful!",
-          description: `KES ${amount} received. Receipt: ${data.MpesaReceiptNumber}`,
+          description: `KES ${amount} received. Receipt: ${data.MpesaReceiptNumber || "Confirmed"}`,
         });
 
         // Call success callback after a short delay
         setTimeout(() => {
           onPaymentSuccess();
         }, 2000);
-      } else if (data.ResultCode && data.ResultCode !== "0") {
-        // Payment failed
+      } else if (data.ResultCode && 
+                 data.ResultCode !== "0" && 
+                 data.ResultCode !== 0 &&
+                 data.status === "failed") {
+        // Only mark as failed if explicitly failed status
         setPaymentStep("failed");
         setIsProcessing(false);
         toast({
