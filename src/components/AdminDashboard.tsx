@@ -340,6 +340,26 @@ const AdminDashboard = ({
         console.log("💸 AdminDashboard received: disbursement:updated", data);
         fetchDisbursements(); // Refresh disbursements
       });
+
+      // Listen for cycle completion
+      socket.on("cycle:completed", (data: any) => {
+        console.log("✅ AdminDashboard received: cycle:completed", data);
+        toast({
+          title: "Cycle Completed",
+          description: `Cycle #${data.cycle_number} has been completed`,
+        });
+        fetchAllData(); // Refresh all data
+      });
+
+      // Listen for new cycle start
+      socket.on("cycle:new", (data: any) => {
+        console.log("🆕 AdminDashboard received: cycle:new", data);
+        toast({
+          title: "New Cycle Started!",
+          description: `Cycle #${data.cycle_number} has started with ${data.next_recipient?.name || 'recipient'} as the next recipient`,
+        });
+        fetchAllData(); // Refresh all data
+      });
     }
 
     return () => {
@@ -354,6 +374,8 @@ const AdminDashboard = ({
         socket.off("member:new");
         socket.off("disbursement:new");
         socket.off("disbursement:updated");
+        socket.off("cycle:completed");
+        socket.off("cycle:new");
       }
     };
   }, []);
@@ -941,13 +963,25 @@ Thank you for your cooperation! 🙏`;
                     const data = await response.json();
 
                     if (response.ok && data.success) {
+                      const newCycleInfo = data.newCycle ? 
+                        `New Cycle #${data.newCycle.cycle_number} started with ${data.newCycle.next_recipient?.name} as recipient` : 
+                        '';
+                      
                       toast({
-                        title: "Disbursement Recorded",
-                        description: `KES ${disbursementAmount.toLocaleString()} marked as disbursed to ${currentCycle.next_recipient?.name || 'recipient'}`,
+                        title: "✅ Disbursement Complete",
+                        description: data.message || `KES ${disbursementAmount.toLocaleString()} disbursed to ${currentCycle.next_recipient?.name || 'recipient'}. ${newCycleInfo}`,
                       });
-                      fetchDisbursements();
-                      fetchCurrentCycle();
-                      fetchAllData();
+                      
+                      // Refresh all data to show new cycle
+                      await fetchDisbursements();
+                      await fetchCurrentCycle();
+                      await fetchPayments();
+                      await fetchAllData();
+                      
+                      // Refresh members to reset payment statuses
+                      if (typeof refreshMembers === "function") {
+                        await refreshMembers();
+                      }
                     } else {
                       throw new Error(data.error || "Failed to record disbursement");
                     }

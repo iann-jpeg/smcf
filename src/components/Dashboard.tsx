@@ -259,6 +259,14 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
       console.log("🔄 Dashboard received: cycle:updated", data);
       fetchData(); // Refresh cycle stats
     });
+    socket.on("cycle:completed", (data) => {
+      console.log("✅ Dashboard received: cycle:completed", data);
+      fetchData(); // Refresh cycle stats
+    });
+    socket.on("cycle:new", (data) => {
+      console.log("🆕 Dashboard received: cycle:new", data);
+      fetchData(); // Refresh cycle stats
+    });
     return () => {
       console.log("🧹 Dashboard: Cleaning up Socket.IO listeners");
       socket.off("announcement:new");
@@ -266,6 +274,8 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
       socket.off("payment:completed");
       socket.off("payment:new");
       socket.off("cycle:updated");
+      socket.off("cycle:completed");
+      socket.off("cycle:new");
     };
   }, []);
 

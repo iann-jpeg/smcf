@@ -131,23 +131,76 @@ router.post("/", protect, adminOnly, async (req, res) => {
     disbursement.mpesa_transaction_id = `DISB${Date.now()}`;
     await disbursement.save();
 
-    // Update cycle status
-    cycle.disbursement_status = "completed";
+    // Update cycle to completed
+    cycle.status = "completed";
     cycle.disbursement_date = new Date();
-    cycle.recipient_id = recipient_id;
     await cycle.save();
 
-    // Update member record
+    // Update recipient member record
     await Member.findByIdAndUpdate(recipient_id, {
       $inc: { total_received: amount },
       last_payout_date: new Date(),
       last_payout_amount: amount,
+      disbursement_status: "received",
     });
 
-    // Emit socket event
+    console.log("🔄 Current cycle completed, starting new cycle...");
+
+    // ===== AUTO-START NEW CYCLE =====
+    // Find next recipient in the queue
+    const currentRecipient = await Member.findById(recipient_id);
+    const currentPosition = currentRecipient?.position || 0;
+
+    // Get next member by position
+    let nextRecipient = await Member.findOne({
+      position: { $gt: currentPosition },
+      status: "active",
+    }).sort({ position: 1 });
+
+    // If no next recipient, cycle back to first member
+    if (!nextRecipient) {
+      nextRecipient = await Member.findOne({ status: "active" }).sort({ position: 1 });
+    }
+
+    if (!nextRecipient) {
+      console.error("❌ No next recipient found for new cycle");
+      return res.status(500).json({
+        success: false,
+        error: "Disbursement recorded but failed to start new cycle - no recipients available"
+      });
+    }
+
+    // Create new cycle
+    const newCycleNumber = cycle.cycle_number + 1;
+    const newCycle = await Cycle.create({
+      cycle_number: newCycleNumber,
+      start_date: new Date(),
+      end_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000), // 5 days
+      status: "active",
+      total_members: totalMembers,
+      next_recipient: nextRecipient._id,
+      paid_members_count: 0,
+      total_amount_collected: 0,
+    });
+
+    // Reset all members' payment status for new cycle
+    await Member.updateMany(
+      {},
+      { 
+        payment_status: "pending", 
+        payment_date: null,
+        amount: 0
+      }
+    );
+
+    console.log(`✅ New cycle #${newCycleNumber} started with recipient: ${nextRecipient.name}`);
+
+    // Emit socket events for real-time updates
     if (req.app.get("io")) {
       req.app.get("io").emit("disbursement:new", disbursement);
-      req.app.get("io").emit("cycle:updated", cycle);
+      req.app.get("io").emit("cycle:completed", cycle);
+      req.app.get("io").emit("cycle:new", newCycle);
+      req.app.get("io").emit("cycle:updated", newCycle);
     }
 
     const populatedDisbursement = await Disbursement.findById(disbursement._id)
@@ -155,7 +208,15 @@ router.post("/", protect, adminOnly, async (req, res) => {
       .populate("cycle_id", "cycle_number")
       .populate("initiated_by", "name");
 
-    res.status(201).json({ success: true, data: populatedDisbursement });
+    const populatedNewCycle = await Cycle.findById(newCycle._id)
+      .populate("next_recipient", "name phone member_id position");
+
+    res.status(201).json({ 
+      success: true, 
+      data: populatedDisbursement,
+      newCycle: populatedNewCycle,
+      message: `Disbursement completed and Cycle #${newCycleNumber} started with ${nextRecipient.name} as recipient`
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

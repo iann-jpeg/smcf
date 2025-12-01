@@ -360,6 +360,26 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
           duration: announcement.priority === "high" ? 10000 : 6000,
         });
       });
+
+      // Listen for cycle completion
+      socket.on("cycle:completed", (data: any) => {
+        console.log("✅ MemberDashboard received: cycle:completed", data);
+        toast({
+          title: "Cycle Completed",
+          description: `Cycle #${data.cycle_number} has been completed. Disbursement made!`,
+        });
+        fetchData(); // Refresh all data
+      });
+
+      // Listen for new cycle start
+      socket.on("cycle:new", (data: any) => {
+        console.log("🆕 MemberDashboard received: cycle:new", data);
+        toast({
+          title: "New Cycle Started!",
+          description: `Cycle #${data.cycle_number} has started. Next recipient: ${data.next_recipient?.name || 'TBA'}`,
+        });
+        fetchData(); // Refresh all data
+      });
     }
 
     return () => {
@@ -373,6 +393,8 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         socket.off("loanStatusUpdated");
         socket.off("announcementCreated");
         socket.off("member:new");
+        socket.off("cycle:completed");
+        socket.off("cycle:new");
       }
     };
   }, [userData]);
