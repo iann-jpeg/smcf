@@ -51,12 +51,9 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
       try {
         console.log("🔄 Starting data fetch for userRole:", userRole);
 
-        // Fetch cycle data, members, AND payments for everyone to ensure progress bars match
+        // Fetch cycle data and payments (members endpoint requires admin auth)
         const requests = [
           fetch(`${API_BASE}/api/cycles/current`, {
-            headers: { ...authService.getAuthHeaders() },
-          }),
-          fetch(`${API_BASE}/api/members`, {
             headers: { ...authService.getAuthHeaders() },
           }),
           fetch(`${API_BASE}/api/payments`, {
@@ -66,50 +63,26 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
 
         const responses = await Promise.all(requests);
 
-        if (!responses[0].ok || !responses[1].ok || !responses[2].ok) {
+        if (!responses[0].ok || !responses[1].ok) {
           console.error("❌ API request failed:", {
             cycleStatus: responses[0].status,
-            membersStatus: responses[1].status,
-            paymentsStatus: responses[2].status,
+            paymentsStatus: responses[1].status,
           });
           setIsLoadingData(false);
           return;
         }
 
         const cycleData = await responses[0].json();
-        const membersResponse = await responses[1].json();
-        const paymentsResponse = await responses[2].json();
+        const paymentsResponse = await responses[1].json();
 
         console.log("📊 Dashboard raw responses:", {
           userRole,
           cycleSuccess: cycleData?.success,
           cycleDataExists: !!cycleData?.data,
-          membersResponseType: Array.isArray(membersResponse)
-            ? "array"
-            : typeof membersResponse,
-          membersCount: Array.isArray(membersResponse)
-            ? membersResponse.length
-            : membersResponse?.data?.length || 0,
           paymentsCount: Array.isArray(paymentsResponse)
             ? paymentsResponse.length
             : 0,
         });
-
-        // Extract members array from response (handle both array and object with data property)
-        let membersData = [];
-        if (Array.isArray(membersResponse)) {
-          membersData = membersResponse;
-        } else if (
-          membersResponse?.data &&
-          Array.isArray(membersResponse.data)
-        ) {
-          membersData = membersResponse.data;
-        } else if (
-          membersResponse?.success &&
-          Array.isArray(membersResponse.members)
-        ) {
-          membersData = membersResponse.members;
-        }
 
         // Extract payments array
         const paymentsData = Array.isArray(paymentsResponse)
@@ -117,12 +90,8 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
           : [];
 
         console.log("👥 Extracted data:", {
-          membersCount: membersData.length,
           paymentsCount: paymentsData.length,
         });
-
-        // Always update members array for accurate progress calculation
-        setMembers(membersData);
 
         // Calculate paid members from ALL PAYMENTS (same logic as MemberDashboard)
         // Count unique members who have paid (completed payments only)
@@ -148,9 +117,9 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
           totalCollected,
         });
 
-        // Use real-time data for accurate progress
-        const totalMembersCount = membersData.length;
-        const paidMembersCount = uniquePaidMembers; // Use payment-based count (86%)
+        // Get total members count from cycle data (includes ALL members)
+        const totalMembersCount = cycleData?.data?.total_members || 14;
+        const paidMembersCount = uniquePaidMembers; // Use payment-based count
         const expectedAmount = totalMembersCount * 224;
 
         console.log("📈 Calculated stats from PAYMENTS data:", {
@@ -169,8 +138,8 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
           const newCycleData = {
             currentCycle: cycle.cycle_number || 1,
             daysLeft: cycle.days_left || 0,
-            totalMembers: totalMembersCount,
-            paidMembers: paidMembersCount, // Use calculated from actual member data
+            totalMembers: totalMembersCount, // From cycle data
+            paidMembers: paidMembersCount, // From payments count
             nextRecipient:
               cycle.next_recipient?.name ||
               cycle.next_recipient_name ||
