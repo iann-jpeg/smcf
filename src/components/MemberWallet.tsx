@@ -100,10 +100,40 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
             data.type === "wallet_deposit"
           ) {
             console.log("✅ My wallet deposit completed!");
+
+            // Close the dialog if it's still open
+            setShowDepositDialog(false);
+            setDepositAmount("");
+            setIsProcessing(false);
+
+            // Fetch updated wallet data
             fetchWalletData();
+
+            // Show success notification
             toast({
-              title: "✅ Deposit Confirmed!",
-              description: `KES ${data.amount} has been added to your wallet`,
+              title: "Payment Successful! 🎉",
+              description: `KES ${data.amount.toLocaleString()} has been added to your wallet`,
+              duration: 5000,
+            });
+          }
+        });
+
+        // Listen for failed payments
+        socket.on("payment:failed", (data: any) => {
+          console.log("❌ Payment failed event:", data);
+          if (data.memberId === userData?._id) {
+            console.log("❌ My payment failed!");
+
+            setShowDepositDialog(false);
+            setDepositAmount("");
+            setIsProcessing(false);
+
+            toast({
+              title: "Payment Failed",
+              description:
+                data.message || "Payment was not completed. Please try again.",
+              variant: "destructive",
+              duration: 5000,
             });
           }
         });
