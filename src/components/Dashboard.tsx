@@ -228,7 +228,18 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
     // Refresh every 30 seconds
     const interval = setInterval(fetchData, 30000);
 
-    return () => clearInterval(interval);
+    // Fallback timeout - if data doesn't load within 5 seconds, stop showing loading state
+    const timeout = setTimeout(() => {
+      if (isLoadingData) {
+        console.warn("⚠️ Data fetch timeout - stopping loading state");
+        setIsLoadingData(false);
+      }
+    }, 5000);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
   }, []);
 
   const handleLogout = () => {
@@ -276,6 +287,16 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
                 ? "Administrator"
                 : `Member ${userData?.memberId || userData?.member_id || ""}`}
             </Badge>
+            <Button
+              onClick={() => {
+                console.log("🔄 Manual refresh triggered");
+                setIsLoadingData(true);
+                window.location.reload();
+              }}
+              variant="outline"
+              size="sm">
+              Refresh Data
+            </Button>
             <Button onClick={handleLogout} variant="outline" size="sm">
               <LogOut className="w-4 h-4 mr-2" />
               Logout
