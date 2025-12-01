@@ -219,7 +219,7 @@ router.post("/stk-push", protect, async (req, res) => {
   }
 });
 
-// Poll Lipia payment status
+// Poll Lipia payment status with improved detection
 async function pollLipiaPaymentStatus(
   paymentId,
   checkoutRequestId,
@@ -229,7 +229,7 @@ async function pollLipiaPaymentStatus(
   app,
   attempts = 0
 ) {
-  const maxAttempts = 60; // Poll for 60 seconds - faster detection
+  const maxAttempts = 60; // Poll for 60 seconds (1 check per second)
 
   if (attempts >= maxAttempts) {
     console.log("⏱️ Payment polling timeout after 60 seconds:", {
@@ -239,26 +239,29 @@ async function pollLipiaPaymentStatus(
     const payment = await Payment.findByIdAndUpdate(
       paymentId,
       {
-        status: "failed",
-        notes: "Payment timed out - no response from M-Pesa after 60 seconds",
+        status: "timeout",
+        notes:
+          "Payment check timed out - Transaction may still complete. Check M-Pesa message.",
       },
       { new: true }
     );
 
     // Emit socket event for timeout
-    console.log("🔔 Emitting payment:failed event for timeout");
-    app.get("io").emit("payment:failed", {
-      paymentId,
-      memberId,
-      message:
-        "Payment timed out. If you entered your PIN, your wallet will update automatically.",
-    });
+    console.log("🔔 Emitting payment:timeout event");
+    if (app.get("io")) {
+      app.get("io").emit("payment:timeout", {
+        paymentId,
+        memberId,
+        message:
+          "Payment verification timed out. If you completed payment, it will reflect shortly.",
+      });
+    }
     return;
   }
 
   try {
     const lipiaService = await import("../services/lipiaService.js");
-    // Use checkoutRequestId from Lipia, not our custom reference
+    // Use checkoutRequestId from Lipia API
     const status = await lipiaService.queryLipiaPaymentStatus(
       checkoutRequestId
     );
@@ -270,22 +273,37 @@ async function pollLipiaPaymentStatus(
       success: status.success,
       resultCode: status.resultCode,
       resultDesc: status.resultDescription,
-      error: status.error,
+      mpesaReceipt: status.mpesaReceiptNumber,
     });
 
     if (status.status === "completed" || status.status === "success") {
-      // Payment successful
+      // Payment successful - Update payment record
+      console.log("✅ PAYMENT SUCCESSFUL - Processing completion:", {
+        checkoutRequestId,
+        mpesaReceipt: status.mpesaReceiptNumber,
+        amount,
+      });
+
       const payment = await Payment.findByIdAndUpdate(
         paymentId,
         {
           status: "completed",
-          mpesa_transaction_id: status.transactionId || reference,
+          mpesa_transaction_id:
+            status.mpesaReceiptNumber || status.transactionId || reference,
+          transaction_date: status.transactionDate || new Date(),
+          notes: `Payment completed - ${status.resultDescription || "Success"}`,
         },
         { new: true }
       );
 
       // Get member details
       const member = await Member.findById(memberId);
+      if (!member) {
+        console.error("❌ Member not found:", memberId);
+        return;
+      }
+
+      console.log("👤 Processing payment for member:", member.name);
 
       // Create Saving record for wallet deposit
       const Saving = (await import("../models/Saving.js")).default;
@@ -296,6 +314,12 @@ async function pollLipiaPaymentStatus(
       });
       const balanceBefore = lastSaving ? lastSaving.balance_after : 0;
       const balanceAfter = balanceBefore + amount;
+
+      console.log("💰 Updating wallet balance:", {
+        before: balanceBefore,
+        deposit: amount,
+        after: balanceAfter,
+      });
 
       const savingRecord = await Saving.create({
         member_id: memberId,
@@ -510,18 +534,73 @@ router.get("/debug/latest-deposits", protect, async (req, res) => {
       .sort({ created_at: -1 })
       .limit(5);
 
+    // Also get wallet balance
+    const Saving = (await import("../models/Saving.js")).default;
+    const lastSaving = await Saving.findOne({ member_id: userId }).sort({
+      created_at: -1,
+    });
+    const currentBalance = lastSaving ? lastSaving.balance_after : 0;
+
     res.json({
       success: true,
       count: payments.length,
+      currentBalance,
       payments: payments.map((p) => ({
         _id: p._id,
         amount: p.amount,
         status: p.status,
         reference: p.transaction_reference,
         checkout_id: p.checkout_request_id,
+        merchant_id: p.merchant_request_id,
+        mpesa_id: p.mpesa_transaction_id,
         notes: p.notes,
         created_at: p.created_at,
+        updated_at: p.updated_at,
       })),
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Test wallet system endpoint (for debugging)
+router.get("/debug/wallet-system", protect, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const member = await Member.findById(userId);
+
+    // Check Lipia config
+    const lipiaConfigured = !!process.env.LIPIA_API_KEY;
+
+    // Check recent payments
+    const recentPayments = await Payment.find({ member_id: userId })
+      .sort({ created_at: -1 })
+      .limit(3);
+
+    // Check savings
+    const Saving = (await import("../models/Saving.js")).default;
+    const recentSavings = await Saving.find({ member_id: userId })
+      .sort({ created_at: -1 })
+      .limit(3);
+
+    res.json({
+      success: true,
+      system: {
+        lipiaConfigured,
+        socketIOAvailable: !!req.app.get("io"),
+        memberFound: !!member,
+      },
+      member: member
+        ? {
+            name: member.name,
+            phone: member.phone,
+            total_savings: member.total_savings,
+          }
+        : null,
+      recentPayments: recentPayments.length,
+      recentSavings: recentSavings.length,
+      lastPayment: recentPayments[0] || null,
+      lastSaving: recentSavings[0] || null,
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

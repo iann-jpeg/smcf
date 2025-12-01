@@ -139,23 +139,41 @@ export const initiateLipiaPayment = async (
       // Extract M-Pesa specific error if available
       const errorMessage =
         data.error?.mpesaError?.errorMessage ||
+        data.error?.message ||
         data.customerMessage ||
         data.message ||
         "Payment initiation failed";
+
+      console.error("❌ Lipia API returned failure:", {
+        success: data.success,
+        message: data.message,
+        error: data.error,
+        customerMessage: data.customerMessage,
+      });
+
       throw new Error(errorMessage);
     }
 
     // Return normalized response with both formats for compatibility
-    const checkoutRequestId = data.data?.TransactionReference || data.data?.CheckoutRequestID || data.data?.checkoutRequestId;
-    const merchantRequestId = data.data?.MerchantRequestID || data.data?.merchantRequestId;
-    
+    const checkoutRequestId =
+      data.data?.TransactionReference ||
+      data.data?.CheckoutRequestID ||
+      data.data?.checkoutRequestId;
+    const merchantRequestId =
+      data.data?.MerchantRequestID || data.data?.merchantRequestId;
+
+    console.log("✅ Lipia STK Push Success! IDs:", {
+      checkoutRequestId,
+      merchantRequestId,
+    });
+
     return {
       success: true,
       data: data.data,
       checkoutRequestID: checkoutRequestId,
-      checkoutRequestId: checkoutRequestId,  // Also provide lowercase version
+      checkoutRequestId: checkoutRequestId, // Also provide lowercase version
       merchantRequestID: merchantRequestId,
-      merchantRequestId: merchantRequestId,  // Also provide lowercase version
+      merchantRequestId: merchantRequestId, // Also provide lowercase version
       responseCode: data.data?.ResponseCode || "0",
       responseDescription:
         data.data?.ResponseDescription || data.message || "Success",
@@ -192,18 +210,30 @@ export const queryLipiaPaymentStatus = async (transactionReference) => {
 
     const data = await response.json();
 
-    console.log("📥 Lipia status response (full):", JSON.stringify(data, null, 2));
+    console.log(
+      "📥 Lipia status response (full):",
+      JSON.stringify(data, null, 2)
+    );
     console.log("🔍 Response structure - data.data:", data.data);
-    console.log("🔍 Response structure - data.data.response:", data.data?.response);
+    console.log(
+      "🔍 Response structure - data.data.response:",
+      data.data?.response
+    );
 
     if (!data.success) {
-      console.log("⚠️ Lipia API returned success: false, message:", data.message);
+      console.log(
+        "⚠️ Lipia API returned success: false, message:",
+        data.message
+      );
       // Don't throw error for pending/not found - just return pending status
-      if (data.message?.includes("not found") || data.message?.includes("pending")) {
+      if (
+        data.message?.includes("not found") ||
+        data.message?.includes("pending")
+      ) {
         return {
           success: true,
           status: "pending",
-          message: "Payment still processing"
+          message: "Payment still processing",
         };
       }
       throw new Error(data.message || "Payment query failed");
@@ -214,14 +244,23 @@ export const queryLipiaPaymentStatus = async (transactionReference) => {
     console.log("📊 Payment data extracted:", paymentData);
 
     // Map status to our internal format - check multiple possible fields
-    const rawStatus = paymentData.Status || paymentData.status || paymentData.ResultCode;
+    const rawStatus =
+      paymentData.Status || paymentData.status || paymentData.ResultCode;
     console.log("🔍 Raw status value:", rawStatus);
-    
+
     let status = "pending";
-    if (rawStatus === "SUCCESS" || rawStatus === "0" || paymentData.ResultCode === "0") {
+    if (
+      rawStatus === "SUCCESS" ||
+      rawStatus === "0" ||
+      paymentData.ResultCode === "0"
+    ) {
       status = "completed";
       console.log("✅ Payment SUCCESS detected");
-    } else if (rawStatus === "FAILED" || rawStatus === "1" || paymentData.ResultCode === "1") {
+    } else if (
+      rawStatus === "FAILED" ||
+      rawStatus === "1" ||
+      paymentData.ResultCode === "1"
+    ) {
       status = "failed";
       console.log("❌ Payment FAILED detected");
     } else if (rawStatus === "CANCELLED" || paymentData.ResultCode === "1032") {
@@ -236,10 +275,16 @@ export const queryLipiaPaymentStatus = async (transactionReference) => {
       data: paymentData,
       status: status,
       resultCode: paymentData.ResultCode || rawStatus,
-      resultDescription: paymentData.ResultDesc || paymentData.ResultDescription || "Processing",
-      mpesaReceiptNumber: paymentData.MpesaReceiptNumber || paymentData.mpesaReceiptNumber,
-      transactionId: paymentData.TransactionID || paymentData.transactionId || paymentData.MpesaReceiptNumber,
-      transactionDate: paymentData.TransactionDate || paymentData.transactionDate,
+      resultDescription:
+        paymentData.ResultDesc || paymentData.ResultDescription || "Processing",
+      mpesaReceiptNumber:
+        paymentData.MpesaReceiptNumber || paymentData.mpesaReceiptNumber,
+      transactionId:
+        paymentData.TransactionID ||
+        paymentData.transactionId ||
+        paymentData.MpesaReceiptNumber,
+      transactionDate:
+        paymentData.TransactionDate || paymentData.transactionDate,
       phoneNumber: paymentData.Phone || paymentData.phone,
       amount: paymentData.Amount || paymentData.amount,
     };
