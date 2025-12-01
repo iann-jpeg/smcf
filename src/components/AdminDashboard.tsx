@@ -700,7 +700,7 @@ Thank you for your cooperation! 🙏`;
           },
           body: JSON.stringify({
             member_id: id,
-            amount: 204,
+            amount: 224,
             phone: member.phone,
             mpesa_transaction_id: `ADMIN-${Date.now()}`,
             payment_method: "admin_manual",

@@ -33,7 +33,7 @@ const paymentSchema = new mongoose.Schema({
   },
   payment_method: {
     type: String,
-    enum: ["mpesa", "lipia", "cash", "bank_transfer"],
+    enum: ["mpesa", "lipia", "cash", "bank_transfer", "admin_manual"],
     default: "lipia",
   },
   status: {
