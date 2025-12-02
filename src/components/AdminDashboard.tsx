@@ -98,7 +98,7 @@ const AdminDashboard = ({
 
   // Real-time data states
   const [recentPayments, setRecentPayments] = useState<any[]>([]);
-  const [allPayments, setAllPayments] = useState<any[]>([]); // Store ALL payments for calculation
+  const [allPayments, setAllPayments] = useState<any[]>([]);
   const [disbursements, setDisbursements] = useState<any[]>([]);
   const [loans, setLoans] = useState<any[]>([]);
   const [currentCycle, setCurrentCycle] = useState<any>(null);
@@ -114,35 +114,31 @@ const AdminDashboard = ({
     if (b?.position != null) return 1;
     return 0;
   });
+
+  // Calculate paid members from actual payment records for CURRENT CYCLE ONLY
+  const currentCycleNumber = currentCycle?.cycle_number || null;
   
-  // Calculate paid members from actual completed payments (more accurate than member status)
-  const currentCycleNumber = currentCycle?.cycle_number;
-  const completedPayments = Array.isArray(allPayments) 
-    ? allPayments.filter((p: any) => 
-        p.status === "completed" && 
-        (!currentCycleNumber || p.cycle_number === currentCycleNumber)
-      )
-    : [];
-  const uniquePaidMemberIds = new Set(
+  // Filter payments for current cycle only (same as Dashboard and MemberDashboard)
+  const currentCyclePayments = currentCycleNumber
+    ? allPayments.filter((p: any) => p.cycle_number === currentCycleNumber)
+    : allPayments;
+  
+  const completedPayments = currentCyclePayments.filter((p: any) => p.status === "completed");
+  const paidMemberIds = new Set(
     completedPayments.map((p: any) => p.member_id?._id || p.member_id)
   );
-  const paidMembersCount = uniquePaidMemberIds.size;
-  
-  // Also keep the old calculation for backward compatibility
   const paidMembers = orderedMembers.filter(
-    (m: any) => m && m.payment_status === "paid"
+    (m: any) => m && paidMemberIds.has(m._id || m.id)
   );
   const pendingMembers = orderedMembers.filter(
-    (m: any) => m && m.payment_status === "pending"
+    (m: any) => m && !paidMemberIds.has(m._id || m.id)
   );
   
-  console.log("💰 AdminDashboard payment calculation:", {
-    totalMembers: safeMembers.length,
-    paidMembersFromStatus: paidMembers.length,
-    paidMembersFromPayments: paidMembersCount,
-    completedPaymentsCount: completedPayments.length,
-    currentCycleNumber,
-  });
+  // Calculate total collected from current cycle payments only
+  const totalCollected = completedPayments.reduce(
+    (sum: number, p: any) => sum + (p.amount || 0),
+    0
+  );
 
   // Polling for real-time data
   const pollRef = useRef<NodeJS.Timeout | null>(null);
@@ -156,19 +152,19 @@ const AdminDashboard = ({
         },
       });
       const data = await res.json();
-      const allPaymentsData = Array.isArray(data) ? data : [];
+      const paymentsArray = Array.isArray(data) ? data : [];
       
-      // Store ALL payments for calculation
+      // Store all payments for statistics calculation
       setAllPayments((prev) => {
-        if (JSON.stringify(prev) !== JSON.stringify(allPaymentsData)) {
-          return allPaymentsData;
+        if (JSON.stringify(prev) !== JSON.stringify(paymentsArray)) {
+          return paymentsArray;
         }
         return prev;
       });
       
       // Store recent 5 for display
       setRecentPayments((prev) => {
-        const newData = allPaymentsData.slice(0, 5);
+        const newData = paymentsArray.slice(0, 5);
         if (JSON.stringify(prev) !== JSON.stringify(newData)) {
           return newData;
         }
@@ -272,93 +268,71 @@ const AdminDashboard = ({
     // Initial silent fetch
     fetchAllData();
 
-    // Silent background polling every 10 seconds for faster updates
+    // Silent background polling every 20 seconds
     pollRef.current = setInterval(() => {
       // Silent refresh - no loading indicators
       fetchAllData();
-    }, 10000);
+    }, 20000);
 
     // Socket.IO real-time event listeners
     const socket = (window as any).socket;
     if (socket) {
       console.log("👂 Admin Dashboard listening for real-time updates");
-      console.log("🔌 Socket connected:", socket.connected);
-      console.log("🆔 Socket ID:", socket.id);
 
-      // Listen for payment completion (new event name)
-      socket.on("payment:completed", (data: any) => {
-        console.log("💰 AdminDashboard received: payment:completed", data);
+      // Listen for payment completion
+      socket.on("paymentCompleted", (data: any) => {
+        console.log("💰 Payment completed:", data);
         toast({
           title: "Payment Received!",
-          description: `Payment of KES ${data.amount} received`,
+          description: `Payment of KES ${data.amount} received from member`,
         });
         fetchAllData(); // Refresh data
       });
 
-      // Listen for new payments
-      socket.on("payment:new", (data: any) => {
-        console.log("💰 AdminDashboard received: payment:new", data);
+      // Listen for member updates
+      socket.on("memberUpdated", (data: any) => {
+        console.log("� Member updated:", data);
         fetchAllData(); // Refresh data
       });
 
-      // Listen for cycle updates (new event name)
-      socket.on("cycle:updated", (data: any) => {
-        console.log("🔄 AdminDashboard received: cycle:updated", data);
-        fetchCurrentCycle(); // Refresh cycle data specifically
-        fetchAllData(); // Refresh all data
+      // Listen for cycle updates
+      socket.on("cycleUpdated", (data: any) => {
+        console.log("🔄 Cycle updated:", data);
+        fetchAllData(); // Refresh data
       });
 
       // Listen for payment failures
-      socket.on("payment:failed", (data: any) => {
-        console.log("❌ AdminDashboard received: payment:failed", data);
+      socket.on("paymentFailed", (data: any) => {
+        console.log("❌ Payment failed:", data);
         toast({
           title: "Payment Failed",
-          description: `Payment failed: ${data.message || "Unknown error"}`,
+          description: `Payment from member failed: ${data.reason}`,
           variant: "destructive",
         });
       });
 
-      // Listen for member additions
-      socket.on("member:new", (data: any) => {
-        console.log("👤 AdminDashboard received: member:new", data);
+      // Listen for disbursement completion
+      socket.on("disbursementCompleted", (data: any) => {
+        console.log("💸 Disbursement completed:", data);
+        toast({
+          title: "Disbursement Successful!",
+          description: `KES ${data.amount} sent to ${data.memberName}`,
+        });
         fetchAllData(); // Refresh data
       });
 
-      // Listen for new disbursements
-      socket.on("disbursement:new", (data: any) => {
-        console.log("💸 AdminDashboard received: disbursement:new", data);
+      // Listen for next recipient updates
+      socket.on("nextRecipientUpdated", (data: any) => {
+        console.log("➡️ Next recipient updated:", data);
         toast({
-          title: "Disbursement Processed!",
-          description: `KES ${data.amount} sent to ${data.recipient_id?.name || "member"}`,
+          title: "Next Recipient Updated",
+          description: `${
+            data.previousRecipient.name
+          } received payment. Next: ${
+            data.nextRecipient?.name || "All members paid"
+          }`,
         });
-        fetchDisbursements(); // Refresh disbursements
-        fetchCurrentCycle(); // Refresh current cycle
-      });
-
-      // Listen for disbursement updates
-      socket.on("disbursement:updated", (data: any) => {
-        console.log("💸 AdminDashboard received: disbursement:updated", data);
-        fetchDisbursements(); // Refresh disbursements
-      });
-
-      // Listen for cycle completion
-      socket.on("cycle:completed", (data: any) => {
-        console.log("✅ AdminDashboard received: cycle:completed", data);
-        toast({
-          title: "Cycle Completed",
-          description: `Cycle #${data.cycle_number} has been completed`,
-        });
-        fetchAllData(); // Refresh all data
-      });
-
-      // Listen for new cycle start
-      socket.on("cycle:new", (data: any) => {
-        console.log("🆕 AdminDashboard received: cycle:new", data);
-        toast({
-          title: "New Cycle Started!",
-          description: `Cycle #${data.cycle_number} has started with ${data.next_recipient?.name || 'recipient'} as the next recipient`,
-        });
-        fetchAllData(); // Refresh all data
+        fetchAllData(); // Refresh data
       });
     }
 
@@ -367,15 +341,12 @@ const AdminDashboard = ({
 
       // Cleanup Socket.IO listeners
       if (socket) {
-        socket.off("payment:completed");
-        socket.off("payment:new");
-        socket.off("cycle:updated");
-        socket.off("payment:failed");
-        socket.off("member:new");
-        socket.off("disbursement:new");
-        socket.off("disbursement:updated");
-        socket.off("cycle:completed");
-        socket.off("cycle:new");
+        socket.off("paymentCompleted");
+        socket.off("disbursementCompleted");
+        socket.off("memberUpdated");
+        socket.off("cycleUpdated");
+        socket.off("paymentFailed");
+        socket.off("nextRecipientUpdated");
       }
     };
   }, []);
@@ -491,7 +462,7 @@ Thank you for your cooperation! 🙏`;
     }
 
     const totalMembers = safeMembers.length;
-    const paidCount = paidMembersCount; // Use payment-based count for accuracy
+    const paidCount = paidMembers.length;
 
     if (paidCount < totalMembers) {
       toast({
@@ -722,7 +693,7 @@ Thank you for your cooperation! 🙏`;
           },
           body: JSON.stringify({
             member_id: id,
-            amount: 224,
+            amount: 204,
             phone: member.phone,
             mpesa_transaction_id: `ADMIN-${Date.now()}`,
             payment_method: "admin_manual",
@@ -938,7 +909,7 @@ Thank you for your cooperation! 🙏`;
                     const recipientId = currentCycle.next_recipient?._id || currentCycle.recipient_id?._id || currentCycle.recipient_id;
                     const recipientPhone = currentCycle.next_recipient?.phone;
                     const cycleId = currentCycle._id || currentCycle.id;
-                    const disbursementAmount = safeMembers.length * 224;
+                    const disbursementAmount = safeMembers.length * 204;
 
                     if (!recipientId || !cycleId || !recipientPhone) {
                       throw new Error("Missing recipient information");
@@ -963,25 +934,13 @@ Thank you for your cooperation! 🙏`;
                     const data = await response.json();
 
                     if (response.ok && data.success) {
-                      const newCycleInfo = data.newCycle ? 
-                        `New Cycle #${data.newCycle.cycle_number} started with ${data.newCycle.next_recipient?.name} as recipient` : 
-                        '';
-                      
                       toast({
-                        title: "✅ Disbursement Complete",
-                        description: data.message || `KES ${disbursementAmount.toLocaleString()} disbursed to ${currentCycle.next_recipient?.name || 'recipient'}. ${newCycleInfo}`,
+                        title: "Disbursement Recorded",
+                        description: `KES ${disbursementAmount.toLocaleString()} marked as disbursed to ${currentCycle.next_recipient?.name || 'recipient'}`,
                       });
-                      
-                      // Refresh all data to show new cycle
-                      await fetchDisbursements();
-                      await fetchCurrentCycle();
-                      await fetchPayments();
-                      await fetchAllData();
-                      
-                      // Refresh members to reset payment statuses
-                      if (typeof refreshMembers === "function") {
-                        await refreshMembers();
-                      }
+                      fetchDisbursements();
+                      fetchCurrentCycle();
+                      fetchAllData();
                     } else {
                       throw new Error(data.error || "Failed to record disbursement");
                     }
@@ -1138,7 +1097,7 @@ Thank you for your cooperation! 🙏`;
                     Amount Collected
                   </div>
                   <div className="text-2xl font-bold text-financial-success">
-                    KES {(currentCycle?.total_amount_collected || currentCycle?.data?.total_amount_collected || userData?.cycleData?.collectedAmount || 0).toLocaleString()}
+                    KES {totalCollected.toLocaleString()}
                   </div>
                 </div>
                 <div>
@@ -1146,7 +1105,7 @@ Thank you for your cooperation! 🙏`;
                     Target Amount
                   </div>
                   <div className="text-2xl font-bold">
-                    KES {((safeMembers.length || 14) * 204).toLocaleString()}
+                    KES {((safeMembers.length || 14) * 224).toLocaleString()}
                   </div>
                 </div>
                 <div>
@@ -1268,7 +1227,7 @@ Thank you for your cooperation! 🙏`;
                   {paidMembers.length}
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  KES {(paidMembers.length * 204).toLocaleString()} collected
+                  KES {totalCollected.toLocaleString()} collected
                 </div>
               </CardContent>
             </Card>
@@ -1285,7 +1244,7 @@ Thank you for your cooperation! 🙏`;
                   {pendingMembers.length}
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  KES {(pendingMembers.length * 204).toLocaleString()}{" "}
+                  KES {(pendingMembers.length * 224).toLocaleString()}{" "}
                   outstanding
                 </div>
               </CardContent>
@@ -1565,7 +1524,7 @@ Thank you for your cooperation! 🙏`;
                     <div className="text-2xl font-bold text-accent">
                       KES{" "}
                       {(
-                        safeMembers.length * 224 -
+                        safeMembers.length * 204 -
                         (currentCycle.total_amount_collected || 0)
                       ).toLocaleString()}
                     </div>
@@ -1691,7 +1650,7 @@ Thank you for your cooperation! 🙏`;
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Amount:</span>
                       <span className="font-semibold text-accent">
-                        KES {(safeMembers.length * 224).toLocaleString()}
+                        KES {(safeMembers.length * 204).toLocaleString()}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -1700,14 +1659,14 @@ Thank you for your cooperation! 🙏`;
                         variant={
                           currentCycle.disbursement_status === "completed"
                             ? "default"
-                            : paidMembersCount === safeMembers.length
+                            : currentCycle.paid_members_count === safeMembers.length
                             ? "default"
                             : "secondary"
                         }>
                         {currentCycle.disbursement_status ||
-                          (paidMembersCount === safeMembers.length
+                          (currentCycle.paid_members_count === safeMembers.length
                             ? "Ready"
-                            : `Waiting (${paidMembersCount}/${safeMembers.length})`)}
+                            : `Waiting (${currentCycle.paid_members_count}/${safeMembers.length})`)}
                       </Badge>
                     </div>
                   </div>
@@ -1727,7 +1686,7 @@ Thank you for your cooperation! 🙏`;
                             body: JSON.stringify({
                               cycle_id: currentCycle._id,
                               recipient_id: currentCycle.recipient_id._id || currentCycle.recipient_id,
-                              amount: safeMembers.length * 224,
+                              amount: safeMembers.length * 204,
                               method: "manual",
                               status: "completed",
                             }),
@@ -1755,14 +1714,9 @@ Thank you for your cooperation! 🙏`;
                       }}
                       className="w-full"
                       variant="default"
-                      disabled={paidMembersCount !== safeMembers.length}>
+                      disabled={currentCycle.paid_members_count !== safeMembers.length}>
                       <CheckCircle className="w-4 h-4 mr-2" />
                       Mark as Disbursed
-                      {paidMembersCount !== safeMembers.length && (
-                        <span className="ml-2 text-xs">
-                          ({paidMembersCount}/{safeMembers.length} paid)
-                        </span>
-                      )}
                     </Button>
                   )}
                   
@@ -1801,7 +1755,7 @@ Thank you for your cooperation! 🙏`;
                             body: JSON.stringify({
                               cycle_id: currentCycle._id,
                               recipient_id: currentCycle.recipient_id._id || currentCycle.recipient_id,
-                              amount: safeMembers.length * 224,
+                              amount: safeMembers.length * 204,
                               method: "manual",
                               status: "completed",
                             }),

@@ -105,30 +105,38 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
           ? paymentsResponse
           : [];
 
+        // Get current cycle number
+        const currentCycleNumber = cycleData?.data?.cycle_number || null;
+
+        // Filter payments for CURRENT CYCLE ONLY (same as AdminDashboard & MemberDashboard)
+        const currentCyclePayments = currentCycleNumber
+          ? paymentsData.filter((p: any) => p.cycle_number === currentCycleNumber)
+          : paymentsData;
+
         console.log("👥 Extracted data:", {
-          paymentsCount: paymentsData.length,
+          totalPayments: paymentsData.length,
+          currentCycleNumber,
+          currentCyclePayments: currentCyclePayments.length,
         });
 
-        // Calculate paid members from ALL PAYMENTS (same logic as MemberDashboard)
+        // Calculate paid members from CURRENT CYCLE PAYMENTS ONLY
         // Count unique members who have paid (completed payments only)
-        const uniquePaidMembers = Array.isArray(paymentsData)
-          ? new Set(
-              paymentsData
-                .filter((p: any) => p.status === "completed")
-                .map((p: any) => p.member_id?._id || p.member_id)
-            ).size
-          : 0;
+        const completedPayments = currentCyclePayments.filter((p: any) => p.status === "completed");
+        const uniquePaidMembers = new Set(
+          completedPayments.map((p: any) => p.member_id?._id || p.member_id)
+        ).size;
 
-        // Calculate total collected from ALL completed payments
-        const totalCollected = Array.isArray(paymentsData)
-          ? paymentsData
-              .filter((p: any) => p.status === "completed")
-              .reduce((sum: number, p: any) => sum + (p.amount || 0), 0)
-          : 0;
+        // Calculate total collected from current cycle completed payments
+        const totalCollected = completedPayments.reduce(
+          (sum: number, p: any) => sum + (p.amount || 0),
+          0
+        );
 
-        console.log("💰 Payment calculation (ALL PAYMENTS):", {
+        console.log("💰 Payment calculation (CURRENT CYCLE ONLY):", {
+          currentCycleNumber,
           totalPayments: paymentsData.length,
-          completedPayments: paymentsData.filter((p: any) => p.status === "completed").length,
+          currentCyclePayments: currentCyclePayments.length,
+          completedPayments: completedPayments.length,
           uniquePaidMembers,
           totalCollected,
         });
@@ -259,14 +267,6 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
       console.log("🔄 Dashboard received: cycle:updated", data);
       fetchData(); // Refresh cycle stats
     });
-    socket.on("cycle:completed", (data) => {
-      console.log("✅ Dashboard received: cycle:completed", data);
-      fetchData(); // Refresh cycle stats
-    });
-    socket.on("cycle:new", (data) => {
-      console.log("🆕 Dashboard received: cycle:new", data);
-      fetchData(); // Refresh cycle stats
-    });
     return () => {
       console.log("🧹 Dashboard: Cleaning up Socket.IO listeners");
       socket.off("announcement:new");
@@ -274,8 +274,6 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
       socket.off("payment:completed");
       socket.off("payment:new");
       socket.off("cycle:updated");
-      socket.off("cycle:completed");
-      socket.off("cycle:new");
     };
   }, []);
 

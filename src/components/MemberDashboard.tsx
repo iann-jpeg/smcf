@@ -148,27 +148,42 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
             : 14; // Default to 14 members if not available
 
         console.log("👥 Total members count:", totalMembersCount);
-        console.log("💰 Payments data:", payments);
+        console.log("💰 Payments data:", Array.isArray(payments) ? payments.length : 0, "payments");
 
-        // Calculate total collected from all payments
-        const totalCollected = Array.isArray(payments)
-          ? payments
-              .filter((p) => p.status === "completed")
-              .reduce((sum, p) => sum + (p.amount || 0), 0)
-          : 0;
+        // Get current cycle number
+        const currentCycleNumber = cycleData.success && cycleData.data
+          ? cycleData.data.cycle_number
+          : null;
+
+        // Use EXACT same calculation as AdminDashboard
+        const paymentsArray = Array.isArray(payments) ? payments : [];
+        
+        // Filter payments for CURRENT CYCLE ONLY (same as AdminDashboard)
+        const currentCyclePayments = currentCycleNumber
+          ? paymentsArray.filter((p: any) => p.cycle_number === currentCycleNumber)
+          : paymentsArray;
+        
+        const completedPayments = currentCyclePayments.filter((p: any) => p.status === "completed");
+        
+        console.log("🔢 Current cycle number:", currentCycleNumber);
+        console.log("💳 Total payments:", paymentsArray.length);
+        console.log("📍 Current cycle payments:", currentCyclePayments.length);
+        console.log("✅ Completed payments:", completedPayments.length);
+        
+        // Calculate total collected from actual completed payments
+        const totalCollected = completedPayments.reduce(
+          (sum: number, p: any) => sum + (p.amount || 0),
+          0
+        );
+
+        // Count unique members who have paid (same as AdminDashboard)
+        const paidMemberIds = new Set(
+          completedPayments.map((p: any) => p.member_id?._id || p.member_id)
+        );
+        const uniquePaidMembers = paidMemberIds.size;
 
         console.log("💵 Total collected:", totalCollected);
-
-        // Count unique members who have paid
-        const uniquePaidMembers = Array.isArray(payments)
-          ? new Set(
-              payments
-                .filter((p) => p.status === "completed")
-                .map((p) => p.member_id?._id || p.member_id)
-            ).size
-          : 0;
-
-        console.log("✅ Unique paid members:", uniquePaidMembers);
+        console.log("✅ Unique paid members:", uniquePaidMembers, "out of", totalMembersCount);
 
         // Update cycle data - always use fresh data from system
         const newData = {
@@ -182,14 +197,8 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
               : 0,
           paidMembers: uniquePaidMembers, // Always use calculated count from actual payments
           totalMembers: totalMembersCount || 0,
-          collectedAmount:
-            cycleData.success && cycleData.data
-              ? cycleData.data.total_amount_collected || totalCollected
-              : totalCollected,
-          totalAmount:
-            cycleData.success && cycleData.data
-              ? cycleData.data.expected_amount || totalMembersCount * 224
-              : totalMembersCount * 224,
+          collectedAmount: totalCollected, // Use calculated from actual payments
+          totalAmount: totalMembersCount * 224, // Expected amount based on member count
           cycleStartDate:
             cycleData.success && cycleData.data && cycleData.data.start_date
               ? new Date(cycleData.data.start_date).toLocaleDateString()
@@ -360,26 +369,6 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
           duration: announcement.priority === "high" ? 10000 : 6000,
         });
       });
-
-      // Listen for cycle completion
-      socket.on("cycle:completed", (data: any) => {
-        console.log("✅ MemberDashboard received: cycle:completed", data);
-        toast({
-          title: "Cycle Completed",
-          description: `Cycle #${data.cycle_number} has been completed. Disbursement made!`,
-        });
-        fetchData(); // Refresh all data
-      });
-
-      // Listen for new cycle start
-      socket.on("cycle:new", (data: any) => {
-        console.log("🆕 MemberDashboard received: cycle:new", data);
-        toast({
-          title: "New Cycle Started!",
-          description: `Cycle #${data.cycle_number} has started. Next recipient: ${data.next_recipient?.name || 'TBA'}`,
-        });
-        fetchData(); // Refresh all data
-      });
     }
 
     return () => {
@@ -393,8 +382,6 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         socket.off("loanStatusUpdated");
         socket.off("announcementCreated");
         socket.off("member:new");
-        socket.off("cycle:completed");
-        socket.off("cycle:new");
       }
     };
   }, [userData]);
