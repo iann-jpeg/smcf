@@ -86,6 +86,10 @@ const memberSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  wallet_balance: {
+    type: Number,
+    default: 0,
+  },
   registered_by_admin: {
     type: Boolean,
     default: true,
