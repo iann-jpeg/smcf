@@ -909,7 +909,7 @@ Thank you for your cooperation! 🙏`;
                     const recipientId = currentCycle.next_recipient?._id || currentCycle.recipient_id?._id || currentCycle.recipient_id;
                     const recipientPhone = currentCycle.next_recipient?.phone;
                     const cycleId = currentCycle._id || currentCycle.id;
-                    const disbursementAmount = safeMembers.length * 204;
+                    const disbursementAmount = safeMembers.length * 224;
 
                     if (!recipientId || !cycleId || !recipientPhone) {
                       throw new Error("Missing recipient information");
