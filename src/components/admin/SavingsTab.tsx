@@ -360,13 +360,13 @@ const AdminSavingsTab = () => {
                           <Badge variant="outline">#{member.position}</Badge>
                         </TableCell>
                         <TableCell className="font-semibold text-blue-600">
-                          KES {member.currentBalance.toLocaleString()}
+                          KES {(member.currentBalance || 0).toLocaleString()}
                         </TableCell>
                         <TableCell className="text-green-600">
-                          KES {member.totalDeposits.toLocaleString()}
+                          KES {(member.totalDeposits || 0).toLocaleString()}
                         </TableCell>
                         <TableCell className="text-blue-600">
-                          KES {member.totalInterestEarned.toLocaleString()}
+                          KES {(member.totalInterestEarned || 0).toLocaleString()}
                         </TableCell>
                         <TableCell>
                           {member.lastTransaction
