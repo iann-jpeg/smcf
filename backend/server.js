@@ -20,6 +20,9 @@ import memberRoutes from "./routes/members.js";
 import paymentRoutes from "./routes/payments.js";
 import savingsRoutes from "./routes/savings.js";
 
+// Import interest service
+import { startInterestCronJob } from "./services/interestService.js";
+
 const app = express();
 const httpServer = createServer(app);
 
@@ -48,8 +51,9 @@ const io = new Server(httpServer, {
   },
 });
 
-// Make io accessible to routes
+// Make io accessible to routes and globally for cron jobs
 app.set("io", io);
+global.io = io;
 
 // Middleware - CORS must be first
 app.use(
@@ -165,6 +169,9 @@ httpServer.listen(PORT, () => {
   console.log(`\n🚀 SMCF Backend Server running on port ${PORT}`);
   console.log(`📡 Environment: ${process.env.NODE_ENV || "development"}`);
   console.log(`🔌 Socket.IO enabled for real-time updates`);
+  
+  // Start interest calculation cron job
+  startInterestCronJob();
   console.log(`\n📚 API Documentation:`);
   console.log(`   Health: http://localhost:${PORT}/health`);
   console.log(`   Admin Setup: http://localhost:${PORT}/api/admin/setup`);
