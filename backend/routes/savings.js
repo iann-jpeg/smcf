@@ -10,6 +10,11 @@ router.get("/summary", protect, async (req, res) => {
   try {
     const memberId = req.member ? req.member._id : req.admin._id;
 
+    // Get member's wallet_balance from Member model
+    const Member = (await import("../models/Member.js")).default;
+    const member = await Member.findById(memberId).select("wallet_balance");
+    const currentBalance = member ? (member.wallet_balance || 0) : 0;
+
     // Get all completed savings transactions for this member
     const transactions = await Saving.find({ 
       member_id: memberId,
@@ -18,24 +23,18 @@ router.get("/summary", protect, async (req, res) => {
       created_at: -1,
     });
 
-    // Calculate current balance from most recent completed transaction
-    const currentBalance =
-      transactions.length > 0
-        ? transactions[0].balance_after
-        : 0;
-
     // Calculate totals only from completed transactions
     const totalDeposits = transactions
       .filter((t) => t.transaction_type === "deposit")
       .reduce((sum, t) => sum + t.amount, 0);
 
     const totalWithdrawals = transactions
-      .filter((t) => t.transaction_type === "withdrawal" && t.status === "completed")
+      .filter((t) => t.transaction_type === "withdrawal")
       .reduce((sum, t) => sum + t.amount, 0);
 
     const totalInterestEarned = transactions
       .filter((t) => t.transaction_type === "interest")
-      .reduce((sum, t) => sum + (t.interest_amount || 0), 0);
+      .reduce((sum, t) => sum + t.amount, 0);
 
     res.json({
       success: true,
@@ -115,9 +114,12 @@ router.post("/deposit", protect, async (req, res) => {
       status: "completed",
     });
 
-    // Update member's total savings
+    // Update member's total savings AND wallet_balance
     await Member.findByIdAndUpdate(memberId, {
-      $inc: { total_savings: amount },
+      $inc: { 
+        total_savings: amount,
+        wallet_balance: amount 
+      },
     });
 
     // Emit Socket.IO event
@@ -225,9 +227,12 @@ router.put("/:id/status", protect, adminOnly, async (req, res) => {
     // Handle withdrawal approval/rejection
     if (saving.transaction_type === "withdrawal") {
       if (status === "completed") {
-        // Deduct from member's total savings
+        // Deduct from member's total savings AND wallet_balance
         await Member.findByIdAndUpdate(saving.member_id, {
-          $inc: { total_savings: -saving.amount },
+          $inc: { 
+            total_savings: -saving.amount,
+            wallet_balance: -saving.amount 
+          },
         });
 
         // Balance was already set during withdrawal request, just update status
@@ -284,7 +289,7 @@ router.get("/admin/all", protect, adminOnly, async (req, res) => {
   try {
     // Get all members with their savings data
     const members = await Member.find().select(
-      "name member_id phone total_savings position"
+      "name member_id phone total_savings wallet_balance position"
     );
 
     // Get savings summary for each member (only completed transactions)
@@ -297,16 +302,20 @@ router.get("/admin/all", protect, adminOnly, async (req, res) => {
           created_at: -1,
         });
 
-        const currentBalance =
-          transactions.length > 0 ? transactions[0].balance_after : 0;
+        // Use wallet_balance from member model
+        const currentBalance = member.wallet_balance || 0;
 
         const totalDeposits = transactions
           .filter((t) => t.transaction_type === "deposit")
           .reduce((sum, t) => sum + t.amount, 0);
 
+        const totalWithdrawals = transactions
+          .filter((t) => t.transaction_type === "withdrawal")
+          .reduce((sum, t) => sum + t.amount, 0);
+
         const totalInterestEarned = transactions
           .filter((t) => t.transaction_type === "interest")
-          .reduce((sum, t) => sum + (t.interest_amount || 0), 0);
+          .reduce((sum, t) => sum + t.amount, 0);
 
         return {
           _id: member._id,
@@ -316,6 +325,7 @@ router.get("/admin/all", protect, adminOnly, async (req, res) => {
           position: member.position,
           currentBalance,
           totalDeposits,
+          totalWithdrawals,
           totalInterestEarned,
           lastTransaction:
             transactions.length > 0 ? transactions[0].created_at : null,

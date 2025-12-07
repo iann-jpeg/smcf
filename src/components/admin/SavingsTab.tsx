@@ -204,21 +204,21 @@ const AdminSavingsTab = () => {
     }
   };
 
-  // Calculate totals
+  // Calculate totals with safety checks
   const totalSavings = membersWithSavings.reduce(
-    (sum, m) => sum + m.currentBalance,
+    (sum, m) => sum + (m.currentBalance || 0),
     0
   );
   const totalDeposits = membersWithSavings.reduce(
-    (sum, m) => sum + m.totalDeposits,
+    (sum, m) => sum + (m.totalDeposits || 0),
     0
   );
   const totalInterest = membersWithSavings.reduce(
-    (sum, m) => sum + m.totalInterestEarned,
+    (sum, m) => sum + (m.totalInterestEarned || 0),
     0
   );
   const membersWithBalance = membersWithSavings.filter(
-    (m) => m.currentBalance > 0
+    (m) => (m.currentBalance || 0) > 0
   ).length;
 
   return (

@@ -287,7 +287,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
       return;
     }
 
-    if (amount > summary.currentBalance) {
+    if (amount > (summary.currentBalance || 0)) {
       toast({
         title: "Insufficient Balance",
         description: "You don't have enough balance for this withdrawal",
@@ -377,7 +377,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-blue-700 dark:text-blue-300">
-              KES {summary.currentBalance.toLocaleString()}
+              KES {(summary.currentBalance || 0).toLocaleString()}
             </div>
           </CardContent>
         </Card>
@@ -390,8 +390,8 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              KES {summary.totalDeposits.toLocaleString()}
+            <div className="text-2xl font-bold">
+              KES {(summary.totalDeposits || 0).toLocaleString()}
             </div>
           </CardContent>
         </Card>
@@ -405,7 +405,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">
-              KES {summary.totalInterestEarned.toLocaleString()}
+              KES {(summary.totalInterestEarned || 0).toLocaleString()}
             </div>
             <div className="text-xs text-muted-foreground mt-1">
               3% monthly rate
@@ -422,7 +422,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">
-              KES {summary.totalWithdrawals.toLocaleString()}
+              KES {(summary.totalWithdrawals || 0).toLocaleString()}
             </div>
           </CardContent>
         </Card>
@@ -447,7 +447,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
             onClick={() => setShowWithdrawDialog(true)}
             variant="outline"
             className="flex items-center gap-2"
-            disabled={summary.currentBalance === 0}>
+            disabled={(summary.currentBalance || 0) === 0}>
             <ArrowUpRight className="w-4 h-4" />
             Request Withdrawal
           </Button>
@@ -507,10 +507,10 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
                       {transaction.transaction_type === "withdrawal"
                         ? "-"
                         : "+"}
-                      KES {transaction.amount.toLocaleString()}
+                      KES {(transaction.amount || 0).toLocaleString()}
                     </div>
                     <div className="text-sm text-muted-foreground">
-                      Balance: KES {transaction.balance_after.toLocaleString()}
+                      Balance: KES {(transaction.balance_after || 0).toLocaleString()}
                     </div>
                     <div className="mt-1">
                       {getStatusBadge(transaction.status)}
@@ -727,10 +727,10 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
                 value={withdrawAmount}
                 onChange={(e) => setWithdrawAmount(e.target.value)}
                 min="1"
-                max={summary.currentBalance}
+                max={summary.currentBalance || 0}
               />
               <div className="text-sm text-muted-foreground mt-1">
-                Available: KES {summary.currentBalance.toLocaleString()}
+                Available: KES {(summary.currentBalance || 0).toLocaleString()}
               </div>
             </div>
             <div>

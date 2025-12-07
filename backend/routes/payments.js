@@ -337,10 +337,11 @@ async function pollLipiaPaymentStatus(
           notes: `Wallet deposit via M-Pesa - ${reference}`,
         });
 
-        // Update member's total_savings
+        // Update member's total_savings AND wallet_balance
         await Member.findByIdAndUpdate(memberId, {
           $inc: {
             total_savings: amount,
+            wallet_balance: amount,
           },
         });
 
@@ -748,9 +749,12 @@ router.post("/lipia-callback", async (req, res) => {
           notes: `Wallet deposit via M-Pesa - ${reference}`,
         });
 
-        // Update member's total_savings
+        // Update member's total_savings AND wallet_balance
         await Member.findByIdAndUpdate(payment.member_id, {
-          $inc: { total_savings: payment.amount },
+          $inc: { 
+            total_savings: payment.amount,
+            wallet_balance: payment.amount 
+          },
         });
 
         console.log("✅ Wallet deposit completed via callback:", {
