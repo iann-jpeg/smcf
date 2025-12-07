@@ -460,6 +460,18 @@ const Index = () => {
             {[
               {
                 icon: Wallet,
+                title: "Personal Savings Wallet",
+                description:
+                  "Save any amount in your personal wallet and earn 3% interest every month with zero maintenance fees.",
+              },
+              {
+                icon: TrendingUp,
+                title: "Member Loans",
+                description:
+                  "Access loans when you need them. Quick approval process with flexible repayment terms for active members.",
+              },
+              {
+                icon: Smartphone,
                 title: "M-Pesa Integration",
                 description:
                   "Seamless payments via M-Pesa STK Push. Direct payouts to your mobile money account.",
@@ -475,18 +487,6 @@ const Index = () => {
                 title: "Secure & Transparent",
                 description:
                   "OTP authentication, encrypted transactions, and complete audit trails for all activities.",
-              },
-              {
-                icon: TrendingUp,
-                title: "Real-time Tracking",
-                description:
-                  "Live payment status, contribution history, and upcoming payout notifications.",
-              },
-              {
-                icon: Smartphone,
-                title: "Mobile Responsive",
-                description:
-                  "Works perfectly on any device - desktop, tablet, or smartphone.",
               },
               {
                 icon: Clock,
@@ -511,8 +511,120 @@ const Index = () => {
         </div>
       </section>
 
+      {/* Loans & Savings Section */}
+      <section className="py-10 sm:py-16 md:py-20 px-3 sm:px-4">
+        <div className="container mx-auto max-w-6xl">
+          <h3 className="text-2xl sm:text-3xl font-bold text-center mb-8 sm:mb-12">
+            More Benefits for Members
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
+            {/* Savings Wallet Card */}
+            <Card className="overflow-hidden hover:shadow-financial transition-all duration-300">
+              <div className="bg-gradient-to-br from-financial-success/10 to-financial-success/5 p-6">
+                <Wallet className="w-12 h-12 sm:w-16 sm:h-16 text-financial-success mb-4" />
+                <CardTitle className="text-xl sm:text-2xl mb-3">Personal Savings Wallet</CardTitle>
+                <CardDescription className="text-base sm:text-lg mb-6">
+                  Save for your future with our personal wallet feature
+                </CardDescription>
+              </div>
+              <CardContent className="pt-6">
+                <ul className="space-y-3 sm:space-y-4">
+                  <li className="flex items-start gap-3">
+                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-financial-success/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <span className="text-financial-success text-sm sm:text-base">✓</span>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm sm:text-base">Save Any Amount</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">No minimum deposit required</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-financial-success/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <span className="text-financial-success text-sm sm:text-base">✓</span>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm sm:text-base">Earn 3% Interest Monthly</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Interest calculated and paid every month</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-financial-success/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <span className="text-financial-success text-sm sm:text-base">✓</span>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm sm:text-base">Zero Maintenance Fees</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Keep 100% of your interest earnings</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-financial-success/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <span className="text-financial-success text-sm sm:text-base">✓</span>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm sm:text-base">Withdraw Anytime</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Direct to M-Pesa, no restrictions</p>
+                    </div>
+                  </li>
+                </ul>
+              </CardContent>
+            </Card>
+
+            {/* Loans Card */}
+            <Card className="overflow-hidden hover:shadow-financial transition-all duration-300">
+              <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-6">
+                <TrendingUp className="w-12 h-12 sm:w-16 sm:h-16 text-primary mb-4" />
+                <CardTitle className="text-xl sm:text-2xl mb-3">Member Loans</CardTitle>
+                <CardDescription className="text-base sm:text-lg mb-6">
+                  Access financial support when you need it most
+                </CardDescription>
+              </div>
+              <CardContent className="pt-6">
+                <ul className="space-y-3 sm:space-y-4">
+                  <li className="flex items-start gap-3">
+                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <span className="text-primary text-sm sm:text-base">✓</span>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm sm:text-base">Quick Approval</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Get approved within 24 hours</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <span className="text-primary text-sm sm:text-base">✓</span>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm sm:text-base">Flexible Repayment</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Choose terms that work for you</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <span className="text-primary text-sm sm:text-base">✓</span>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm sm:text-base">Competitive Rates</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Fair interest rates for members</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <span className="text-primary text-sm sm:text-base">✓</span>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm sm:text-base">Build Credit History</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Increase your loan limit over time</p>
+                    </div>
+                  </li>
+                </ul>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
+
       {/* How It Works */}
-      <section className="py-20 px-4">
+      <section className="py-20 px-4 bg-muted/30">
         <div className="container mx-auto max-w-4xl">
           <h3 className="text-3xl font-bold text-center mb-12">
             How SMCF Works
