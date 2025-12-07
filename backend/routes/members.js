@@ -113,7 +113,7 @@ router.post("/", protect, adminOnly, async (req, res) => {
       name,
       phone,
       password,
-      position: position || nextNumber,
+      position: position || (maxNumber + 1 + attempts),
       registered_by_admin: true,
       status: "active",
     };
