@@ -70,6 +70,8 @@ const AddMemberDialog = ({
         join_date: new Date().toISOString(),
       };
 
+      console.log("📤 Sending member data:", payload);
+      
       const res = await fetch(`${API_BASE}/api/members`, {
         method: "POST",
         headers: {
@@ -78,8 +80,15 @@ const AddMemberDialog = ({
         },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error("Failed to create member");
-      const created = await res.json();
+      
+      const responseData = await res.json();
+      console.log("📥 Server response:", responseData);
+      
+      if (!res.ok) {
+        throw new Error(responseData.error || "Failed to create member");
+      }
+      
+      const created = responseData.data || responseData;
 
       // Notify parent and close
       onMemberAdded(created);
@@ -96,12 +105,12 @@ const AddMemberDialog = ({
         initialContribution: "200",
       });
       onOpenChange(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Add member failed", err);
       setIsProcessing(false);
       toast({
         title: "Add Failed",
-        description: "Could not add member",
+        description: err.message || "Could not add member",
         variant: "destructive",
       });
     }

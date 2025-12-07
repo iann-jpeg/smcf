@@ -68,51 +68,16 @@ router.post("/", protect, adminOnly, async (req, res) => {
       });
     }
 
-    // Check if all members have paid - calculate from actual completed payments
-    const Payment = (await import("../models/Payment.js")).default;
-    
-    // Get all members (not just active, since we count all in frontend)
-    const allMembers = await Member.find();
-    const totalMembers = allMembers.length;
-    
-    console.log("🔍 Disbursement validation for cycle #" + cycle.cycle_number);
-    console.log("   Total members:", totalMembers);
-    
-    // Get ALL completed payments (regardless of cycle_number for now)
-    const allCompletedPayments = await Payment.find({
-      status: "completed",
-    });
-    
-    console.log("   All completed payments:", allCompletedPayments.length);
-    
-    // Count unique members who have made completed payments
-    const uniquePaidMembers = new Set(
-      allCompletedPayments.map((p) => {
-        const memberId = p.member_id?._id || p.member_id;
-        return memberId ? memberId.toString() : null;
-      }).filter(id => id !== null)
-    ).size;
-    
-    console.log("   Unique paid members (all payments):", uniquePaidMembers);
-    console.log("   Cycle stored count:", cycle.paid_members_count);
-    console.log("   Validation result:", uniquePaidMembers >= totalMembers ? "✅ PASS" : "❌ FAIL");
-    
-    // Validate that enough members have paid
-    if (uniquePaidMembers < totalMembers) {
-      console.error(`❌ Not enough members paid: ${uniquePaidMembers}/${totalMembers}`);
+    // Check if all members have paid
+    const totalMembers = await Member.countDocuments();
+    if (cycle.paid_members_count < totalMembers) {
       return res.status(400).json({
         success: false,
-        error: `Cannot disburse - only ${uniquePaidMembers}/${totalMembers} members have paid`,
-        details: {
-          paid: uniquePaidMembers,
-          total: totalMembers,
-          cycleNumber: cycle.cycle_number,
-          paymentsFound: allCompletedPayments.length,
-        }
+        error: "Cannot disburse - not all members have paid",
+        paid: cycle.paid_members_count,
+        total: totalMembers,
       });
     }
-    
-    console.log("✅ All members have paid, proceeding with disbursement");
 
     // Create disbursement record
     const disbursement = await Disbursement.create({
@@ -131,76 +96,23 @@ router.post("/", protect, adminOnly, async (req, res) => {
     disbursement.mpesa_transaction_id = `DISB${Date.now()}`;
     await disbursement.save();
 
-    // Update cycle to completed
-    cycle.status = "completed";
+    // Update cycle status
+    cycle.disbursement_status = "completed";
     cycle.disbursement_date = new Date();
+    cycle.recipient_id = recipient_id;
     await cycle.save();
 
-    // Update recipient member record
+    // Update member record
     await Member.findByIdAndUpdate(recipient_id, {
       $inc: { total_received: amount },
       last_payout_date: new Date(),
       last_payout_amount: amount,
-      disbursement_status: "received",
     });
 
-    console.log("🔄 Current cycle completed, starting new cycle...");
-
-    // ===== AUTO-START NEW CYCLE =====
-    // Find next recipient in the queue
-    const currentRecipient = await Member.findById(recipient_id);
-    const currentPosition = currentRecipient?.position || 0;
-
-    // Get next member by position
-    let nextRecipient = await Member.findOne({
-      position: { $gt: currentPosition },
-      status: "active",
-    }).sort({ position: 1 });
-
-    // If no next recipient, cycle back to first member
-    if (!nextRecipient) {
-      nextRecipient = await Member.findOne({ status: "active" }).sort({ position: 1 });
-    }
-
-    if (!nextRecipient) {
-      console.error("❌ No next recipient found for new cycle");
-      return res.status(500).json({
-        success: false,
-        error: "Disbursement recorded but failed to start new cycle - no recipients available"
-      });
-    }
-
-    // Create new cycle
-    const newCycleNumber = cycle.cycle_number + 1;
-    const newCycle = await Cycle.create({
-      cycle_number: newCycleNumber,
-      start_date: new Date(),
-      end_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000), // 5 days
-      status: "active",
-      total_members: totalMembers,
-      next_recipient: nextRecipient._id,
-      paid_members_count: 0,
-      total_amount_collected: 0,
-    });
-
-    // Reset all members' payment status for new cycle
-    await Member.updateMany(
-      {},
-      { 
-        payment_status: "pending", 
-        payment_date: null,
-        amount: 0
-      }
-    );
-
-    console.log(`✅ New cycle #${newCycleNumber} started with recipient: ${nextRecipient.name}`);
-
-    // Emit socket events for real-time updates
+    // Emit socket event
     if (req.app.get("io")) {
       req.app.get("io").emit("disbursement:new", disbursement);
-      req.app.get("io").emit("cycle:completed", cycle);
-      req.app.get("io").emit("cycle:new", newCycle);
-      req.app.get("io").emit("cycle:updated", newCycle);
+      req.app.get("io").emit("cycle:updated", cycle);
     }
 
     const populatedDisbursement = await Disbursement.findById(disbursement._id)
@@ -208,15 +120,7 @@ router.post("/", protect, adminOnly, async (req, res) => {
       .populate("cycle_id", "cycle_number")
       .populate("initiated_by", "name");
 
-    const populatedNewCycle = await Cycle.findById(newCycle._id)
-      .populate("next_recipient", "name phone member_id position");
-
-    res.status(201).json({ 
-      success: true, 
-      data: populatedDisbursement,
-      newCycle: populatedNewCycle,
-      message: `Disbursement completed and Cycle #${newCycleNumber} started with ${nextRecipient.name} as recipient`
-    });
+    res.status(201).json({ success: true, data: populatedDisbursement });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

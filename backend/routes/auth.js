@@ -46,15 +46,28 @@ router.post("/login", async (req, res) => {
     }
 
     // Check if member exists and was registered by admin
+    console.log("🔍 Looking for member with phone:", phone);
     const member = await Member.findOne({ phone }).select("+password");
+    
     if (!member) {
+      console.log("❌ Member not found with phone:", phone);
       return res.status(403).json({
         success: false,
         error: "Member not found. Please contact admin to register you first.",
       });
     }
 
+    console.log("✅ Member found:", {
+      member_id: member.member_id,
+      name: member.name,
+      phone: member.phone,
+      status: member.status,
+      registered_by_admin: member.registered_by_admin,
+      has_password: !!member.password,
+    });
+
     if (!member.registered_by_admin) {
+      console.log("❌ Member not registered by admin");
       return res.status(403).json({
         success: false,
         error: "Your account needs to be activated by an admin.",
@@ -62,44 +75,55 @@ router.post("/login", async (req, res) => {
     }
 
     if (member.status !== "active") {
+      console.log("❌ Member status is not active:", member.status);
       return res.status(403).json({
         success: false,
         error: "Your account is not active. Please contact admin.",
       });
     }
 
+    console.log("🔐 Comparing passwords...");
     const isPasswordValid = await member.comparePassword(password);
+    console.log("Password valid:", isPasswordValid);
+    
     if (!isPasswordValid) {
+      console.log("❌ Invalid password for member:", member.member_id);
       return res.status(401).json({
         success: false,
         error: "Invalid credentials",
       });
     }
 
+    console.log("✅ Member login successful, generating token...");
     const token = generateToken(member._id, "member");
+    
+    const userData = {
+      _id: member._id,
+      id: member._id,
+      name: member.name,
+      phone: member.phone,
+      phoneNumber: member.phone,
+      member_id: member.member_id,
+      memberId: member.member_id,
+      status: member.status,
+      position: member.position,
+      payment_status: member.payment_status || "pending",
+      total_contributed: member.total_contributed || 0,
+      total_received: member.total_received || 0,
+      monthly_contribution: member.monthly_contribution || 224,
+      join_date: member.join_date,
+    };
+    
+    console.log("📤 Sending member login response:", { ...userData, token: "[HIDDEN]" });
+    
     res.json({
       success: true,
       role: "member",
       token,
-      user: {
-        _id: member._id,
-        id: member._id,
-        name: member.name,
-        phone: member.phone,
-        phoneNumber: member.phone,
-        member_id: member.member_id,
-        memberId: member.member_id,
-        status: member.status,
-        position: member.position,
-        payment_status: member.payment_status || "pending",
-        total_contributed: member.total_contributed || 0,
-        total_received: member.total_received || 0,
-        monthly_contribution: member.monthly_contribution || 204,
-        join_date: member.join_date,
-      },
+      user: userData,
     });
   } catch (error) {
-    console.error("Login error:", error);
+    console.error("❌ Login error:", error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

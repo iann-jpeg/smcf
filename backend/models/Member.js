@@ -23,7 +23,8 @@ const memberSchema = new mongoose.Schema({
   },
   id_number: {
     type: String,
-    required: true,
+    required: false,
+    default: "",
   },
   status: {
     type: String,
@@ -41,7 +42,7 @@ const memberSchema = new mongoose.Schema({
   },
   monthly_contribution: {
     type: Number,
-    default: 204,
+    default: 224, // Updated from 204 to 224
   },
   join_date: {
     type: Date,
@@ -56,7 +57,7 @@ const memberSchema = new mongoose.Schema({
   },
   total_contributed: {
     type: Number,
-    default: 0,
+    default: 0, // Members start with zero contributions
   },
   total_received: {
     type: Number,
