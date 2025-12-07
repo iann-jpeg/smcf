@@ -32,9 +32,20 @@ router.get("/:id", protect, async (req, res) => {
 // Create member (admin only - this is how members are registered)
 router.post("/", protect, adminOnly, async (req, res) => {
   try {
+    console.log("📝 Creating new member with request body:", req.body);
     const { name, phone, id_number, position, password } = req.body;
 
+    // Validate required fields
+    if (!name || !phone) {
+      console.error("❌ Missing required fields - name or phone");
+      return res.status(400).json({
+        success: false,
+        error: "Name and phone are required",
+      });
+    }
+
     if (!password) {
+      console.error("❌ Password is missing");
       return res.status(400).json({
         success: false,
         error: "Password is required",
@@ -44,26 +55,79 @@ router.post("/", protect, adminOnly, async (req, res) => {
     // Check if member with phone already exists
     const existingMember = await Member.findOne({ phone });
     if (existingMember) {
+      console.error("❌ Member with phone already exists:", phone);
       return res.status(400).json({
         success: false,
         error: "Member with this phone number already exists",
       });
     }
 
-    // Generate unique member ID
-    const count = await Member.countDocuments();
-    const member_id = `SMCF-${(count + 1).toString().padStart(4, "0")}`;
+    // Generate unique member ID - find ALL member IDs and get the highest number
+    const allMembers = await Member.find().select("member_id").lean();
+    
+    console.log("📊 All existing member IDs:", allMembers.map(m => m.member_id));
+    
+    let maxNumber = 0;
+    allMembers.forEach(member => {
+      if (member.member_id) {
+        const match = member.member_id.match(/SMCF-(\d+)/);
+        if (match) {
+          const num = parseInt(match[1]);
+          if (num > maxNumber) {
+            maxNumber = num;
+          }
+        }
+      }
+    });
+    
+    // Try to find a unique ID, incrementing until we find one that doesn't exist
+    let member_id = null;
+    let attempts = 0;
+    const maxAttempts = 10;
+    
+    while (!member_id && attempts < maxAttempts) {
+      const tryNumber = maxNumber + 1 + attempts;
+      const tryId = `SMCF-${tryNumber.toString().padStart(4, "0")}`;
+      
+      const exists = await Member.findOne({ member_id: tryId });
+      if (!exists) {
+        member_id = tryId;
+        console.log("✅ Found unique member_id:", member_id, "after", attempts + 1, "attempts");
+      } else {
+        console.log("⚠️ ID", tryId, "already exists, trying next...");
+        attempts++;
+      }
+    }
+    
+    if (!member_id) {
+      console.error("❌ Could not generate unique member_id after", maxAttempts, "attempts");
+      return res.status(500).json({
+        success: false,
+        error: "Could not generate unique member ID. Please try again.",
+      });
+    }
 
-    const member = await Member.create({
+    // Create member data object
+    const memberData = {
       member_id,
       name,
       phone,
       password,
-      id_number,
-      position: position || count + 1,
+      position: position || nextNumber,
       registered_by_admin: true,
       status: "active",
-    });
+    };
+
+    // Only add id_number if it's provided and not empty
+    if (id_number && id_number.trim() !== "") {
+      memberData.id_number = id_number;
+    }
+
+    console.log("📦 Creating member with data:", { ...memberData, password: "[HIDDEN]" });
+
+    const member = await Member.create(memberData);
+
+    console.log("✅ Member created successfully with ID:", member._id);
 
     // Emit socket event
     if (req.app.get("io")) {
@@ -72,6 +136,17 @@ router.post("/", protect, adminOnly, async (req, res) => {
 
     res.status(201).json({ success: true, data: member });
   } catch (error) {
+    console.error("❌ Error creating member:");
+    console.error("Error message:", error.message);
+    console.error("Error stack:", error.stack);
+    if (error.code === 11000) {
+      // Duplicate key error
+      console.error("Duplicate key error details:", error.keyValue);
+      return res.status(400).json({
+        success: false,
+        error: "A member with this phone number or member ID already exists",
+      });
+    }
     res.status(500).json({ success: false, error: error.message });
   }
 });
