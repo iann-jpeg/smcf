@@ -95,8 +95,11 @@ const AdminDashboard = ({
   const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
   const [showAnnouncementDialog, setShowAnnouncementDialog] = useState(false);
   const [showProfileDialog, setShowProfileDialog] = useState(false);
+  const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [editingMember, setEditingMember] = useState<string | null>(null);
   const [editedMemberData, setEditedMemberData] = useState<any>({});
+  const [contributionAmount, setContributionAmount] = useState<number>(224);
+  const [newContributionAmount, setNewContributionAmount] = useState<string>("");
 
   // Real-time data states
   const [recentPayments, setRecentPayments] = useState<any[]>([]);
@@ -359,6 +362,73 @@ const AdminDashboard = ({
     }
   };
 
+  const updateContributionAmount = async () => {
+    const amount = Number(newContributionAmount);
+    if (!amount || amount <= 0) {
+      toast({
+        title: 'Invalid Amount',
+        description: 'Please enter a valid contribution amount',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to change the monthly contribution from KES ${contributionAmount} to KES ${amount}? This will affect all future payments and cycles.`)) {
+      return;
+    }
+
+    try {
+      // Update all members' monthly_contribution
+      const updatePromises = safeMembers.map(member => 
+        fetch(`${API_BASE}/api/members/${member._id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...authService.getAuthHeaders(),
+          },
+          body: JSON.stringify({
+            monthly_contribution: amount,
+          }),
+        })
+      );
+
+      await Promise.all(updatePromises);
+
+      // Update current cycle if exists
+      if (currentCycle?._id) {
+        await fetch(`${API_BASE}/api/cycles/${currentCycle._id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...authService.getAuthHeaders(),
+          },
+          body: JSON.stringify({
+            monthly_contribution: amount,
+            total_amount_expected: safeMembers.length * amount,
+          }),
+        });
+      }
+
+      setContributionAmount(amount);
+      setNewContributionAmount("");
+      setShowSettingsDialog(false);
+      refreshMembers();
+      fetchCurrentCycle();
+
+      toast({
+        title: 'Contribution Amount Updated',
+        description: `Monthly contribution changed to KES ${amount.toLocaleString()} for all members`,
+      });
+    } catch (error: any) {
+      console.error('Update contribution amount failed:', error);
+      toast({
+        title: 'Update Failed',
+        description: error.message || 'Could not update contribution amount',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const fetchLoans = async () => {
     try {
       const res = await fetch(`${API_BASE}/api/loans`, {
@@ -426,6 +496,13 @@ const AdminDashboard = ({
       await refreshMembers();
     }
   };
+
+  // Load contribution amount from members
+  useEffect(() => {
+    if (safeMembers.length > 0 && safeMembers[0].monthly_contribution) {
+      setContributionAmount(safeMembers[0].monthly_contribution);
+    }
+  }, [safeMembers]);
 
   useEffect(() => {
     // Initial silent fetch
@@ -497,6 +574,23 @@ const AdminDashboard = ({
         });
         fetchAllData(); // Refresh data
       });
+
+      // Listen for loan status updates (including repayments)
+      socket.on("loanStatusUpdated", (data: any) => {
+        console.log("💰 Loan status updated:", data);
+        const statusMessages: Record<string, string> = {
+          approved: `Loan of KES ${data.amount.toLocaleString()} approved for ${data.memberName}`,
+          rejected: `Loan request from ${data.memberName} was rejected`,
+          disbursed: `Loan of KES ${data.amount.toLocaleString()} disbursed to ${data.memberName}`,
+          repaid: `${data.memberName} has repaid their loan of KES ${data.amount.toLocaleString()}`,
+        };
+
+        toast({
+          title: `Loan ${data.status.charAt(0).toUpperCase() + data.status.slice(1)}`,
+          description: statusMessages[data.status] || `Loan status updated to ${data.status}`,
+        });
+        fetchAllData(); // Refresh all data including loans
+      });
     }
 
     return () => {
@@ -549,7 +643,7 @@ const AdminDashboard = ({
 
 ⏰ *${daysRemaining} ${daysRemaining === 1 ? "day" : "days"} remaining* to send your contribution!
 
-💰 *Amount Due:* KES 224
+💰 *Amount Due:* KES ${contributionAmount}
 
 📋 *Members who haven't paid yet:*
 ${unpaidList}
@@ -565,7 +659,7 @@ Hi ${memberName},
 
 ⏰ You have *${daysRemaining} ${daysRemaining === 1 ? "day" : "days"} remaining* to send your contribution!
 
-💰 *Amount Due:* KES 224
+💰 *Amount Due:* KES ${contributionAmount}
 
 ⚠️ Please send your contribution before the deadline to avoid penalties.
 
@@ -856,7 +950,7 @@ Thank you for your cooperation! 🙏`;
           },
           body: JSON.stringify({
             member_id: id,
-            amount: 224,
+            amount: contributionAmount,
             phone: member.phone,
             mpesa_transaction_id: `ADMIN-${Date.now()}`,
             payment_method: "admin_manual",
@@ -873,7 +967,7 @@ Thank you for your cooperation! 🙏`;
 
         toast({
           title: "Payment Recorded",
-          description: `KES 224 contribution recorded for ${member.name}. Member status updated to PAID.`,
+          description: `KES ${contributionAmount} contribution recorded for ${member.name}. Member status updated to PAID.`,
         });
       } else {
         // When marking as pending, just update the member status
@@ -1030,6 +1124,18 @@ Thank you for your cooperation! 🙏`;
             <span className="sm:hidden">Profile</span>
           </Button>
           <Button
+            variant="outline"
+            onClick={() => {
+              setNewContributionAmount(contributionAmount.toString());
+              setShowSettingsDialog(true);
+            }}
+            className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm"
+            size="sm">
+            <Settings className="w-3 h-3 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Settings</span>
+            <span className="sm:hidden">Settings</span>
+          </Button>
+          <Button
             variant="destructive"
             onClick={onLogout}
             className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm"
@@ -1072,7 +1178,7 @@ Thank you for your cooperation! 🙏`;
                     const recipientId = currentCycle.next_recipient?._id || currentCycle.recipient_id?._id || currentCycle.recipient_id;
                     const recipientPhone = currentCycle.next_recipient?.phone;
                     const cycleId = currentCycle._id || currentCycle.id;
-                    const disbursementAmount = safeMembers.length * 224;
+                    const disbursementAmount = safeMembers.length * contributionAmount;
 
                     if (!recipientId || !cycleId || !recipientPhone) {
                       throw new Error("Missing recipient information");
@@ -1268,7 +1374,7 @@ Thank you for your cooperation! 🙏`;
                     Target Amount
                   </div>
                   <div className="text-2xl font-bold">
-                    KES {((safeMembers.length || 14) * 224).toLocaleString()}
+                    KES {((safeMembers.length || 14) * contributionAmount).toLocaleString()}
                   </div>
                 </div>
                 <div>
@@ -1407,7 +1513,7 @@ Thank you for your cooperation! 🙏`;
                   {pendingMembers.length}
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  KES {(pendingMembers.length * 224).toLocaleString()}{" "}
+                  KES {(pendingMembers.length * contributionAmount).toLocaleString()}{" "}
                   outstanding
                 </div>
               </CardContent>
@@ -1813,7 +1919,7 @@ Thank you for your cooperation! 🙏`;
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Amount:</span>
                       <span className="font-semibold text-accent">
-                        KES {(safeMembers.length * 224).toLocaleString()}
+                        KES {(safeMembers.length * contributionAmount).toLocaleString()}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -2071,6 +2177,88 @@ Thank you for your cooperation! 🙏`;
         open={showAnnouncementDialog}
         onOpenChange={setShowAnnouncementDialog}
       />
+
+      {/* Settings Dialog */}
+      <Dialog open={showSettingsDialog} onOpenChange={setShowSettingsDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Settings className="w-5 h-5" />
+              System Settings
+            </DialogTitle>
+            <DialogDescription>
+              Configure system-wide settings for SMCF
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6 py-4">
+            {/* Current Contribution Amount */}
+            <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
+              <div className="text-sm text-muted-foreground mb-1">Current Monthly Contribution</div>
+              <div className="text-3xl font-bold text-primary">KES {contributionAmount.toLocaleString()}</div>
+            </div>
+
+            {/* Update Contribution Amount */}
+            <div className="space-y-3">
+              <Label htmlFor="new-contribution">New Monthly Contribution Amount (KES)</Label>
+              <Input
+                id="new-contribution"
+                type="number"
+                placeholder="Enter new amount (e.g., 250)"
+                value={newContributionAmount}
+                onChange={(e) => setNewContributionAmount(e.target.value)}
+                min="0"
+              />
+              <p className="text-xs text-muted-foreground">
+                This will update the contribution amount for all members and future cycles. Current payments will not be affected.
+              </p>
+            </div>
+
+            {/* Impact Summary */}
+            {newContributionAmount && Number(newContributionAmount) > 0 && (
+              <div className="p-4 bg-accent/10 border border-accent/20 rounded-lg space-y-2">
+                <div className="text-sm font-medium">Impact Summary:</div>
+                <div className="text-sm space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Members affected:</span>
+                    <span className="font-medium">{safeMembers.length}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">New cycle total:</span>
+                    <span className="font-medium">KES {(safeMembers.length * Number(newContributionAmount)).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Change:</span>
+                    <span className={`font-medium ${Number(newContributionAmount) > contributionAmount ? 'text-red-600' : 'text-green-600'}`}>
+                      {Number(newContributionAmount) > contributionAmount ? '+' : ''}KES {(Number(newContributionAmount) - contributionAmount).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setShowSettingsDialog(false);
+                  setNewContributionAmount("");
+                }}>
+                Cancel
+              </Button>
+              <Button
+                variant="default"
+                className="flex-1"
+                onClick={updateContributionAmount}
+                disabled={!newContributionAmount || Number(newContributionAmount) <= 0}>
+                <Save className="w-4 h-4 mr-2" />
+                Update Amount
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -30,6 +30,8 @@ import {
   Clock,
   CreditCard,
   DollarSign,
+  Download,
+  FileSpreadsheet,
   Loader2,
   PiggyBank,
   Shield,
@@ -38,6 +40,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import smcfLogo from '@/assets/smcf-logo.png';
 
 interface MemberWalletProps {
   userData: any;
@@ -335,6 +338,167 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
     }
   };
 
+  const generateWalletPDF = () => {
+    const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>SMCF Wallet Statement</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; color: #333; }
+    .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #2563eb; padding-bottom: 20px; }
+    .logo { max-width: 120px; height: auto; margin: 0 auto 15px; display: block; }
+    .header h1 { color: #2563eb; margin: 0; font-size: 28px; }
+    .header p { color: #666; margin: 5px 0; }
+    .section { margin: 30px 0; }
+    .section h2 { color: #2563eb; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; }
+    .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin: 20px 0; }
+    .stat-card { background: #f9fafb; padding: 15px; border-radius: 8px; border-left: 4px solid #2563eb; }
+    .stat-label { font-size: 12px; color: #666; text-transform: uppercase; }
+    .stat-value { font-size: 20px; font-weight: bold; color: #2563eb; margin-top: 5px; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th { background: #2563eb; color: white; padding: 12px; text-align: left; font-size: 12px; }
+    td { padding: 10px; border-bottom: 1px solid #e5e7eb; font-size: 11px; }
+    tr:nth-child(even) { background: #f9fafb; }
+    .type-deposit { color: #16a34a; font-weight: bold; }
+    .type-withdrawal { color: #dc2626; font-weight: bold; }
+    .type-interest { color: #2563eb; font-weight: bold; }
+    .footer { margin-top: 40px; text-align: center; color: #666; font-size: 12px; border-top: 2px solid #e5e7eb; padding-top: 20px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <img src="${smcfLogo}" alt="SMCF Logo" class="logo" />
+    <h1>SMCF - Smart Moves Cash Flow</h1>
+    <p>Wallet Statement</p>
+    <p>Member: ${userData?.name || 'Member'} (${userData?.member_id || '-'})</p>
+    <p>Generated on: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p>
+  </div>
+
+  <div class="section">
+    <h2>Account Summary</h2>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Current Balance</div>
+        <div class="stat-value">KES ${(summary.currentBalance || 0).toLocaleString()}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Deposits</div>
+        <div class="stat-value">KES ${(summary.totalDeposits || 0).toLocaleString()}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Withdrawals</div>
+        <div class="stat-value">KES ${(summary.totalWithdrawals || 0).toLocaleString()}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Interest Earned</div>
+        <div class="stat-value">KES ${(summary.totalInterestEarned || 0).toLocaleString()}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Recent Transactions</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Type</th>
+          <th>Amount</th>
+          <th>Balance After</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${transactions.slice(0, 20).map(txn => `
+          <tr>
+            <td>${new Date(txn.date || txn.created_at).toLocaleDateString()}</td>
+            <td class="type-${txn.type}">${(txn.type || 'transaction').toUpperCase()}</td>
+            <td>KES ${(txn.amount || 0).toLocaleString()}</td>
+            <td>KES ${(txn.balance_after || 0).toLocaleString()}</td>
+            <td>${(txn.status || 'completed').toUpperCase()}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="footer">
+    <p><strong>SMCF - Smart Moves Cash Flow</strong></p>
+    <p>Digital Table Banking Platform | Automated Contributions | Secure Transactions</p>
+    <p>This statement is confidential and intended for the account holder only.</p>
+  </div>
+</body>
+</html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      setTimeout(() => {
+        printWindow.print();
+        toast({
+          title: 'PDF Ready',
+          description: 'Print dialog opened. Choose "Save as PDF" to download.',
+        });
+      }, 500);
+    } else {
+      toast({
+        title: 'Pop-up Blocked',
+        description: 'Please allow pop-ups for this site.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const exportWalletCSV = () => {
+    try {
+      const csvData = [
+        ['SMCF - Smart Moves Cash Flow', 'Wallet Statement', `Generated: ${new Date().toLocaleString()}`],
+        ['Member', userData?.name || 'Member', 'ID:', userData?.member_id || '-'],
+        [],
+        ['Account Summary'],
+        ['Current Balance', `KES ${(summary.currentBalance || 0).toLocaleString()}`],
+        ['Total Deposits', `KES ${(summary.totalDeposits || 0).toLocaleString()}`],
+        ['Total Withdrawals', `KES ${(summary.totalWithdrawals || 0).toLocaleString()}`],
+        ['Interest Earned', `KES ${(summary.totalInterestEarned || 0).toLocaleString()}`],
+        [],
+        ['Date', 'Type', 'Amount', 'Balance After', 'Status'],
+        ...transactions.slice(0, 20).map(txn => [
+          new Date(txn.date || txn.created_at).toLocaleDateString(),
+          txn.type || 'transaction',
+          txn.amount || 0,
+          txn.balance_after || 0,
+          txn.status || 'completed',
+        ]),
+      ];
+
+      const csvContent = csvData.map(row => row.join(',')).join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `smcf-wallet-statement-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast({
+        title: 'CSV Export Complete',
+        description: 'Wallet statement has been downloaded as CSV',
+      });
+    } catch (err) {
+      toast({
+        title: 'CSV Export Failed',
+        description: 'Could not export CSV report',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const getTransactionIcon = (type: string) => {
     switch (type) {
       case "deposit":
@@ -457,13 +621,35 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
       {/* Transaction History */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="w-5 h-5" />
-            Transaction History
-          </CardTitle>
-          <CardDescription>
-            Your recent savings transactions and interest earnings
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="w-5 h-5" />
+                Transaction History
+              </CardTitle>
+              <CardDescription>
+                Your recent savings transactions and interest earnings
+              </CardDescription>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={exportWalletCSV}
+                variant="outline"
+                size="sm"
+                disabled={transactions.length === 0}>
+                <FileSpreadsheet className="w-4 h-4 mr-2" />
+                Export CSV
+              </Button>
+              <Button
+                onClick={generateWalletPDF}
+                variant="default"
+                size="sm"
+                disabled={transactions.length === 0}>
+                <Download className="w-4 h-4 mr-2" />
+                Download PDF
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {transactions.length === 0 ? (

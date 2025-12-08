@@ -31,8 +31,8 @@ const LoanRequestDialog = ({
 }: LoanRequestDialogProps) => {
   const [amount, setAmount] = useState("");
   const [purpose, setPurpose] = useState("");
-  const [term, setTerm] = useState("");
-  const [interest, setInterest] = useState("5");
+  const [term] = useState("1"); // Fixed: 1 month
+  const [interest] = useState("10"); // Fixed: 10%
   const [phone, setPhone] = useState(memberPhone || "");
   const [errors, setErrors] = useState<{ [k: string]: string }>({});
   const { toast } = useToast();
@@ -106,8 +106,6 @@ const LoanRequestDialog = ({
       onOpenChange(false);
       setAmount("");
       setPurpose("");
-      setTerm("");
-      setInterest("5");
       if (onSubmitted) onSubmitted();
     } catch (e: any) {
       console.error(e);
@@ -162,52 +160,28 @@ const LoanRequestDialog = ({
               )}
             </div>
 
-            <div>
-              <Label>Term (months)</Label>
-              <Input
-                type="number"
-                value={term}
-                onChange={(e) => setTerm(e.target.value)}
-                placeholder="e.g. 6"
-                min={1}
-                max={60}
-              />
-              {errors.term && (
-                <div className="text-xs text-destructive mt-1">
-                  {errors.term}
-                </div>
-              )}
-            </div>
-
-            <div>
-              <Label>Interest Rate (%)</Label>
-              <Input
-                type="number"
-                value={interest}
-                onChange={(e) => setInterest(e.target.value)}
-                step="0.1"
-                min="0.1"
-              />
-              {errors.interest && (
-                <div className="text-xs text-destructive mt-1">
-                  {errors.interest}
-                </div>
-              )}
+            {/* Fixed loan terms info */}
+            <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg space-y-1">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Loan Term:</span>
+                <span className="font-medium">1 Month</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Interest Rate:</span>
+                <span className="font-medium">10%</span>
+              </div>
             </div>
 
             <div className="text-sm text-muted-foreground">
-              Estimated monthly repayment:{" "}
+              Total repayment amount:{" "}
               <strong>
                 {useMemo(() => {
                   const P = Number(amount) || 0;
-                  const r = (Number(interest) || 0) / 100 / 12;
-                  const n = Number(term) || 1;
-                  if (!P || n <= 0) return "—";
-                  // amortized loan payment
-                  const payment =
-                    r === 0 ? P / n : (P * r) / (1 - Math.pow(1 + r, -n));
-                  return `KES ${Math.round(payment).toLocaleString()}`;
-                }, [amount, term, interest])}
+                  if (!P) return "—";
+                  // Simple calculation: Principal + 10% interest
+                  const totalRepayment = P + (P * 0.10);
+                  return `KES ${Math.round(totalRepayment).toLocaleString()}`;
+                }, [amount])}
               </strong>
             </div>
 

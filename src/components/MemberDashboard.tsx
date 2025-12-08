@@ -10,6 +10,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import API_BASE from "@/lib/api";
@@ -35,6 +44,9 @@ interface MemberDashboardProps {
 const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
   const [showPayment, setShowPayment] = useState(false);
   const [showLoanRequest, setShowLoanRequest] = useState(false);
+  const [showRepayment, setShowRepayment] = useState(false);
+  const [selectedLoan, setSelectedLoan] = useState<any>(null);
+  const [isProcessingRepayment, setIsProcessingRepayment] = useState(false);
   const { toast } = useToast();
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [memberLoans, setMemberLoans] = useState<any[]>([]);
@@ -404,6 +416,112 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
     setTimeout(() => {
       window.location.reload();
     }, 1500);
+  };
+
+  const handleLoanRepayment = async () => {
+    if (!selectedLoan) return;
+
+    setIsProcessingRepayment(true);
+
+    try {
+      const totalRepayable = selectedLoan.amount + (selectedLoan.amount * 0.10);
+      
+      // Initiate STK Push
+      const response = await fetch(`${API_BASE}/api/payments/stk-push`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          member_id: userData._id || userData.id,
+          phone: userData.phoneNumber || userData.phone,
+          amount: totalRepayable,
+          type: 'loan_repayment',
+          loan_id: selectedLoan._id,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to initiate payment');
+      }
+
+      toast({
+        title: "M-Pesa Prompt Sent",
+        description: `Check your phone for M-Pesa prompt to pay KES ${totalRepayable.toLocaleString()}`,
+      });
+
+      // Poll for payment confirmation
+      const checkoutRequestID = data.CheckoutRequestID;
+      let attempts = 0;
+      const maxAttempts = 30; // 30 seconds
+
+      const pollInterval = setInterval(async () => {
+        attempts++;
+
+        try {
+          const confirmRes = await fetch(
+            `${API_BASE}/api/payments/check-payment/${checkoutRequestID}`
+          );
+          const confirmData = await confirmRes.json();
+
+          if (confirmData.status === 'completed') {
+            clearInterval(pollInterval);
+            
+            // Update loan status to repaid
+            await fetch(`${API_BASE}/api/loans/${selectedLoan._id}/status`, {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                status: 'repaid',
+                repayment_date: new Date().toISOString(),
+              }),
+            });
+
+            toast({
+              title: "Loan Repaid Successfully!",
+              description: `Your loan of KES ${selectedLoan.amount.toLocaleString()} has been fully repaid.`,
+            });
+
+            setIsProcessingRepayment(false);
+            setShowRepayment(false);
+            setSelectedLoan(null);
+
+            // Refresh data
+            setTimeout(() => {
+              window.location.reload();
+            }, 1500);
+          } else if (confirmData.status === 'failed') {
+            clearInterval(pollInterval);
+            throw new Error('Payment failed or was cancelled');
+          } else if (attempts >= maxAttempts) {
+            clearInterval(pollInterval);
+            throw new Error('Payment confirmation timeout');
+          }
+        } catch (err: any) {
+          clearInterval(pollInterval);
+          console.error('Payment confirmation error:', err);
+          toast({
+            title: "Payment Failed",
+            description: err.message || "Please try again",
+            variant: "destructive",
+          });
+          setIsProcessingRepayment(false);
+        }
+      }, 1000);
+
+    } catch (error: any) {
+      console.error('Repayment error:', error);
+      toast({
+        title: "Repayment Failed",
+        description: error.message || "Failed to initiate loan repayment",
+        variant: "destructive",
+      });
+      setIsProcessingRepayment(false);
+    }
   };
 
   return (
@@ -1009,6 +1127,34 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                               )}
                             </div>
                           </div>
+                          
+                          {/* Repayment Button for Disbursed Loans */}
+                          {loan.status === "disbursed" && (
+                            <div className="mt-3 pt-3 border-t">
+                              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                                <div className="text-sm">
+                                  <p className="text-muted-foreground">Total Repayable:</p>
+                                  <p className="text-lg font-bold text-mpesa-green">
+                                    KES {(loan.amount * 1.10).toLocaleString()}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    (Principal: {loan.amount.toLocaleString()} + 10% Interest: {(loan.amount * 0.10).toLocaleString()})
+                                  </p>
+                                </div>
+                                <Button
+                                  onClick={() => {
+                                    setSelectedLoan(loan);
+                                    setShowRepayment(true);
+                                  }}
+                                  variant="mpesa"
+                                  size="sm"
+                                  className="w-full sm:w-auto">
+                                  <Phone className="w-4 h-4 mr-2" />
+                                  Repay via M-Pesa
+                                </Button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </CardContent>
                     </Card>
@@ -1176,6 +1322,78 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
           });
         }}
       />
+
+      {/* Loan Repayment Dialog */}
+      <Dialog open={showRepayment} onOpenChange={setShowRepayment}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Phone className="w-5 h-5 text-mpesa-green" />
+              Repay Your Loan
+            </DialogTitle>
+            <DialogDescription>
+              Complete your loan repayment via M-Pesa
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedLoan && (
+            <div className="space-y-4">
+              <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Loan Amount:</span>
+                  <span className="font-medium">KES {selectedLoan.amount.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Interest (10%):</span>
+                  <span className="font-medium">KES {(selectedLoan.amount * 0.10).toLocaleString()}</span>
+                </div>
+                <Separator />
+                <div className="flex justify-between">
+                  <span className="font-semibold">Total Repayable:</span>
+                  <span className="text-xl font-bold text-mpesa-green">
+                    KES {(selectedLoan.amount * 1.10).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-mpesa-green/10 border border-mpesa-green/20 p-4 rounded-lg space-y-2">
+                <p className="text-sm font-medium">Payment Details:</p>
+                <div className="text-sm space-y-1">
+                  <p>• Till Number: <span className="font-bold">6938069</span></p>
+                  <p>• Your Phone: <span className="font-medium">{userData?.phoneNumber || userData?.phone}</span></p>
+                  <p>• You will receive an M-Pesa prompt</p>
+                  <p>• Enter your M-Pesa PIN to complete payment</p>
+                </div>
+              </div>
+
+              <DialogFooter className="gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowRepayment(false);
+                    setSelectedLoan(null);
+                  }}
+                  disabled={isProcessingRepayment}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="mpesa"
+                  onClick={handleLoanRepayment}
+                  disabled={isProcessingRepayment}>
+                  {isProcessingRepayment ? (
+                    <>Processing...</>
+                  ) : (
+                    <>
+                      <Phone className="w-4 h-4 mr-2" />
+                      Send M-Pesa Prompt
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
