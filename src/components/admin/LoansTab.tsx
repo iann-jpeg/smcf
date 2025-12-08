@@ -33,11 +33,14 @@ import {
   CheckCircle,
   Clock,
   DollarSign,
+  Download,
+  FileSpreadsheet,
   HandCoins,
   Loader2,
   Trash2,
   XCircle,
 } from "lucide-react";
+import smcfLogo from '@/assets/smcf-logo.png';
 import { useEffect, useState } from "react";
 
 interface Loan {
@@ -219,6 +222,197 @@ const LoansTab = () => {
     }
   };
 
+  const generateLoansPDF = () => {
+    const totalLoaned = loans.reduce((sum, loan) => sum + loan.amount, 0);
+    const totalRepayable = loans.reduce((sum, loan) => sum + loan.total_repayable, 0);
+    const pendingLoans = loans.filter(l => l.status === 'pending').length;
+    const approvedLoans = loans.filter(l => l.status === 'approved').length;
+    const disbursedLoans = loans.filter(l => l.status === 'disbursed').length;
+    const repaidLoans = loans.filter(l => l.status === 'repaid').length;
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>SMCF Loans Report</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; color: #333; }
+    .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #2563eb; padding-bottom: 20px; }
+    .logo { max-width: 120px; height: auto; margin: 0 auto 15px; display: block; }
+    .header h1 { color: #2563eb; margin: 0; font-size: 28px; }
+    .header p { color: #666; margin: 5px 0; }
+    .section { margin: 30px 0; }
+    .section h2 { color: #2563eb; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; }
+    .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: 20px 0; }
+    .stat-card { background: #f9fafb; padding: 15px; border-radius: 8px; border-left: 4px solid #2563eb; }
+    .stat-label { font-size: 12px; color: #666; text-transform: uppercase; }
+    .stat-value { font-size: 24px; font-weight: bold; color: #2563eb; margin-top: 5px; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th { background: #2563eb; color: white; padding: 12px; text-align: left; font-size: 12px; }
+    td { padding: 10px; border-bottom: 1px solid #e5e7eb; font-size: 11px; }
+    tr:nth-child(even) { background: #f9fafb; }
+    .status-pending { color: #ea580c; font-weight: bold; }
+    .status-approved { color: #2563eb; font-weight: bold; }
+    .status-disbursed { color: #16a34a; font-weight: bold; }
+    .status-repaid { color: #059669; font-weight: bold; }
+    .footer { margin-top: 40px; text-align: center; color: #666; font-size: 12px; border-top: 2px solid #e5e7eb; padding-top: 20px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <img src="${smcfLogo}" alt="SMCF Logo" class="logo" />
+    <h1>SMCF - Smart Moves Cash Flow</h1>
+    <p>Loans Report</p>
+    <p>Generated on: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p>
+  </div>
+
+  <div class="section">
+    <h2>Loans Summary</h2>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total Loans</div>
+        <div class="stat-value">${loans.length}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Loaned</div>
+        <div class="stat-value">KES ${totalLoaned.toLocaleString()}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Repayable</div>
+        <div class="stat-value">KES ${totalRepayable.toLocaleString()}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Loan Status Breakdown</h2>
+    <table>
+      <tr>
+        <td><strong>Pending</strong></td>
+        <td style="text-align: right;">${pendingLoans}</td>
+      </tr>
+      <tr>
+        <td><strong>Approved</strong></td>
+        <td style="text-align: right;">${approvedLoans}</td>
+      </tr>
+      <tr>
+        <td><strong>Disbursed</strong></td>
+        <td style="text-align: right;">${disbursedLoans}</td>
+      </tr>
+      <tr>
+        <td><strong>Repaid</strong></td>
+        <td style="text-align: right;">${repaidLoans}</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>All Loans</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Member</th>
+          <th>Amount</th>
+          <th>Purpose</th>
+          <th>Interest Rate</th>
+          <th>Total Repayable</th>
+          <th>Status</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${loans.map(loan => `
+          <tr>
+            <td>${loan.member_id?.name || 'Unknown'}</td>
+            <td>KES ${loan.amount.toLocaleString()}</td>
+            <td>${loan.purpose}</td>
+            <td>${loan.interest_rate}%</td>
+            <td>KES ${loan.total_repayable.toLocaleString()}</td>
+            <td class="status-${loan.status}">${loan.status.toUpperCase()}</td>
+            <td>${new Date(loan.created_at).toLocaleDateString()}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="footer">
+    <p><strong>SMCF - Smart Moves Cash Flow</strong></p>
+    <p>Digital Table Banking Platform | Automated Contributions | Secure Transactions</p>
+    <p>This report is confidential and intended for authorized personnel only.</p>
+  </div>
+</body>
+</html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      setTimeout(() => {
+        printWindow.print();
+        toast({
+          title: 'PDF Ready',
+          description: 'Print dialog opened. Choose "Save as PDF" to download.',
+        });
+      }, 500);
+    } else {
+      toast({
+        title: 'Pop-up Blocked',
+        description: 'Please allow pop-ups for this site.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const exportLoansCSV = () => {
+    try {
+      const csvData = [
+        ['SMCF - Smart Moves Cash Flow', 'Loans Report', `Generated: ${new Date().toLocaleString()}`],
+        [],
+        ['Member', 'Phone', 'Amount', 'Purpose', 'Interest Rate', 'Total Repayable', 'Status', 'Date'],
+        ...loans.map(loan => [
+          loan.member_id?.name || 'Unknown',
+          loan.member_id?.phone || '-',
+          loan.amount,
+          loan.purpose,
+          `${loan.interest_rate}%`,
+          loan.total_repayable,
+          loan.status,
+          new Date(loan.created_at).toLocaleDateString(),
+        ]),
+        [],
+        ['Summary'],
+        ['Total Loans', loans.length],
+        ['Total Loaned', `KES ${loans.reduce((sum, loan) => sum + loan.amount, 0).toLocaleString()}`],
+        ['Total Repayable', `KES ${loans.reduce((sum, loan) => sum + loan.total_repayable, 0).toLocaleString()}`],
+      ];
+
+      const csvContent = csvData.map(row => row.join(',')).join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `smcf-loans-report-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast({
+        title: 'CSV Export Complete',
+        description: 'Loans report has been downloaded as CSV',
+      });
+    } catch (err) {
+      toast({
+        title: 'CSV Export Failed',
+        description: 'Could not export CSV report',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const variants: Record<string, any> = {
       pending: { variant: "outline", icon: Clock, className: "text-amber-600" },
@@ -350,6 +544,22 @@ const LoansTab = () => {
             <div className="flex gap-2">
               <Button onClick={fetchLoans} variant="outline" size="sm">
                 Refresh
+              </Button>
+              <Button
+                onClick={exportLoansCSV}
+                variant="outline"
+                size="sm"
+                disabled={loans.length === 0}>
+                <FileSpreadsheet className="w-4 h-4 mr-2" />
+                Export CSV
+              </Button>
+              <Button
+                onClick={generateLoansPDF}
+                variant="default"
+                size="sm"
+                disabled={loans.length === 0}>
+                <Download className="w-4 h-4 mr-2" />
+                Download PDF
               </Button>
               <Button
                 onClick={() => setShowClearDialog(true)}

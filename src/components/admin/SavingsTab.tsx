@@ -25,11 +25,14 @@ import {
   CheckCircle,
   Clock,
   DollarSign,
+  Download,
+  FileSpreadsheet,
   Loader2,
   PiggyBank,
   TrendingUp,
   XCircle,
 } from "lucide-react";
+import smcfLogo from '@/assets/smcf-logo.png';
 import { useEffect, useState } from "react";
 
 const AdminSavingsTab = () => {
@@ -204,6 +207,173 @@ const AdminSavingsTab = () => {
     }
   };
 
+  const generateSavingsPDF = () => {
+    const totalSavings = membersWithSavings.reduce((sum, m) => sum + (m.currentBalance || 0), 0);
+    const totalDeposits = membersWithSavings.reduce((sum, m) => sum + (m.totalDeposits || 0), 0);
+    const totalInterest = membersWithSavings.reduce((sum, m) => sum + (m.totalInterestEarned || 0), 0);
+    const membersWithBalance = membersWithSavings.filter((m) => (m.currentBalance || 0) > 0).length;
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>SMCF Savings Report</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; color: #333; }
+    .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #2563eb; padding-bottom: 20px; }
+    .logo { max-width: 120px; height: auto; margin: 0 auto 15px; display: block; }
+    .header h1 { color: #2563eb; margin: 0; font-size: 28px; }
+    .header p { color: #666; margin: 5px 0; }
+    .section { margin: 30px 0; }
+    .section h2 { color: #2563eb; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; }
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin: 20px 0; }
+    .stat-card { background: #f9fafb; padding: 15px; border-radius: 8px; border-left: 4px solid #2563eb; }
+    .stat-label { font-size: 12px; color: #666; text-transform: uppercase; }
+    .stat-value { font-size: 20px; font-weight: bold; color: #2563eb; margin-top: 5px; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th { background: #2563eb; color: white; padding: 12px; text-align: left; font-size: 12px; }
+    td { padding: 10px; border-bottom: 1px solid #e5e7eb; font-size: 11px; }
+    tr:nth-child(even) { background: #f9fafb; }
+    .footer { margin-top: 40px; text-align: center; color: #666; font-size: 12px; border-top: 2px solid #e5e7eb; padding-top: 20px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <img src="${smcfLogo}" alt="SMCF Logo" class="logo" />
+    <h1>SMCF - Smart Moves Cash Flow</h1>
+    <p>Savings Report</p>
+    <p>Generated on: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p>
+  </div>
+
+  <div class="section">
+    <h2>Savings Summary</h2>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total Savings Pool</div>
+        <div class="stat-value">KES ${totalSavings.toLocaleString()}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Active Savers</div>
+        <div class="stat-value">${membersWithBalance}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Deposits</div>
+        <div class="stat-value">KES ${totalDeposits.toLocaleString()}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Interest</div>
+        <div class="stat-value">KES ${totalInterest.toLocaleString()}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Member Savings</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Member</th>
+          <th>Member ID</th>
+          <th>Current Balance</th>
+          <th>Total Deposits</th>
+          <th>Interest Earned</th>
+          <th>Last Transaction</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${membersWithSavings.map(member => `
+          <tr>
+            <td>${member.name || 'Unknown'}</td>
+            <td>${member.member_id || '-'}</td>
+            <td>KES ${(member.currentBalance || 0).toLocaleString()}</td>
+            <td>KES ${(member.totalDeposits || 0).toLocaleString()}</td>
+            <td>KES ${(member.totalInterestEarned || 0).toLocaleString()}</td>
+            <td>${member.lastTransactionDate ? new Date(member.lastTransactionDate).toLocaleDateString() : '-'}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="footer">
+    <p><strong>SMCF - Smart Moves Cash Flow</strong></p>
+    <p>Digital Table Banking Platform | Automated Contributions | Secure Transactions</p>
+    <p>This report is confidential and intended for authorized personnel only.</p>
+  </div>
+</body>
+</html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      setTimeout(() => {
+        printWindow.print();
+        toast({
+          title: 'PDF Ready',
+          description: 'Print dialog opened. Choose "Save as PDF" to download.',
+        });
+      }, 500);
+    } else {
+      toast({
+        title: 'Pop-up Blocked',
+        description: 'Please allow pop-ups for this site.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const exportSavingsCSV = () => {
+    try {
+      const totalSavings = membersWithSavings.reduce((sum, m) => sum + (m.currentBalance || 0), 0);
+      const totalDeposits = membersWithSavings.reduce((sum, m) => sum + (m.totalDeposits || 0), 0);
+      const totalInterest = membersWithSavings.reduce((sum, m) => sum + (m.totalInterestEarned || 0), 0);
+
+      const csvData = [
+        ['SMCF - Smart Moves Cash Flow', 'Savings Report', `Generated: ${new Date().toLocaleString()}`],
+        [],
+        ['Member', 'Member ID', 'Current Balance', 'Total Deposits', 'Interest Earned', 'Last Transaction'],
+        ...membersWithSavings.map(member => [
+          member.name || 'Unknown',
+          member.member_id || '-',
+          member.currentBalance || 0,
+          member.totalDeposits || 0,
+          member.totalInterestEarned || 0,
+          member.lastTransactionDate ? new Date(member.lastTransactionDate).toLocaleDateString() : '-',
+        ]),
+        [],
+        ['Summary'],
+        ['Total Savings Pool', `KES ${totalSavings.toLocaleString()}`],
+        ['Total Deposits', `KES ${totalDeposits.toLocaleString()}`],
+        ['Total Interest', `KES ${totalInterest.toLocaleString()}`],
+      ];
+
+      const csvContent = csvData.map(row => row.join(',')).join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `smcf-savings-report-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast({
+        title: 'CSV Export Complete',
+        description: 'Savings report has been downloaded as CSV',
+      });
+    } catch (err) {
+      toast({
+        title: 'CSV Export Failed',
+        description: 'Could not export CSV report',
+        variant: 'destructive',
+      });
+    }
+  };
+
   // Calculate totals with safety checks
   const totalSavings = membersWithSavings.reduce(
     (sum, m) => sum + (m.currentBalance || 0),
@@ -315,6 +485,32 @@ const AdminSavingsTab = () => {
 
       {/* Tabs */}
       <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Savings Management</CardTitle>
+              <CardDescription>View member savings and generate reports</CardDescription>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={exportSavingsCSV}
+                variant="outline"
+                size="sm"
+                disabled={membersWithSavings.length === 0}>
+                <FileSpreadsheet className="w-4 h-4 mr-2" />
+                Export CSV
+              </Button>
+              <Button
+                onClick={generateSavingsPDF}
+                variant="default"
+                size="sm"
+                disabled={membersWithSavings.length === 0}>
+                <Download className="w-4 h-4 mr-2" />
+                Download PDF
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
         <CardContent className="pt-6">
           <Tabs defaultValue="members" className="w-full">
             <TabsList className="grid w-full grid-cols-2">

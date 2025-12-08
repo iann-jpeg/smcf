@@ -6,6 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import API_BASE from '@/lib/api';
 import { authService } from '@/lib/authService';
 import { useState, useEffect } from 'react';
+import smcfLogo from '@/assets/smcf-logo.png';
 
 const ReportsTab = () => {
   const { toast } = useToast();
@@ -63,6 +64,7 @@ const ReportsTab = () => {
   <style>
     body { font-family: Arial, sans-serif; margin: 40px; color: #333; }
     .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #2563eb; padding-bottom: 20px; }
+    .logo { max-width: 120px; height: auto; margin: 0 auto 15px; display: block; }
     .header h1 { color: #2563eb; margin: 0; font-size: 28px; }
     .header p { color: #666; margin: 5px 0; }
     .section { margin: 30px 0; }
@@ -84,6 +86,7 @@ const ReportsTab = () => {
 </head>
 <body>
   <div class="header">
+    <img src="${smcfLogo}" alt="SMCF Logo" class="logo" />
     <h1>SMCF - Smart Moves Cash Flow</h1>
     <p>Cycle Report #${cycle?.cycle_number || 'N/A'}</p>
     <p>Generated on: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p>

@@ -31,6 +31,7 @@ import {
   DollarSign,
   Download,
   Edit,
+  FileSpreadsheet,
   LogOut,
   Megaphone,
   Save,
@@ -42,6 +43,7 @@ import {
   UserPlus,
   Wallet,
 } from "lucide-react";
+import smcfLogo from '@/assets/smcf-logo.png';
 import { useEffect, useRef, useState } from "react";
 import ApprovalsTab from "./admin/ApprovalsTab";
 import LoansTab from "./admin/LoansTab";
@@ -193,6 +195,167 @@ const AdminDashboard = ({
       });
     } catch (e) {
       console.error("Could not fetch disbursements", e);
+    }
+  };
+
+  const generateDisbursementsPDF = () => {
+    const totalDisbursed = disbursements.reduce((sum, d) => sum + (d.amount || 0), 0);
+    const completedDisbursements = disbursements.filter(d => d.status === 'completed').length;
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>SMCF Disbursements Report</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; color: #333; }
+    .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #2563eb; padding-bottom: 20px; }
+    .logo { max-width: 120px; height: auto; margin: 0 auto 15px; display: block; }
+    .header h1 { color: #2563eb; margin: 0; font-size: 28px; }
+    .header p { color: #666; margin: 5px 0; }
+    .section { margin: 30px 0; }
+    .section h2 { color: #2563eb; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; }
+    .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: 20px 0; }
+    .stat-card { background: #f9fafb; padding: 15px; border-radius: 8px; border-left: 4px solid #2563eb; }
+    .stat-label { font-size: 12px; color: #666; text-transform: uppercase; }
+    .stat-value { font-size: 24px; font-weight: bold; color: #2563eb; margin-top: 5px; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th { background: #2563eb; color: white; padding: 12px; text-align: left; font-size: 12px; }
+    td { padding: 10px; border-bottom: 1px solid #e5e7eb; font-size: 11px; }
+    tr:nth-child(even) { background: #f9fafb; }
+    .status-completed { color: #16a34a; font-weight: bold; }
+    .status-pending { color: #ea580c; font-weight: bold; }
+    .footer { margin-top: 40px; text-align: center; color: #666; font-size: 12px; border-top: 2px solid #e5e7eb; padding-top: 20px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <img src="${smcfLogo}" alt="SMCF Logo" class="logo" />
+    <h1>SMCF - Smart Moves Cash Flow</h1>
+    <p>Disbursements Report</p>
+    <p>Generated on: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p>
+  </div>
+
+  <div class="section">
+    <h2>Disbursement Summary</h2>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total Disbursements</div>
+        <div class="stat-value">${disbursements.length}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Completed</div>
+        <div class="stat-value">${completedDisbursements}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Disbursed</div>
+        <div class="stat-value">KES ${totalDisbursed.toLocaleString()}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>All Disbursements</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Cycle</th>
+          <th>Recipient</th>
+          <th>Amount</th>
+          <th>Method</th>
+          <th>Status</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${disbursements.map(d => `
+          <tr>
+            <td>#${d.cycle_id?.cycle_number || '-'}</td>
+            <td>${d.member_id?.name || 'Unknown'}</td>
+            <td>KES ${(d.amount || 0).toLocaleString()}</td>
+            <td>${d.method || 'Manual'}</td>
+            <td class="status-${d.status}">${(d.status || 'pending').toUpperCase()}</td>
+            <td>${d.date ? new Date(d.date).toLocaleDateString() : '-'}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="footer">
+    <p><strong>SMCF - Smart Moves Cash Flow</strong></p>
+    <p>Digital Table Banking Platform | Automated Contributions | Secure Transactions</p>
+    <p>This report is confidential and intended for authorized personnel only.</p>
+  </div>
+</body>
+</html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      setTimeout(() => {
+        printWindow.print();
+        toast({
+          title: 'PDF Ready',
+          description: 'Print dialog opened. Choose "Save as PDF" to download.',
+        });
+      }, 500);
+    } else {
+      toast({
+        title: 'Pop-up Blocked',
+        description: 'Please allow pop-ups for this site.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const exportDisbursementsCSV = () => {
+    try {
+      const totalDisbursed = disbursements.reduce((sum, d) => sum + (d.amount || 0), 0);
+
+      const csvData = [
+        ['SMCF - Smart Moves Cash Flow', 'Disbursements Report', `Generated: ${new Date().toLocaleString()}`],
+        [],
+        ['Cycle', 'Recipient', 'Member ID', 'Amount', 'Method', 'Status', 'Date'],
+        ...disbursements.map(d => [
+          `#${d.cycle_id?.cycle_number || '-'}`,
+          d.member_id?.name || 'Unknown',
+          d.member_id?.member_id || '-',
+          d.amount || 0,
+          d.method || 'Manual',
+          d.status || 'pending',
+          d.date ? new Date(d.date).toLocaleDateString() : '-',
+        ]),
+        [],
+        ['Summary'],
+        ['Total Disbursements', disbursements.length],
+        ['Total Amount Disbursed', `KES ${totalDisbursed.toLocaleString()}`],
+      ];
+
+      const csvContent = csvData.map(row => row.join(',')).join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `smcf-disbursements-report-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast({
+        title: 'CSV Export Complete',
+        description: 'Disbursements report has been downloaded as CSV',
+      });
+    } catch (err) {
+      toast({
+        title: 'CSV Export Failed',
+        description: 'Could not export CSV report',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -1785,6 +1948,22 @@ Thank you for your cooperation! 🙏`;
                       Mark as Disbursed
                     </Button>
                   )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={exportDisbursementsCSV}
+                    disabled={disbursements.length === 0}>
+                    <FileSpreadsheet className="w-4 h-4 mr-2" />
+                    Export CSV
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="default"
+                    onClick={generateDisbursementsPDF}
+                    disabled={disbursements.length === 0}>
+                    <Download className="w-4 h-4 mr-2" />
+                    Download PDF
+                  </Button>
                   <Button
                     size="sm"
                     variant="outline"
