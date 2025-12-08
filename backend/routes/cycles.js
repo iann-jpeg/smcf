@@ -59,7 +59,7 @@ router.get("/current", protect, async (req, res) => {
         paid_members_count: paidMembersCount,
         total_amount_collected: totalAmountCollected,
         days_left: daysLeft,
-        expected_amount: cycle.total_members * 204,
+        expected_amount: cycle.total_members * 224,
       },
     });
   } catch (error) {
@@ -187,7 +187,7 @@ router.get("/:cycleNumber/stats", protect, async (req, res) => {
           paid_members: paidMembers,
           pending_members: cycle.total_members - paidMembers,
           total_collected: totalCollected,
-          expected_amount: cycle.total_members * 204,
+          expected_amount: cycle.total_members * 224,
           collection_percentage: (
             (paidMembers / cycle.total_members) *
             100

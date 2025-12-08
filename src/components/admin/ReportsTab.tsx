@@ -52,7 +52,7 @@ const ReportsTab = () => {
       const paidMembers = members.filter(m => m.payment_status === 'paid');
       const pendingMembers = members.filter(m => m.payment_status === 'pending');
       const totalCollected = cycle?.total_amount_collected || 0;
-      const targetAmount = members.length * 204;
+      const targetAmount = members.length * 224;
       
       const htmlContent = `
 <!DOCTYPE html>
@@ -270,7 +270,7 @@ const ReportsTab = () => {
         ['Paid Members', members.filter(m => m.payment_status === 'paid').length],
         ['Pending Members', members.filter(m => m.payment_status === 'pending').length],
         ['Total Collected', `KES ${currentCycle?.total_amount_collected || 0}`],
-        ['Target Amount', `KES ${members.length * 204}`],
+        ['Target Amount', `KES ${members.length * 224}`],
       ];
 
       const csvContent = csvData.map(row => row.join(',')).join('\n');

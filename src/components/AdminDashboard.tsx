@@ -693,7 +693,7 @@ Thank you for your cooperation! 🙏`;
           },
           body: JSON.stringify({
             member_id: id,
-            amount: 204,
+            amount: 224,
             phone: member.phone,
             mpesa_transaction_id: `ADMIN-${Date.now()}`,
             payment_method: "admin_manual",
@@ -1650,7 +1650,7 @@ Thank you for your cooperation! 🙏`;
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Amount:</span>
                       <span className="font-semibold text-accent">
-                        KES {(safeMembers.length * 204).toLocaleString()}
+                        KES {(safeMembers.length * 224).toLocaleString()}
                       </span>
                     </div>
                     <div className="flex justify-between">

@@ -1159,7 +1159,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         open={showPayment}
         onOpenChange={setShowPayment}
         onPaymentSuccess={handlePaymentSuccess}
-        amount={204}
+        amount={224}
         memberData={userData}
         cycle={currentCycleData?.currentCycle || 1}
       />

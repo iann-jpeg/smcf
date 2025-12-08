@@ -40,7 +40,7 @@ router.post("/", protect, async (req, res) => {
 
     const payment = await Payment.create({
       member_id,
-      amount: amount || 204,
+      amount: amount || 224,
       phone,
       mpesa_transaction_id,
       payment_method: payment_method || "mpesa",
@@ -52,8 +52,8 @@ router.post("/", protect, async (req, res) => {
     await Member.findByIdAndUpdate(member_id, {
       payment_status: "paid",
       payment_date: new Date(),
-      amount: amount || 204,
-      $inc: { total_contributed: amount || 204 },
+      amount: amount || 224,
+      $inc: { total_contributed: amount || 224 },
     });
 
     // Update cycle collection stats
