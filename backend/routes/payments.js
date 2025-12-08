@@ -87,7 +87,7 @@ router.post("/", protect, async (req, res) => {
 // Initiate STK Push for wallet deposit
 router.post("/stk-push", protect, async (req, res) => {
   try {
-    const { amount, phone, type, notes } = req.body;
+    const { amount, phone, type, notes, loan_id } = req.body;
     const memberId = req.user._id;
 
     if (!phone) {
@@ -113,35 +113,49 @@ router.post("/stk-push", protect, async (req, res) => {
       });
     }
 
-    // Generate unique reference
-    const reference = `WD${Date.now()}-${memberId.toString().slice(-6)}`;
+    // Generate unique reference based on payment type
+    const referencePrefix = type === 'loan_repayment' ? 'LR' : 'WD';
+    const reference = `${referencePrefix}${Date.now()}-${memberId.toString().slice(-6)}`;
 
     // Store pending payment record
-    const payment = await Payment.create({
+    const paymentData = {
       member_id: memberId,
       amount,
       phone,
       payment_method: "mpesa",
       status: "pending",
       type: type || "wallet_deposit",
-      notes: notes || `Wallet deposit by ${member.name}`,
+      notes: notes || (type === 'loan_repayment' ? `Loan repayment by ${member.name}` : `Wallet deposit by ${member.name}`),
       transaction_reference: reference,
-    });
+    };
 
-    console.log("💰 Initiating wallet deposit STK Push:", {
+    // Add loan_id if this is a loan repayment
+    if (type === 'loan_repayment' && loan_id) {
+      paymentData.loan_id = loan_id;
+    }
+
+    const payment = await Payment.create(paymentData);
+
+    const paymentTypeLabel = type === 'loan_repayment' ? 'loan repayment' : 'wallet deposit';
+    console.log(`💰 Initiating ${paymentTypeLabel} STK Push:`, {
       member: member.name,
       phone,
       amount,
       reference,
+      type,
+      loan_id: loan_id || 'N/A',
     });
 
     // Use Lipia API for actual M-Pesa STK Push
     const lipiaService = await import("../services/lipiaService.js");
+    const description = type === 'loan_repayment' 
+      ? `SMCF Loan Repayment - ${member.name}`
+      : `SMCF Wallet Deposit - ${member.name}`;
     const lipiaResponse = await lipiaService.initiateLipiaPayment(
       phone,
       amount,
       reference,
-      `SMCF Wallet Deposit - ${member.name}`
+      description
     );
 
     console.log("✅ Lipia STK Push initiated:", lipiaResponse);

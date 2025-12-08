@@ -431,6 +431,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...authService.getAuthHeaders(),
         },
         body: JSON.stringify({
           member_id: userData._id || userData.id,
