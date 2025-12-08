@@ -105,12 +105,12 @@ const AuthDialog = ({ open, onOpenChange, onLogin }: AuthDialogProps) => {
         </DialogHeader>
 
         <Tabs defaultValue="member" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-2" style={{ display: 'none' }}>
             <TabsTrigger value="member" className="flex items-center gap-2">
               <Users className="w-4 h-4" />
               Member
             </TabsTrigger>
-            <TabsTrigger value="admin" className="flex items-center gap-2">
+            <TabsTrigger value="admin" className="flex items-center gap-2" style={{ display: 'none' }}>
               <Shield className="w-4 h-4" />
               Admin
             </TabsTrigger>
@@ -174,7 +174,7 @@ const AuthDialog = ({ open, onOpenChange, onLogin }: AuthDialogProps) => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="admin" className="space-y-4">
+          <TabsContent value="admin" className="space-y-4" style={{ display: 'none' }}>
             <Card>
               <CardHeader className="pb-4">
                 <CardTitle className="text-lg">Admin/Treasurer Login</CardTitle>
