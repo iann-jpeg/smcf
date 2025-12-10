@@ -36,6 +36,8 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import TopSaverBadge from "@/components/analytics/TopSaverBadge";
+import MemberCycleChart from "@/components/analytics/MemberCycleChart";
+import CycleQRPayment from "@/components/CycleQRPayment";
 
 interface MemberDashboardProps {
   userData: any;
@@ -72,18 +74,17 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
     memberPosition: userData?.position || 0,
   });
 
-  // Silent background data fetch without UI flicker
-  useEffect(() => {
+  // Define fetchData function outside useEffect so it can be reused
+  const fetchData = async () => {
     // Safety check - ensure userData exists
     if (!userData || !userData._id) {
       console.warn("MemberDashboard: userData is undefined or missing _id");
       return;
     }
 
-    const fetchData = async () => {
-      try {
+    try {
         // Fetch all data in parallel including fresh member data
-        const [cycleRes, paymentsRes, loansRes, announcementsRes, memberRes, savingsSummaryRes, allSavingsRes] =
+      const [cycleRes, paymentsRes, loansRes, announcementsRes, memberRes, savingsSummaryRes, allSavingsRes] =
           await Promise.all([
             fetch(`${API_BASE}/api/cycles/current`, {
               headers: { ...authService.getAuthHeaders() },
@@ -185,7 +186,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         const totalMembersCount =
           cycleData.success && cycleData.data?.total_members
             ? cycleData.data.total_members
-            : 14; // Default to 14 members if not available
+            : 27; // Default to 27 members if not available
 
         console.log("👥 Total members count:", totalMembersCount);
         console.log("💰 Payments data:", Array.isArray(payments) ? payments.length : 0, "payments");
@@ -310,10 +311,18 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
           }
           return prev;
         });
-      } catch (error) {
-        console.error("Error fetching member data:", error);
-      }
-    };
+    } catch (error) {
+      console.error("Error fetching member data:", error);
+    }
+  };
+
+  // Silent background data fetch without UI flicker
+  useEffect(() => {
+    // Safety check - ensure userData exists
+    if (!userData || !userData._id) {
+      console.warn("MemberDashboard: userData is undefined or missing _id");
+      return;
+    }
 
     // Initial fetch
     fetchData();
@@ -679,6 +688,20 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
           </div>
 
           <div className="text-center space-y-4">
+            <CycleQRPayment 
+              onPaymentSuccess={fetchData}
+              contributionAmount={224}
+            />
+            
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-white px-2 text-muted-foreground">Or</span>
+              </div>
+            </div>
+
             <Button
               onClick={handleMakePayment}
               variant="mpesa"
@@ -732,6 +755,9 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Cycle Trend Chart */}
+      <MemberCycleChart />
 
       <Tabs defaultValue="overview" className="w-full">
         <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">

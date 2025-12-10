@@ -285,6 +285,45 @@ router.put("/:id/status", protect, adminOnly, async (req, res) => {
 });
 
 // Get all members' savings (admin only)
+// Get all members savings summary (accessible to all authenticated users for top saver badge)
+router.get("/all-members", protect, async (req, res) => {
+  try {
+    // Get all members with their savings data
+    const members = await Member.find().select(
+      "name member_id total_savings wallet_balance"
+    );
+
+    // Get savings summary for each member (only completed transactions)
+    const membersWithSavings = await Promise.all(
+      members.map(async (member) => {
+        const transactions = await Saving.find({ 
+          member_id: member._id,
+          status: "completed"
+        });
+
+        const totalDeposits = transactions
+          .filter((t) => t.transaction_type === "deposit")
+          .reduce((sum, t) => sum + t.amount, 0);
+
+        return {
+          _id: member._id,
+          name: member.name,
+          member_id: member.member_id,
+          totalDeposits,
+        };
+      })
+    );
+
+    res.json({
+      success: true,
+      data: membersWithSavings,
+    });
+  } catch (error) {
+    console.error("Error fetching all members savings:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 router.get("/admin/all", protect, adminOnly, async (req, res) => {
   try {
     // Get all members with their savings data
@@ -450,6 +489,129 @@ router.delete("/", protect, adminOnly, async (req, res) => {
     });
   } catch (error) {
     console.error("Error clearing savings:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// QR-based transfer between members
+router.post("/qr-transfer", protect, async (req, res) => {
+  try {
+    const senderId = req.member ? req.member._id : req.admin._id;
+    const { recipientId, recipientMemberId, amount, qrData } = req.body;
+
+    // Validate amount
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Invalid amount" 
+      });
+    }
+
+    // Validate QR data
+    if (!qrData || qrData.type !== "SMCF_WALLET_DEPOSIT") {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Invalid QR code data" 
+      });
+    }
+
+    // Get sender
+    const sender = await Member.findById(senderId);
+    if (!sender) {
+      return res.status(404).json({ 
+        success: false, 
+        error: "Sender not found" 
+      });
+    }
+
+    // Check sender balance
+    if (sender.wallet_balance < amount) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Insufficient balance" 
+      });
+    }
+
+    // Get recipient
+    const recipient = await Member.findById(recipientId);
+    if (!recipient) {
+      return res.status(404).json({ 
+        success: false, 
+        error: "Recipient not found" 
+      });
+    }
+
+    // Verify recipient member_id matches QR data
+    if (recipient.member_id !== recipientMemberId) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "QR code mismatch" 
+      });
+    }
+
+    // Deduct from sender
+    sender.wallet_balance -= amount;
+    await sender.save();
+
+    // Add to recipient
+    recipient.wallet_balance += amount;
+    recipient.total_savings += amount;
+    await recipient.save();
+
+    // Create withdrawal transaction for sender
+    const withdrawalTxn = await Saving.create({
+      member_id: senderId,
+      amount: amount,
+      transaction_type: "withdrawal",
+      status: "completed",
+      notes: `QR Transfer to ${recipient.name} (${recipient.member_id})`,
+      balance_after: sender.wallet_balance,
+    });
+
+    // Create deposit transaction for recipient
+    const depositTxn = await Saving.create({
+      member_id: recipientId,
+      amount: amount,
+      transaction_type: "deposit",
+      status: "completed",
+      notes: `QR Transfer from ${sender.name} (${sender.member_id})`,
+      balance_after: recipient.wallet_balance,
+    });
+
+    // Emit Socket.IO events
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("qrTransfer", {
+        senderId: sender._id,
+        senderName: sender.name,
+        recipientId: recipient._id,
+        recipientName: recipient.name,
+        amount,
+        timestamp: new Date(),
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Successfully transferred KES ${amount} to ${recipient.name}`,
+      data: {
+        sender: {
+          id: sender._id,
+          name: sender.name,
+          newBalance: sender.wallet_balance,
+        },
+        recipient: {
+          id: recipient._id,
+          name: recipient.name,
+          newBalance: recipient.wallet_balance,
+        },
+        amount,
+        withdrawalTxn: withdrawalTxn._id,
+        depositTxn: depositTxn._id,
+      },
+    });
+  } catch (error) {
+    console.error("Error processing QR transfer:", error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

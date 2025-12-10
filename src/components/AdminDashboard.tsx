@@ -202,6 +202,300 @@ const AdminDashboard = ({
     }
   };
 
+  const generateDisbursementReceipt = (disbursement: any) => {
+    const transactionId = disbursement.mpesa_transaction_id || 
+      disbursement.transaction_id || 
+      `MAN${disbursement._id?.slice(-10) || Math.random().toString(36).substring(7).toUpperCase()}`;
+    
+    const date = new Date(disbursement.disbursement_date || disbursement.created_at);
+    const formattedDate = date.toLocaleDateString('en-GB', { 
+      day: 'numeric', 
+      month: 'long', 
+      year: 'numeric' 
+    });
+    
+    const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Disbursement Receipt - ${transactionId}</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #1a472a 0%, #2d5f3f 100%);
+      padding: 40px 20px;
+      min-height: 100vh;
+    }
+    
+    .receipt-container {
+      max-width: 500px;
+      margin: 0 auto;
+      background: #000;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    
+    .header {
+      background: linear-gradient(135deg, #1a472a 0%, #2d5f3f 100%);
+      padding: 30px 20px;
+      text-align: center;
+      color: white;
+    }
+    
+    .header h1 {
+      font-size: 24px;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+    
+    .status-badge {
+      display: inline-block;
+      background: rgba(76, 175, 80, 0.2);
+      color: #4caf50;
+      padding: 8px 20px;
+      border-radius: 20px;
+      font-size: 16px;
+      font-weight: 600;
+      margin-top: 10px;
+    }
+    
+    .transaction-info {
+      background: #1a1a1a;
+      padding: 20px;
+      border-bottom: 1px solid #333;
+    }
+    
+    .transaction-info p {
+      color: #888;
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
+    
+    .transaction-info .value {
+      color: #9acd32;
+      font-weight: 600;
+    }
+    
+    .checkmark {
+      width: 80px;
+      height: 80px;
+      background: #4caf50;
+      border-radius: 50%;
+      margin: 0 auto 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 48px;
+      color: white;
+    }
+    
+    .amount-section {
+      background: #000;
+      padding: 30px 20px;
+      text-align: center;
+      border-bottom: 1px solid #333;
+    }
+    
+    .amount-label {
+      color: #888;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+    
+    .amount {
+      color: #9acd32;
+      font-size: 36px;
+      font-weight: bold;
+      margin-bottom: 20px;
+    }
+    
+    .details-section {
+      background: #0a0a0a;
+      padding: 25px 20px;
+    }
+    
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid #222;
+      color: white;
+    }
+    
+    .detail-row:last-child {
+      border-bottom: none;
+    }
+    
+    .detail-label {
+      color: #888;
+      font-size: 14px;
+    }
+    
+    .detail-value {
+      color: white;
+      font-size: 14px;
+      font-weight: 600;
+      text-align: right;
+    }
+    
+    .transaction-details-header {
+      color: white;
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #333;
+    }
+    
+    .footer {
+      background: #000;
+      padding: 20px;
+      text-align: center;
+    }
+    
+    .action-buttons {
+      display: flex;
+      justify-content: space-around;
+      margin-bottom: 20px;
+    }
+    
+    .action-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      color: #9acd32;
+      font-size: 12px;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    
+    .action-btn .icon {
+      width: 40px;
+      height: 40px;
+      border: 2px solid #333;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 8px;
+      font-size: 20px;
+    }
+    
+    @media print {
+      body {
+        background: white;
+        padding: 0;
+      }
+      
+      .receipt-container {
+        box-shadow: none;
+        max-width: 100%;
+      }
+      
+      .action-buttons {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="receipt-container">
+    <div class="header">
+      <h1>Transaction Details</h1>
+    </div>
+    
+    <div class="transaction-info">
+      <div class="status-badge">Success</div>
+      <p style="margin-top: 15px;">Transaction ID: <span class="value">${transactionId}</span></p>
+      <p>Date: <span class="value">${formattedDate}</span></p>
+    </div>
+    
+    <div class="amount-section">
+      <div class="checkmark">✓</div>
+      <div class="amount-label">Disbursed Amount</div>
+      <div class="amount">${(disbursement.amount || 0).toLocaleString()} KES</div>
+    </div>
+    
+    <div class="details-section">
+      <div class="transaction-details-header">From</div>
+      <div class="detail-row">
+        <span class="detail-label">Account Name</span>
+        <span class="detail-value">SMCF ADMIN</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Organization</span>
+        <span class="detail-value">Smart Money Cash Flow</span>
+      </div>
+    </div>
+    
+    <div class="details-section">
+      <div class="transaction-details-header">Transaction Details</div>
+      <div class="detail-row">
+        <span class="detail-label">To</span>
+        <span class="detail-value">${disbursement.recipient_id?.name || 'Unknown'}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Phone Number</span>
+        <span class="detail-value">${disbursement.recipient_id?.phone || disbursement.phone || 'N/A'}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Cycle Number</span>
+        <span class="detail-value">#${disbursement.cycle_id?.cycle_number || 'N/A'}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Method</span>
+        <span class="detail-value">${disbursement.method === 'mpesa' ? 'M-Pesa' : 'Manual'}</span>
+      </div>
+    </div>
+    
+    <div class="footer">
+      <div class="action-buttons">
+        <div class="action-btn" onclick="window.print()">
+          <div class="icon">📄</div>
+          <span>Download<br>Receipt</span>
+        </div>
+        <div class="action-btn" onclick="window.print()">
+          <div class="icon">🔄</div>
+          <span>Share<br>Receipt</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // Auto print on load (optional)
+    // window.onload = function() { window.print(); }
+  </script>
+</body>
+</html>
+`;
+
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const newWindow = window.open(url, '_blank');
+    
+    if (newWindow) {
+      newWindow.onload = () => {
+        setTimeout(() => {
+          newWindow.print();
+        }, 250);
+      };
+    }
+    
+    toast({
+      title: "Receipt Generated",
+      description: "Opening receipt in new window...",
+    });
+  };
+
   const generateDisbursementsPDF = () => {
     const totalDisbursed = disbursements.reduce((sum, d) => sum + (d.amount || 0), 0);
     const completedDisbursements = disbursements.filter(d => d.status === 'completed').length;
@@ -2037,6 +2331,20 @@ Thank you for your cooperation! 🙏`;
                             });
                             fetchDisbursements();
                             fetchCurrentCycle();
+                            
+                            // Auto-generate receipt after marking as disbursed
+                            setTimeout(() => {
+                              const disbursementData = data.disbursement || {
+                                _id: data.id,
+                                recipient_id: currentCycle.recipient_id,
+                                cycle_id: currentCycle,
+                                amount: safeMembers.length * 204,
+                                method: "manual",
+                                status: "completed",
+                                disbursement_date: new Date().toISOString(),
+                              };
+                              generateDisbursementReceipt(disbursementData);
+                            }, 1000);
                           } else {
                             throw new Error(data.error || "Failed to record disbursement");
                           }
@@ -2156,10 +2464,10 @@ Thank you for your cooperation! 🙏`;
                 {disbursements.map((disbursement, index) => (
                   <div
                     key={disbursement._id || index}
-                    className="flex items-center justify-between p-3 border rounded-lg">
-                    <div className="flex items-center gap-3">
+                    className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center gap-3 flex-1">
                       <CheckCircle className="w-5 h-5 text-financial-success" />
-                      <div>
+                      <div className="flex-1">
                         <div className="font-medium">
                           {disbursement.recipient_id?.name || "Unknown"}
                         </div>
@@ -2176,19 +2484,30 @@ Thank you for your cooperation! 🙏`;
                         </div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="font-semibold text-financial-success">
-                        KES {disbursement.amount?.toLocaleString() || 0}
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <div className="font-semibold text-financial-success">
+                          KES {disbursement.amount?.toLocaleString() || 0}
+                        </div>
+                        <Badge
+                          variant={
+                            disbursement.status === "completed"
+                              ? "default"
+                              : "secondary"
+                          }
+                          className="text-xs">
+                          {disbursement.status}
+                        </Badge>
                       </div>
-                      <Badge
-                        variant={
-                          disbursement.status === "completed"
-                            ? "default"
-                            : "secondary"
-                        }
-                        className="text-xs">
-                        {disbursement.status}
-                      </Badge>
+                      {disbursement.status === "completed" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => generateDisbursementReceipt(disbursement)}
+                          title="Download Receipt">
+                          <Download className="w-4 h-4" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ))}

@@ -42,6 +42,8 @@ import {
 import { useEffect, useState } from "react";
 import smcfLogo from '@/assets/smcf-logo.png';
 import TopSaverBadge from "@/components/analytics/TopSaverBadge";
+import MemberQRCode from "@/components/MemberQRCode";
+import QRScanner from "@/components/QRScanner";
 
 interface MemberWalletProps {
   userData: any;
@@ -78,7 +80,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
         fetch(`${API_BASE}/api/savings/transactions?limit=20`, {
           headers: { ...authService.getAuthHeaders() },
         }),
-        fetch(`${API_BASE}/api/savings/admin/all`, {
+        fetch(`${API_BASE}/api/savings/all-members`, {
           headers: { ...authService.getAuthHeaders() },
         }),
       ]);
@@ -511,6 +513,136 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
     }
   };
 
+  const generateTransactionStatement = (transaction: any) => {
+    const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>SMCF Transaction Statement</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; color: #333; }
+    .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #2563eb; padding-bottom: 20px; }
+    .logo { max-width: 120px; height: auto; margin: 0 auto 15px; display: block; }
+    .header h1 { color: #2563eb; margin: 0; font-size: 28px; }
+    .header p { color: #666; margin: 5px 0; }
+    .receipt-box { background: #f9fafb; border: 2px solid #2563eb; border-radius: 12px; padding: 30px; margin: 30px 0; }
+    .receipt-title { text-align: center; color: #2563eb; font-size: 24px; font-weight: bold; margin-bottom: 20px; }
+    .receipt-row { display: flex; justify-content: space-between; padding: 15px 0; border-bottom: 1px solid #e5e7eb; }
+    .receipt-row:last-child { border-bottom: none; }
+    .receipt-label { font-weight: 600; color: #666; }
+    .receipt-value { font-weight: bold; color: #333; }
+    .amount-highlight { font-size: 32px; color: #16a34a; text-align: center; margin: 20px 0; }
+    .status-badge { display: inline-block; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: bold; }
+    .status-completed { background: #dcfce7; color: #16a34a; }
+    .status-pending { background: #fef3c7; color: #d97706; }
+    .footer { margin-top: 40px; text-align: center; color: #666; font-size: 12px; border-top: 2px solid #e5e7eb; padding-top: 20px; }
+    .watermark { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-45deg); font-size: 100px; color: rgba(37, 99, 235, 0.05); font-weight: bold; z-index: -1; }
+  </style>
+</head>
+<body>
+  <div class="watermark">SMCF</div>
+  <div class="header">
+    <img src="${smcfLogo}" alt="SMCF Logo" class="logo" />
+    <h1>SMCF - Smart Moves Cash Flow</h1>
+    <p>Transaction Statement</p>
+    <p>Generated on: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p>
+  </div>
+
+  <div class="receipt-box">
+    <div class="receipt-title">Transaction Receipt</div>
+    
+    <div class="amount-highlight">
+      ${transaction.transaction_type === "withdrawal" ? "-" : "+"}KES ${(transaction.amount || 0).toLocaleString()}
+    </div>
+
+    <div class="receipt-row">
+      <span class="receipt-label">Transaction ID</span>
+      <span class="receipt-value">${transaction._id}</span>
+    </div>
+    
+    <div class="receipt-row">
+      <span class="receipt-label">Member Name</span>
+      <span class="receipt-value">${userData?.name || 'Member'}</span>
+    </div>
+    
+    <div class="receipt-row">
+      <span class="receipt-label">Member ID</span>
+      <span class="receipt-value">${userData?.member_id || '-'}</span>
+    </div>
+    
+    <div class="receipt-row">
+      <span class="receipt-label">Transaction Type</span>
+      <span class="receipt-value">${(transaction.transaction_type || 'transaction').toUpperCase()}</span>
+    </div>
+    
+    <div class="receipt-row">
+      <span class="receipt-label">Date & Time</span>
+      <span class="receipt-value">${new Date(transaction.created_at).toLocaleString()}</span>
+    </div>
+    
+    <div class="receipt-row">
+      <span class="receipt-label">Amount</span>
+      <span class="receipt-value">KES ${(transaction.amount || 0).toLocaleString()}</span>
+    </div>
+    
+    <div class="receipt-row">
+      <span class="receipt-label">Balance After</span>
+      <span class="receipt-value">KES ${(transaction.balance_after || 0).toLocaleString()}</span>
+    </div>
+    
+    ${transaction.mpesa_receipt ? `
+    <div class="receipt-row">
+      <span class="receipt-label">M-Pesa Receipt</span>
+      <span class="receipt-value">${transaction.mpesa_receipt}</span>
+    </div>
+    ` : ''}
+    
+    ${transaction.notes ? `
+    <div class="receipt-row">
+      <span class="receipt-label">Notes</span>
+      <span class="receipt-value">${transaction.notes}</span>
+    </div>
+    ` : ''}
+    
+    <div class="receipt-row">
+      <span class="receipt-label">Status</span>
+      <span class="receipt-value">
+        <span class="status-badge status-${transaction.status}">${(transaction.status || 'completed').toUpperCase()}</span>
+      </span>
+    </div>
+  </div>
+
+  <div class="footer">
+    <p><strong>SMCF - Smart Moves Cash Flow</strong></p>
+    <p>Digital Table Banking Platform | Automated Contributions | Secure Transactions</p>
+    <p>This is an official transaction statement. For queries, contact SMCF support.</p>
+    <p style="margin-top: 15px; font-size: 10px;">Statement ID: ${transaction._id} | Printed: ${new Date().toLocaleString()}</p>
+  </div>
+</body>
+</html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      setTimeout(() => {
+        printWindow.print();
+        toast({
+          title: 'Statement Ready',
+          description: 'Print dialog opened. Choose "Save as PDF" to download.',
+        });
+      }, 500);
+    } else {
+      toast({
+        title: 'Pop-up Blocked',
+        description: 'Please allow pop-ups for this site.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const exportWalletCSV = () => {
     try {
       const csvData = [
@@ -590,14 +722,6 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
 
   return (
     <div className="space-y-6">
-      {/* Debug Card */}
-      <Card className="bg-blue-50 border-blue-300">
-        <CardContent className="pt-4 text-sm">
-          <strong>Debug Info:</strong> isTopSaver = <span className="font-bold">{String(isTopSaver)}</span> | 
-          Deposits = KES {summary.totalDeposits?.toLocaleString() || 0}
-        </CardContent>
-      </Card>
-
       {/* Top Saver Badge */}
       {isTopSaver && (
         <Card className="bg-gradient-to-r from-yellow-50 to-yellow-100 dark:from-yellow-950 dark:to-yellow-900 border-yellow-300">
@@ -691,7 +815,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
             Deposit money to your savings wallet or request withdrawals
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex gap-3">
+        <CardContent className="flex flex-wrap gap-3">
           <Button
             onClick={() => setShowDepositDialog(true)}
             className="flex items-center gap-2">
@@ -706,8 +830,12 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
             <ArrowUpRight className="w-4 h-4" />
             Request Withdrawal
           </Button>
+          <QRScanner onScanSuccess={fetchWalletData} />
         </CardContent>
       </Card>
+
+      {/* Member QR Code */}
+      <MemberQRCode userData={userData} />
 
       {/* Transaction History */}
       <Card>
@@ -773,25 +901,35 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
                       )}
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div
-                      className={`text-lg font-bold ${
-                        transaction.transaction_type === "deposit" ||
-                        transaction.transaction_type === "interest"
-                          ? "text-green-600"
-                          : "text-red-600"
-                      }`}>
-                      {transaction.transaction_type === "withdrawal"
-                        ? "-"
-                        : "+"}
-                      KES {(transaction.amount || 0).toLocaleString()}
+                  <div className="text-right flex items-center gap-3">
+                    <div>
+                      <div
+                        className={`text-lg font-bold ${
+                          transaction.transaction_type === "deposit" ||
+                          transaction.transaction_type === "interest"
+                            ? "text-green-600"
+                            : "text-red-600"
+                        }`}>
+                        {transaction.transaction_type === "withdrawal"
+                          ? "-"
+                          : "+"}
+                        KES {(transaction.amount || 0).toLocaleString()}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Balance: KES {(transaction.balance_after || 0).toLocaleString()}
+                      </div>
+                      <div className="mt-1">
+                        {getStatusBadge(transaction.status)}
+                      </div>
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      Balance: KES {(transaction.balance_after || 0).toLocaleString()}
-                    </div>
-                    <div className="mt-1">
-                      {getStatusBadge(transaction.status)}
-                    </div>
+                    <Button
+                      onClick={() => generateTransactionStatement(transaction)}
+                      variant="outline"
+                      size="sm"
+                      className="flex-shrink-0"
+                      title="Download Statement">
+                      <Download className="w-4 h-4" />
+                    </Button>
                   </div>
                 </div>
               ))}

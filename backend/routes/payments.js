@@ -985,4 +985,110 @@ router.delete("/", protect, async (req, res) => {
   }
 });
 
+// QR-based cycle payment
+router.post("/qr-cycle-payment", protect, async (req, res) => {
+  try {
+    const payerId = req.member ? req.member._id : req.admin._id;
+    const { organizationMemberId, amount, qrData } = req.body;
+
+    // Validate amount
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Invalid amount" 
+      });
+    }
+
+    // Validate QR data
+    if (!qrData || qrData.type !== "SMCF_WALLET_DEPOSIT") {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Invalid QR code data" 
+      });
+    }
+
+    // Get payer (member making payment)
+    const payer = await Member.findById(payerId);
+    if (!payer) {
+      return res.status(404).json({ 
+        success: false, 
+        error: "Member not found" 
+      });
+    }
+
+    // Get current cycle
+    const currentCycle = await Cycle.findOne({ status: "active" });
+    if (!currentCycle) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "No active cycle found" 
+      });
+    }
+
+    // Check if already paid for this cycle
+    const existingPayment = await Payment.findOne({
+      member_id: payerId,
+      cycle_number: currentCycle.cycle_number,
+      status: "completed",
+    });
+
+    if (existingPayment) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Already paid for this cycle" 
+      });
+    }
+
+    // Create payment record
+    const payment = await Payment.create({
+      member_id: payerId,
+      amount: amount,
+      phone: payer.phone,
+      payment_method: "qr_transfer",
+      cycle_number: currentCycle.cycle_number,
+      status: "completed",
+      mpesa_transaction_id: `QR-${Date.now()}`,
+    });
+
+    // Update member contribution tracking
+    payer.total_contributed = (payer.total_contributed || 0) + amount;
+    payer.payment_status = "paid";
+    await payer.save();
+
+    // Emit Socket.IO event
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("paymentRecorded", {
+        payment: {
+          ...payment.toObject(),
+          member_id: {
+            _id: payer._id,
+            name: payer.name,
+            member_id: payer.member_id,
+          },
+        },
+        timestamp: new Date(),
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Cycle payment of KES ${amount} recorded successfully`,
+      data: {
+        payment: payment,
+        member: {
+          id: payer._id,
+          name: payer.name,
+          member_id: payer.member_id,
+          total_contributed: payer.total_contributed,
+        },
+        cycle: currentCycle.cycle_number,
+      },
+    });
+  } catch (error) {
+    console.error("Error processing QR cycle payment:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 export default router;
