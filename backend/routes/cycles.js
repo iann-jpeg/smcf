@@ -18,10 +18,14 @@ router.get("/current", protect, async (req, res) => {
       const totalMembers = await Member.countDocuments();
       const nextRecipient = await Member.findOne().sort({ position: 1 });
 
+      // Official cycle start date: January 5, 2026
+      const cycleStartDate = new Date('2026-01-05T00:00:00.000Z');
+      const cycleEndDate = new Date(cycleStartDate.getTime() + 5 * 24 * 60 * 60 * 1000); // 5 days from start
+
       cycle = await Cycle.create({
         cycle_number: 1,
-        start_date: new Date(),
-        end_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000), // 5 days
+        start_date: cycleStartDate,
+        end_date: cycleEndDate,
         status: "active",
         total_members: totalMembers,
         next_recipient: nextRecipient?._id,
@@ -125,10 +129,16 @@ router.post("/start", protect, adminOnly, async (req, res) => {
     const totalMembers = await Member.countDocuments({ status: "active" });
     const newCycleNumber = (currentCycle?.cycle_number || 0) + 1;
 
+    // Calculate start date based on cycle number
+    // First cycle starts on January 5, 2026, subsequent cycles are 5 days apart
+    const firstCycleStart = new Date('2026-01-05T00:00:00.000Z');
+    const cycleStartDate = new Date(firstCycleStart.getTime() + ((newCycleNumber - 1) * 5 * 24 * 60 * 60 * 1000));
+    const cycleEndDate = new Date(cycleStartDate.getTime() + 5 * 24 * 60 * 60 * 1000);
+
     const newCycle = await Cycle.create({
       cycle_number: newCycleNumber,
-      start_date: new Date(),
-      end_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000), // 5 days
+      start_date: cycleStartDate,
+      end_date: cycleEndDate,
       status: "active",
       total_members: totalMembers,
       next_recipient: recipient._id,

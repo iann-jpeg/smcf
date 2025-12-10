@@ -3,6 +3,7 @@ import AdminDashboard from "@/components/AdminDashboard";
 import AdminSetup from "@/components/AdminSetup";
 import AuthDialog from "@/components/AuthDialog";
 import Dashboard from "@/components/Dashboard";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -375,13 +376,16 @@ const Index = () => {
               </p>
             </div>
           </div>
-          <Button
-            onClick={() => setShowAuth(true)}
-            variant="default"
-            size="sm"
-            className="text-xs sm:text-sm px-3 sm:px-4">
-            Login / Register
-          </Button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Button
+              onClick={() => setShowAuth(true)}
+              variant="default"
+              size="sm"
+              className="text-xs sm:text-sm px-3 sm:px-4">
+              Login / Register
+            </Button>
+          </div>
         </div>
       </header>
 

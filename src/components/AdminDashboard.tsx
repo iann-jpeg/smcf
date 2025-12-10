@@ -3,6 +3,7 @@ import AnnouncementDialog from "@/components/AnnouncementDialog";
 import MpesaDisbursementDialog from "@/components/MpesaDisbursementDialog";
 import SavingsTab from "@/components/admin/SavingsTab";
 import ContributionCycleChart from "@/components/analytics/ContributionCycleChart";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +28,7 @@ import { useToast } from "@/hooks/use-toast";
 import API_BASE from "@/lib/api";
 import { authService } from "@/lib/authService";
 import {
+  AlertCircle,
   AlertTriangle,
   CheckCircle,
   DollarSign,
@@ -109,6 +111,8 @@ const AdminDashboard = ({
   const [loans, setLoans] = useState<any[]>([]);
   const [currentCycle, setCurrentCycle] = useState<any>(null);
   const [cycleStats, setCycleStats] = useState<any>(null);
+  const [savingsData, setSavingsData] = useState<any[]>([]);
+  const [pendingWithdrawals, setPendingWithdrawals] = useState<any[]>([]);
 
   // Safe fallbacks to avoid runtime errors when data is undefined
   const safeMembers = Array.isArray(members) ? members : [];
@@ -775,6 +779,48 @@ const AdminDashboard = ({
     // This function is kept for backward compatibility but does nothing
   };
 
+  const fetchSavings = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/savings/admin/all`, {
+        headers: {
+          ...authService.getAuthHeaders(),
+        },
+      });
+      const data = await res.json();
+      // Only update if data changed
+      setSavingsData((prev) => {
+        const newData = data.success && Array.isArray(data.data) ? data.data : [];
+        if (JSON.stringify(prev) !== JSON.stringify(newData)) {
+          return newData;
+        }
+        return prev;
+      });
+    } catch (e) {
+      console.error("Could not fetch savings data", e);
+    }
+  };
+
+  const fetchPendingWithdrawals = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/savings/admin/pending-withdrawals`, {
+        headers: {
+          ...authService.getAuthHeaders(),
+        },
+      });
+      const data = await res.json();
+      // Only update if data changed
+      setPendingWithdrawals((prev) => {
+        const newData = data.success && Array.isArray(data.data) ? data.data : [];
+        if (JSON.stringify(prev) !== JSON.stringify(newData)) {
+          return newData;
+        }
+        return prev;
+      });
+    } catch (e) {
+      console.error("Could not fetch pending withdrawals", e);
+    }
+  };
+
   // Fetch all data silently in parallel
   const fetchAllData = async () => {
     // Fetch all in parallel for better performance
@@ -784,6 +830,8 @@ const AdminDashboard = ({
       fetchLoans(),
       fetchCurrentCycle(),
       fetchCycleStats(),
+      fetchSavings(),
+      fetchPendingWithdrawals(),
     ]);
 
     // Refresh members silently
@@ -1409,6 +1457,7 @@ Thank you for your cooperation! 🙏`;
           </p>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
+          <ThemeToggle />
           <Button
             variant="outline"
             onClick={() => setShowProfileDialog(true)}
@@ -1441,6 +1490,405 @@ Thank you for your cooperation! 🙏`;
           </Button>
         </div>
       </div>
+
+      {/* System Overview Dashboard */}
+      <Card className="border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-xl">
+            <TrendingUp className="w-6 h-6 text-primary" />
+            System Overview Dashboard
+          </CardTitle>
+          <CardDescription>
+            Real-time summary of all system metrics - Cycle #{currentCycle?.cycle_number || 1}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Total Members */}
+            <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900 border-blue-200">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-blue-600 dark:text-blue-400">Total Members</p>
+                    <p className="text-3xl font-bold text-blue-900 dark:text-blue-100">{safeMembers.length}</p>
+                    <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                      Active participants
+                    </p>
+                  </div>
+                  <User className="w-12 h-12 text-blue-300 dark:text-blue-700" />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Payment Progress */}
+            <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900 border-green-200">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-green-600 dark:text-green-400">Payments This Cycle</p>
+                    <p className="text-3xl font-bold text-green-900 dark:text-green-100">
+                      {paidMembers.length}/{safeMembers.length}
+                    </p>
+                    <div className="mt-2">
+                      <Progress 
+                        value={safeMembers.length > 0 ? (paidMembers.length / safeMembers.length) * 100 : 0} 
+                        className="h-2"
+                      />
+                      <p className="text-xs text-green-700 dark:text-green-300 mt-1">
+                        {safeMembers.length > 0 ? Math.round((paidMembers.length / safeMembers.length) * 100) : 0}% complete
+                      </p>
+                    </div>
+                  </div>
+                  <CheckCircle className="w-12 h-12 text-green-300 dark:text-green-700" />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Total Collected */}
+            <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900 border-emerald-200">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">Collected Amount</p>
+                    <p className="text-3xl font-bold text-emerald-900 dark:text-emerald-100">
+                      {totalCollected.toLocaleString()}
+                    </p>
+                    <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-1">
+                      of {(safeMembers.length * contributionAmount).toLocaleString()} KES
+                    </p>
+                  </div>
+                  <DollarSign className="w-12 h-12 text-emerald-300 dark:text-emerald-700" />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Pending Payments */}
+            <Card className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900 border-amber-200">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-amber-600 dark:text-amber-400">Pending Members</p>
+                    <p className="text-3xl font-bold text-amber-900 dark:text-amber-100">{pendingMembers.length}</p>
+                    <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                      {pendingMembers.length > 0 ? 'Need to pay' : 'All paid!'}
+                    </p>
+                  </div>
+                  <AlertTriangle className="w-12 h-12 text-amber-300 dark:text-amber-700" />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Active Loans */}
+            <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900 border-purple-200">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-purple-600 dark:text-purple-400">Active Loans</p>
+                    <p className="text-3xl font-bold text-purple-900 dark:text-purple-100">
+                      {loans.filter((l: any) => ['approved', 'disbursed'].includes(l.status)).length}
+                    </p>
+                    <p className="text-xs text-purple-700 dark:text-purple-300 mt-1">
+                      Total: KES {loans.filter((l: any) => ['approved', 'disbursed'].includes(l.status))
+                        .reduce((sum: number, l: any) => sum + (l.amount || 0), 0).toLocaleString()}
+                    </p>
+                  </div>
+                  <TrendingUp className="w-12 h-12 text-purple-300 dark:text-purple-700" />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Pending Loan Requests */}
+            <Card className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-950 dark:to-orange-900 border-orange-200">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-orange-600 dark:text-orange-400">Pending Loans</p>
+                    <p className="text-3xl font-bold text-orange-900 dark:text-orange-100">
+                      {loans.filter((l: any) => l.status === 'pending').length}
+                    </p>
+                    <p className="text-xs text-orange-700 dark:text-orange-300 mt-1">
+                      Awaiting approval
+                    </p>
+                  </div>
+                  <AlertTriangle className="w-12 h-12 text-orange-300 dark:text-orange-700" />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Total Disbursements */}
+            <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-950 dark:to-cyan-900 border-cyan-200">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-cyan-600 dark:text-cyan-400">Total Disbursed</p>
+                    <p className="text-3xl font-bold text-cyan-900 dark:text-cyan-100">
+                      {disbursements.filter((d: any) => d.status === 'completed').length}
+                    </p>
+                    <p className="text-xs text-cyan-700 dark:text-cyan-300 mt-1">
+                      KES {disbursements.filter((d: any) => d.status === 'completed')
+                        .reduce((sum: number, d: any) => sum + (d.amount || 0), 0).toLocaleString()}
+                    </p>
+                  </div>
+                  <Wallet className="w-12 h-12 text-cyan-300 dark:text-cyan-700" />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Cycle Progress */}
+            <Card className="bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-950 dark:to-indigo-900 border-indigo-200">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-indigo-600 dark:text-indigo-400">Days Remaining</p>
+                    <p className="text-3xl font-bold text-indigo-900 dark:text-indigo-100">
+                      {currentCycle?.days_left || 0}
+                    </p>
+                    <p className="text-xs text-indigo-700 dark:text-indigo-300 mt-1">
+                      Cycle #{currentCycle?.cycle_number || 1}
+                    </p>
+                  </div>
+                  <TrendingUp className="w-12 h-12 text-indigo-300 dark:text-indigo-700" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Quick Stats Bar */}
+          <div className="mt-6 p-4 bg-muted/50 rounded-lg border">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+              <div>
+                <p className="text-xs text-muted-foreground">Collection Rate</p>
+                <p className="text-lg font-bold text-primary">
+                  {safeMembers.length > 0 ? Math.round((paidMembers.length / safeMembers.length) * 100) : 0}%
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Expected Total</p>
+                <p className="text-lg font-bold text-financial-success">
+                  KES {(safeMembers.length * contributionAmount).toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Recent Payments</p>
+                <p className="text-lg font-bold text-blue-600">
+                  {recentPayments.length}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Total Announcements</p>
+                <p className="text-lg font-bold text-purple-600">
+                  {announcements?.length || 0}
+                </p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Savings Dashboard */}
+      <Card className="border-2 border-emerald-500/20 bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-xl">
+            <Wallet className="w-6 h-6 text-emerald-600" />
+            Savings Dashboard
+          </CardTitle>
+          <CardDescription>
+            Complete overview of member savings and wallet balances
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Total Savings */}
+            <Card className="bg-gradient-to-br from-emerald-100 to-emerald-200 dark:from-emerald-900 dark:to-emerald-800 border-emerald-300">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">Total Savings</p>
+                    <p className="text-3xl font-bold text-emerald-900 dark:text-emerald-100">
+                      {savingsData.reduce((sum, m) => sum + (m.totalDeposits || 0), 0).toLocaleString()}
+                    </p>
+                    <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-1">
+                      KES - All deposits
+                    </p>
+                  </div>
+                  <DollarSign className="w-12 h-12 text-emerald-400 dark:text-emerald-600" />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Total Wallets Balance */}
+            <Card className="bg-gradient-to-br from-teal-100 to-teal-200 dark:from-teal-900 dark:to-teal-800 border-teal-300">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-teal-700 dark:text-teal-300">Wallet Balances</p>
+                    <p className="text-3xl font-bold text-teal-900 dark:text-teal-100">
+                      {safeMembers.reduce((sum, m) => sum + (m.wallet_balance || 0), 0).toLocaleString()}
+                    </p>
+                    <p className="text-xs text-teal-700 dark:text-teal-300 mt-1">
+                      KES - Available funds
+                    </p>
+                  </div>
+                  <Wallet className="w-12 h-12 text-teal-400 dark:text-teal-600" />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Active Savers */}
+            <Card className="bg-gradient-to-br from-green-100 to-green-200 dark:from-green-900 dark:to-green-800 border-green-300">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-green-700 dark:text-green-300">Active Savers</p>
+                    <p className="text-3xl font-bold text-green-900 dark:text-green-100">
+                      {savingsData.filter(m => (m.totalDeposits || 0) > 0).length}
+                    </p>
+                    <p className="text-xs text-green-700 dark:text-green-300 mt-1">
+                      of {safeMembers.length} members
+                    </p>
+                  </div>
+                  <User className="w-12 h-12 text-green-400 dark:text-green-600" />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Top Saver */}
+            <Card className="bg-gradient-to-br from-yellow-100 to-amber-200 dark:from-yellow-900 dark:to-amber-800 border-yellow-300">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-yellow-700 dark:text-yellow-300">Top Saver</p>
+                    <p className="text-xl font-bold text-yellow-900 dark:text-yellow-100 truncate">
+                      {savingsData.length > 0 
+                        ? savingsData.reduce((top, m) => 
+                            (m.totalDeposits || 0) > (top.totalDeposits || 0) ? m : top
+                          , savingsData[0]).name || "N/A"
+                        : "N/A"}
+                    </p>
+                    <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
+                      KES {savingsData.length > 0 
+                        ? (savingsData.reduce((top, m) => 
+                            (m.totalDeposits || 0) > (top.totalDeposits || 0) ? m : top
+                          , savingsData[0]).totalDeposits || 0).toLocaleString()
+                        : "0"}
+                    </p>
+                  </div>
+                  <TrendingUp className="w-12 h-12 text-yellow-400 dark:text-yellow-600" />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Pending Withdrawals */}
+            <Card className="bg-gradient-to-br from-orange-100 to-orange-200 dark:from-orange-900 dark:to-orange-800 border-orange-300">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-orange-700 dark:text-orange-300">Pending Withdrawals</p>
+                    <p className="text-3xl font-bold text-orange-900 dark:text-orange-100">
+                      {pendingWithdrawals.length}
+                    </p>
+                    <p className="text-xs text-orange-700 dark:text-orange-300 mt-1">
+                      KES {pendingWithdrawals.reduce((sum, w) => sum + (w.amount || 0), 0).toLocaleString()}
+                    </p>
+                  </div>
+                  <AlertCircle className="w-12 h-12 text-orange-400 dark:text-orange-600" />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Total Interest Earned */}
+            <Card className="bg-gradient-to-br from-purple-100 to-purple-200 dark:from-purple-900 dark:to-purple-800 border-purple-300">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-purple-700 dark:text-purple-300">Total Interest</p>
+                    <p className="text-3xl font-bold text-purple-900 dark:text-purple-100">
+                      {savingsData.reduce((sum, m) => sum + (m.totalInterestEarned || 0), 0).toLocaleString()}
+                    </p>
+                    <p className="text-xs text-purple-700 dark:text-purple-300 mt-1">
+                      KES - All members
+                    </p>
+                  </div>
+                  <TrendingUp className="w-12 h-12 text-purple-400 dark:text-purple-600" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Savings Statistics Bar */}
+          <div className="mt-6 p-4 bg-white/50 dark:bg-gray-800/50 rounded-lg border border-emerald-200 dark:border-emerald-800">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
+              <div>
+                <p className="text-xs text-muted-foreground">Average Savings</p>
+                <p className="text-lg font-bold text-emerald-600">
+                  KES {savingsData.length > 0 
+                    ? Math.round(savingsData.reduce((sum, m) => sum + (m.totalDeposits || 0), 0) / savingsData.length).toLocaleString()
+                    : "0"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Participation</p>
+                <p className="text-lg font-bold text-teal-600">
+                  {safeMembers.length > 0 
+                    ? Math.round((savingsData.filter(m => (m.totalDeposits || 0) > 0).length / safeMembers.length) * 100)
+                    : 0}%
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Total Withdrawals</p>
+                <p className="text-lg font-bold text-orange-600">
+                  KES {savingsData.reduce((sum, m) => sum + (m.totalWithdrawals || 0), 0).toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Interest Earned</p>
+                <p className="text-lg font-bold text-purple-600">
+                  KES {savingsData.reduce((sum, m) => sum + (m.totalInterestEarned || 0), 0).toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Combined Total</p>
+                <p className="text-lg font-bold text-emerald-700">
+                  KES {(savingsData.reduce((sum, m) => sum + (m.totalDeposits || 0), 0) + 
+                    safeMembers.reduce((sum, m) => sum + (m.wallet_balance || 0), 0)).toLocaleString()}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Top Savers List */}
+          <div className="mt-6">
+            <h4 className="text-sm font-semibold text-muted-foreground mb-3">Top 5 Savers</h4>
+            <div className="space-y-2">
+              {savingsData
+                .sort((a, b) => (b.totalDeposits || 0) - (a.totalDeposits || 0))
+                .slice(0, 5)
+                .map((member, index) => (
+                  <div key={member._id} className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border border-emerald-100 dark:border-emerald-900">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                        index === 0 ? 'bg-yellow-400 text-yellow-900' :
+                        index === 1 ? 'bg-gray-300 text-gray-700' :
+                        index === 2 ? 'bg-amber-600 text-amber-100' :
+                        'bg-emerald-100 text-emerald-700'
+                      }`}>
+                        {index + 1}
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm">{member.name}</p>
+                        <p className="text-xs text-muted-foreground">{member.member_id}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-emerald-600">KES {(member.totalDeposits || 0).toLocaleString()}</p>
+                      <p className="text-xs text-muted-foreground">{member.transactionCount || 0} transactions</p>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Next Recipient Card */}
       {currentCycle?.next_recipient && (

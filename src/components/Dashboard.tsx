@@ -1,5 +1,6 @@
 import AdminDashboard from "@/components/AdminDashboard";
 import MemberDashboard from "@/components/MemberDashboard";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -301,6 +302,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
                 ? "Administrator"
                 : `Member ${userData?.memberId || userData?.member_id || ""}`}
             </Badge>
+            <ThemeToggle />
             <Button
               onClick={() => {
                 console.log("🔄 Manual refresh triggered");
