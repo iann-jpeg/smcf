@@ -34,6 +34,8 @@ import {
 } from "lucide-react";
 import smcfLogo from '@/assets/smcf-logo.png';
 import { useEffect, useState } from "react";
+import SavingsChart from "@/components/analytics/SavingsChart";
+import TopSaverBadge from "@/components/analytics/TopSaverBadge";
 
 const AdminSavingsTab = () => {
   const [membersWithSavings, setMembersWithSavings] = useState<any[]>([]);
@@ -391,6 +393,13 @@ const AdminSavingsTab = () => {
     (m) => (m.currentBalance || 0) > 0
   ).length;
 
+  // Find the member with highest total deposits
+  const topSaver = membersWithSavings.length > 0
+    ? membersWithSavings.reduce((top, member) => 
+        (member.totalDeposits || 0) > (top.totalDeposits || 0) ? member : top
+      )
+    : null;
+
   return (
     <div className="space-y-6">
       {/* Statistics Cards */}
@@ -457,6 +466,11 @@ const AdminSavingsTab = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Savings Analytics Chart */}
+      {membersWithSavings.length > 0 && (
+        <SavingsChart data={membersWithSavings} />
+      )}
 
       {/* Interest Application */}
       <Card>
@@ -546,7 +560,15 @@ const AdminSavingsTab = () => {
                       <TableRow key={member._id}>
                         <TableCell>
                           <div>
-                            <div className="font-medium">{member.name}</div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{member.name}</span>
+                              {topSaver && member._id === topSaver._id && (
+                                <TopSaverBadge 
+                                  isTopSaver={true} 
+                                  currentBalance={member.totalDeposits}
+                                />
+                              )}
+                            </div>
                             <div className="text-sm text-muted-foreground">
                               {member.member_id} • {member.phone}
                             </div>

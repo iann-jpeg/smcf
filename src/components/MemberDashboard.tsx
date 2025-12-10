@@ -35,6 +35,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import TopSaverBadge from "@/components/analytics/TopSaverBadge";
 
 interface MemberDashboardProps {
   userData: any;
@@ -51,6 +52,8 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [memberLoans, setMemberLoans] = useState<any[]>([]);
   const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [isTopSaver, setIsTopSaver] = useState(false);
+  const [savingsBalance, setSavingsBalance] = useState(0);
   const [currentCycleData, setCurrentCycleData] = useState({
     currentCycle: 0,
     daysLeft: 0,
@@ -80,7 +83,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
     const fetchData = async () => {
       try {
         // Fetch all data in parallel including fresh member data
-        const [cycleRes, paymentsRes, loansRes, announcementsRes, memberRes] =
+        const [cycleRes, paymentsRes, loansRes, announcementsRes, memberRes, savingsSummaryRes, allSavingsRes] =
           await Promise.all([
             fetch(`${API_BASE}/api/cycles/current`, {
               headers: { ...authService.getAuthHeaders() },
@@ -95,6 +98,12 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
               headers: { ...authService.getAuthHeaders() },
             }),
             fetch(`${API_BASE}/api/members/${userData._id}`, {
+              headers: { ...authService.getAuthHeaders() },
+            }),
+            fetch(`${API_BASE}/api/savings/summary`, {
+              headers: { ...authService.getAuthHeaders() },
+            }),
+            fetch(`${API_BASE}/api/savings/admin/all`, {
               headers: { ...authService.getAuthHeaders() },
             }),
           ]);
@@ -132,6 +141,25 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
           : [];
 
         setMemberLoans(memberLoansList);
+
+        // Check if member is top saver
+        const savingsSummaryData = await savingsSummaryRes.json();
+        const allSavingsData = await allSavingsRes.json();
+
+        if (savingsSummaryData.success && allSavingsData.success && allSavingsData.data) {
+          const currentBalance = savingsSummaryData.data.currentBalance || 0;
+          setSavingsBalance(currentBalance);
+
+          // Determine top saver based on total deposits
+          const totalDeposits = savingsSummaryData.data.totalDeposits || 0;
+          if (totalDeposits > 0) {
+            const topSaver = allSavingsData.data.reduce((top: any, member: any) => 
+              (member.totalDeposits || 0) > (top.totalDeposits || 0) ? member : top
+            , { totalDeposits: 0 });
+            
+            setIsTopSaver(topSaver._id === userData._id);
+          }
+        }
 
         // Update announcements
         if (Array.isArray(announcementsData)) {
@@ -527,6 +555,52 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
 
   return (
     <div className="space-y-4 md:space-y-6 p-2 md:p-0">
+      {/* Top Saver Badge */}
+      {isTopSaver && (
+        <Card className="bg-gradient-to-r from-yellow-50 to-yellow-100 dark:from-yellow-950 dark:to-yellow-900 border-yellow-300">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <TopSaverBadge 
+                isTopSaver={true} 
+                currentBalance={savingsBalance}
+                className="text-base"
+              />
+              <div>
+                <p className="font-semibold text-yellow-900 dark:text-yellow-100">
+                  Congratulations! You're the Top Saver!
+                </p>
+                <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                  You have the highest savings balance among all members
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Top Saver Badge */}
+      {isTopSaver && (
+        <Card className="bg-gradient-to-r from-yellow-50 to-yellow-100 dark:from-yellow-950 dark:to-yellow-900 border-yellow-300">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <TopSaverBadge 
+                isTopSaver={true} 
+                currentBalance={savingsBalance}
+                className="text-base"
+              />
+              <div>
+                <p className="font-semibold text-yellow-900 dark:text-yellow-100">
+                  Congratulations! You're the Top Saver!
+                </p>
+                <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                  You have the highest savings balance among all members
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Payment Status Alert */}
       <Card
         className={`border-l-4 ${

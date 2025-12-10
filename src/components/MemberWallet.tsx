@@ -41,6 +41,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import smcfLogo from '@/assets/smcf-logo.png';
+import TopSaverBadge from "@/components/analytics/TopSaverBadge";
 
 interface MemberWalletProps {
   userData: any;
@@ -65,21 +66,26 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
     "confirm" | "processing" | "waiting"
   >("confirm");
   const [pollCount, setPollCount] = useState(0);
+  const [isTopSaver, setIsTopSaver] = useState(false);
   const { toast } = useToast();
 
   const fetchWalletData = async () => {
     try {
-      const [summaryRes, transactionsRes] = await Promise.all([
+      const [summaryRes, transactionsRes, allSavingsRes] = await Promise.all([
         fetch(`${API_BASE}/api/savings/summary`, {
           headers: { ...authService.getAuthHeaders() },
         }),
         fetch(`${API_BASE}/api/savings/transactions?limit=20`, {
           headers: { ...authService.getAuthHeaders() },
         }),
+        fetch(`${API_BASE}/api/savings/admin/all`, {
+          headers: { ...authService.getAuthHeaders() },
+        }),
       ]);
 
       const summaryData = await summaryRes.json();
       const transactionsData = await transactionsRes.json();
+      const allSavingsData = await allSavingsRes.json();
 
       if (summaryData.success) {
         setSummary(summaryData.data);
@@ -87,6 +93,58 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
 
       if (transactionsData.success) {
         setTransactions(transactionsData.data);
+      }
+
+      // Determine if this member is the top saver based on total deposits
+      if (allSavingsData.success && allSavingsData.data && summaryData.success) {
+        const members = allSavingsData.data.filter((m: any) => (m.totalDeposits || 0) > 0);
+        
+        if (members.length > 0) {
+          const topSaver = members.reduce((top: any, member: any) => 
+            (member.totalDeposits || 0) > (top.totalDeposits || 0) ? member : top
+          );
+          
+          // Try multiple ID comparisons
+          const userIdStr = String(userData._id || userData.id);
+          const userMemberId = userData.member_id || userData.memberId;
+          const topSaverIdStr = String(topSaver._id || topSaver.id);
+          const topSaverMemberId = topSaver.member_id || topSaver.memberId;
+          
+          // Show top 5 savers for debugging
+          const topFive = members
+            .sort((a: any, b: any) => (b.totalDeposits || 0) - (a.totalDeposits || 0))
+            .slice(0, 5)
+            .map((m: any) => `${m.name} (${m.member_id}): KES ${(m.totalDeposits || 0).toLocaleString()}`);
+          
+          console.log("🏆 Top Saver Check:", {
+            topSaverId: topSaverIdStr,
+            topSaverMemberId: topSaverMemberId,
+            topSaverName: topSaver.name,
+            topSaverDeposits: topSaver.totalDeposits,
+            currentUserId: userIdStr,
+            currentUserMemberId: userMemberId,
+            currentUserName: userData.name,
+            currentUserDeposits: summaryData.data.totalDeposits,
+            isMatchById: topSaverIdStr === userIdStr,
+            isMatchByMemberId: topSaverMemberId === userMemberId,
+            totalMembersWithDeposits: members.length,
+            topFive
+          });
+          
+          // Check both _id and member_id
+          const isTop = ((topSaverIdStr === userIdStr) || (topSaverMemberId && topSaverMemberId === userMemberId)) 
+                        && summaryData.data.totalDeposits > 0;
+          setIsTopSaver(isTop);
+          
+          if (isTop) {
+            console.log("✅ YOU ARE THE TOP SAVER!");
+          } else {
+            console.log("❌ Not the top saver");
+          }
+        } else {
+          console.log("ℹ️ No members with deposits found");
+          setIsTopSaver(false);
+        }
       }
     } catch (error) {
       console.error("Error fetching wallet data:", error);
@@ -528,8 +586,41 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
     );
   };
 
+  console.log("🎨 Rendering MemberWallet, isTopSaver:", isTopSaver);
+
   return (
     <div className="space-y-6">
+      {/* Debug Card */}
+      <Card className="bg-blue-50 border-blue-300">
+        <CardContent className="pt-4 text-sm">
+          <strong>Debug Info:</strong> isTopSaver = <span className="font-bold">{String(isTopSaver)}</span> | 
+          Deposits = KES {summary.totalDeposits?.toLocaleString() || 0}
+        </CardContent>
+      </Card>
+
+      {/* Top Saver Badge */}
+      {isTopSaver && (
+        <Card className="bg-gradient-to-r from-yellow-50 to-yellow-100 dark:from-yellow-950 dark:to-yellow-900 border-yellow-300">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <TopSaverBadge 
+                isTopSaver={true} 
+                currentBalance={summary.totalDeposits}
+                className="text-base"
+              />
+              <div>
+                <p className="font-semibold text-yellow-900 dark:text-yellow-100">
+                  🎉 Congratulations! You're the Top Saver!
+                </p>
+                <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                  You have the highest total deposits: KES {(summary.totalDeposits || 0).toLocaleString()}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Wallet Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900 border-blue-200">

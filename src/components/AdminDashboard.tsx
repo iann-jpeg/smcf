@@ -2,6 +2,7 @@ import AddMemberDialog from "@/components/AddMemberDialog";
 import AnnouncementDialog from "@/components/AnnouncementDialog";
 import MpesaDisbursementDialog from "@/components/MpesaDisbursementDialog";
 import SavingsTab from "@/components/admin/SavingsTab";
+import ContributionCycleChart from "@/components/analytics/ContributionCycleChart";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -1285,7 +1286,7 @@ Thank you for your cooperation! 🙏`;
 
       <Tabs defaultValue="members" className="w-full">
         <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">
-          <TabsList className="inline-flex w-auto md:grid md:w-full md:grid-cols-7 min-w-max">
+          <TabsList className="inline-flex w-auto md:grid md:w-full md:grid-cols-8 min-w-max">
             <TabsTrigger
               value="members"
               className="text-xs sm:text-sm whitespace-nowrap">
@@ -1297,6 +1298,11 @@ Thank you for your cooperation! 🙏`;
               className="text-xs sm:text-sm whitespace-nowrap">
               <span className="hidden sm:inline">Payment Tracking</span>
               <span className="sm:hidden">Payments</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="analytics"
+              className="text-xs sm:text-sm whitespace-nowrap">
+              Analytics
             </TabsTrigger>
             <TabsTrigger
               value="savings"
@@ -1726,6 +1732,67 @@ Thank you for your cooperation! 🙏`;
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="analytics" className="space-y-6">
+          {/* Contribution Cycle Analytics */}
+          <ContributionCycleChart 
+            payments={allPayments} 
+            totalMembers={safeMembers.length} 
+          />
+
+          {/* Statistics Overview */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Total Cycles Completed
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {currentCycle?.cycle_number ? currentCycle.cycle_number - 1 : 0}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Current cycle: #{currentCycle?.cycle_number || 1}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Average Payment Rate
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {safeMembers.length > 0 
+                    ? Math.round((paidMembers.length / safeMembers.length) * 100)
+                    : 0}%
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {paidMembers.length} of {safeMembers.length} members
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Total Collected
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  KES {totalCollected.toLocaleString()}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Across all cycles
+                </p>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="payments" className="space-y-6">

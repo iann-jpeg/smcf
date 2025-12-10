@@ -7,6 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import LoansChart from "@/components/analytics/LoansChart";
 import {
   Dialog,
   DialogContent,
@@ -530,6 +531,11 @@ const LoansTab = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Loans Analytics Chart */}
+      {loans.length > 0 && (
+        <LoansChart loans={loans} />
+      )}
 
       {/* Loans Management Tabs */}
       <Card>
