@@ -6,6 +6,11 @@ const paymentSchema = new mongoose.Schema({
     ref: "Member",
     required: true,
   },
+  paid_by: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Member",
+    // Optional - only populated for payments made on behalf of others (e.g., QR payments)
+  },
   amount: {
     type: Number,
     required: true,
@@ -33,7 +38,7 @@ const paymentSchema = new mongoose.Schema({
   },
   payment_method: {
     type: String,
-    enum: ["mpesa", "lipia", "cash", "bank_transfer", "admin_manual"],
+    enum: ["mpesa", "lipia", "cash", "bank_transfer", "admin_manual", "qr_transfer"],
     default: "lipia",
   },
   status: {

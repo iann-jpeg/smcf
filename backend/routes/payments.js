@@ -1007,12 +1007,29 @@ router.post("/qr-cycle-payment", protect, async (req, res) => {
       });
     }
 
-    // Get payer (member making payment)
+    // Validate organization member ID
+    if (!organizationMemberId) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Organization member ID is required" 
+      });
+    }
+
+    // Get payer (member making payment via STK Push)
     const payer = await Member.findById(payerId);
     if (!payer) {
       return res.status(404).json({ 
         success: false, 
-        error: "Member not found" 
+        error: "Payer not found" 
+      });
+    }
+
+    // Get recipient (member whose cycle is being paid for)
+    const recipient = await Member.findById(organizationMemberId);
+    if (!recipient) {
+      return res.status(404).json({ 
+        success: false, 
+        error: "Recipient member not found" 
       });
     }
 
@@ -1025,9 +1042,9 @@ router.post("/qr-cycle-payment", protect, async (req, res) => {
       });
     }
 
-    // Check if already paid for this cycle
+    // Check if recipient already paid for this cycle
     const existingPayment = await Payment.findOne({
-      member_id: payerId,
+      member_id: organizationMemberId,
       cycle_number: currentCycle.cycle_number,
       status: "completed",
     });
@@ -1035,25 +1052,26 @@ router.post("/qr-cycle-payment", protect, async (req, res) => {
     if (existingPayment) {
       return res.status(400).json({ 
         success: false, 
-        error: "Already paid for this cycle" 
+        error: `${recipient.name} has already paid for this cycle` 
       });
     }
 
-    // Create payment record
+    // Create payment record - credit goes to recipient, but paid by payer
     const payment = await Payment.create({
-      member_id: payerId,
+      member_id: organizationMemberId, // Payment credited to recipient
       amount: amount,
-      phone: payer.phone,
+      phone: payer.phone, // STK Push sent to payer's phone
       payment_method: "qr_transfer",
       cycle_number: currentCycle.cycle_number,
       status: "completed",
       mpesa_transaction_id: `QR-${Date.now()}`,
+      paid_by: payerId, // Track who actually paid
     });
 
-    // Update member contribution tracking
-    payer.total_contributed = (payer.total_contributed || 0) + amount;
-    payer.payment_status = "paid";
-    await payer.save();
+    // Update recipient's contribution tracking (they received the payment)
+    recipient.total_contributed = (recipient.total_contributed || 0) + amount;
+    recipient.payment_status = "paid";
+    await recipient.save();
 
     // Emit Socket.IO event
     const io = req.app.get("io");
@@ -1062,6 +1080,11 @@ router.post("/qr-cycle-payment", protect, async (req, res) => {
         payment: {
           ...payment.toObject(),
           member_id: {
+            _id: recipient._id,
+            name: recipient.name,
+            member_id: recipient.member_id,
+          },
+          payer_info: {
             _id: payer._id,
             name: payer.name,
             member_id: payer.member_id,
@@ -1073,14 +1096,19 @@ router.post("/qr-cycle-payment", protect, async (req, res) => {
 
     res.json({
       success: true,
-      message: `Cycle payment of KES ${amount} recorded successfully`,
+      message: `Cycle payment of KES ${amount} recorded successfully for ${recipient.name}`,
       data: {
         payment: payment,
-        member: {
+        recipient: {
+          id: recipient._id,
+          name: recipient.name,
+          member_id: recipient.member_id,
+          total_contributed: recipient.total_contributed,
+        },
+        payer: {
           id: payer._id,
           name: payer.name,
           member_id: payer.member_id,
-          total_contributed: payer.total_contributed,
         },
         cycle: currentCycle.cycle_number,
       },

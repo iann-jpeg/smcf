@@ -32,7 +32,7 @@ const CycleQRPayment = ({ onPaymentSuccess, contributionAmount = 224 }: CycleQRP
       setScannedMember(parsedData);
       toast({
         title: "QR Code Scanned",
-        description: `Paying to organization via ${parsedData.memberName}`,
+        description: `Ready to pay cycle contribution for ${parsedData.memberName}`,
       });
     } catch (error) {
       toast({
@@ -57,6 +57,7 @@ const CycleQRPayment = ({ onPaymentSuccess, contributionAmount = 224 }: CycleQRP
 
     try {
       // Make cycle payment via QR
+      // STK Push will be sent to YOUR phone, but payment will be credited to the scanned member
       const response = await fetch(`${API_BASE}/api/payments/qr-cycle-payment`, {
         method: "POST",
         headers: {
@@ -84,7 +85,7 @@ const CycleQRPayment = ({ onPaymentSuccess, contributionAmount = 224 }: CycleQRP
       if (data.success) {
         toast({
           title: "Payment Successful! 🎉",
-          description: `KES ${contributionAmount} cycle contribution recorded`,
+          description: `KES ${contributionAmount} cycle contribution recorded for ${scannedMember.memberName}`,
         });
         setShowDialog(false);
         setQrData("");
@@ -118,9 +119,9 @@ const CycleQRPayment = ({ onPaymentSuccess, contributionAmount = 224 }: CycleQRP
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Pay Cycle Contribution via QR</DialogTitle>
+            <DialogTitle>Pay for Another Member's Cycle</DialogTitle>
             <DialogDescription>
-              Scan the organization's QR code to make your KES {contributionAmount} payment
+              Scan a member's QR code to pay their KES {contributionAmount} cycle contribution. You will receive the STK Push on YOUR phone.
             </DialogDescription>
           </DialogHeader>
 
@@ -161,11 +162,14 @@ const CycleQRPayment = ({ onPaymentSuccess, contributionAmount = 224 }: CycleQRP
               <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                 <div className="flex items-center gap-2 text-green-700 mb-2">
                   <CheckCircle className="w-4 h-4" />
-                  <span className="font-semibold">Organization Verified</span>
+                  <span className="font-semibold">Member Verified</span>
                 </div>
                 <div className="text-sm space-y-1">
-                  <p><strong>Paying to:</strong> {scannedMember.memberName}</p>
+                  <p><strong>Paying for:</strong> {scannedMember.memberName}</p>
                   <p><strong>Member ID:</strong> {scannedMember.memberId}</p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    ℹ️ STK Push will be sent to YOUR phone to complete this payment
+                  </p>
                 </div>
               </div>
             )}
