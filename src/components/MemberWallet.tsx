@@ -25,6 +25,7 @@ import { authService } from "@/lib/authService";
 import {
   AlertCircle,
   ArrowDownLeft,
+  ArrowRightLeft,
   ArrowUpRight,
   CheckCircle,
   Clock,
@@ -58,6 +59,8 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
     transactionCount: 0,
   });
   const [transactions, setTransactions] = useState<any[]>([]);
+  const [transactionFees, setTransactionFees] = useState<any[]>([]);
+  const [totalFeesPaid, setTotalFeesPaid] = useState(0);
   const [showDepositDialog, setShowDepositDialog] = useState(false);
   const [showWithdrawDialog, setShowWithdrawDialog] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -73,7 +76,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
 
   const fetchWalletData = async () => {
     try {
-      const [summaryRes, transactionsRes, allSavingsRes] = await Promise.all([
+      const [summaryRes, transactionsRes, allSavingsRes, feesRes] = await Promise.all([
         fetch(`${API_BASE}/api/savings/summary`, {
           headers: { ...authService.getAuthHeaders() },
         }),
@@ -83,11 +86,15 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
         fetch(`${API_BASE}/api/savings/all-members`, {
           headers: { ...authService.getAuthHeaders() },
         }),
+        fetch(`${API_BASE}/api/savings/admin/fees?limit=20`, {
+          headers: { ...authService.getAuthHeaders() },
+        }).catch(() => ({ json: async () => ({ success: false, data: { fees: [] } }) })),
       ]);
 
       const summaryData = await summaryRes.json();
       const transactionsData = await transactionsRes.json();
       const allSavingsData = await allSavingsRes.json();
+      const feesData = await feesRes.json();
 
       if (summaryData.success) {
         setSummary(summaryData.data);
@@ -95,6 +102,18 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
 
       if (transactionsData.success) {
         setTransactions(transactionsData.data);
+      }
+
+      // Filter fees for current member
+      if (feesData.success && feesData.data?.fees) {
+        const myFees = feesData.data.fees.filter(
+          (fee: any) => String(fee.member_id?._id || fee.member_id) === String(userData._id || userData.id)
+        );
+        setTransactionFees(myFees);
+        
+        // Calculate total fees paid
+        const totalFees = myFees.reduce((sum: number, fee: any) => sum + (fee.fee_amount || 0), 0);
+        setTotalFeesPaid(totalFees);
       }
 
       // Determine if this member is the top saver based on total deposits
@@ -746,7 +765,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
       )}
 
       {/* Wallet Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900 border-blue-200">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -805,6 +824,23 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
             </div>
           </CardContent>
         </Card>
+
+        <Card className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900 border-amber-200">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <DollarSign className="w-4 h-4" />
+              Transaction Fees
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-amber-700 dark:text-amber-300">
+              KES {totalFeesPaid.toLocaleString()}
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              {transactionFees.length} fee charges
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Action Buttons */}
@@ -836,6 +872,80 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
 
       {/* Member QR Code */}
       <MemberQRCode userData={userData} />
+
+      {/* Transaction Fees Breakdown */}
+      {transactionFees.length > 0 && (
+        <Card className="border-l-4 border-l-amber-500">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <DollarSign className="w-5 h-5 text-amber-600" />
+                  Transaction Fees Breakdown
+                </CardTitle>
+                <CardDescription>
+                  Fees charged on your wallet transactions
+                </CardDescription>
+              </div>
+              <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300">
+                Total: KES {totalFeesPaid.toLocaleString()}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {transactionFees.map((fee) => (
+                <div
+                  key={fee._id}
+                  className="flex items-center justify-between p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-full bg-amber-100">
+                      {fee.transaction_type === "transfer" && <ArrowRightLeft className="w-4 h-4 text-amber-700" />}
+                      {fee.transaction_type === "top_up" && <ArrowDownLeft className="w-4 h-4 text-amber-700" />}
+                      {fee.transaction_type === "withdrawal" && <ArrowUpRight className="w-4 h-4 text-amber-700" />}
+                    </div>
+                    <div>
+                      <div className="font-medium capitalize text-amber-900">
+                        {fee.transaction_type.replace("_", " ")} Fee
+                      </div>
+                      <div className="text-sm text-amber-700">
+                        {fee.fee_description}
+                      </div>
+                      <div className="text-xs text-amber-600 mt-1">
+                        {new Date(fee.created_at).toLocaleString()}
+                        {fee.recipient_id && (
+                          <span className="ml-2">
+                            • To: {fee.recipient_id.name}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-lg font-bold text-amber-700">
+                      KES {fee.fee_amount.toLocaleString()}
+                    </div>
+                    <div className="text-xs text-amber-600">
+                      on KES {fee.transaction_amount.toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="text-sm text-blue-800">
+                <p className="font-semibold mb-2">💡 Fee Information:</p>
+                <ul className="space-y-1 text-xs">
+                  <li>• Transfers under KES 100 are free</li>
+                  <li>• Direct deposits are free (no fee)</li>
+                  <li>• STK Push deposits: KES 5 per transaction</li>
+                  <li>• Withdrawal fees range from KES 10 to KES 80</li>
+                </ul>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Transaction History */}
       <Card>

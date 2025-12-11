@@ -19,7 +19,33 @@ const QRScanner = ({ onScanSuccess }: QRScannerProps) => {
   const [amount, setAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [scannedMember, setScannedMember] = useState<any>(null);
+  const [transferFee, setTransferFee] = useState(0);
   const { toast } = useToast();
+
+  // Calculate transfer fee based on amount
+  const calculateFee = (amt: number) => {
+    if (amt < 100) return 0;
+    if (amt < 500) return 5;
+    if (amt < 1000) return 10;
+    if (amt < 2000) return 20;
+    if (amt < 5000) return 30;
+    if (amt < 10000) return 40;
+    if (amt < 20000) return 50;
+    if (amt < 50000) return 70;
+    if (amt <= 100000) return 100;
+    return 100;
+  };
+
+  // Update fee when amount changes
+  const handleAmountChange = (value: string) => {
+    setAmount(value);
+    const amountNum = parseFloat(value);
+    if (!isNaN(amountNum) && amountNum > 0) {
+      setTransferFee(calculateFee(amountNum));
+    } else {
+      setTransferFee(0);
+    }
+  };
 
   const handleScanQR = () => {
     try {
@@ -93,14 +119,18 @@ const QRScanner = ({ onScanSuccess }: QRScannerProps) => {
       console.log("QR Transfer Response:", data);
 
       if (data.success) {
+        const feeMsg = data.data?.transferFee > 0 
+          ? ` (Fee: KES ${data.data.transferFee})` 
+          : '';
         toast({
           title: "Payment Successful! 🎉",
-          description: `KES ${amountNum.toLocaleString()} sent to ${scannedMember.memberName}`,
+          description: `KES ${amountNum.toLocaleString()} sent to ${scannedMember.memberName}${feeMsg}`,
         });
         setShowDialog(false);
         setQrData("");
         setAmount("");
         setScannedMember(null);
+        setTransferFee(0);
         onScanSuccess?.();
       } else {
         throw new Error(data.error || "Payment failed");
@@ -178,9 +208,28 @@ const QRScanner = ({ onScanSuccess }: QRScannerProps) => {
                 type="number"
                 placeholder="Enter amount"
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                onChange={(e) => handleAmountChange(e.target.value)}
                 disabled={!scannedMember}
               />
+              {transferFee > 0 && amount && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="text-amber-700 font-medium">Transfer Fee:</span>
+                    <span className="text-amber-900 font-bold">KES {transferFee}</span>
+                  </div>
+                  <div className="flex justify-between items-center mt-1 pt-1 border-t border-amber-200">
+                    <span className="text-amber-700 font-semibold">Total Deducted:</span>
+                    <span className="text-amber-900 font-bold">
+                      KES {(parseFloat(amount) + transferFee).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {parseFloat(amount) > 0 && parseFloat(amount) < 100 && (
+                <p className="text-xs text-green-600">
+                  ✓ Free transfer (under KES 100)
+                </p>
+              )}
             </div>
 
             <Button

@@ -20,6 +20,8 @@ import {
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import API_BASE from "@/lib/api";
 import { authService } from "@/lib/authService";
@@ -50,6 +52,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
   const [showRepayment, setShowRepayment] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<any>(null);
   const [isProcessingRepayment, setIsProcessingRepayment] = useState(false);
+  const [partialPaymentAmount, setPartialPaymentAmount] = useState("");
   const { toast } = useToast();
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [memberLoans, setMemberLoans] = useState<any[]>([]);
@@ -456,106 +459,73 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
   };
 
   const handleLoanRepayment = async () => {
-    if (!selectedLoan) return;
+    if (!selectedLoan || !partialPaymentAmount) return;
+
+    const paymentAmount = parseFloat(partialPaymentAmount);
+    if (isNaN(paymentAmount) || paymentAmount <= 0) {
+      toast({
+        title: "Invalid Amount",
+        description: "Please enter a valid payment amount",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const maxPayable = selectedLoan.amount_remaining || selectedLoan.total_repayable || selectedLoan.amount;
+    if (paymentAmount > maxPayable) {
+      toast({
+        title: "Amount Too High",
+        description: `Maximum payable amount is KES ${maxPayable.toLocaleString()}`,
+        variant: "destructive",
+      });
+      return;
+    }
 
     setIsProcessingRepayment(true);
 
     try {
-      const totalRepayable = selectedLoan.amount + (selectedLoan.amount * 0.10);
-      
-      // Initiate STK Push
-      const response = await fetch(`${API_BASE}/api/payments/stk-push`, {
+      // Make partial payment via backend
+      const response = await fetch(`${API_BASE}/api/loans/${selectedLoan._id}/repay`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...authService.getAuthHeaders(),
         },
         body: JSON.stringify({
-          member_id: userData._id || userData.id,
-          phone: userData.phoneNumber || userData.phone,
-          amount: totalRepayable,
-          type: 'loan_repayment',
-          loan_id: selectedLoan._id,
+          amount: paymentAmount,
+          payment_method: 'cash',
+          notes: 'Member loan repayment',
         }),
       });
 
       const data = await response.json();
 
       if (!data.success) {
-        throw new Error(data.message || 'Failed to initiate payment');
+        throw new Error(data.error || 'Failed to process payment');
       }
 
+      const isFullyPaid = data.data?.isFullyPaid;
+      
       toast({
-        title: "M-Pesa Prompt Sent",
-        description: `Check your phone for M-Pesa prompt to pay KES ${totalRepayable.toLocaleString()}`,
+        title: isFullyPaid ? "Loan Fully Repaid! 🎉" : "Payment Recorded",
+        description: isFullyPaid 
+          ? `Congratulations! Your loan has been fully repaid.`
+          : `Payment of KES ${paymentAmount.toLocaleString()} recorded. Remaining: KES ${data.data?.remaining.toLocaleString()}`,
       });
 
-      // Poll for payment confirmation
-      const checkoutRequestID = data.CheckoutRequestID;
-      let attempts = 0;
-      const maxAttempts = 30; // 30 seconds
+      setIsProcessingRepayment(false);
+      setShowRepayment(false);
+      setSelectedLoan(null);
+      setPartialPaymentAmount("");
 
-      const pollInterval = setInterval(async () => {
-        attempts++;
-
-        try {
-          const confirmRes = await fetch(
-            `${API_BASE}/api/payments/check-payment/${checkoutRequestID}`
-          );
-          const confirmData = await confirmRes.json();
-
-          if (confirmData.status === 'completed') {
-            clearInterval(pollInterval);
-            
-            // Update loan status to repaid
-            await fetch(`${API_BASE}/api/loans/${selectedLoan._id}/status`, {
-              method: 'PATCH',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                status: 'repaid',
-                repayment_date: new Date().toISOString(),
-              }),
-            });
-
-            toast({
-              title: "Loan Repaid Successfully!",
-              description: `Your loan of KES ${selectedLoan.amount.toLocaleString()} has been fully repaid.`,
-            });
-
-            setIsProcessingRepayment(false);
-            setShowRepayment(false);
-            setSelectedLoan(null);
-
-            // Refresh data
-            setTimeout(() => {
-              window.location.reload();
-            }, 1500);
-          } else if (confirmData.status === 'failed') {
-            clearInterval(pollInterval);
-            throw new Error('Payment failed or was cancelled');
-          } else if (attempts >= maxAttempts) {
-            clearInterval(pollInterval);
-            throw new Error('Payment confirmation timeout');
-          }
-        } catch (err: any) {
-          clearInterval(pollInterval);
-          console.error('Payment confirmation error:', err);
-          toast({
-            title: "Payment Failed",
-            description: err.message || "Please try again",
-            variant: "destructive",
-          });
-          setIsProcessingRepayment(false);
-        }
-      }, 1000);
+      // Refresh data
+      fetchData();
 
     } catch (error: any) {
       console.error('Repayment error:', error);
       toast({
-        title: "Repayment Failed",
-        description: error.message || "Failed to initiate loan repayment",
+        title: "Payment Failed",
+        description: error.message || "Failed to process loan payment",
         variant: "destructive",
       });
       setIsProcessingRepayment(false);
@@ -1426,36 +1396,113 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
 
       {/* Loan Repayment Dialog */}
       <Dialog open={showRepayment} onOpenChange={setShowRepayment}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Phone className="w-5 h-5 text-mpesa-green" />
-              Repay Your Loan
+              Loan Repayment
             </DialogTitle>
             <DialogDescription>
-              Complete your loan repayment via M-Pesa
+              Make full or partial payment towards your loan
             </DialogDescription>
           </DialogHeader>
           
           {selectedLoan && (
             <div className="space-y-4">
+              {/* Loan Summary */}
               <div className="bg-muted/50 p-4 rounded-lg space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Loan Amount:</span>
+                  <span className="text-muted-foreground">Original Loan:</span>
                   <span className="font-medium">KES {selectedLoan.amount.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Interest (10%):</span>
-                  <span className="font-medium">KES {(selectedLoan.amount * 0.10).toLocaleString()}</span>
+                  <span className="text-muted-foreground">Interest ({selectedLoan.interest_rate || 10}%):</span>
+                  <span className="font-medium">KES {((selectedLoan.amount * (selectedLoan.interest_rate || 10)) / 100).toLocaleString()}</span>
                 </div>
                 <Separator />
                 <div className="flex justify-between">
                   <span className="font-semibold">Total Repayable:</span>
-                  <span className="text-xl font-bold text-mpesa-green">
-                    KES {(selectedLoan.amount * 1.10).toLocaleString()}
+                  <span className="text-lg font-bold">
+                    KES {(selectedLoan.total_repayable || selectedLoan.amount * 1.10).toLocaleString()}
                   </span>
                 </div>
               </div>
+
+              {/* Payment Progress */}
+              <div className="bg-green-50 border border-green-200 p-4 rounded-lg space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-green-900">Payment Progress</span>
+                  <span className="text-sm font-bold text-green-700">
+                    {Math.round(((selectedLoan.amount_paid || 0) / (selectedLoan.total_repayable || selectedLoan.amount)) * 100)}%
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-3">
+                  <div
+                    className="bg-green-600 h-3 rounded-full transition-all"
+                    style={{
+                      width: `${Math.min(((selectedLoan.amount_paid || 0) / (selectedLoan.total_repayable || selectedLoan.amount)) * 100, 100)}%`,
+                    }}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Paid</p>
+                    <p className="font-bold text-green-700">KES {(selectedLoan.amount_paid || 0).toLocaleString()}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-muted-foreground">Remaining</p>
+                    <p className="font-bold text-orange-600">KES {(selectedLoan.amount_remaining || selectedLoan.total_repayable || selectedLoan.amount).toLocaleString()}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Payment Amount Input */}
+              <div className="space-y-2">
+                <Label htmlFor="payment-amount">Payment Amount (KES)</Label>
+                <Input
+                  id="payment-amount"
+                  type="number"
+                  placeholder="Enter amount to pay"
+                  value={partialPaymentAmount}
+                  onChange={(e) => setPartialPaymentAmount(e.target.value)}
+                  max={selectedLoan.amount_remaining || selectedLoan.total_repayable}
+                />
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPartialPaymentAmount(((selectedLoan.amount_remaining || selectedLoan.total_repayable) / 2).toFixed(0))}
+                    className="flex-1">
+                    Half
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPartialPaymentAmount((selectedLoan.amount_remaining || selectedLoan.total_repayable).toString())}
+                    className="flex-1">
+                    Full Amount
+                  </Button>
+                </div>
+              </div>
+
+              {/* Payment History */}
+              {selectedLoan.payment_history && selectedLoan.payment_history.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Payment History ({selectedLoan.payment_history.length} payments)</Label>
+                  <div className="max-h-32 overflow-y-auto space-y-2 border rounded-lg p-2">
+                    {selectedLoan.payment_history.map((payment: any, idx: number) => (
+                      <div key={idx} className="flex justify-between text-xs bg-gray-50 p-2 rounded">
+                        <span className="text-muted-foreground">
+                          {new Date(payment.payment_date).toLocaleDateString()}
+                        </span>
+                        <span className="font-semibold text-green-600">
+                          +KES {payment.amount.toLocaleString()}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="bg-mpesa-green/10 border border-mpesa-green/20 p-4 rounded-lg space-y-2">
                 <p className="text-sm font-medium">Payment Details:</p>
@@ -1473,6 +1520,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                   onClick={() => {
                     setShowRepayment(false);
                     setSelectedLoan(null);
+                    setPartialPaymentAmount("");
                   }}
                   disabled={isProcessingRepayment}>
                   Cancel
@@ -1480,13 +1528,13 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                 <Button
                   variant="mpesa"
                   onClick={handleLoanRepayment}
-                  disabled={isProcessingRepayment}>
+                  disabled={isProcessingRepayment || !partialPaymentAmount || parseFloat(partialPaymentAmount) <= 0}>
                   {isProcessingRepayment ? (
                     <>Processing...</>
                   ) : (
                     <>
                       <Phone className="w-4 h-4 mr-2" />
-                      Send M-Pesa Prompt
+                      Pay KES {parseFloat(partialPaymentAmount || "0").toLocaleString()}
                     </>
                   )}
                 </Button>

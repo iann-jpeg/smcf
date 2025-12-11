@@ -2,6 +2,13 @@ import express from "express";
 import { adminOnly, protect } from "../middleware/auth.js";
 import Member from "../models/Member.js";
 import Saving from "../models/Saving.js";
+import TransactionFee from "../models/TransactionFee.js";
+import { 
+  calculateTransferFee, 
+  calculateTopUpFee, 
+  calculateWithdrawalFee,
+  getFeeBreakdown 
+} from "../services/feeService.js";
 
 const router = express.Router();
 
@@ -95,40 +102,68 @@ router.post("/deposit", protect, async (req, res) => {
       });
     }
 
+    // Calculate top-up fee
+    const topUpFee = calculateTopUpFee(payment_method || "mpesa", amount);
+    const netDeposit = amount - topUpFee; // Net amount credited to wallet
+
+    if (netDeposit <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Amount too small after fee deduction",
+      });
+    }
+
     // Get current balance
     const lastTransaction = await Saving.findOne({ member_id: memberId }).sort({
       created_at: -1,
     });
     const currentBalance = lastTransaction ? lastTransaction.balance_after : 0;
 
-    // Create deposit transaction
+    // Create deposit transaction (only net amount after fee)
     const saving = await Saving.create({
       member_id: memberId,
-      amount,
+      amount: netDeposit,
       transaction_type: "deposit",
       balance_before: currentBalance,
-      balance_after: currentBalance + amount,
+      balance_after: currentBalance + netDeposit,
       payment_method: payment_method || "mpesa",
       transaction_ref: transaction_ref || "",
-      notes: notes || "",
+      notes: notes ? `${notes}${topUpFee > 0 ? ` | Fee: KES ${topUpFee}` : ''}` : (topUpFee > 0 ? `Top-up fee: KES ${topUpFee}` : ''),
       status: "completed",
     });
 
-    // Update member's total savings AND wallet_balance
+    // Update member's total savings AND wallet_balance (net amount only)
     await Member.findByIdAndUpdate(memberId, {
       $inc: { 
-        total_savings: amount,
-        wallet_balance: amount 
+        total_savings: netDeposit,
+        wallet_balance: netDeposit 
       },
     });
+
+    // Record top-up fee if applicable
+    let feeRecord = null;
+    if (topUpFee > 0) {
+      feeRecord = await TransactionFee.create({
+        transaction_type: "top_up",
+        member_id: memberId,
+        transaction_amount: amount,
+        fee_amount: topUpFee,
+        payment_method: payment_method || "mpesa",
+        fee_description: `Top-up fee for ${payment_method || "mpesa"} deposit of KES ${amount.toLocaleString()}`,
+        reference_id: saving._id.toString(),
+        status: "collected",
+      });
+    }
 
     // Emit Socket.IO event
     const io = req.app.get("io");
     if (io) {
       io.emit("savingDeposit", {
         memberId,
-        amount,
-        newBalance: currentBalance + amount,
+        amount: netDeposit,
+        fee: topUpFee,
+        grossAmount: amount,
+        newBalance: currentBalance + netDeposit,
         timestamp: new Date(),
       });
     }
@@ -136,6 +171,9 @@ router.post("/deposit", protect, async (req, res) => {
     res.status(201).json({
       success: true,
       data: saving,
+      fee: topUpFee,
+      grossAmount: amount,
+      netAmount: netDeposit,
       message: `Deposit of KES ${amount.toLocaleString()} successful`,
     });
   } catch (error) {
@@ -227,21 +265,59 @@ router.put("/:id/status", protect, adminOnly, async (req, res) => {
     // Handle withdrawal approval/rejection
     if (saving.transaction_type === "withdrawal") {
       if (status === "completed") {
-        // Deduct from member's total savings AND wallet_balance
+        // Calculate withdrawal fee
+        const withdrawalFee = calculateWithdrawalFee(saving.amount);
+        const totalDeduction = saving.amount + withdrawalFee;
+
+        // Get member to check balance
+        const member = await Member.findById(saving.member_id);
+        if (!member) {
+          return res.status(404).json({
+            success: false,
+            error: "Member not found",
+          });
+        }
+
+        // Check if member has enough balance for amount + fee
+        if (member.wallet_balance < totalDeduction) {
+          return res.status(400).json({
+            success: false,
+            error: `Insufficient balance. Withdrawal fee: KES ${withdrawalFee}. Total required: KES ${totalDeduction}`,
+          });
+        }
+
+        // Deduct from member's total savings AND wallet_balance (amount + fee)
         await Member.findByIdAndUpdate(saving.member_id, {
           $inc: { 
-            total_savings: -saving.amount,
-            wallet_balance: -saving.amount 
+            total_savings: -totalDeduction,
+            wallet_balance: -totalDeduction 
           },
         });
 
-        // Balance was already set during withdrawal request, just update status
+        // Update saving notes to include fee
+        saving.notes = saving.notes 
+          ? `${saving.notes}${withdrawalFee > 0 ? ` | Fee: KES ${withdrawalFee}` : ''}`
+          : (withdrawalFee > 0 ? `Withdrawal fee: KES ${withdrawalFee}` : '');
         saving.status = "completed";
         saving.processed_by = req.admin._id;
         saving.processed_at = new Date();
         await saving.save();
 
-        console.log(`✅ Withdrawal approved: KES ${saving.amount} deducted from member ${saving.member_id}`);
+        // Record withdrawal fee if applicable
+        let feeRecord = null;
+        if (withdrawalFee > 0) {
+          feeRecord = await TransactionFee.create({
+            transaction_type: "withdrawal",
+            member_id: saving.member_id,
+            transaction_amount: saving.amount,
+            fee_amount: withdrawalFee,
+            fee_description: `Withdrawal fee for KES ${saving.amount.toLocaleString()}`,
+            reference_id: saving._id.toString(),
+            status: "collected",
+          });
+        }
+
+        console.log(`✅ Withdrawal approved: KES ${totalDeduction} (Amount: ${saving.amount} + Fee: ${withdrawalFee}) deducted from member ${saving.member_id}`);
       } else if (status === "failed") {
         // Revert the balance back to before withdrawal
         saving.balance_after = saving.balance_before;
@@ -515,6 +591,10 @@ router.post("/qr-transfer", protect, async (req, res) => {
       });
     }
 
+    // Calculate transfer fee
+    const transferFee = calculateTransferFee(amount);
+    const totalDeduction = amount + transferFee;
+
     // Get sender
     const sender = await Member.findById(senderId);
     if (!sender) {
@@ -524,11 +604,11 @@ router.post("/qr-transfer", protect, async (req, res) => {
       });
     }
 
-    // Check sender balance
-    if (sender.wallet_balance < amount) {
+    // Check sender balance (must cover amount + fee)
+    if (sender.wallet_balance < totalDeduction) {
       return res.status(400).json({ 
         success: false, 
-        error: "Insufficient balance" 
+        error: `Insufficient balance. Transfer fee: KES ${transferFee}. Total required: KES ${totalDeduction}` 
       });
     }
 
@@ -549,11 +629,11 @@ router.post("/qr-transfer", protect, async (req, res) => {
       });
     }
 
-    // Deduct from sender
-    sender.wallet_balance -= amount;
+    // Deduct from sender (amount + fee)
+    sender.wallet_balance -= totalDeduction;
     await sender.save();
 
-    // Add to recipient
+    // Add to recipient (only the transfer amount, not the fee)
     recipient.wallet_balance += amount;
     recipient.total_savings += amount;
     await recipient.save();
@@ -564,7 +644,7 @@ router.post("/qr-transfer", protect, async (req, res) => {
       amount: amount,
       transaction_type: "withdrawal",
       status: "completed",
-      notes: `QR Transfer to ${recipient.name} (${recipient.member_id})`,
+      notes: `QR Transfer to ${recipient.name} (${recipient.member_id})${transferFee > 0 ? ` | Fee: KES ${transferFee}` : ''}`,
       balance_after: sender.wallet_balance,
     });
 
@@ -577,6 +657,21 @@ router.post("/qr-transfer", protect, async (req, res) => {
       notes: `QR Transfer from ${sender.name} (${sender.member_id})`,
       balance_after: recipient.wallet_balance,
     });
+
+    // Record transfer fee if applicable
+    let feeRecord = null;
+    if (transferFee > 0) {
+      feeRecord = await TransactionFee.create({
+        transaction_type: "transfer",
+        member_id: senderId,
+        recipient_id: recipientId,
+        transaction_amount: amount,
+        fee_amount: transferFee,
+        fee_description: `Transfer fee for KES ${amount.toLocaleString()} to ${recipient.name}`,
+        reference_id: withdrawalTxn._id.toString(),
+        status: "collected",
+      });
+    }
 
     // Emit Socket.IO events
     const io = req.app.get("io");
@@ -593,7 +688,7 @@ router.post("/qr-transfer", protect, async (req, res) => {
 
     res.json({
       success: true,
-      message: `Successfully transferred KES ${amount} to ${recipient.name}`,
+      message: `Successfully transferred KES ${amount} to ${recipient.name}${transferFee > 0 ? ` (Fee: KES ${transferFee})` : ''}`,
       data: {
         sender: {
           id: sender._id,
@@ -606,8 +701,11 @@ router.post("/qr-transfer", protect, async (req, res) => {
           newBalance: recipient.wallet_balance,
         },
         amount,
+        transferFee,
+        totalDeducted: totalDeduction,
         withdrawalTxn: withdrawalTxn._id,
         depositTxn: depositTxn._id,
+        feeRecord: feeRecord?._id,
       },
     });
   } catch (error) {
@@ -616,4 +714,139 @@ router.post("/qr-transfer", protect, async (req, res) => {
   }
 });
 
-export default router;
+// Get all transaction fees (admin only)
+router.get("/admin/fees", protect, adminOnly, async (req, res) => {
+  try {
+    const { transaction_type, start_date, end_date, limit = 100 } = req.query;
+
+    // Build query
+    let query = {};
+    
+    if (transaction_type) {
+      query.transaction_type = transaction_type;
+    }
+    
+    if (start_date || end_date) {
+      query.created_at = {};
+      if (start_date) query.created_at.$gte = new Date(start_date);
+      if (end_date) query.created_at.$lte = new Date(end_date);
+    }
+
+    // Get fees with member details
+    const fees = await TransactionFee.find(query)
+      .populate("member_id", "name member_id phone")
+      .populate("recipient_id", "name member_id")
+      .sort({ created_at: -1 })
+      .limit(parseInt(limit));
+
+    // Calculate totals
+    const totalStats = await TransactionFee.aggregate([
+      { $match: query },
+      {
+        $group: {
+          _id: "$transaction_type",
+          total_fees: { $sum: "$fee_amount" },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    // Calculate overall total
+    const overallTotal = await TransactionFee.aggregate([
+      { $match: query },
+      {
+        $group: {
+          _id: null,
+          total_collected: { $sum: "$fee_amount" },
+          total_transactions: { $sum: 1 },
+        },
+      },
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        fees,
+        stats: totalStats,
+        summary: overallTotal[0] || { total_collected: 0, total_transactions: 0 },
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching transaction fees:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get fee summary for dashboard (admin only)
+router.get("/admin/fees/summary", protect, adminOnly, async (req, res) => {
+  try {
+    // Get total fees by type
+    const feesByType = await TransactionFee.aggregate([
+      {
+        $group: {
+          _id: "$transaction_type",
+          total: { $sum: "$fee_amount" },
+          count: { $sum: 1 },
+          avg: { $avg: "$fee_amount" },
+        },
+      },
+    ]);
+
+    // Get total fees collected
+    const totalFees = await TransactionFee.aggregate([
+      {
+        $group: {
+          _id: null,
+          total: { $sum: "$fee_amount" },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    // Get recent fees (last 10)
+    const recentFees = await TransactionFee.find()
+      .populate("member_id", "name member_id")
+      .populate("recipient_id", "name member_id")
+      .sort({ created_at: -1 })
+      .limit(10);
+
+    // Get fees by date (last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const feesByDate = await TransactionFee.aggregate([
+      {
+        $match: {
+          created_at: { $gte: thirtyDaysAgo },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: { format: "%Y-%m-%d", date: "$created_at" },
+          },
+          total: { $sum: "$fee_amount" },
+          count: { $sum: 1 },
+        },
+      },
+      {
+        $sort: { _id: 1 },
+      },
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        feesByType,
+        totalCollected: totalFees[0]?.total || 0,
+        totalTransactions: totalFees[0]?.count || 0,
+        recentFees,
+        feesByDate,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching fee summary:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+

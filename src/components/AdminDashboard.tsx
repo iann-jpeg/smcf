@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import TransactionFeesReport from "@/components/TransactionFeesReport";
 import { useToast } from "@/hooks/use-toast";
 import API_BASE from "@/lib/api";
 import { authService } from "@/lib/authService";
@@ -113,6 +114,7 @@ const AdminDashboard = ({
   const [cycleStats, setCycleStats] = useState<any>(null);
   const [savingsData, setSavingsData] = useState<any[]>([]);
   const [pendingWithdrawals, setPendingWithdrawals] = useState<any[]>([]);
+  const [feeSummary, setFeeSummary] = useState<any>(null);
 
   // Safe fallbacks to avoid runtime errors when data is undefined
   const safeMembers = Array.isArray(members) ? members : [];
@@ -821,6 +823,22 @@ const AdminDashboard = ({
     }
   };
 
+  const fetchFeeSummary = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/savings/admin/fees/summary`, {
+        headers: {
+          ...authService.getAuthHeaders(),
+        },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFeeSummary(data.data);
+      }
+    } catch (e) {
+      console.error("Could not fetch fee summary", e);
+    }
+  };
+
   // Fetch all data silently in parallel
   const fetchAllData = async () => {
     // Fetch all in parallel for better performance
@@ -831,6 +849,8 @@ const AdminDashboard = ({
       fetchCurrentCycle(),
       fetchCycleStats(),
       fetchSavings(),
+      fetchPendingWithdrawals(),
+      fetchFeeSummary(),
       fetchPendingWithdrawals(),
     ]);
 
@@ -1651,11 +1671,29 @@ Thank you for your cooperation! 🙏`;
                 </div>
               </CardContent>
             </Card>
+
+            {/* Transaction Fees Collected */}
+            <Card className="bg-gradient-to-br from-teal-50 to-teal-100 dark:from-teal-950 dark:to-teal-900 border-teal-200">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-teal-600 dark:text-teal-400">Transaction Fees</p>
+                    <p className="text-3xl font-bold text-teal-900 dark:text-teal-100">
+                      KES {feeSummary?.totalCollected?.toLocaleString() || 0}
+                    </p>
+                    <p className="text-xs text-teal-700 dark:text-teal-300 mt-1">
+                      {feeSummary?.totalTransactions || 0} fee transactions
+                    </p>
+                  </div>
+                  <DollarSign className="w-12 h-12 text-teal-300 dark:text-teal-700" />
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Quick Stats Bar */}
           <div className="mt-6 p-4 bg-muted/50 rounded-lg border">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
               <div>
                 <p className="text-xs text-muted-foreground">Collection Rate</p>
                 <p className="text-lg font-bold text-primary">
@@ -1672,6 +1710,12 @@ Thank you for your cooperation! 🙏`;
                 <p className="text-xs text-muted-foreground">Recent Payments</p>
                 <p className="text-lg font-bold text-blue-600">
                   {recentPayments.length}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Fees Collected</p>
+                <p className="text-lg font-bold text-teal-600">
+                  KES {feeSummary?.totalCollected?.toLocaleString() || 0}
                 </p>
               </div>
               <div>
@@ -2028,7 +2072,7 @@ Thank you for your cooperation! 🙏`;
 
       <Tabs defaultValue="members" className="w-full">
         <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">
-          <TabsList className="inline-flex w-auto md:grid md:w-full md:grid-cols-8 min-w-max">
+          <TabsList className="inline-flex w-auto md:grid md:w-full md:grid-cols-9 min-w-max">
             <TabsTrigger
               value="members"
               className="text-xs sm:text-sm whitespace-nowrap">
@@ -2065,6 +2109,11 @@ Thank you for your cooperation! 🙏`;
               value="approvals"
               className="text-xs sm:text-sm whitespace-nowrap">
               Approvals
+            </TabsTrigger>
+            <TabsTrigger
+              value="fees"
+              className="text-xs sm:text-sm whitespace-nowrap">
+              Fees
             </TabsTrigger>
             <TabsTrigger
               value="reports"
@@ -2698,6 +2747,10 @@ Thank you for your cooperation! 🙏`;
                 </div>
                 <Button
                   onClick={() => setShowDisbursementDialog(true)}
+
+        <TabsContent value="fees" className="space-y-6">
+          <TransactionFeesReport />
+        </TabsContent>
                   variant="mpesa"
                   size="sm">
                   <Wallet className="w-4 h-4 mr-2" />
@@ -2969,6 +3022,10 @@ Thank you for your cooperation! 🙏`;
 
         <TabsContent value="approvals" className="space-y-6">
           <ApprovalsTab />
+        </TabsContent>
+
+        <TabsContent value="fees" className="space-y-6">
+          <TransactionFeesReport />
         </TabsContent>
 
         <TabsContent value="reports" className="space-y-6">

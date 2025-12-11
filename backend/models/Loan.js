@@ -39,6 +39,25 @@ const loanSchema = new mongoose.Schema({
   total_repayable: {
     type: Number,
   },
+  amount_paid: {
+    type: Number,
+    default: 0,
+  },
+  amount_remaining: {
+    type: Number,
+  },
+  payment_history: [
+    {
+      amount: Number,
+      payment_date: {
+        type: Date,
+        default: Date.now,
+      },
+      payment_method: String,
+      transaction_ref: String,
+      notes: String,
+    },
+  ],
   created_at: {
     type: Date,
     default: Date.now,
@@ -56,6 +75,18 @@ loanSchema.pre("save", function (next) {
   } else {
     this.total_repayable = this.amount;
   }
+  
+  // Calculate remaining amount
+  this.amount_remaining = this.total_repayable - (this.amount_paid || 0);
+  
+  // Auto-update status to 'repaid' if fully paid
+  if (this.amount_remaining <= 0 && this.status === 'disbursed') {
+    this.status = 'repaid';
+    if (!this.repayment_date) {
+      this.repayment_date = new Date();
+    }
+  }
+  
   this.updated_at = Date.now();
   next();
 });
