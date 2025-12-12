@@ -64,6 +64,8 @@ interface Loan {
   approval_date?: string;
   disbursement_date?: string;
   repayment_date?: string;
+  rejection_reason?: string;
+  notes?: string;
   created_at: string;
 }
 
@@ -580,7 +582,8 @@ const LoansTab = () => {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="pending" className="w-full">
-            <TabsList className="grid w-full grid-cols-4">
+            <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">
+            <TabsList className="inline-flex w-auto md:grid md:w-full md:grid-cols-4 min-w-max">
               <TabsTrigger value="pending">
                 Pending ({pendingLoans.length})
               </TabsTrigger>
@@ -594,6 +597,7 @@ const LoansTab = () => {
                 Completed ({completedLoans.length})
               </TabsTrigger>
             </TabsList>
+            </div>
 
             {/* Pending Loans */}
             <TabsContent value="pending" className="space-y-4">
@@ -602,6 +606,7 @@ const LoansTab = () => {
                   No pending loan requests
                 </div>
               ) : (
+                <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -668,6 +673,7 @@ const LoansTab = () => {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </TabsContent>
 
@@ -678,6 +684,7 @@ const LoansTab = () => {
                   No approved loans awaiting disbursement
                 </div>
               ) : (
+                <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -731,6 +738,7 @@ const LoansTab = () => {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </TabsContent>
 
@@ -741,6 +749,7 @@ const LoansTab = () => {
                   No active loans
                 </div>
               ) : (
+                <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -794,6 +803,7 @@ const LoansTab = () => {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </TabsContent>
 
@@ -804,6 +814,7 @@ const LoansTab = () => {
                   No completed loans
                 </div>
               ) : (
+                <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -812,6 +823,7 @@ const LoansTab = () => {
                       <TableHead>Total Repaid</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Completed On</TableHead>
+                      <TableHead>Details</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -843,10 +855,26 @@ const LoansTab = () => {
                             ? new Date(loan.approval_date).toLocaleDateString()
                             : "N/A"}
                         </TableCell>
+                        <TableCell>
+                          {loan.status === "rejected" && loan.rejection_reason ? (
+                            <div className="max-w-xs">
+                              <div className="text-xs font-medium text-destructive mb-1">Rejection Reason:</div>
+                              <div className="text-xs text-muted-foreground">{loan.rejection_reason}</div>
+                            </div>
+                          ) : loan.notes ? (
+                            <div className="max-w-xs">
+                              <div className="text-xs font-medium mb-1">Notes:</div>
+                              <div className="text-xs text-muted-foreground">{loan.notes}</div>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">-</span>
+                          )}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </TabsContent>
           </Tabs>

@@ -527,7 +527,8 @@ const AdminSavingsTab = () => {
         </CardHeader>
         <CardContent className="pt-6">
           <Tabs defaultValue="members" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+            <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">
+            <TabsList className="inline-flex w-auto md:grid md:w-full md:grid-cols-2 min-w-max">
               <TabsTrigger value="members">
                 Member Savings ({membersWithSavings.length})
               </TabsTrigger>
@@ -535,6 +536,7 @@ const AdminSavingsTab = () => {
                 Pending Withdrawals ({pendingWithdrawals.length})
               </TabsTrigger>
             </TabsList>
+            </div>
 
             {/* Member Savings Tab */}
             <TabsContent value="members" className="space-y-4">
@@ -544,6 +546,7 @@ const AdminSavingsTab = () => {
                   <p>No savings data yet</p>
                 </div>
               ) : (
+                <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -597,6 +600,7 @@ const AdminSavingsTab = () => {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </TabsContent>
 
@@ -607,8 +611,7 @@ const AdminSavingsTab = () => {
                   <Clock className="w-12 h-12 mx-auto mb-3 opacity-50" />
                   <p>No pending withdrawal requests</p>
                 </div>
-              ) : (
-                <Table>
+              ) : (                <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">                <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Member</TableHead>
@@ -679,6 +682,7 @@ const AdminSavingsTab = () => {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </TabsContent>
           </Tabs>

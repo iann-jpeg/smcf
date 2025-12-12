@@ -52,6 +52,9 @@ const savingSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    rejection_reason: {
+      type: String,
+    },
     processed_by: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Admin",

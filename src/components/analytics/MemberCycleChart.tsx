@@ -20,15 +20,25 @@ const MemberCycleChart = () => {
       
       const data = await response.json();
       
-      if (data.success && data.data) {
+      // Handle both array response and object response
+      const paymentsArray = Array.isArray(data) ? data : (data.success && data.data ? data.data : []);
+      
+      if (paymentsArray.length > 0) {
         const userData = authService.getUser();
         const userId = userData?._id || userData?.id;
         
+        console.log('📊 Member Cycle Chart - User ID:', userId);
+        console.log('📊 Total payments fetched:', paymentsArray.length);
+        
         // Filter payments for this member only
-        const memberPayments = data.data.filter((payment: any) => {
+        const memberPayments = paymentsArray.filter((payment: any) => {
           const paymentMemberId = payment.member_id?._id || payment.member_id;
-          return String(paymentMemberId) === String(userId) && payment.status === 'completed';
+          const matches = String(paymentMemberId) === String(userId) && payment.status === 'completed';
+          return matches;
         });
+        
+        console.log('📊 Member payments found:', memberPayments.length);
+        console.log('📊 Sample payment:', memberPayments[0]);
 
         // Group by cycle
         const cycleMap = new Map();
@@ -63,6 +73,7 @@ const MemberCycleChart = () => {
           })
           .slice(-10); // Last 10 cycles
 
+        console.log('📊 Processed cycle data:', processedData);
         setChartData(processedData);
       }
     } catch (error) {

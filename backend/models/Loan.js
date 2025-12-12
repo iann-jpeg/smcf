@@ -46,6 +46,12 @@ const loanSchema = new mongoose.Schema({
   amount_remaining: {
     type: Number,
   },
+  rejection_reason: {
+    type: String,
+  },
+  notes: {
+    type: String,
+  },
   payment_history: [
     {
       amount: Number,

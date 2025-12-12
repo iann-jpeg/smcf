@@ -1013,6 +1013,12 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
                           {transaction.notes}
                         </div>
                       )}
+                      {transaction.status === "failed" && transaction.rejection_reason && (
+                        <div className="text-xs text-destructive mt-2 p-2 bg-destructive/10 border border-destructive/20 rounded">
+                          <span className="font-medium">Rejection Reason: </span>
+                          {transaction.rejection_reason}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="text-right flex items-center gap-3">

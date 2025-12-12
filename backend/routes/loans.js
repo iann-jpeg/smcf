@@ -66,20 +66,29 @@ router.delete("/", protect, adminOnly, async (req, res) => {
   }
 });
 
-// Approve/Reject loan (admin only)
+// Approve/Reject loan (admin only) - supports both PUT and PATCH
 router.put("/:id/status", protect, adminOnly, async (req, res) => {
   try {
-    const { status } = req.body; // 'approved', 'rejected', 'disbursed', 'repaid'
+    const { status, rejection_reason, notes } = req.body; // 'approved', 'rejected', 'disbursed', 'repaid'
 
     const updateData = { status };
 
     if (status === "approved") {
       updateData.approved_by = req.admin._id;
       updateData.approval_date = new Date();
+    } else if (status === "rejected") {
+      if (rejection_reason) {
+        updateData.rejection_reason = rejection_reason;
+      }
     } else if (status === "disbursed") {
       updateData.disbursement_date = new Date();
     } else if (status === "repaid") {
       updateData.repayment_date = new Date();
+    }
+    
+    // Save notes if provided
+    if (notes) {
+      updateData.notes = notes;
     }
 
     const loan = await Loan.findByIdAndUpdate(req.params.id, updateData, {
@@ -92,6 +101,65 @@ router.put("/:id/status", protect, adminOnly, async (req, res) => {
     }
 
     // Emit Socket.IO event for real-time updates
+    const io = req.app.get("io");
+    if (io && loan.member_id) {
+      io.emit("loanStatusUpdated", {
+        loanId: loan._id,
+        memberId: loan.member_id._id,
+        memberName: loan.member_id.name,
+        status: loan.status,
+        amount: loan.amount,
+        rejectionReason: loan.rejection_reason || null,
+        notes: loan.notes || null,
+        timestamp: new Date(),
+      });
+
+      console.log(
+        `📢 Loan status updated: ${loan.status} for member ${
+          loan.member_id.name
+        }${loan.rejection_reason ? ` - Reason: ${loan.rejection_reason}` : ""}`
+      );
+    }
+
+    res.json({ success: true, data: loan });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PATCH method alias for loan status updates (for ApprovalsTab compatibility)
+router.patch("/:id/status", protect, adminOnly, async (req, res) => {
+  try {
+    const { status, rejection_reason, notes } = req.body;
+
+    const updateData = { status };
+
+    if (status === "approved") {
+      updateData.approved_by = req.admin._id;
+      updateData.approval_date = new Date();
+    } else if (status === "rejected") {
+      if (rejection_reason) {
+        updateData.rejection_reason = rejection_reason;
+      }
+    } else if (status === "disbursed") {
+      updateData.disbursement_date = new Date();
+    } else if (status === "repaid") {
+      updateData.repayment_date = new Date();
+    }
+    
+    if (notes) {
+      updateData.notes = notes;
+    }
+
+    const loan = await Loan.findByIdAndUpdate(req.params.id, updateData, {
+      new: true,
+      populate: { path: "member_id", select: "name phone member_id" },
+    });
+
+    if (!loan) {
+      return res.status(404).json({ success: false, error: "Loan not found" });
+    }
+
     const io = req.app.get("io");
     if (io && loan.member_id) {
       io.emit("loanStatusUpdated", {

@@ -253,9 +253,7 @@ export const queryLipiaPaymentStatus = async (transactionReference) => {
       paymentData.TransactionID ||
       paymentData.transactionId ||
       paymentData.ReceiptNumber ||
-      paymentData.receiptNumber ||
-      data.data?.MpesaReceiptNumber ||
-      data.MpesaReceiptNumber;
+      paymentData.receiptNumber;
 
     console.log("💳 M-Pesa Receipt extracted:", mpesaReceipt);
 
@@ -263,17 +261,24 @@ export const queryLipiaPaymentStatus = async (transactionReference) => {
     const rawStatus =
       paymentData.Status || paymentData.status || paymentData.ResultCode;
     console.log("🔍 Raw status value:", rawStatus);
+    console.log("🔍 Result Code:", paymentData.ResultCode);
 
     let status = "pending";
-    if (
-      rawStatus === "SUCCESS" ||
-      rawStatus === "0" ||
-      paymentData.ResultCode === "0" ||
+    
+    // CRITICAL: Only mark as completed if:
+    // 1. ResultCode is EXACTLY "0" (success)
+    // 2. AND we have a valid M-Pesa receipt number
+    // 3. OR rawStatus is explicitly "SUCCESS"
+    const hasValidReceipt = mpesaReceipt && mpesaReceipt.length > 5; // M-Pesa receipts are typically 10+ chars
+    const isSuccessCode = 
+      paymentData.ResultCode === "0" || 
       paymentData.ResultCode === 0 ||
-      mpesaReceipt // If we have a receipt, payment is successful
-    ) {
+      rawStatus === "0";
+    const isSuccessStatus = rawStatus === "SUCCESS";
+    
+    if ((isSuccessCode && hasValidReceipt) || isSuccessStatus) {
       status = "completed";
-      console.log("✅ Payment SUCCESS detected");
+      console.log("✅ Payment SUCCESS detected - ResultCode:", paymentData.ResultCode, "Receipt:", mpesaReceipt);
     } else if (
       rawStatus === "FAILED" ||
       rawStatus === "1" ||
@@ -281,12 +286,12 @@ export const queryLipiaPaymentStatus = async (transactionReference) => {
       paymentData.ResultCode === 1
     ) {
       status = "failed";
-      console.log("❌ Payment FAILED detected");
+      console.log("❌ Payment FAILED detected - ResultCode:", paymentData.ResultCode);
     } else if (rawStatus === "CANCELLED" || paymentData.ResultCode === "1032") {
       status = "cancelled";
-      console.log("❌ Payment CANCELLED by user");
+      console.log("❌ Payment CANCELLED by user - ResultCode:", paymentData.ResultCode);
     } else {
-      console.log("⏳ Payment still PENDING, Status:", rawStatus);
+      console.log("⏳ Payment still PENDING, Status:", rawStatus, "ResultCode:", paymentData.ResultCode);
     }
 
     return {

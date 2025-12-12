@@ -367,7 +367,8 @@ const ApprovalsTab = () => {
             </div>
           ) : (
             <Tabs defaultValue="loans" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
+              <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">
+              <TabsList className="inline-flex w-auto md:grid md:w-full md:grid-cols-2 min-w-max">
                 <TabsTrigger value="loans">
                   Loans ({pendingLoans.length})
                 </TabsTrigger>
@@ -375,6 +376,7 @@ const ApprovalsTab = () => {
                   Withdrawals ({pendingWithdrawals.length})
                 </TabsTrigger>
               </TabsList>
+              </div>
 
               {/* Pending Loans */}
               <TabsContent value="loans" className="space-y-4">
@@ -461,8 +463,7 @@ const ApprovalsTab = () => {
                     <CheckCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
                     <p>No pending withdrawal requests</p>
                   </div>
-                ) : (
-                  <Table>
+                ) : (                  <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">                  <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Member</TableHead>
@@ -531,6 +532,7 @@ const ApprovalsTab = () => {
                       ))}
                     </TableBody>
                   </Table>
+                  </div>
                 )}
               </TabsContent>
             </Tabs>

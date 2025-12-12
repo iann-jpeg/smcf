@@ -481,6 +481,182 @@ router.get("/admin/pending-withdrawals", protect, adminOnly, async (req, res) =>
   }
 });
 
+// Approve withdrawal (admin only)
+router.post("/admin/approve-withdrawal/:id", protect, adminOnly, async (req, res) => {
+  try {
+    const savingId = req.params.id;
+
+    const saving = await Saving.findById(savingId).populate("member_id", "name member_id phone wallet_balance");
+    if (!saving) {
+      return res.status(404).json({
+        success: false,
+        error: "Withdrawal request not found",
+      });
+    }
+
+    if (saving.status !== "pending") {
+      return res.status(400).json({
+        success: false,
+        error: "Withdrawal has already been processed",
+      });
+    }
+
+    if (saving.transaction_type !== "withdrawal") {
+      return res.status(400).json({
+        success: false,
+        error: "This is not a withdrawal request",
+      });
+    }
+
+    // Calculate withdrawal fee
+    const withdrawalFee = calculateWithdrawalFee(saving.amount);
+    const totalDeduction = saving.amount + withdrawalFee;
+
+    // Get member to check balance
+    const member = await Member.findById(saving.member_id._id);
+    if (!member) {
+      return res.status(404).json({
+        success: false,
+        error: "Member not found",
+      });
+    }
+
+    // Check if member has enough balance for amount + fee
+    if (member.wallet_balance < totalDeduction) {
+      return res.status(400).json({
+        success: false,
+        error: `Insufficient balance. Withdrawal amount: KES ${saving.amount}, Fee: KES ${withdrawalFee}, Total required: KES ${totalDeduction}, Current balance: KES ${member.wallet_balance}`,
+      });
+    }
+
+    // Deduct from member's wallet_balance and total_savings (amount + fee)
+    await Member.findByIdAndUpdate(saving.member_id._id, {
+      $inc: { 
+        total_savings: -totalDeduction,
+        wallet_balance: -totalDeduction 
+      },
+    });
+
+    // Update saving record
+    saving.notes = saving.notes 
+      ? `${saving.notes}${withdrawalFee > 0 ? ` | Fee: KES ${withdrawalFee}` : ''}`
+      : (withdrawalFee > 0 ? `Withdrawal fee: KES ${withdrawalFee}` : '');
+    saving.status = "completed";
+    saving.processed_by = req.admin._id;
+    saving.processed_at = new Date();
+    saving.balance_after = member.wallet_balance - totalDeduction;
+    await saving.save();
+
+    // Record withdrawal fee if applicable
+    if (withdrawalFee > 0) {
+      await TransactionFee.create({
+        transaction_type: "withdrawal",
+        member_id: saving.member_id._id,
+        transaction_amount: saving.amount,
+        fee_amount: withdrawalFee,
+        fee_description: `Withdrawal fee for KES ${saving.amount.toLocaleString()}`,
+        reference_id: saving._id.toString(),
+        status: "collected",
+      });
+    }
+
+    console.log(`✅ Withdrawal approved: KES ${totalDeduction} (Amount: ${saving.amount} + Fee: ${withdrawalFee}) deducted from ${member.name}'s wallet`);
+
+    // Emit Socket.IO event
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("withdrawalStatusUpdated", {
+        savingId,
+        memberId: saving.member_id._id,
+        status: "completed",
+        amount: saving.amount,
+        fee: withdrawalFee,
+        totalDeducted: totalDeduction,
+        newBalance: saving.balance_after,
+        timestamp: new Date(),
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Withdrawal approved. KES ${saving.amount} will be sent to member. Fee: KES ${withdrawalFee}`,
+      data: saving,
+    });
+  } catch (error) {
+    console.error("Error approving withdrawal:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Reject withdrawal (admin only)
+router.post("/admin/reject-withdrawal/:id", protect, adminOnly, async (req, res) => {
+  try {
+    const savingId = req.params.id;
+    const { rejection_reason } = req.body;
+
+    if (!rejection_reason || !rejection_reason.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: "Rejection reason is required",
+      });
+    }
+
+    const saving = await Saving.findById(savingId).populate("member_id", "name member_id phone");
+    if (!saving) {
+      return res.status(404).json({
+        success: false,
+        error: "Withdrawal request not found",
+      });
+    }
+
+    if (saving.status !== "pending") {
+      return res.status(400).json({
+        success: false,
+        error: "Withdrawal has already been processed",
+      });
+    }
+
+    if (saving.transaction_type !== "withdrawal") {
+      return res.status(400).json({
+        success: false,
+        error: "This is not a withdrawal request",
+      });
+    }
+
+    // Update saving record with rejection
+    saving.status = "failed";
+    saving.rejection_reason = rejection_reason;
+    saving.processed_by = req.admin._id;
+    saving.processed_at = new Date();
+    saving.balance_after = saving.balance_before; // Restore original balance
+    await saving.save();
+
+    console.log(`❌ Withdrawal rejected for ${saving.member_id.name}: ${rejection_reason}`);
+
+    // Emit Socket.IO event
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("withdrawalStatusUpdated", {
+        savingId,
+        memberId: saving.member_id._id,
+        status: "failed",
+        amount: saving.amount,
+        rejectionReason: rejection_reason,
+        timestamp: new Date(),
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Withdrawal rejected",
+      data: saving,
+    });
+  } catch (error) {
+    console.error("Error rejecting withdrawal:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Apply monthly interest to all members (admin only - manual trigger or cron job)
 router.post("/admin/apply-interest", protect, adminOnly, async (req, res) => {
   try {
