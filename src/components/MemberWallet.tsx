@@ -193,9 +193,12 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
           ) {
             console.log("✅ My wallet deposit completed!");
 
-            // Clear poll interval
+            // Stop polling immediately
             if ((window as any).walletPollInterval) {
               clearInterval((window as any).walletPollInterval);
+            }
+            if ((window as any).walletPollingActive) {
+              (window as any).walletPollingActive = false;
             }
 
             // Close the dialog and reset state
@@ -204,9 +207,6 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
             setIsProcessing(false);
             setPaymentStep("confirm");
             setPollCount(0);
-
-            // Fetch updated wallet data
-            fetchWalletData();
 
             // Show success notification with fee info if applicable
             const feeMessage = data.fee && data.fee > 0
@@ -218,6 +218,12 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
               description: `KES ${data.grossAmount?.toLocaleString() || data.amount.toLocaleString()} deposited ${feeMessage}`,
               duration: 5000,
             });
+
+            // Fetch updated wallet data immediately and again after 1 second
+            fetchWalletData();
+            setTimeout(() => {
+              fetchWalletData();
+            }, 1000);
           }
         });
 
@@ -253,6 +259,15 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
           console.log("💾 New saving record event:", data);
           if (data.memberId === userData?._id) {
             console.log("✅ My saving record created!");
+            fetchWalletData();
+          }
+        });
+
+        // Listen for savings deposits
+        socket.on("savingDeposit", (data: any) => {
+          console.log("💰 Saving deposit event:", data);
+          if (data.memberId === userData?._id) {
+            console.log("✅ My deposit received!");
             fetchWalletData();
           }
         });
@@ -309,7 +324,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
     setIsProcessing(true);
 
     try {
-      const res = await fetch(`${API_BASE}/api/payments/stk-push`, {
+      const res = await fetch(`${API_BASE}/api/lipia/stk-push`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -330,25 +345,88 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
         setIsProcessing(false);
         setPollCount(0);
 
+        const checkoutRequestID = data.CheckoutRequestID || data.TransactionReference;
+
         toast({
           title: "STK Push Sent! 📱",
           description: `Check your phone (${phoneNumber}) and enter your M-Pesa PIN`,
           duration: 5000,
         });
 
-        // Start poll counter animation (visual only, backend handles actual polling)
-        const pollInterval = setInterval(() => {
-          setPollCount((prev) => {
-            if (prev >= 60) {
-              clearInterval(pollInterval);
-              return 60;
-            }
-            return prev + 1;
-          });
-        }, 1000);
+        // Start actual polling for payment status
+        let pollAttempts = 0;
+        let pollingActive = true;
+        
+        const pollPaymentStatus = async () => {
+          if (!pollingActive) return;
+          
+          pollAttempts++;
+          setPollCount(pollAttempts);
 
+          // Stop after 60 attempts (60 seconds)
+          if (pollAttempts >= 60) {
+            pollingActive = false;
+            clearInterval((window as any).walletPollInterval);
+            toast({
+              title: "Payment Verification Timeout",
+              description: "Please check your transaction history",
+              variant: "destructive",
+            });
+            setPaymentStep("confirm");
+            setIsProcessing(false);
+            return;
+          }
+
+          try {
+            const statusRes = await fetch(`${API_BASE}/api/lipia/query-status`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...authService.getAuthHeaders(),
+              },
+              body: JSON.stringify({
+                checkoutRequestID,
+                transactionReference: checkoutRequestID,
+              }),
+            });
+
+            const statusData = await statusRes.json();
+
+            if (statusData.success && (statusData.ResultCode === "0" || statusData.ResultCode === 0 || statusData.status === "completed")) {
+              // Payment successful!
+              pollingActive = false;
+              clearInterval((window as any).walletPollInterval);
+              
+              setShowDepositDialog(false);
+              setDepositAmount("");
+              setIsProcessing(false);
+              setPaymentStep("confirm");
+              setPollCount(0);
+
+              toast({
+                title: "Payment Successful! 🎉",
+                description: `KES ${amount.toLocaleString()} deposited to your wallet`,
+                duration: 5000,
+              });
+
+              // Refresh wallet data immediately and again after 1 second to ensure backend has processed
+              fetchWalletData();
+              setTimeout(() => {
+                fetchWalletData();
+              }, 1000);
+            }
+          } catch (error) {
+            console.error("Polling error:", error);
+          }
+        };
+
+        // Start polling immediately, then every second
+        pollPaymentStatus();
+        const pollInterval = setInterval(pollPaymentStatus, 1000);
+        
         // Store interval for cleanup
         (window as any).walletPollInterval = pollInterval;
+        (window as any).walletPollingActive = () => pollingActive;
       } else {
         throw new Error(data.error || "Failed to initiate payment");
       }

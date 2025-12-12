@@ -102,17 +102,29 @@ const AdminSavingsTab = () => {
       socket.on("savingDeposit", () => {
         console.log("💰 New deposit received");
         fetchSavingsData();
+        // Refetch after 1 second to ensure backend has processed
+        setTimeout(() => {
+          fetchSavingsData();
+        }, 1000);
       });
 
       socket.on("saving:new", () => {
         console.log("💰 New saving transaction");
         fetchSavingsData();
+        // Refetch after 1 second to ensure backend has processed
+        setTimeout(() => {
+          fetchSavingsData();
+        }, 1000);
       });
 
       socket.on("payment:completed", (data: any) => {
         if (data.type === "wallet_deposit") {
           console.log("💰 Wallet deposit completed in admin view");
           fetchSavingsData();
+          // Refetch after 1 second to ensure backend has processed
+          setTimeout(() => {
+            fetchSavingsData();
+          }, 1000);
         }
       });
     }

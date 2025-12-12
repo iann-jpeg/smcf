@@ -18,7 +18,7 @@ const router = express.Router();
  */
 router.post("/stk-push", protect, async (req, res) => {
   try {
-    const { phone, amount, cycleNumber } = req.body;
+    const { phone, amount, cycleNumber, type, notes } = req.body;
 
     if (!phone || !amount) {
       return res.status(400).json({
@@ -27,15 +27,24 @@ router.post("/stk-push", protect, async (req, res) => {
       });
     }
 
+    // Determine payment type (default to cycle_payment for backward compatibility)
+    const paymentType = type || "cycle_payment";
+
     // Generate unique reference
     const reference = `SMCF-${Date.now()}-${req.user._id}`;
+
+    // Create description based on payment type
+    let description = `SMCF Contribution - Cycle ${cycleNumber || "Current"}`;
+    if (paymentType === "wallet_deposit") {
+      description = notes || `Wallet deposit - KES ${amount}`;
+    }
 
     // Initiate payment via Lipia
     const result = await initiateLipiaPayment(
       phone,
       amount,
       reference,
-      `SMCF Contribution - Cycle ${cycleNumber || "Current"}`
+      description
     );
 
     if (!result.success) {
@@ -51,6 +60,7 @@ router.post("/stk-push", protect, async (req, res) => {
     console.log("🔑 MerchantRequestID from Lipia:", result.merchantRequestID);
     console.log("👤 Member ID:", req.user._id);
     console.log("💰 Amount:", amount);
+    console.log("📋 Payment Type:", paymentType);
     console.log("🔢 Cycle Number:", cycleNumber);
 
     // Create pending payment record
@@ -61,11 +71,12 @@ router.post("/stk-push", protect, async (req, res) => {
       amount: parseFloat(amount),
       cycle_number: cycleNumber,
       status: "pending",
-      type: "cycle_payment", // Explicitly mark as cycle payment
+      type: paymentType, // Use the type from request body
       payment_method: "lipia", // Explicitly set payment method
       mpesa_transaction_id: reference,
       checkout_request_id: result.checkoutRequestID,
       merchant_request_id: result.merchantRequestID,
+      notes: notes || description,
       date: new Date(),
     });
 
@@ -237,6 +248,13 @@ router.post("/query-status", protect, async (req, res) => {
 
         // Handle based on payment type
         if (payment.type === "wallet_deposit") {
+          console.log("💰 Processing wallet deposit for query-status:");
+          console.log("   Payment ID:", payment._id);
+          console.log("   Member ID:", payment.member_id);
+          console.log("   Payment Amount:", payment.amount);
+          console.log("   Payment Amount Type:", typeof payment.amount);
+          console.log("   Full Payment Object:", JSON.stringify(payment, null, 2));
+          
           // Wallet deposit - create Saving record
           const Saving = (await import("../models/Saving.js")).default;
 
@@ -244,11 +262,16 @@ router.post("/query-status", protect, async (req, res) => {
             member_id: payment.member_id,
           }).sort({ created_at: -1 });
           const balanceBefore = lastSaving ? lastSaving.balance_after : 0;
-          const balanceAfter = balanceBefore + payment.amount;
+          const depositAmount = parseFloat(payment.amount) || 0;
+          const balanceAfter = balanceBefore + depositAmount;
+
+          console.log("   Balance before:", balanceBefore);
+          console.log("   Deposit amount (parsed):", depositAmount);
+          console.log("   Balance after:", balanceAfter);
 
           const savingRecord = await Saving.create({
             member_id: payment.member_id,
-            amount: payment.amount,
+            amount: depositAmount,
             transaction_type: "deposit",
             balance_before: balanceBefore,
             balance_after: balanceAfter,
@@ -256,16 +279,25 @@ router.post("/query-status", protect, async (req, res) => {
             payment_method: "mpesa",
             transaction_ref: result.mpesaReceiptNumber,
             notes: `Wallet deposit via M-Pesa - ${result.mpesaReceiptNumber}`,
+            created_at: new Date(),
+          });
+
+          console.log("✅ Saving record created:", {
+            id: savingRecord._id,
+            amount: savingRecord.amount,
+            balance_after: savingRecord.balance_after,
+            created_at: savingRecord.created_at,
           });
 
           await Member.findByIdAndUpdate(payment.member_id, {
-            $inc: { total_savings: payment.amount },
+            $inc: { total_savings: depositAmount },
           });
 
           console.log("✅ Wallet deposit completed:", {
             member: member?.name,
-            amount: payment.amount,
+            amount: depositAmount,
             newBalance: balanceAfter,
+            savingId: savingRecord._id,
           });
 
           // Emit Socket.IO events
@@ -298,11 +330,21 @@ router.post("/query-status", protect, async (req, res) => {
           }
         } else if (payment.type === "cycle_payment") {
           // Cycle payment - update member and cycle stats
+          // Split payment: KES 200 cycle, KES 20 credit, KES 4 transaction fees
+          const cycleAmount = 200;
+          const creditAmount = 20;
+          const feeAmount = 4;
+          
           await Member.findByIdAndUpdate(payment.member_id, {
             payment_status: "paid",
             payment_date: new Date(),
             amount: payment.amount,
-            $inc: { total_contributed: payment.amount },
+            $inc: { 
+              total_contributed: payment.amount,
+              total_cycle_contribution: cycleAmount,
+              total_member_credit: creditAmount,
+              total_transaction_fees: feeAmount,
+            },
           });
 
           // Recalculate cycle stats from all completed payments
@@ -870,59 +912,154 @@ router.post("/callback", async (req, res) => {
       payment.transaction_date = callbackData.transactionDate;
       await payment.save();
 
-      // Update member payment status
-      const updatedMember = await Member.findByIdAndUpdate(
-        payment.member_id,
-        {
-          payment_status: "paid",
-          $inc: { total_contributed: payment.amount },
-        },
-        { new: true }
-      );
+      const member = await Member.findById(payment.member_id);
 
-      // Update cycle stats
-      const updatedCycle = await Cycle.findOneAndUpdate(
-        { cycle_number: payment.cycle_number, status: "active" },
-        {
-          $inc: {
-            paid_members_count: 1,
-            total_amount_collected: payment.amount,
-          },
-        },
-        { new: true }
-      );
+      // Handle based on payment type
+      if (payment.type === "wallet_deposit") {
+        console.log("💰 Processing wallet deposit for callback:");
+        console.log("   Payment ID:", payment._id);
+        console.log("   Member ID:", payment.member_id);
+        console.log("   Payment Amount:", payment.amount);
+        console.log("   Payment Amount Type:", typeof payment.amount);
+        
+        // Wallet deposit - create Saving record
+        const Saving = (await import("../models/Saving.js")).default;
 
-      console.log(
-        "Payment completed successfully:",
-        callbackData.mpesaReceiptNumber
-      );
+        const lastSaving = await Saving.findOne({
+          member_id: payment.member_id,
+        }).sort({ created_at: -1 });
+        const balanceBefore = lastSaving ? lastSaving.balance_after : 0;
+        const depositAmount = parseFloat(payment.amount) || 0;
+        const balanceAfter = balanceBefore + depositAmount;
 
-      // Emit Socket.IO events for real-time updates
-      const io = req.app.get("io");
-      if (io) {
-        console.log("💰 Callback - Broadcasting real-time payment updates");
+        console.log("   Balance before:", balanceBefore);
+        console.log("   Deposit amount (parsed):", depositAmount);
+        console.log("   Balance after:", balanceAfter);
 
-        io.emit("paymentCompleted", {
-          paymentId: payment._id,
-          memberId: payment.member_id,
-          amount: payment.amount,
-          transactionId: callbackData.mpesaReceiptNumber,
-          timestamp: new Date(),
+        const savingRecord = await Saving.create({
+          member_id: payment.member_id,
+          amount: depositAmount,
+          transaction_type: "deposit",
+          balance_before: balanceBefore,
+          balance_after: balanceAfter,
+          status: "completed",
+          payment_method: "mpesa",
+          transaction_ref: callbackData.mpesaReceiptNumber,
+          notes: `Wallet deposit via M-Pesa - ${callbackData.mpesaReceiptNumber}`,
+          created_at: new Date(),
         });
 
-        io.emit("memberUpdated", {
-          memberId: updatedMember._id,
-          name: updatedMember.name,
-          payment_status: "paid",
-          total_contributed: updatedMember.total_contributed,
+        console.log("✅ Saving record created via callback:", {
+          id: savingRecord._id,
+          amount: savingRecord.amount,
+          balance_after: savingRecord.balance_after,
+          created_at: savingRecord.created_at,
         });
 
-        if (updatedCycle) {
-          io.emit("cycleUpdated", {
-            cycle_number: updatedCycle.cycle_number,
-            paid_members_count: updatedCycle.paid_members_count,
-            total_amount_collected: updatedCycle.total_amount_collected,
+        await Member.findByIdAndUpdate(payment.member_id, {
+          $inc: { total_savings: depositAmount },
+        });
+
+        console.log("✅ Wallet deposit completed via callback:", {
+          member: member?.name,
+          amount: depositAmount,
+          newBalance: balanceAfter,
+          savingId: savingRecord._id,
+        });
+
+        // Emit Socket.IO events
+        const io = req.app.get("io");
+        if (io) {
+          io.emit("payment:completed", {
+            memberId: payment.member_id.toString(),
+            checkoutRequestID: payment.checkout_request_id,
+            mpesaReceiptNumber: callbackData.mpesaReceiptNumber,
+            payment: {
+              _id: payment._id,
+              amount: payment.amount,
+              status: "completed",
+            },
+            amount: payment.amount,
+            type: "wallet_deposit",
           });
+
+          io.emit("saving:new", {
+            memberId: payment.member_id.toString(),
+            saving: savingRecord,
+            member: member?.name,
+          });
+
+          io.emit("savingDeposit", {
+            memberId: payment.member_id.toString(),
+            amount: payment.amount,
+            newBalance: balanceAfter,
+          });
+        }
+      } else if (payment.type === "cycle_payment") {
+        // Cycle payment - update member and cycle stats
+        // Split payment: KES 200 cycle, KES 20 credit, KES 4 transaction fees
+        const cycleAmount = 200;
+        const creditAmount = 20;
+        const feeAmount = 4;
+        
+        const updatedMember = await Member.findByIdAndUpdate(
+          payment.member_id,
+          {
+            payment_status: "paid",
+            $inc: { 
+              total_contributed: payment.amount,
+              total_cycle_contribution: cycleAmount,
+              total_member_credit: creditAmount,
+              total_transaction_fees: feeAmount,
+            },
+          },
+          { new: true }
+        );
+
+        // Update cycle stats
+        const updatedCycle = await Cycle.findOneAndUpdate(
+          { cycle_number: payment.cycle_number, status: "active" },
+          {
+            $inc: {
+              paid_members_count: 1,
+              total_amount_collected: payment.amount,
+            },
+          },
+          { new: true }
+        );
+
+        console.log(
+          "Payment completed successfully:",
+          callbackData.mpesaReceiptNumber
+        );
+
+        // Emit Socket.IO events for real-time updates
+        const io = req.app.get("io");
+        if (io) {
+          console.log("💰 Callback - Broadcasting real-time payment updates");
+
+          io.emit("paymentCompleted", {
+            paymentId: payment._id,
+            memberId: payment.member_id,
+            amount: payment.amount,
+            transactionId: callbackData.mpesaReceiptNumber,
+            timestamp: new Date(),
+          });
+
+          io.emit("memberUpdated", {
+            memberId: updatedMember._id,
+            name: updatedMember.name,
+            payment_status: "paid",
+            total_contributed: updatedMember.total_contributed,
+          });
+
+          if (updatedCycle) {
+            io.emit("cycleUpdated", {
+              cycle_number: updatedCycle.cycle_number,
+              paid_members_count: updatedCycle.paid_members_count,
+              total_amount_collected: updatedCycle.total_amount_collected,
+            });
+          }
         }
       }
     } else {
