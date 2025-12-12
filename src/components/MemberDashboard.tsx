@@ -384,28 +384,34 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
       // Listen for payment completion (new event name)
       socket.on("payment:completed", (data: any) => {
         console.log("💰 MemberDashboard received: payment:completed", data);
+        console.log("   Current user ID:", userData._id, "or", userData.id);
+        console.log("   Payment memberId:", data.memberId);
+        console.log("   Payment payerId:", data.payerId);
+        console.log("   Payment type:", data.type);
         
-        // Check if this payment involves current user (as recipient OR payer)
-        const isMyPayment = data.memberId === userData._id.toString() || 
-                           data.memberId === userData.id?.toString() ||
-                           data.payerId === userData._id.toString() ||
-                           data.payerId === userData.id?.toString();
-        
-        if (isMyPayment || data.type === "cycle_payment") {
-          // Show toast notification
-          if (data.isQRPayment && data.payerId === userData._id.toString()) {
-            // User paid for someone else via QR
+        // For cycle payments, always refresh (affects cycle progress for everyone)
+        if (data.type === "cycle_payment") {
+          // Check if this user is directly involved
+          const isRecipient = data.memberId === userData._id?.toString() || 
+                             data.memberId === userData.id?.toString();
+          const isPayer = data.payerId === userData._id?.toString() ||
+                         data.payerId === userData.id?.toString();
+          
+          // Show toast only if user is directly involved
+          if (isPayer && data.isQRPayment) {
             toast({
               title: "Payment Sent!",
               description: `Payment of KES ${data.amount} sent successfully`,
             });
-          } else {
+          } else if (isRecipient || isPayer) {
             toast({
               title: "Payment Confirmed!",
               description: `Payment of KES ${data.amount} has been confirmed`,
             });
           }
-          fetchData(); // Refresh data immediately
+          
+          // Always refresh data for cycle payments (updates cycle progress for all members)
+          fetchData();
         }
       });
 
