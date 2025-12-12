@@ -46,6 +46,13 @@ router.post("/stk-push", protect, async (req, res) => {
       });
     }
 
+    console.log("✅ STK Push successful! Creating payment record...");
+    console.log("🔑 CheckoutRequestID from Lipia:", result.checkoutRequestID);
+    console.log("🔑 MerchantRequestID from Lipia:", result.merchantRequestID);
+    console.log("👤 Member ID:", req.user._id);
+    console.log("💰 Amount:", amount);
+    console.log("🔢 Cycle Number:", cycleNumber);
+
     // Create pending payment record
     const payment = await Payment.create({
       member_id: req.user._id,
@@ -61,6 +68,11 @@ router.post("/stk-push", protect, async (req, res) => {
       merchant_request_id: result.merchantRequestID,
       date: new Date(),
     });
+
+    console.log("💾 Payment record created successfully!");
+    console.log("   Payment ID:", payment._id);
+    console.log("   checkout_request_id:", payment.checkout_request_id);
+    console.log("   Status:", payment.status);
 
     res.json({
       success: true,
@@ -92,7 +104,11 @@ router.post("/query-status", protect, async (req, res) => {
     const { checkoutRequestID, transactionReference } = req.body;
     const reference = transactionReference || checkoutRequestID;
 
-    console.log("🔍 Query-status request:", { checkoutRequestID, transactionReference, reference });
+    console.log("🔍 ============ QUERY STATUS REQUEST ============");
+    console.log("📥 Request body:", JSON.stringify(req.body, null, 2));
+    console.log("🔑 CheckoutRequestID:", checkoutRequestID);
+    console.log("🔑 TransactionReference:", transactionReference);
+    console.log("🔑 Using reference:", reference);
 
     if (!reference) {
       return res.status(400).json({
@@ -101,16 +117,21 @@ router.post("/query-status", protect, async (req, res) => {
       });
     }
 
+    console.log("📞 Calling Lipia API to check status...");
     const result = await queryLipiaPaymentStatus(reference);
 
-    console.log("📊 Query-status result:", {
-      success: result.success,
-      status: result.status,
-      resultCode: result.resultCode,
-      mpesaReceipt: result.mpesaReceiptNumber,
-    });
+    console.log("📊 ============ LIPIA API RESPONSE ============");
+    console.log("✅ Success:", result.success);
+    console.log("📌 Status:", result.status);
+    console.log("🔢 ResultCode:", result.resultCode);
+    console.log("💳 M-Pesa Receipt:", result.mpesaReceiptNumber);
+    console.log("💰 Amount:", result.amount);
+    console.log("📱 Phone:", result.phoneNumber);
+    console.log("📅 Transaction Date:", result.transactionDate);
+    console.log("📝 Full result:", JSON.stringify(result, null, 2));
 
     if (!result.success) {
+      console.log("❌ Lipia API returned failure");
       return res.status(400).json({
         success: false,
         error: result.error,
@@ -118,8 +139,14 @@ router.post("/query-status", protect, async (req, res) => {
     }
 
     // Update payment status if completed - check multiple success indicators
+    console.log("🔍 Checking if payment is completed...");
+    console.log("   Status === 'completed'?", result.status === "completed");
+    console.log("   ResultCode === '0'?", result.resultCode === "0");
+    console.log("   Has M-Pesa Receipt?", !!result.mpesaReceiptNumber);
+    
     if (result.status === "completed" || result.resultCode === "0" || result.mpesaReceiptNumber) {
-      console.log("💳 Attempting to complete payment with checkoutRequestID:", checkoutRequestID);
+      console.log("✅ Payment is COMPLETED! Updating database...");
+      console.log("🔍 Looking for payment with checkout_request_id:", checkoutRequestID);
       
       const payment = await Payment.findOneAndUpdate(
         { checkout_request_id: checkoutRequestID },
@@ -132,14 +159,44 @@ router.post("/query-status", protect, async (req, res) => {
       );
 
       if (!payment) {
-        console.error("❌ Payment not found with checkout_request_id:", checkoutRequestID);
+        console.error("❌❌❌ PAYMENT NOT FOUND! ❌❌❌");
+        console.error("   Searched for checkout_request_id:", checkoutRequestID);
+        console.error("   This means the Payment record doesn't exist in database");
+        console.error("   Check if STK push created the payment record properly");
+        
+        // Try to find any payment with similar reference
+        const anyPayment = await Payment.findOne({
+          $or: [
+            { mpesa_transaction_id: { $regex: checkoutRequestID, $options: 'i' } },
+            { merchant_request_id: checkoutRequestID }
+          ]
+        });
+        
+        if (anyPayment) {
+          console.log("🔍 Found payment with different field:", {
+            _id: anyPayment._id,
+            checkout_request_id: anyPayment.checkout_request_id,
+            mpesa_transaction_id: anyPayment.mpesa_transaction_id,
+            merchant_request_id: anyPayment.merchant_request_id,
+          });
+        } else {
+          console.log("🔍 No payment found at all with any reference to:", checkoutRequestID);
+        }
+        
         return res.json({
           success: true,
           status: result.status,
           ResultCode: result.resultCode,
-          message: "Payment record not found",
+          message: "Payment record not found in database",
         });
       }
+
+      console.log("✅✅✅ PAYMENT FOUND AND UPDATED! ✅✅✅");
+      console.log("💾 Payment ID:", payment._id);
+      console.log("👤 Member ID:", payment.member_id);
+      console.log("💰 Amount:", payment.amount);
+      console.log("📋 Type:", payment.type);
+      console.log("✔️ Status:", payment.status);
 
       if (payment.status === "completed") {
         console.log("✅ Payment completed via query-status:", {
