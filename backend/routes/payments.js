@@ -1042,19 +1042,17 @@ router.post("/qr-cycle-payment", protect, async (req, res) => {
       });
     }
 
-    // Check if recipient already paid for this cycle
+    // Check if recipient already paid for current cycle
     const existingPayment = await Payment.findOne({
       member_id: organizationMemberId,
       cycle_number: currentCycle.cycle_number,
       status: "completed",
     });
 
-    if (existingPayment) {
-      return res.status(400).json({ 
-        success: false, 
-        error: `${recipient.name} has already paid for this cycle` 
-      });
-    }
+    // Determine target cycle - if already paid for current, pay for next cycle
+    const targetCycle = existingPayment 
+      ? currentCycle.cycle_number + 1 
+      : currentCycle.cycle_number;
 
     // Create payment record - credit goes to recipient, but paid by payer
     const payment = await Payment.create({
@@ -1062,7 +1060,7 @@ router.post("/qr-cycle-payment", protect, async (req, res) => {
       amount: amount,
       phone: payer.phone, // STK Push sent to payer's phone
       payment_method: "qr_transfer",
-      cycle_number: currentCycle.cycle_number,
+      cycle_number: targetCycle, // Use target cycle (current or next)
       status: "completed",
       mpesa_transaction_id: `QR-${Date.now()}`,
       paid_by: payerId, // Track who actually paid
