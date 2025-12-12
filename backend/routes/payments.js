@@ -49,12 +49,22 @@ router.post("/", protect, async (req, res) => {
       status: "completed",
     });
 
-    // Update member payment status and increment total contributed
+    // Split the payment: KES 224 = 200 (cycle) + 20 (credit) + 4 (fees)
+    const cycleAmount = 200;
+    const creditAmount = 20;
+    const feeAmount = 4;
+
+    // Update member payment status and increment breakdown totals
     await Member.findByIdAndUpdate(member_id, {
       payment_status: "paid",
       payment_date: new Date(),
       amount: amount || 224,
-      $inc: { total_contributed: amount || 224 },
+      $inc: { 
+        total_contributed: amount || 224,
+        total_cycle_contribution: cycleAmount,
+        total_member_credit: creditAmount,
+        total_transaction_fees: feeAmount,
+      },
     });
 
     // Update cycle collection stats
@@ -447,12 +457,22 @@ async function pollLipiaPaymentStatus(
           cycleNumber: payment.cycle_number,
         });
 
-        // Update member payment status
+        // Split the payment: KES 224 = 200 (cycle) + 20 (credit) + 4 (fees)
+        const cycleAmount = 200;
+        const creditAmount = 20;
+        const feeAmount = 4;
+
+        // Update member payment status with breakdown
         await Member.findByIdAndUpdate(memberId, {
           payment_status: "paid",
           payment_date: new Date(),
           amount: amount,
-          $inc: { total_contributed: amount },
+          $inc: { 
+            total_contributed: amount,
+            total_cycle_contribution: cycleAmount,
+            total_member_credit: creditAmount,
+            total_transaction_fees: feeAmount,
+          },
         });
 
         // Update cycle collection stats

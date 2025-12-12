@@ -43,6 +43,7 @@ import {
 } from "lucide-react";
 import smcfLogo from '@/assets/smcf-logo.png';
 import { useEffect, useState } from "react";
+import CreditScoreCard from "@/components/CreditScoreCard";
 
 interface Loan {
   _id: string;
@@ -75,6 +76,7 @@ const LoansTab = () => {
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [showDisbursementDialog, setShowDisbursementDialog] = useState(false);
   const [showClearDialog, setShowClearDialog] = useState(false);
+  const [showCreditScoreDialog, setShowCreditScoreDialog] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
@@ -611,6 +613,7 @@ const LoansTab = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Member</TableHead>
+                      <TableHead>Credit Score</TableHead>
                       <TableHead>Amount</TableHead>
                       <TableHead>Purpose</TableHead>
                       <TableHead>Interest</TableHead>
@@ -631,6 +634,17 @@ const LoansTab = () => {
                               {loan.member_id?.phone || "N/A"}
                             </div>
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedLoan(loan);
+                              setShowCreditScoreDialog(true);
+                            }}>
+                            View Score
+                          </Button>
                         </TableCell>
                         <TableCell className="font-semibold">
                           KES {loan.amount.toLocaleString()}
@@ -1033,6 +1047,42 @@ const LoansTab = () => {
                 <Loader2 className="w-4 h-4 animate-spin mr-2" />
               ) : null}
               Confirm Disbursement
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Credit Score Dialog */}
+      <Dialog open={showCreditScoreDialog} onOpenChange={setShowCreditScoreDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Member Credit Score</DialogTitle>
+            <DialogDescription>
+              Review member's creditworthiness before approving loan
+            </DialogDescription>
+          </DialogHeader>
+          {selectedLoan && (
+            <div className="space-y-4">
+              <div className="bg-muted p-4 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-semibold">{selectedLoan.member_id?.name || "Unknown Member"}</div>
+                    <div className="text-sm text-muted-foreground">{selectedLoan.member_id?.phone || "N/A"}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm text-muted-foreground">Requesting</div>
+                    <div className="text-lg font-bold">KES {selectedLoan.amount.toLocaleString()}</div>
+                  </div>
+                </div>
+              </div>
+              <CreditScoreCard memberId={selectedLoan.member_id?._id} showTitle={false} />
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowCreditScoreDialog(false)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

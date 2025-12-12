@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import CreditScoreCard from "@/components/CreditScoreCard";
 import {
   Dialog,
   DialogContent,
@@ -9,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import API_BASE from "@/lib/api";
 import { authService } from "@/lib/authService";
@@ -38,7 +40,6 @@ const LoanRequestDialog = ({
   const { toast } = useToast();
 
   // validation assumptions
-  const MIN_AMOUNT = 1000;
   const MAX_AMOUNT = 500000;
   const MIN_TERM = 1; // months
   const MAX_TERM = 60; // months
@@ -57,9 +58,7 @@ const LoanRequestDialog = ({
     if (!phone) errs.phone = "Phone is required";
     if (!purpose || purpose.trim().length === 0)
       errs.purpose = "Purpose is required";
-    if (!amount || isNaN(amt)) errs.amount = "Enter a valid amount";
-    else if (amt < MIN_AMOUNT)
-      errs.amount = `Minimum amount is KES ${MIN_AMOUNT.toLocaleString()}`;
+    if (!amount || isNaN(amt) || amt <= 0) errs.amount = "Enter a valid amount";
     else if (amt > MAX_AMOUNT)
       errs.amount = `Maximum amount is KES ${MAX_AMOUNT.toLocaleString()}`;
     if (!term || isNaN(trm)) errs.term = "Enter a valid term (months)";
@@ -119,82 +118,113 @@ const LoanRequestDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader className="space-y-2">
           <DialogTitle className="text-base sm:text-lg">
             Request a Loan
           </DialogTitle>
           <DialogDescription className="text-xs sm:text-sm">
-            Fill in the details below and submit your loan request to the admin.
+            Check your credit score and submit your loan request
           </DialogDescription>
         </DialogHeader>
-        <Card>
-          <CardContent className="space-y-3 pt-3 sm:pt-4">
-            <div>
-              <Label>Loan Amount (KES)</Label>
-              <Input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="e.g. 5,000"
-                min={1000}
-              />
-              {errors.amount && (
-                <div className="text-xs text-destructive mt-1">
-                  {errors.amount}
-                </div>
-              )}
-            </div>
+        
+        <Tabs defaultValue="credit-score" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="credit-score">Credit Score</TabsTrigger>
+            <TabsTrigger value="loan-form">Loan Application</TabsTrigger>
+          </TabsList>
 
-            <div>
-              <Label>Purpose of Loan</Label>
-              <Input
-                value={purpose}
-                onChange={(e) => setPurpose(e.target.value)}
-                placeholder="e.g. Business capital, Emergency, etc."
-              />
-              {errors.purpose && (
-                <div className="text-xs text-destructive mt-1">
-                  {errors.purpose}
-                </div>
-              )}
+          {/* Credit Score Tab */}
+          <TabsContent value="credit-score" className="space-y-4">
+            <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <strong>ℹ️ Before applying:</strong> Review your credit score to understand your loan eligibility. 
+                A score of 70+ is recommended for approval.
+              </p>
             </div>
-
-            {/* Fixed loan terms info */}
-            <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg space-y-1">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Loan Term:</span>
-                <span className="font-medium">1 Month</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Interest Rate:</span>
-                <span className="font-medium">10%</span>
-              </div>
-            </div>
-
-            <div className="text-sm text-muted-foreground">
-              Total repayment amount:{" "}
-              <strong>
-                {useMemo(() => {
-                  const P = Number(amount) || 0;
-                  if (!P) return "—";
-                  // Simple calculation: Principal + 10% interest
-                  const totalRepayment = P + (P * 0.10);
-                  return `KES ${Math.round(totalRepayment).toLocaleString()}`;
-                }, [amount])}
-              </strong>
-            </div>
-
-            <div className="flex gap-2">
-              <Button onClick={handleSubmit} variant="default">
-                Submit Request
-              </Button>
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
+            <CreditScoreCard showTitle={true} />
+            <div className="flex justify-end">
+              <Button onClick={() => {
+                // Switch to loan form tab
+                const tabsTrigger = document.querySelector('[value="loan-form"]') as HTMLElement;
+                if (tabsTrigger) tabsTrigger.click();
+              }}>
+                Continue to Application →
               </Button>
             </div>
-          </CardContent>
-        </Card>
+          </TabsContent>
+
+          {/* Loan Form Tab */}
+          <TabsContent value="loan-form">
+            <Card>
+              <CardContent className="space-y-3 pt-3 sm:pt-4">
+                <div>
+                  <Label>Loan Amount (KES)</Label>
+                  <Input
+                    type="number"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder="e.g. 5,000"
+                    min={1000}
+                  />
+                  {errors.amount && (
+                    <div className="text-xs text-destructive mt-1">
+                      {errors.amount}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <Label>Purpose of Loan</Label>
+                  <Input
+                    value={purpose}
+                    onChange={(e) => setPurpose(e.target.value)}
+                    placeholder="e.g. Business capital, Emergency, etc."
+                  />
+                  {errors.purpose && (
+                    <div className="text-xs text-destructive mt-1">
+                      {errors.purpose}
+                    </div>
+                  )}
+                </div>
+
+                {/* Fixed loan terms info */}
+                <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg space-y-1">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Loan Term:</span>
+                    <span className="font-medium">1 Month</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Interest Rate:</span>
+                    <span className="font-medium">10%</span>
+                  </div>
+                </div>
+
+                <div className="text-sm text-muted-foreground">
+                  Total repayment amount:{" "}
+                  <strong>
+                    {useMemo(() => {
+                      const P = Number(amount) || 0;
+                      if (!P) return "—";
+                      // Simple calculation: Principal + 10% interest
+                      const totalRepayment = P + (P * 0.10);
+                      return `KES ${Math.round(totalRepayment).toLocaleString()}`;
+                    }, [amount])}
+                  </strong>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button onClick={handleSubmit} variant="default">
+                    Submit Request
+                  </Button>
+                  <Button variant="outline" onClick={() => onOpenChange(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );

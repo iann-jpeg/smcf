@@ -25,6 +25,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import API_BASE from "@/lib/api";
@@ -1835,6 +1843,82 @@ Thank you for your cooperation! 🙏`;
                 </div>
               </CardContent>
             </Card>
+
+            {/* Available Funds (Total Interest + Wallet Balance) */}
+            <Card className="bg-gradient-to-br from-rose-50 to-rose-100 dark:from-rose-950 dark:to-rose-900 border-rose-200">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-rose-600 dark:text-rose-400">
+                      Available Funds
+                    </p>
+                    <p className="text-3xl font-bold text-rose-900 dark:text-rose-100">
+                      KES{" "}
+                      {(
+                        (savingsData.reduce(
+                          (sum, m) => sum + (m.totalInterestEarned || 0),
+                          0
+                        ) || 0) +
+                        (savingsData.reduce(
+                          (sum, m) => sum + (m.currentBalance || 0),
+                          0
+                        ) || 0)
+                      ).toLocaleString()}
+                    </p>
+                    <p className="text-xs text-rose-700 dark:text-rose-300 mt-1">
+                      Interest: KES{" "}
+                      {savingsData
+                        .reduce((sum, m) => sum + (m.totalInterestEarned || 0), 0)
+                        .toLocaleString()}{" "}
+                      | Wallet: KES{" "}
+                      {savingsData
+                        .reduce((sum, m) => sum + (m.currentBalance || 0), 0)
+                        .toLocaleString()}
+                    </p>
+                  </div>
+                  <Wallet className="w-12 h-12 text-rose-300 dark:text-rose-700" />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Organization Profit (Transaction Fees + Loan Interest) */}
+            <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900 border-emerald-200">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
+                      Organization Profit
+                    </p>
+                    <p className="text-3xl font-bold text-emerald-900 dark:text-emerald-100">
+                      KES{" "}
+                      {(
+                        (feeSummary?.totalCollected || 0) +
+                        (loans
+                          .filter((l: any) => l.status === "repaid")
+                          .reduce(
+                            (sum: number, l: any) =>
+                              sum + ((l.total_repayable || 0) - (l.amount || 0)),
+                            0
+                          ) || 0)
+                      ).toLocaleString()}
+                    </p>
+                    <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-1">
+                      Fees: KES {(feeSummary?.totalCollected || 0).toLocaleString()}{" "}
+                      | Loan Interest: KES{" "}
+                      {loans
+                        .filter((l: any) => l.status === "repaid")
+                        .reduce(
+                          (sum: number, l: any) =>
+                            sum + ((l.total_repayable || 0) - (l.amount || 0)),
+                          0
+                        )
+                        .toLocaleString()}
+                    </p>
+                  </div>
+                  <TrendingUp className="w-12 h-12 text-emerald-300 dark:text-emerald-700" />
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Quick Stats Bar */}
@@ -2623,161 +2707,72 @@ Thank you for your cooperation! 🙏`;
             <CardHeader>
               <CardTitle>All Members</CardTitle>
               <CardDescription>
-                Total: {safeMembers.length} members
+                Total: {safeMembers.length} members | Payment Breakdown: KES 200 (Cycle) + KES 20 (Credit) + KES 4 (Transaction Fee) = KES 224
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                {orderedMembers.map((member, index) => (
-                  <div
-                    key={member._id || member.id || index}
-                    className="flex items-center justify-between p-3 border rounded-lg">
-                    {editingMember === (member._id || member.id) ? (
-                      <div className="flex-1 space-y-3">
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <Label
-                              htmlFor={`name-${member._id || member.id}`}
-                              className="text-xs">
-                              Name
-                            </Label>
-                            <Input
-                              id={`name-${member._id || member.id}`}
-                              value={editedMemberData.name || ""}
-                              onChange={(e) =>
-                                setEditedMemberData((prev) => ({
-                                  ...prev,
-                                  name: e.target.value,
-                                }))
-                              }
-                              className="text-sm"
-                            />
-                          </div>
-                          <div>
-                            <Label
-                              htmlFor={`phone-${member._id || member.id}`}
-                              className="text-xs">
-                              Phone
-                            </Label>
-                            <Input
-                              id={`phone-${member._id || member.id}`}
-                              value={editedMemberData.phone || ""}
-                              onChange={(e) =>
-                                setEditedMemberData((prev) => ({
-                                  ...prev,
-                                  phone: e.target.value,
-                                }))
-                              }
-                              className="text-sm"
-                            />
-                          </div>
-                          <div>
-                            <Label
-                              htmlFor={`amount-${member._id || member.id}`}
-                              className="text-xs">
-                              Monthly Contribution (KES)
-                            </Label>
-                            <Input
-                              id={`amount-${member._id || member.id}`}
-                              type="number"
-                              value={
-                                editedMemberData.monthly_contribution || ""
-                              }
-                              onChange={(e) =>
-                                setEditedMemberData((prev) => ({
-                                  ...prev,
-                                  monthly_contribution: e.target.value,
-                                }))
-                              }
-                              className="text-sm"
-                            />
-                          </div>
-                          <div>
-                            <Label
-                              htmlFor={`password-${member._id || member.id}`}
-                              className="text-xs">
-                              Password (leave blank to keep current)
-                            </Label>
-                            <Input
-                              id={`password-${member._id || member.id}`}
-                              type="password"
-                              placeholder="Enter new password"
-                              value={editedMemberData.password || ""}
-                              onChange={(e) =>
-                                setEditedMemberData((prev) => ({
-                                  ...prev,
-                                  password: e.target.value,
-                                }))
-                              }
-                              className="text-sm"
-                            />
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            onClick={() =>
-                              handleSaveMember(member._id || member.id)
-                            }>
-                            <Save className="w-3 h-3 mr-1" />
-                            Save
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={handleCancelEdit}>
-                            Cancel
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={`w-3 h-3 rounded-full ${
-                              member.payment_status === "paid"
-                                ? "bg-financial-success"
-                                : "bg-financial-warning"
-                            }`}
-                          />
-                          <div>
-                            <div className="font-medium">
-                              {member.name}{" "}
-                              {member.position ? `(#${member.position})` : ""}
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              {member.member_id} • {member.phone}
-                            </div>
-                            {member.total_contributed > 0 && (
-                              <div className="text-xs text-muted-foreground">
-                                Contributed: KES{" "}
-                                {member.total_contributed?.toLocaleString() ||
-                                  0}{" "}
-                                | Received: KES{" "}
-                                {member.total_received?.toLocaleString() || 0}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="text-right">
-                            <Badge
-                              variant={
+              <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Member</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Cycle Contribution</TableHead>
+                      <TableHead className="text-right">Member Credit</TableHead>
+                      <TableHead className="text-right">Transaction Fees</TableHead>
+                      <TableHead className="text-right">Total Paid</TableHead>
+                      <TableHead className="text-center">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {orderedMembers.map((member, index) => (
+                      <TableRow key={member._id || member.id || index}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <div
+                              className={`w-2 h-2 rounded-full ${
                                 member.payment_status === "paid"
-                                  ? "default"
-                                  : "secondary"
-                              }>
-                              {member.payment_status === "paid"
-                                ? "Paid"
-                                : "Pending"}
-                            </Badge>
-                            {member.date && (
-                              <div className="text-xs text-muted-foreground mt-1">
-                                {member.date}
+                                  ? "bg-financial-success"
+                                  : "bg-financial-warning"
+                              }`}
+                            />
+                            <div>
+                              <div className="font-medium">
+                                {member.name}{" "}
+                                {member.position ? `(#${member.position})` : ""}
                               </div>
-                            )}
+                              <div className="text-xs text-muted-foreground">
+                                {member.member_id} • {member.phone}
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex gap-1 items-center">
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              member.payment_status === "paid"
+                                ? "default"
+                                : "secondary"
+                            }>
+                            {member.payment_status === "paid"
+                              ? "Paid"
+                              : "Pending"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right font-medium text-blue-600">
+                          KES {(member.total_cycle_contribution || 0).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right font-medium text-green-600">
+                          KES {(member.total_member_credit || 0).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right font-medium text-orange-600">
+                          KES {(member.total_transaction_fees || 0).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right font-bold">
+                          KES {(member.total_contributed || 0).toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex justify-center gap-1">
                             <Button
                               size="sm"
                               variant="ghost"
@@ -2795,22 +2790,14 @@ Thank you for your cooperation! 🙏`;
                             <Button
                               size="sm"
                               variant={
-                                member.status === "paid"
-                                  ? "destructive"
+                                member.payment_status === "paid"
+                                  ? "outline"
                                   : "default"
                               }
                               onClick={() => togglePaymentStatusRemote(member)}>
-                              {member.status === "paid"
-                                ? "Mark Pending"
+                              {member.payment_status === "paid"
+                                ? "Unpay"
                                 : "Mark Paid"}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() =>
-                                handleEditMember(member._id || member.id)
-                              }>
-                              <Edit className="w-3 h-3" />
                             </Button>
                             <Button
                               size="sm"
@@ -2820,11 +2807,30 @@ Thank you for your cooperation! 🙏`;
                               <Trash2 className="w-3 h-3" />
                             </Button>
                           </div>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ))}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {/* Totals Row */}
+                    <TableRow className="bg-muted/50 font-bold border-t-2">
+                      <TableCell colSpan={2} className="text-right">
+                        <span className="text-lg">GRAND TOTALS:</span>
+                      </TableCell>
+                      <TableCell className="text-right text-blue-600 text-lg">
+                        KES {orderedMembers.reduce((sum, m) => sum + (m.total_cycle_contribution || 0), 0).toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right text-green-600 text-lg">
+                        KES {orderedMembers.reduce((sum, m) => sum + (m.total_member_credit || 0), 0).toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right text-orange-600 text-lg">
+                        KES {orderedMembers.reduce((sum, m) => sum + (m.total_transaction_fees || 0), 0).toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right text-lg">
+                        KES {orderedMembers.reduce((sum, m) => sum + (m.total_contributed || 0), 0).toLocaleString()}
+                      </TableCell>
+                      <TableCell></TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
               </div>
             </CardContent>
           </Card>

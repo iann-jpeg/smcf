@@ -90,6 +90,19 @@ const memberSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  // Payment breakdown fields (KES 224 split)
+  total_cycle_contribution: {
+    type: Number,
+    default: 0, // KES 200 per payment
+  },
+  total_member_credit: {
+    type: Number,
+    default: 0, // KES 20 per payment
+  },
+  total_transaction_fees: {
+    type: Number,
+    default: 0, // KES 4 per payment
+  },
   registered_by_admin: {
     type: Boolean,
     default: true,
