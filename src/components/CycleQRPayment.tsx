@@ -231,7 +231,7 @@ const CycleQRPayment = ({
 
     try {
       // Get current user's phone for STK push
-      const currentUser = authService.getCurrentUser();
+      const currentUser = authService.getUser();
       
       // Make cycle payment via Lipia STK Push
       const response = await fetch(
