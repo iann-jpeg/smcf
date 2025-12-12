@@ -12,6 +12,7 @@ import { Server } from "socket.io";
 import adminRoutes from "./routes/admin.js";
 import announcementRoutes from "./routes/announcements.js";
 import authRoutes from "./routes/auth.js";
+import creditScoreRoutes from "./routes/creditScore.js";
 import cycleRoutes from "./routes/cycles.js";
 import disbursementRoutes from "./routes/disbursements.js";
 import lipiaRoutes from "./routes/lipia.js";
@@ -192,6 +193,7 @@ app.use("/api/announcements", announcementRoutes);
 app.use("/announcements", announcementRoutes); // Backward compatibility
 app.use("/api/loans", loanRoutes);
 app.use("/api/savings", savingsRoutes);
+app.use("/api/credit-score", creditScoreRoutes);
 
 // Health check endpoint
 app.get("/health", (req, res) => {
