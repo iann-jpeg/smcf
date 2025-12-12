@@ -205,3 +205,4 @@ router.post("/:id/repay", protect, async (req, res) => {
   }
 });
 
+export default router;

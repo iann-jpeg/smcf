@@ -49,11 +49,13 @@ router.post("/stk-push", protect, async (req, res) => {
     // Create pending payment record
     const payment = await Payment.create({
       member_id: req.user._id,
+      paid_by: req.user._id, // Self-payment
       phone: phone,
       amount: parseFloat(amount),
       cycle_number: cycleNumber,
       status: "pending",
       type: "cycle_payment", // Explicitly mark as cycle payment
+      payment_method: "lipia", // Explicitly set payment method
       mpesa_transaction_id: reference,
       checkout_request_id: result.checkoutRequestID,
       merchant_request_id: result.merchantRequestID,

@@ -830,12 +830,19 @@ const AdminDashboard = ({
           ...authService.getAuthHeaders(),
         },
       });
+      
+      if (!res.ok) {
+        console.warn(`Fee summary endpoint returned ${res.status}, skipping...`);
+        return;
+      }
+      
       const data = await res.json();
       if (data.success) {
         setFeeSummary(data.data);
       }
     } catch (e) {
       console.error("Could not fetch fee summary", e);
+      // Gracefully handle if the fee system isn't set up yet
     }
   };
 
@@ -967,6 +974,7 @@ const AdminDashboard = ({
         socket.off("cycleUpdated");
         socket.off("paymentFailed");
         socket.off("nextRecipientUpdated");
+        socket.off("loanStatusUpdated");
       }
     };
   }, []);
@@ -2747,10 +2755,6 @@ Thank you for your cooperation! 🙏`;
                 </div>
                 <Button
                   onClick={() => setShowDisbursementDialog(true)}
-
-        <TabsContent value="fees" className="space-y-6">
-          <TransactionFeesReport />
-        </TabsContent>
                   variant="mpesa"
                   size="sm">
                   <Wallet className="w-4 h-4 mr-2" />

@@ -850,3 +850,4 @@ router.get("/admin/fees/summary", protect, adminOnly, async (req, res) => {
   }
 });
 
+export default router;

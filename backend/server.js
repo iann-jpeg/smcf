@@ -30,6 +30,7 @@ const httpServer = createServer(app);
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:8080",
+  "http://localhost:8081",
   "http://localhost:3000",
   "https://localhost", // For Capacitor Android app
   "capacitor://localhost", // For iOS Capacitor
@@ -182,7 +183,8 @@ httpServer.listen(PORT, () => {
   console.log(`   Cycles: http://localhost:${PORT}/api/cycles`);
   console.log(`   Disbursements: http://localhost:${PORT}/api/disbursements`);
   console.log(`   Announcements: http://localhost:${PORT}/api/announcements`);
-  console.log(`   Loans: http://localhost:${PORT}/api/loans\n`);
+  console.log(`   Loans: http://localhost:${PORT}/api/loans`);
+  console.log(`   Savings: http://localhost:${PORT}/api/savings\n`);
 });
 
 export default app;
