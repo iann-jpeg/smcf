@@ -93,14 +93,88 @@ const connectDB = async () => {
 
 connectDB();
 
+// Track online users
+const onlineUsers = new Map(); // Map of userId -> { socketId, username, role, timestamp }
+
 // Socket.IO connection handling
 io.on("connection", (socket) => {
   console.log("✅ Socket.IO client connected:", socket.id);
   console.log("📍 Client origin:", socket.handshake.headers.origin);
   console.log("👥 Total connected clients:", io.engine.clientsCount);
 
+  // Handle user authentication and tracking
+  socket.on("user:online", (userData) => {
+    if (userData && userData.userId) {
+      onlineUsers.set(userData.userId, {
+        socketId: socket.id,
+        userId: userData.userId,
+        username: userData.username,
+        role: userData.role,
+        timestamp: Date.now(),
+      });
+
+      console.log(`👤 User online: ${userData.username} (${userData.role})`);
+
+      // Broadcast updated online users list to all clients
+      const onlineUsersList = Array.from(onlineUsers.values()).map((user) => ({
+        userId: user.userId,
+        username: user.username,
+        role: user.role,
+        timestamp: user.timestamp,
+      }));
+
+      console.log(`📡 Broadcasting ${onlineUsersList.length} online users`);
+      io.emit("users:online", onlineUsersList);
+    }
+  });
+
+  // Handle request for current online users
+  socket.on("request:online-users", () => {
+    const onlineUsersList = Array.from(onlineUsers.values()).map((user) => ({
+      userId: user.userId,
+      username: user.username,
+      role: user.role,
+      timestamp: user.timestamp,
+    }));
+
+    console.log(
+      `📡 Sending current online users list to ${socket.id}: ${onlineUsersList.length} users`
+    );
+    socket.emit("users:online", onlineUsersList);
+  });
+
   socket.on("disconnect", (reason) => {
-    console.log("❌ Socket.IO client disconnected:", socket.id, "Reason:", reason);
+    console.log(
+      "❌ Socket.IO client disconnected:",
+      socket.id,
+      "Reason:",
+      reason
+    );
+
+    // Remove user from online list
+    for (const [userId, userData] of onlineUsers.entries()) {
+      if (userData.socketId === socket.id) {
+        onlineUsers.delete(userId);
+        console.log(`👤 User offline: ${userData.username}`);
+
+        // Broadcast updated online users list
+        const onlineUsersList = Array.from(onlineUsers.values()).map(
+          (user) => ({
+            userId: user.userId,
+            username: user.username,
+            role: user.role,
+            timestamp: user.timestamp,
+          })
+        );
+
+        console.log(
+          `📡 Broadcasting updated list: ${onlineUsersList.length} users remaining`
+        );
+        io.emit("users:online", onlineUsersList);
+        break;
+      }
+    }
+
     console.log("👥 Remaining clients:", io.engine.clientsCount);
   });
 });
@@ -170,7 +244,7 @@ httpServer.listen(PORT, () => {
   console.log(`\n🚀 SMCF Backend Server running on port ${PORT}`);
   console.log(`📡 Environment: ${process.env.NODE_ENV || "development"}`);
   console.log(`🔌 Socket.IO enabled for real-time updates`);
-  
+
   // Start interest calculation cron job
   startInterestCronJob();
   console.log(`\n📚 API Documentation:`);

@@ -142,17 +142,30 @@ router.post("/query-status", protect, async (req, res) => {
     console.log("🔍 Checking if payment is completed...");
     console.log("   Status === 'completed'?", result.status === "completed");
     console.log("   ResultCode === '0'?", result.resultCode === "0");
+    console.log("   ResultCode === 0?", result.resultCode === 0);
     console.log("   Has M-Pesa Receipt?", !!result.mpesaReceiptNumber);
-    
-    if (result.status === "completed" || result.resultCode === "0" || result.mpesaReceiptNumber) {
+    console.log("   M-Pesa Receipt value:", result.mpesaReceiptNumber);
+
+    if (
+      result.status === "completed" ||
+      result.resultCode === "0" ||
+      result.resultCode === 0 ||
+      result.mpesaReceiptNumber
+    ) {
       console.log("✅ Payment is COMPLETED! Updating database...");
-      console.log("🔍 Looking for payment with checkout_request_id:", checkoutRequestID);
-      
+      console.log(
+        "🔍 Looking for payment with checkout_request_id:",
+        checkoutRequestID
+      );
+
       const payment = await Payment.findOneAndUpdate(
         { checkout_request_id: checkoutRequestID },
         {
           status: "completed",
-          mpesa_transaction_id: result.mpesaReceiptNumber || checkoutRequestID,
+          mpesa_transaction_id:
+            result.mpesaReceiptNumber ||
+            result.transactionId ||
+            checkoutRequestID,
           transaction_date: result.transactionDate || new Date(),
         },
         { new: true }
@@ -160,18 +173,30 @@ router.post("/query-status", protect, async (req, res) => {
 
       if (!payment) {
         console.error("❌❌❌ PAYMENT NOT FOUND! ❌❌❌");
-        console.error("   Searched for checkout_request_id:", checkoutRequestID);
-        console.error("   This means the Payment record doesn't exist in database");
-        console.error("   Check if STK push created the payment record properly");
-        
+        console.error(
+          "   Searched for checkout_request_id:",
+          checkoutRequestID
+        );
+        console.error(
+          "   This means the Payment record doesn't exist in database"
+        );
+        console.error(
+          "   Check if STK push created the payment record properly"
+        );
+
         // Try to find any payment with similar reference
         const anyPayment = await Payment.findOne({
           $or: [
-            { mpesa_transaction_id: { $regex: checkoutRequestID, $options: 'i' } },
-            { merchant_request_id: checkoutRequestID }
-          ]
+            {
+              mpesa_transaction_id: {
+                $regex: checkoutRequestID,
+                $options: "i",
+              },
+            },
+            { merchant_request_id: checkoutRequestID },
+          ],
         });
-        
+
         if (anyPayment) {
           console.log("🔍 Found payment with different field:", {
             _id: anyPayment._id,
@@ -180,9 +205,12 @@ router.post("/query-status", protect, async (req, res) => {
             merchant_request_id: anyPayment.merchant_request_id,
           });
         } else {
-          console.log("🔍 No payment found at all with any reference to:", checkoutRequestID);
+          console.log(
+            "🔍 No payment found at all with any reference to:",
+            checkoutRequestID
+          );
         }
-        
+
         return res.json({
           success: true,
           status: result.status,
@@ -245,6 +273,8 @@ router.post("/query-status", protect, async (req, res) => {
           if (io) {
             io.emit("payment:completed", {
               memberId: payment.member_id.toString(),
+              checkoutRequestID: payment.checkout_request_id,
+              mpesaReceiptNumber: result.mpesaReceiptNumber,
               payment: {
                 _id: payment._id,
                 amount: payment.amount,
@@ -276,18 +306,23 @@ router.post("/query-status", protect, async (req, res) => {
           });
 
           // Recalculate cycle stats from all completed payments
-          const cycle = await Cycle.findOne({ 
+          const cycle = await Cycle.findOne({
             cycle_number: payment.cycle_number,
-            status: "active"
+            status: "active",
           });
-          
+
           if (cycle) {
             const payments = await Payment.find({
               cycle_number: payment.cycle_number,
               status: "completed",
             });
-            const paidCount = new Set(payments.map((p) => p.member_id.toString())).size;
-            const totalCollected = payments.reduce((sum, p) => sum + p.amount, 0);
+            const paidCount = new Set(
+              payments.map((p) => p.member_id.toString())
+            ).size;
+            const totalCollected = payments.reduce(
+              (sum, p) => sum + p.amount,
+              0
+            );
 
             cycle.paid_members_count = paidCount;
             cycle.total_amount_collected = totalCollected;
@@ -306,6 +341,8 @@ router.post("/query-status", protect, async (req, res) => {
             if (io) {
               io.emit("payment:completed", {
                 memberId: payment.member_id.toString(),
+                checkoutRequestID: payment.checkout_request_id,
+                mpesaReceiptNumber: result.mpesaReceiptNumber,
                 payment: {
                   _id: payment._id,
                   amount: payment.amount,
@@ -325,20 +362,24 @@ router.post("/query-status", protect, async (req, res) => {
         } else if (payment.type === "loan_repayment") {
           // Loan repayment - update loan payment history
           const Loan = (await import("../models/Loan.js")).default;
-          
+
           // Extract loan ID from payment notes
           const loanIdMatch = payment.notes?.match(/loan ID: (.+)/);
           if (loanIdMatch) {
             const loanId = loanIdMatch[1];
-            const loan = await Loan.findById(loanId).populate("member_id", "name phone member_id");
-            
+            const loan = await Loan.findById(loanId).populate(
+              "member_id",
+              "name phone member_id"
+            );
+
             if (loan) {
               // Add payment to loan history
               loan.payment_history.push({
                 amount: payment.amount,
                 payment_date: new Date(),
                 payment_method: "mpesa",
-                transaction_ref: result.mpesaReceiptNumber || payment.mpesa_transaction_id,
+                transaction_ref:
+                  result.mpesaReceiptNumber || payment.mpesa_transaction_id,
                 notes: `M-Pesa payment - ${result.mpesaReceiptNumber}`,
               });
 
@@ -393,11 +434,17 @@ router.post("/query-status", protect, async (req, res) => {
     res.json({
       success: true,
       status: result.status,
-      ResultCode: result.status === "completed" ? "0" : result.resultCode,
-      ResultDescription: result.resultDescription,
-      MpesaReceiptNumber: result.mpesaReceiptNumber,
+      ResultCode:
+        result.status === "completed" ? "0" : result.resultCode || "pending",
+      ResultDescription:
+        result.resultDescription ||
+        result.resultDesc ||
+        "Payment query completed",
+      MpesaReceiptNumber: result.mpesaReceiptNumber || result.transactionId,
       TransactionDate: result.transactionDate,
       PhoneNumber: result.phoneNumber,
+      Amount: result.amount,
+      data: result.data, // Include raw data for debugging
     });
   } catch (error) {
     console.error("Query status error:", error);

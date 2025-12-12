@@ -511,6 +511,10 @@ async function pollLipiaPaymentStatus(
           console.log("✅ Cycle payment events emitted");
         }
       }
+
+      // IMPORTANT: Stop polling after successful payment processing
+      console.log("🎉 Payment processing complete - stopping poll");
+      return;
     } else if (status.status === "failed" || status.status === "cancelled") {
       // Only treat as truly failed if we got a definitive FAILED status from Lipia
       // Not if it's just an API error
@@ -543,6 +547,10 @@ async function pollLipiaPaymentStatus(
               "Payment cancelled or failed",
           });
         }
+
+        // Stop polling after definitive failure
+        console.log("❌ Payment definitively failed - stopping poll");
+        return;
       } else {
         // It's an API error, keep polling
         console.log(

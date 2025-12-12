@@ -1,32 +1,83 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { QrCode, Loader2, CheckCircle } from "lucide-react";
 import API_BASE from "@/lib/api";
 import { authService } from "@/lib/authService";
+import { CheckCircle, Loader2, QrCode } from "lucide-react";
+import { useEffect, useState } from "react";
 
 interface CycleQRPaymentProps {
   onPaymentSuccess?: () => void;
   contributionAmount?: number;
 }
 
-const CycleQRPayment = ({ onPaymentSuccess, contributionAmount = 224 }: CycleQRPaymentProps) => {
+const CycleQRPayment = ({
+  onPaymentSuccess,
+  contributionAmount = 224,
+}: CycleQRPaymentProps) => {
   const [showDialog, setShowDialog] = useState(false);
   const [qrData, setQrData] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
-  const [paymentState, setPaymentState] = useState<"idle" | "confirm" | "processing" | "waiting" | "success" | "failed">("idle");
+  const [paymentState, setPaymentState] = useState<
+    "idle" | "confirm" | "processing" | "waiting" | "success" | "failed"
+  >("idle");
   const [checkoutRequestID, setCheckoutRequestID] = useState("");
   const [scannedMember, setScannedMember] = useState<any>(null);
+  const [pollingActive, setPollingActive] = useState(false);
   const { toast } = useToast();
+
+  // Listen for real-time payment confirmations via Socket.IO
+  useEffect(() => {
+    const socket = (window as any).socket;
+    if (!socket || !checkoutRequestID) return;
+
+    const handlePaymentCompleted = (data: any) => {
+      console.log("🔔 QR Payment: Real-time payment notification:", data);
+
+      // Check if this is our payment
+      if (
+        data.checkoutRequestID === checkoutRequestID ||
+        data.memberId === scannedMember?.memberId
+      ) {
+        console.log("✅ QR Payment confirmed via Socket.IO - stopping polling");
+        setPollingActive(false); // Stop polling immediately
+        setPaymentState("success");
+        setIsProcessing(false);
+
+        toast({
+          title: "Payment Successful! 🎉",
+          description: `KES ${contributionAmount} cycle contribution recorded for ${scannedMember.memberName}`,
+        });
+
+        setTimeout(() => {
+          setShowDialog(false);
+          setQrData("");
+          setScannedMember(null);
+          setPaymentState("idle");
+          onPaymentSuccess?.();
+        }, 2000);
+      }
+    };
+
+    socket.on("payment:completed", handlePaymentCompleted);
+
+    return () => {
+      socket.off("payment:completed", handlePaymentCompleted);
+    };
+  }, [checkoutRequestID, scannedMember, contributionAmount, onPaymentSuccess]);
 
   const handleScanQR = () => {
     try {
       const parsedData = JSON.parse(qrData);
-      
+
       if (parsedData.type !== "SMCF_WALLET_DEPOSIT") {
         throw new Error("Invalid QR code type");
       }
@@ -45,16 +96,27 @@ const CycleQRPayment = ({ onPaymentSuccess, contributionAmount = 224 }: CycleQRP
     }
   };
 
-  // Poll payment status
-  const pollPaymentStatus = async (requestID: string, retryCount = 0): Promise<void> => {
-    const maxRetries = 30; // 60 seconds (2 seconds interval)
+  // Poll payment status with adaptive intervals for faster response
+  const pollPaymentStatus = async (
+    requestID: string,
+    retryCount = 0
+  ): Promise<void> => {
+    // Check if polling was stopped (by Socket.IO notification)
+    if (!pollingActive) {
+      console.log("⏹️ QR Payment polling stopped by real-time notification");
+      return;
+    }
+
+    const maxRetries = 40; // Max 60 seconds with adaptive intervals
 
     if (retryCount >= maxRetries) {
+      setPollingActive(false);
       setPaymentState("failed");
       setIsProcessing(false);
       toast({
         title: "Payment Timeout",
-        description: "Payment verification timed out. Please check your transaction history.",
+        description:
+          "Payment verification timed out. Please check your transaction history.",
         variant: "destructive",
       });
       return;
@@ -72,15 +134,39 @@ const CycleQRPayment = ({ onPaymentSuccess, contributionAmount = 224 }: CycleQRP
 
       const data = await response.json();
 
-      // Check for success
-      if (data.ResultCode === "0" || data.MpesaReceiptNumber) {
+      console.log("💳 QR Payment status poll #" + (retryCount + 1) + ":");
+      console.log("   Full API response:", JSON.stringify(data, null, 2));
+      console.log("   data.success:", data.success);
+      console.log("   data.status:", data.status);
+      console.log("   data.ResultCode:", data.ResultCode);
+      console.log("   data.MpesaReceiptNumber:", data.MpesaReceiptNumber);
+
+      // Check for success - be more lenient
+      const isCompleted =
+        data.success &&
+        (data.ResultCode === "0" ||
+          data.ResultCode === 0 ||
+          data.MpesaReceiptNumber ||
+          data.status === "completed" ||
+          (data.data && data.data.status === "completed"));
+
+      if (isCompleted) {
+        setPollingActive(false); // Stop polling
         setPaymentState("success");
         setIsProcessing(false);
-        
+
+        const receiptNumber =
+          data.MpesaReceiptNumber ||
+          data.data?.MpesaReceiptNumber ||
+          data.data?.mpesaReceiptNumber ||
+          "SUCCESS";
+
         toast({
           title: "Payment Successful! 🎉",
-          description: `KES ${contributionAmount} cycle contribution recorded for ${scannedMember.memberName}`,
+          description: `KES ${contributionAmount} cycle contribution recorded. Receipt: ${receiptNumber}`,
         });
+
+        console.log("✅ QR Payment confirmed! Receipt:", receiptNumber);
 
         setTimeout(() => {
           setShowDialog(false);
@@ -89,11 +175,18 @@ const CycleQRPayment = ({ onPaymentSuccess, contributionAmount = 224 }: CycleQRP
           setPaymentState("idle");
           onPaymentSuccess?.();
         }, 2000);
-        return;
+        return; // STOP POLLING
       }
 
       // If status is explicitly failed
-      if (data.status === "failed") {
+      if (
+        data.status === "failed" ||
+        (data.ResultCode &&
+          data.ResultCode !== "0" &&
+          data.ResultCode !== 0 &&
+          data.status === "failed")
+      ) {
+        setPollingActive(false); // Stop polling
         setPaymentState("failed");
         setIsProcessing(false);
         toast({
@@ -101,18 +194,25 @@ const CycleQRPayment = ({ onPaymentSuccess, contributionAmount = 224 }: CycleQRP
           description: data.ResultDescription || "Payment was not completed",
           variant: "destructive",
         });
-        return;
+        return; // STOP POLLING
       }
 
-      // Continue polling
+      // Continue polling with adaptive interval:
+      // First 15 checks: 1 second (fast response when user enters PIN)
+      // Next 15 checks: 2 seconds
+      // Remaining: 3 seconds
+      const nextInterval =
+        retryCount < 15 ? 1000 : retryCount < 30 ? 2000 : 3000;
       setTimeout(() => {
         pollPaymentStatus(requestID, retryCount + 1);
-      }, 2000);
+      }, nextInterval);
     } catch (error) {
       console.error("Payment status check error:", error);
+      const nextInterval =
+        retryCount < 15 ? 1000 : retryCount < 30 ? 2000 : 3000;
       setTimeout(() => {
         pollPaymentStatus(requestID, retryCount + 1);
-      }, 2000);
+      }, nextInterval);
     }
   };
 
@@ -131,21 +231,24 @@ const CycleQRPayment = ({ onPaymentSuccess, contributionAmount = 224 }: CycleQRP
 
     try {
       // Make cycle payment via QR - this will initiate STK Push
-      const response = await fetch(`${API_BASE}/api/payments/qr-cycle-payment`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...authService.getAuthHeaders(),
-        },
-        body: JSON.stringify({
-          organizationMemberId: scannedMember.userId,
-          amount: contributionAmount,
-          qrData: scannedMember,
-        }),
-      });
+      const response = await fetch(
+        `${API_BASE}/api/payments/qr-cycle-payment`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...authService.getAuthHeaders(),
+          },
+          body: JSON.stringify({
+            organizationMemberId: scannedMember.userId,
+            amount: contributionAmount,
+            qrData: scannedMember,
+          }),
+        }
+      );
 
       console.log("QR Cycle Payment Response Status:", response.status);
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         console.error("QR Cycle Payment Error:", errorText);
@@ -159,10 +262,12 @@ const CycleQRPayment = ({ onPaymentSuccess, contributionAmount = 224 }: CycleQRP
         // STK Push sent successfully
         setCheckoutRequestID(data.CheckoutRequestID);
         setPaymentState("processing");
-        
+        setPollingActive(true); // Start polling flag
+
         toast({
           title: "STK Push Sent 📱",
-          description: data.message || "Please enter your M-Pesa PIN on your phone",
+          description:
+            data.message || "Please enter your M-Pesa PIN on your phone",
         });
 
         // Start polling for payment status
@@ -197,7 +302,8 @@ const CycleQRPayment = ({ onPaymentSuccess, contributionAmount = 224 }: CycleQRP
           <DialogHeader>
             <DialogTitle>Pay for Another Member's Cycle</DialogTitle>
             <DialogDescription>
-              Scan a member's QR code to pay their KES {contributionAmount} cycle contribution. You will receive the STK Push on YOUR phone.
+              Scan a member's QR code to pay their KES {contributionAmount}{" "}
+              cycle contribution. You will receive the STK Push on YOUR phone.
             </DialogDescription>
           </DialogHeader>
 
@@ -230,7 +336,8 @@ const CycleQRPayment = ({ onPaymentSuccess, contributionAmount = 224 }: CycleQRP
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                Get the QR code data from the organization admin or payment coordinator
+                Get the QR code data from the organization admin or payment
+                coordinator
               </p>
             </div>
 
@@ -241,10 +348,15 @@ const CycleQRPayment = ({ onPaymentSuccess, contributionAmount = 224 }: CycleQRP
                   <span className="font-semibold">Member Verified</span>
                 </div>
                 <div className="text-sm space-y-1">
-                  <p><strong>Paying for:</strong> {scannedMember.memberName}</p>
-                  <p><strong>Member ID:</strong> {scannedMember.memberId}</p>
+                  <p>
+                    <strong>Paying for:</strong> {scannedMember.memberName}
+                  </p>
+                  <p>
+                    <strong>Member ID:</strong> {scannedMember.memberId}
+                  </p>
                   <p className="text-xs text-muted-foreground mt-2">
-                    ℹ️ STK Push will be sent to YOUR phone to complete this payment
+                    ℹ️ STK Push will be sent to YOUR phone to complete this
+                    payment
                   </p>
                 </div>
               </div>
@@ -258,7 +370,8 @@ const CycleQRPayment = ({ onPaymentSuccess, contributionAmount = 224 }: CycleQRP
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   {paymentState === "confirm" && "Initiating Payment..."}
-                  {paymentState === "processing" && "Enter M-Pesa PIN on your phone..."}
+                  {paymentState === "processing" &&
+                    "Enter M-Pesa PIN on your phone..."}
                   {paymentState === "waiting" && "Waiting for confirmation..."}
                   {paymentState === "success" && "Payment Successful!"}
                   {paymentState === "failed" && "Payment Failed"}

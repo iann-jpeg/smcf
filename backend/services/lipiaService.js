@@ -241,7 +241,23 @@ export const queryLipiaPaymentStatus = async (transactionReference) => {
 
     // Handle different response structures
     const paymentData = data.data?.response || data.data || {};
-    console.log("📊 Payment data extracted:", paymentData);
+    console.log(
+      "📊 Payment data extracted:",
+      JSON.stringify(paymentData, null, 2)
+    );
+
+    // Extract M-Pesa receipt number from multiple possible locations
+    const mpesaReceipt =
+      paymentData.MpesaReceiptNumber ||
+      paymentData.mpesaReceiptNumber ||
+      paymentData.TransactionID ||
+      paymentData.transactionId ||
+      paymentData.ReceiptNumber ||
+      paymentData.receiptNumber ||
+      data.data?.MpesaReceiptNumber ||
+      data.MpesaReceiptNumber;
+
+    console.log("💳 M-Pesa Receipt extracted:", mpesaReceipt);
 
     // Map status to our internal format - check multiple possible fields
     const rawStatus =
@@ -252,14 +268,17 @@ export const queryLipiaPaymentStatus = async (transactionReference) => {
     if (
       rawStatus === "SUCCESS" ||
       rawStatus === "0" ||
-      paymentData.ResultCode === "0"
+      paymentData.ResultCode === "0" ||
+      paymentData.ResultCode === 0 ||
+      mpesaReceipt // If we have a receipt, payment is successful
     ) {
       status = "completed";
       console.log("✅ Payment SUCCESS detected");
     } else if (
       rawStatus === "FAILED" ||
       rawStatus === "1" ||
-      paymentData.ResultCode === "1"
+      paymentData.ResultCode === "1" ||
+      paymentData.ResultCode === 1
     ) {
       status = "failed";
       console.log("❌ Payment FAILED detected");
@@ -274,18 +293,22 @@ export const queryLipiaPaymentStatus = async (transactionReference) => {
       success: true,
       data: paymentData,
       status: status,
-      resultCode: paymentData.ResultCode || rawStatus,
+      resultCode:
+        paymentData.ResultCode ||
+        rawStatus ||
+        (status === "completed" ? "0" : "pending"),
       resultDescription:
-        paymentData.ResultDesc || paymentData.ResultDescription || "Processing",
-      mpesaReceiptNumber:
-        paymentData.MpesaReceiptNumber || paymentData.mpesaReceiptNumber,
+        paymentData.ResultDesc ||
+        paymentData.ResultDescription ||
+        paymentData.Message ||
+        "Processing",
+      mpesaReceiptNumber: mpesaReceipt,
       transactionId:
-        paymentData.TransactionID ||
-        paymentData.transactionId ||
-        paymentData.MpesaReceiptNumber,
+        mpesaReceipt || paymentData.TransactionID || paymentData.transactionId,
       transactionDate:
         paymentData.TransactionDate || paymentData.transactionDate,
-      phoneNumber: paymentData.Phone || paymentData.phone,
+      phoneNumber:
+        paymentData.Phone || paymentData.phone || paymentData.PhoneNumber,
       amount: paymentData.Amount || paymentData.amount,
     };
   } catch (error) {

@@ -1,3 +1,6 @@
+import MemberCycleChart from "@/components/analytics/MemberCycleChart";
+import TopSaverBadge from "@/components/analytics/TopSaverBadge";
+import CycleQRPayment from "@/components/CycleQRPayment";
 import LoanRequestDialog from "@/components/LoanRequestDialog";
 import MemberWallet from "@/components/MemberWallet";
 import PaymentDialog from "@/components/PaymentDialog";
@@ -18,10 +21,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import API_BASE from "@/lib/api";
 import { authService } from "@/lib/authService";
@@ -37,9 +40,6 @@ import {
   Wallet,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import TopSaverBadge from "@/components/analytics/TopSaverBadge";
-import MemberCycleChart from "@/components/analytics/MemberCycleChart";
-import CycleQRPayment from "@/components/CycleQRPayment";
 
 interface MemberDashboardProps {
   userData: any;
@@ -52,7 +52,9 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
   const [showRepayment, setShowRepayment] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<any>(null);
   const [isProcessingRepayment, setIsProcessingRepayment] = useState(false);
-  const [repaymentState, setRepaymentState] = useState<"idle" | "confirm" | "processing" | "waiting" | "success" | "failed">("idle");
+  const [repaymentState, setRepaymentState] = useState<
+    "idle" | "confirm" | "processing" | "waiting" | "success" | "failed"
+  >("idle");
   const [checkoutRequestID, setCheckoutRequestID] = useState("");
   const [partialPaymentAmount, setPartialPaymentAmount] = useState("");
   const { toast } = useToast();
@@ -88,234 +90,260 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
     }
 
     try {
-        // Fetch all data in parallel including fresh member data
-      const [cycleRes, paymentsRes, loansRes, announcementsRes, memberRes, savingsSummaryRes, allSavingsRes] =
-          await Promise.all([
-            fetch(`${API_BASE}/api/cycles/current`, {
-              headers: { ...authService.getAuthHeaders() },
-            }),
-            fetch(`${API_BASE}/api/payments`, {
-              headers: { ...authService.getAuthHeaders() },
-            }),
-            fetch(`${API_BASE}/api/loans`, {
-              headers: { ...authService.getAuthHeaders() },
-            }),
-            fetch(`${API_BASE}/api/announcements`, {
-              headers: { ...authService.getAuthHeaders() },
-            }),
-            fetch(`${API_BASE}/api/members/${userData._id}`, {
-              headers: { ...authService.getAuthHeaders() },
-            }),
-            fetch(`${API_BASE}/api/savings/summary`, {
-              headers: { ...authService.getAuthHeaders() },
-            }),
-            fetch(`${API_BASE}/api/savings/admin/all`, {
-              headers: { ...authService.getAuthHeaders() },
-            }),
-          ]);
+      // Fetch all data in parallel including fresh member data
+      const [
+        cycleRes,
+        paymentsRes,
+        loansRes,
+        announcementsRes,
+        memberRes,
+        savingsSummaryRes,
+        allSavingsRes,
+      ] = await Promise.all([
+        fetch(`${API_BASE}/api/cycles/current`, {
+          headers: { ...authService.getAuthHeaders() },
+        }),
+        fetch(`${API_BASE}/api/payments`, {
+          headers: { ...authService.getAuthHeaders() },
+        }),
+        fetch(`${API_BASE}/api/loans`, {
+          headers: { ...authService.getAuthHeaders() },
+        }),
+        fetch(`${API_BASE}/api/announcements`, {
+          headers: { ...authService.getAuthHeaders() },
+        }),
+        fetch(`${API_BASE}/api/members/${userData._id}`, {
+          headers: { ...authService.getAuthHeaders() },
+        }),
+        fetch(`${API_BASE}/api/savings/summary`, {
+          headers: { ...authService.getAuthHeaders() },
+        }),
+        fetch(`${API_BASE}/api/savings/admin/all`, {
+          headers: { ...authService.getAuthHeaders() },
+        }),
+      ]);
 
-        const cycleData = await cycleRes.json();
-        const payments = await paymentsRes.json();
-        const loansData = await loansRes.json();
+      const cycleData = await cycleRes.json();
+      const payments = await paymentsRes.json();
+      const loansData = await loansRes.json();
 
-        let announcementsData: any = [];
-        try {
-          if (announcementsRes.ok) {
-            announcementsData = await announcementsRes.json();
-            console.log("📢 Announcements response:", announcementsData);
-          } else {
-            console.error(
-              "❌ Announcements fetch failed:",
-              announcementsRes.status
-            );
-          }
-        } catch (err) {
-          console.error("❌ Error parsing announcements:", err);
-        }
-
-        const freshMemberData = await memberRes.json();
-
-        // Filter member's loans
-        const memberLoansList = Array.isArray(loansData)
-          ? loansData.filter(
-              (loan) =>
-                loan.member_id?._id === userData._id ||
-                loan.member_id?._id === userData.id ||
-                loan.member_id === userData._id ||
-                loan.member_id === userData.id
-            )
-          : [];
-
-        setMemberLoans(memberLoansList);
-
-        // Check if member is top saver
-        const savingsSummaryData = await savingsSummaryRes.json();
-        const allSavingsData = await allSavingsRes.json();
-
-        if (savingsSummaryData.success && allSavingsData.success && allSavingsData.data) {
-          const currentBalance = savingsSummaryData.data.currentBalance || 0;
-          setSavingsBalance(currentBalance);
-
-          // Determine top saver based on total deposits
-          const totalDeposits = savingsSummaryData.data.totalDeposits || 0;
-          if (totalDeposits > 0) {
-            const topSaver = allSavingsData.data.reduce((top: any, member: any) => 
-              (member.totalDeposits || 0) > (top.totalDeposits || 0) ? member : top
-            , { totalDeposits: 0 });
-            
-            setIsTopSaver(topSaver._id === userData._id);
-          }
-        }
-
-        // Update announcements
-        if (Array.isArray(announcementsData)) {
-          console.log("📢 Fetched announcements:", announcementsData.length);
-          setAnnouncements(announcementsData);
-        } else if (
-          announcementsData?.success &&
-          Array.isArray(announcementsData.data)
-        ) {
-          console.log(
-            "📢 Fetched announcements:",
-            announcementsData.data.length
-          );
-          setAnnouncements(announcementsData.data);
+      let announcementsData: any = [];
+      try {
+        if (announcementsRes.ok) {
+          announcementsData = await announcementsRes.json();
+          console.log("📢 Announcements response:", announcementsData);
         } else {
-          console.log(
-            "📢 No announcements or unexpected format:",
-            announcementsData
+          console.error(
+            "❌ Announcements fetch failed:",
+            announcementsRes.status
           );
         }
+      } catch (err) {
+        console.error("❌ Error parsing announcements:", err);
+      }
 
-        // Get total members count from cycle data or calculate from payments
-        const totalMembersCount =
-          cycleData.success && cycleData.data?.total_members
-            ? cycleData.data.total_members
-            : 27; // Default to 27 members if not available
+      const freshMemberData = await memberRes.json();
 
-        console.log("👥 Total members count:", totalMembersCount);
-        console.log("💰 Payments data:", Array.isArray(payments) ? payments.length : 0, "payments");
+      // Filter member's loans
+      const memberLoansList = Array.isArray(loansData)
+        ? loansData.filter(
+            (loan) =>
+              loan.member_id?._id === userData._id ||
+              loan.member_id?._id === userData.id ||
+              loan.member_id === userData._id ||
+              loan.member_id === userData.id
+          )
+        : [];
 
-        // Get current cycle number
-        const currentCycleNumber = cycleData.success && cycleData.data
+      setMemberLoans(memberLoansList);
+
+      // Check if member is top saver
+      const savingsSummaryData = await savingsSummaryRes.json();
+      const allSavingsData = await allSavingsRes.json();
+
+      if (
+        savingsSummaryData.success &&
+        allSavingsData.success &&
+        allSavingsData.data
+      ) {
+        const currentBalance = savingsSummaryData.data.currentBalance || 0;
+        setSavingsBalance(currentBalance);
+
+        // Determine top saver based on total deposits
+        const totalDeposits = savingsSummaryData.data.totalDeposits || 0;
+        if (totalDeposits > 0) {
+          const topSaver = allSavingsData.data.reduce(
+            (top: any, member: any) =>
+              (member.totalDeposits || 0) > (top.totalDeposits || 0)
+                ? member
+                : top,
+            { totalDeposits: 0 }
+          );
+
+          setIsTopSaver(topSaver._id === userData._id);
+        }
+      }
+
+      // Update announcements
+      if (Array.isArray(announcementsData)) {
+        console.log("📢 Fetched announcements:", announcementsData.length);
+        setAnnouncements(announcementsData);
+      } else if (
+        announcementsData?.success &&
+        Array.isArray(announcementsData.data)
+      ) {
+        console.log("📢 Fetched announcements:", announcementsData.data.length);
+        setAnnouncements(announcementsData.data);
+      } else {
+        console.log(
+          "📢 No announcements or unexpected format:",
+          announcementsData
+        );
+      }
+
+      // Get total members count from cycle data or calculate from payments
+      const totalMembersCount =
+        cycleData.success && cycleData.data?.total_members
+          ? cycleData.data.total_members
+          : 27; // Default to 27 members if not available
+
+      console.log("👥 Total members count:", totalMembersCount);
+      console.log(
+        "💰 Payments data:",
+        Array.isArray(payments) ? payments.length : 0,
+        "payments"
+      );
+
+      // Get current cycle number
+      const currentCycleNumber =
+        cycleData.success && cycleData.data
           ? cycleData.data.cycle_number
           : null;
 
-        // Use EXACT same calculation as AdminDashboard
-        const paymentsArray = Array.isArray(payments) ? payments : [];
-        
-        // Filter payments for CURRENT CYCLE ONLY (same as AdminDashboard)
-        const currentCyclePayments = currentCycleNumber
-          ? paymentsArray.filter((p: any) => p.cycle_number === currentCycleNumber)
-          : paymentsArray;
-        
-        const completedPayments = currentCyclePayments.filter((p: any) => p.status === "completed");
-        
-        console.log("🔢 Current cycle number:", currentCycleNumber);
-        console.log("💳 Total payments:", paymentsArray.length);
-        console.log("📍 Current cycle payments:", currentCyclePayments.length);
-        console.log("✅ Completed payments:", completedPayments.length);
-        
-        // Calculate total collected from actual completed payments
-        const totalCollected = completedPayments.reduce(
-          (sum: number, p: any) => sum + (p.amount || 0),
-          0
-        );
+      // Use EXACT same calculation as AdminDashboard
+      const paymentsArray = Array.isArray(payments) ? payments : [];
 
-        // Count unique members who have paid (same as AdminDashboard)
-        const paidMemberIds = new Set(
-          completedPayments.map((p: any) => p.member_id?._id || p.member_id)
-        );
-        const uniquePaidMembers = paidMemberIds.size;
+      // Filter payments for CURRENT CYCLE ONLY (same as AdminDashboard)
+      const currentCyclePayments = currentCycleNumber
+        ? paymentsArray.filter(
+            (p: any) => p.cycle_number === currentCycleNumber
+          )
+        : paymentsArray;
 
-        console.log("💵 Total collected:", totalCollected);
-        console.log("✅ Unique paid members:", uniquePaidMembers, "out of", totalMembersCount);
+      const completedPayments = currentCyclePayments.filter(
+        (p: any) => p.status === "completed"
+      );
 
-        // Update cycle data - always use fresh data from system
-        const newData = {
-          currentCycle:
-            cycleData.success && cycleData.data
-              ? cycleData.data.cycle_number || 1
-              : 1,
-          daysLeft:
-            cycleData.success && cycleData.data
-              ? cycleData.data.days_left || 0
-              : 0,
-          paidMembers: uniquePaidMembers, // Always use calculated count from actual payments
-          totalMembers: totalMembersCount || 0,
-          collectedAmount: totalCollected, // Use calculated from actual payments
-          totalAmount: totalMembersCount * 224, // Expected amount based on member count
-          cycleStartDate:
-            cycleData.success && cycleData.data && cycleData.data.start_date
-              ? new Date(cycleData.data.start_date).toLocaleDateString()
-              : new Date().toLocaleDateString(),
-          nextRecipient:
-            cycleData.success && cycleData.data
-              ? cycleData.data.next_recipient?.name ||
-                cycleData.data.next_recipient_name ||
-                "No recipient assigned"
-              : "No Active Cycle",
+      console.log("🔢 Current cycle number:", currentCycleNumber);
+      console.log("💳 Total payments:", paymentsArray.length);
+      console.log("📍 Current cycle payments:", currentCyclePayments.length);
+      console.log("✅ Completed payments:", completedPayments.length);
+
+      // Calculate total collected from actual completed payments
+      const totalCollected = completedPayments.reduce(
+        (sum: number, p: any) => sum + (p.amount || 0),
+        0
+      );
+
+      // Count unique members who have paid (same as AdminDashboard)
+      const paidMemberIds = new Set(
+        completedPayments.map((p: any) => p.member_id?._id || p.member_id)
+      );
+      const uniquePaidMembers = paidMemberIds.size;
+
+      console.log("💵 Total collected:", totalCollected);
+      console.log(
+        "✅ Unique paid members:",
+        uniquePaidMembers,
+        "out of",
+        totalMembersCount
+      );
+
+      // Update cycle data - always use fresh data from system
+      const newData = {
+        currentCycle:
+          cycleData.success && cycleData.data
+            ? cycleData.data.cycle_number || 1
+            : 1,
+        daysLeft:
+          cycleData.success && cycleData.data
+            ? cycleData.data.days_left || 0
+            : 0,
+        paidMembers: uniquePaidMembers, // Always use calculated count from actual payments
+        totalMembers: totalMembersCount || 0,
+        collectedAmount: totalCollected, // Use calculated from actual payments
+        totalAmount: totalMembersCount * 224, // Expected amount based on member count
+        cycleStartDate:
+          cycleData.success && cycleData.data && cycleData.data.start_date
+            ? new Date(cycleData.data.start_date).toLocaleDateString()
+            : new Date().toLocaleDateString(),
+        nextRecipient:
+          cycleData.success && cycleData.data
+            ? cycleData.data.next_recipient?.name ||
+              cycleData.data.next_recipient_name ||
+              "No recipient assigned"
+            : "No Active Cycle",
+      };
+
+      console.log("📊 Updated cycle data:", newData);
+      setCurrentCycleData(newData);
+
+      // Filter for this member's payments
+      const memberPayments = Array.isArray(payments)
+        ? payments.filter(
+            (p) =>
+              p.member_id?._id === userData._id ||
+              p.member_id?._id === userData.id ||
+              p.member_id === userData._id ||
+              p.member_id === userData.id
+          )
+        : [];
+
+      // Update payment history silently only if changed
+      setPaymentHistory((prev) => {
+        const newHistory = memberPayments.map((p) => ({
+          cycle: p.cycle_number,
+          amount: p.amount,
+          date: new Date(p.date).toLocaleDateString(),
+          status: p.status,
+        }));
+        if (JSON.stringify(prev) !== JSON.stringify(newHistory)) {
+          return newHistory;
+        }
+        return prev;
+      });
+
+      // Check if paid this cycle using payment_status from fresh member data
+      const hasPaid = freshMemberData.success
+        ? freshMemberData.data.payment_status === "paid"
+        : memberPayments.some(
+            (p) =>
+              p.cycle_number === cycleData.data?.cycle_number &&
+              p.status === "completed"
+          );
+
+      // Update stats using fresh member data
+      setMemberStats((prev) => {
+        const newStats = {
+          hasPaidThisCycle: hasPaid,
+          nextPayoutCycle: freshMemberData.success
+            ? freshMemberData.data.next_payout_cycle || 0
+            : prev.nextPayoutCycle,
+          totalContributed: freshMemberData.success
+            ? freshMemberData.data.total_contributed || 0
+            : prev.totalContributed,
+          totalReceived: freshMemberData.success
+            ? freshMemberData.data.total_received || 0
+            : prev.totalReceived,
+          memberPosition: freshMemberData.success
+            ? freshMemberData.data.position || 0
+            : prev.memberPosition,
         };
-
-        console.log("📊 Updated cycle data:", newData);
-        setCurrentCycleData(newData);
-
-        // Filter for this member's payments
-        const memberPayments = Array.isArray(payments)
-          ? payments.filter(
-              (p) =>
-                p.member_id?._id === userData._id ||
-                p.member_id?._id === userData.id ||
-                p.member_id === userData._id ||
-                p.member_id === userData.id
-            )
-          : [];
-
-        // Update payment history silently only if changed
-        setPaymentHistory((prev) => {
-          const newHistory = memberPayments.map((p) => ({
-            cycle: p.cycle_number,
-            amount: p.amount,
-            date: new Date(p.date).toLocaleDateString(),
-            status: p.status,
-          }));
-          if (JSON.stringify(prev) !== JSON.stringify(newHistory)) {
-            return newHistory;
-          }
-          return prev;
-        });
-
-        // Check if paid this cycle using payment_status from fresh member data
-        const hasPaid = freshMemberData.success
-          ? freshMemberData.data.payment_status === "paid"
-          : memberPayments.some(
-              (p) =>
-                p.cycle_number === cycleData.data?.cycle_number &&
-                p.status === "completed"
-            );
-
-        // Update stats using fresh member data
-        setMemberStats((prev) => {
-          const newStats = {
-            hasPaidThisCycle: hasPaid,
-            nextPayoutCycle: freshMemberData.success
-              ? freshMemberData.data.next_payout_cycle || 0
-              : prev.nextPayoutCycle,
-            totalContributed: freshMemberData.success
-              ? freshMemberData.data.total_contributed || 0
-              : prev.totalContributed,
-            totalReceived: freshMemberData.success
-              ? freshMemberData.data.total_received || 0
-              : prev.totalReceived,
-            memberPosition: freshMemberData.success
-              ? freshMemberData.data.position || 0
-              : prev.memberPosition,
-          };
-          if (JSON.stringify(prev) !== JSON.stringify(newStats)) {
-            return newStats;
-          }
-          return prev;
-        });
+        if (JSON.stringify(prev) !== JSON.stringify(newStats)) {
+          return newStats;
+        }
+        return prev;
+      });
     } catch (error) {
       console.error("Error fetching member data:", error);
     }
@@ -341,6 +369,17 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
       console.log("👂 Member Dashboard listening for real-time updates");
       console.log("🔌 Socket connected:", socket.connected);
       console.log("🆔 Socket ID:", socket.id);
+
+      // Notify server that user is online
+      socket.emit("user:online", {
+        userId: userData._id || userData.id,
+        username: userData.username || userData.name,
+        role: userData.role || "member",
+      });
+      console.log(
+        "👤 Notified server: member is online",
+        userData.username || userData.name
+      );
 
       // Listen for payment completion (new event name)
       socket.on("payment:completed", (data: any) => {
@@ -461,7 +500,10 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
   };
 
   // Poll loan repayment status
-  const pollRepaymentStatus = async (requestID: string, retryCount = 0): Promise<void> => {
+  const pollRepaymentStatus = async (
+    requestID: string,
+    retryCount = 0
+  ): Promise<void> => {
     const maxRetries = 30; // 60 seconds
 
     if (retryCount >= maxRetries) {
@@ -469,7 +511,8 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
       setIsProcessingRepayment(false);
       toast({
         title: "Payment Timeout",
-        description: "Payment verification timed out. Please check your transaction history.",
+        description:
+          "Payment verification timed out. Please check your transaction history.",
         variant: "destructive",
       });
       return;
@@ -492,14 +535,17 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         setRepaymentState("success");
         setIsProcessingRepayment(false);
 
-        const isFullyPaid = selectedLoan && 
-          (selectedLoan.amount_remaining - parseFloat(partialPaymentAmount)) <= 0;
-        
+        const isFullyPaid =
+          selectedLoan &&
+          selectedLoan.amount_remaining - parseFloat(partialPaymentAmount) <= 0;
+
         toast({
           title: isFullyPaid ? "Loan Fully Repaid! 🎉" : "Payment Successful!",
-          description: isFullyPaid 
+          description: isFullyPaid
             ? "Congratulations! Your loan has been fully repaid."
-            : `Payment of KES ${parseFloat(partialPaymentAmount).toLocaleString()} recorded successfully.`,
+            : `Payment of KES ${parseFloat(
+                partialPaymentAmount
+              ).toLocaleString()} recorded successfully.`,
         });
 
         setTimeout(() => {
@@ -549,7 +595,10 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
       return;
     }
 
-    const maxPayable = selectedLoan.amount_remaining || selectedLoan.total_repayable || selectedLoan.amount;
+    const maxPayable =
+      selectedLoan.amount_remaining ||
+      selectedLoan.total_repayable ||
+      selectedLoan.amount;
     if (paymentAmount > maxPayable) {
       toast({
         title: "Amount Too High",
@@ -564,31 +613,35 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
 
     try {
       // Initiate STK Push for loan repayment
-      const response = await fetch(`${API_BASE}/api/loans/${selectedLoan._id}/repay`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...authService.getAuthHeaders(),
-        },
-        body: JSON.stringify({
-          amount: paymentAmount,
-        }),
-      });
+      const response = await fetch(
+        `${API_BASE}/api/loans/${selectedLoan._id}/repay`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...authService.getAuthHeaders(),
+          },
+          body: JSON.stringify({
+            amount: paymentAmount,
+          }),
+        }
+      );
 
       const data = await response.json();
 
       if (!data.success) {
-        throw new Error(data.error || 'Failed to initiate payment');
+        throw new Error(data.error || "Failed to initiate payment");
       }
 
       if (data.CheckoutRequestID) {
         // STK Push sent successfully
         setCheckoutRequestID(data.CheckoutRequestID);
         setRepaymentState("processing");
-        
+
         toast({
           title: "STK Push Sent 📱",
-          description: data.message || "Please enter your M-Pesa PIN on your phone",
+          description:
+            data.message || "Please enter your M-Pesa PIN on your phone",
         });
 
         // Start polling for payment status
@@ -596,9 +649,8 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
       } else {
         throw new Error("Payment initiation failed");
       }
-
     } catch (error: any) {
-      console.error('Repayment error:', error);
+      console.error("Repayment error:", error);
       setRepaymentState("failed");
       toast({
         title: "Payment Failed",
@@ -616,8 +668,8 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         <Card className="bg-gradient-to-r from-yellow-50 to-yellow-100 dark:from-yellow-950 dark:to-yellow-900 border-yellow-300">
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
-              <TopSaverBadge 
-                isTopSaver={true} 
+              <TopSaverBadge
+                isTopSaver={true}
                 currentBalance={savingsBalance}
                 className="text-base"
               />
@@ -639,8 +691,8 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         <Card className="bg-gradient-to-r from-yellow-50 to-yellow-100 dark:from-yellow-950 dark:to-yellow-900 border-yellow-300">
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
-              <TopSaverBadge 
-                isTopSaver={true} 
+              <TopSaverBadge
+                isTopSaver={true}
                 currentBalance={savingsBalance}
                 className="text-base"
               />
@@ -735,11 +787,11 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
           </div>
 
           <div className="text-center space-y-4">
-            <CycleQRPayment 
+            <CycleQRPayment
               onPaymentSuccess={fetchData}
               contributionAmount={224}
             />
-            
+
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
                 <span className="w-full border-t" />
@@ -1275,18 +1327,22 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                               )}
                             </div>
                           </div>
-                          
+
                           {/* Repayment Button for Disbursed Loans */}
                           {loan.status === "disbursed" && (
                             <div className="mt-3 pt-3 border-t">
                               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                                 <div className="text-sm">
-                                  <p className="text-muted-foreground">Total Repayable:</p>
+                                  <p className="text-muted-foreground">
+                                    Total Repayable:
+                                  </p>
                                   <p className="text-lg font-bold text-mpesa-green">
-                                    KES {(loan.amount * 1.10).toLocaleString()}
+                                    KES {(loan.amount * 1.1).toLocaleString()}
                                   </p>
                                   <p className="text-xs text-muted-foreground">
-                                    (Principal: {loan.amount.toLocaleString()} + 10% Interest: {(loan.amount * 0.10).toLocaleString()})
+                                    (Principal: {loan.amount.toLocaleString()} +
+                                    10% Interest:{" "}
+                                    {(loan.amount * 0.1).toLocaleString()})
                                   </p>
                                 </div>
                                 <Button
@@ -1483,24 +1539,38 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
               Make full or partial payment towards your loan
             </DialogDescription>
           </DialogHeader>
-          
+
           {selectedLoan && (
             <div className="space-y-4">
               {/* Loan Summary */}
               <div className="bg-muted/50 p-4 rounded-lg space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Original Loan:</span>
-                  <span className="font-medium">KES {selectedLoan.amount.toLocaleString()}</span>
+                  <span className="font-medium">
+                    KES {selectedLoan.amount.toLocaleString()}
+                  </span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Interest ({selectedLoan.interest_rate || 10}%):</span>
-                  <span className="font-medium">KES {((selectedLoan.amount * (selectedLoan.interest_rate || 10)) / 100).toLocaleString()}</span>
+                  <span className="text-muted-foreground">
+                    Interest ({selectedLoan.interest_rate || 10}%):
+                  </span>
+                  <span className="font-medium">
+                    KES{" "}
+                    {(
+                      (selectedLoan.amount *
+                        (selectedLoan.interest_rate || 10)) /
+                      100
+                    ).toLocaleString()}
+                  </span>
                 </div>
                 <Separator />
                 <div className="flex justify-between">
                   <span className="font-semibold">Total Repayable:</span>
                   <span className="text-lg font-bold">
-                    KES {(selectedLoan.total_repayable || selectedLoan.amount * 1.10).toLocaleString()}
+                    KES{" "}
+                    {(
+                      selectedLoan.total_repayable || selectedLoan.amount * 1.1
+                    ).toLocaleString()}
                   </span>
                 </div>
               </div>
@@ -1508,27 +1578,49 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
               {/* Payment Progress */}
               <div className="bg-green-50 border border-green-200 p-4 rounded-lg space-y-3">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-green-900">Payment Progress</span>
+                  <span className="text-sm font-medium text-green-900">
+                    Payment Progress
+                  </span>
                   <span className="text-sm font-bold text-green-700">
-                    {Math.round(((selectedLoan.amount_paid || 0) / (selectedLoan.total_repayable || selectedLoan.amount)) * 100)}%
+                    {Math.round(
+                      ((selectedLoan.amount_paid || 0) /
+                        (selectedLoan.total_repayable || selectedLoan.amount)) *
+                        100
+                    )}
+                    %
                   </span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-3">
                   <div
                     className="bg-green-600 h-3 rounded-full transition-all"
                     style={{
-                      width: `${Math.min(((selectedLoan.amount_paid || 0) / (selectedLoan.total_repayable || selectedLoan.amount)) * 100, 100)}%`,
+                      width: `${Math.min(
+                        ((selectedLoan.amount_paid || 0) /
+                          (selectedLoan.total_repayable ||
+                            selectedLoan.amount)) *
+                          100,
+                        100
+                      )}%`,
                     }}
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div>
                     <p className="text-muted-foreground">Paid</p>
-                    <p className="font-bold text-green-700">KES {(selectedLoan.amount_paid || 0).toLocaleString()}</p>
+                    <p className="font-bold text-green-700">
+                      KES {(selectedLoan.amount_paid || 0).toLocaleString()}
+                    </p>
                   </div>
                   <div className="text-right">
                     <p className="text-muted-foreground">Remaining</p>
-                    <p className="font-bold text-orange-600">KES {(selectedLoan.amount_remaining || selectedLoan.total_repayable || selectedLoan.amount).toLocaleString()}</p>
+                    <p className="font-bold text-orange-600">
+                      KES{" "}
+                      {(
+                        selectedLoan.amount_remaining ||
+                        selectedLoan.total_repayable ||
+                        selectedLoan.amount
+                      ).toLocaleString()}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -1542,20 +1634,37 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                   placeholder="Enter amount to pay"
                   value={partialPaymentAmount}
                   onChange={(e) => setPartialPaymentAmount(e.target.value)}
-                  max={selectedLoan.amount_remaining || selectedLoan.total_repayable}
+                  max={
+                    selectedLoan.amount_remaining ||
+                    selectedLoan.total_repayable
+                  }
                 />
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setPartialPaymentAmount(((selectedLoan.amount_remaining || selectedLoan.total_repayable) / 2).toFixed(0))}
+                    onClick={() =>
+                      setPartialPaymentAmount(
+                        (
+                          (selectedLoan.amount_remaining ||
+                            selectedLoan.total_repayable) / 2
+                        ).toFixed(0)
+                      )
+                    }
                     className="flex-1">
                     Half
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setPartialPaymentAmount((selectedLoan.amount_remaining || selectedLoan.total_repayable).toString())}
+                    onClick={() =>
+                      setPartialPaymentAmount(
+                        (
+                          selectedLoan.amount_remaining ||
+                          selectedLoan.total_repayable
+                        ).toString()
+                      )
+                    }
                     className="flex-1">
                     Full Amount
                   </Button>
@@ -1563,29 +1672,46 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
               </div>
 
               {/* Payment History */}
-              {selectedLoan.payment_history && selectedLoan.payment_history.length > 0 && (
-                <div className="space-y-2">
-                  <Label>Payment History ({selectedLoan.payment_history.length} payments)</Label>
-                  <div className="max-h-32 overflow-y-auto space-y-2 border rounded-lg p-2">
-                    {selectedLoan.payment_history.map((payment: any, idx: number) => (
-                      <div key={idx} className="flex justify-between text-xs bg-gray-50 p-2 rounded">
-                        <span className="text-muted-foreground">
-                          {new Date(payment.payment_date).toLocaleDateString()}
-                        </span>
-                        <span className="font-semibold text-green-600">
-                          +KES {payment.amount.toLocaleString()}
-                        </span>
-                      </div>
-                    ))}
+              {selectedLoan.payment_history &&
+                selectedLoan.payment_history.length > 0 && (
+                  <div className="space-y-2">
+                    <Label>
+                      Payment History ({selectedLoan.payment_history.length}{" "}
+                      payments)
+                    </Label>
+                    <div className="max-h-32 overflow-y-auto space-y-2 border rounded-lg p-2">
+                      {selectedLoan.payment_history.map(
+                        (payment: any, idx: number) => (
+                          <div
+                            key={idx}
+                            className="flex justify-between text-xs bg-gray-50 p-2 rounded">
+                            <span className="text-muted-foreground">
+                              {new Date(
+                                payment.payment_date
+                              ).toLocaleDateString()}
+                            </span>
+                            <span className="font-semibold text-green-600">
+                              +KES {payment.amount.toLocaleString()}
+                            </span>
+                          </div>
+                        )
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
               <div className="bg-mpesa-green/10 border border-mpesa-green/20 p-4 rounded-lg space-y-2">
                 <p className="text-sm font-medium">Payment Details:</p>
                 <div className="text-sm space-y-1">
-                  <p>• Till Number: <span className="font-bold">6938069</span></p>
-                  <p>• Your Phone: <span className="font-medium">{userData?.phoneNumber || userData?.phone}</span></p>
+                  <p>
+                    • Till Number: <span className="font-bold">6938069</span>
+                  </p>
+                  <p>
+                    • Your Phone:{" "}
+                    <span className="font-medium">
+                      {userData?.phoneNumber || userData?.phone}
+                    </span>
+                  </p>
                   <p>• You will receive an M-Pesa prompt</p>
                   <p>• Enter your M-Pesa PIN to complete payment</p>
                 </div>
@@ -1605,19 +1731,26 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                 <Button
                   variant="mpesa"
                   onClick={handleLoanRepayment}
-                  disabled={isProcessingRepayment || !partialPaymentAmount || parseFloat(partialPaymentAmount) <= 0}>
+                  disabled={
+                    isProcessingRepayment ||
+                    !partialPaymentAmount ||
+                    parseFloat(partialPaymentAmount) <= 0
+                  }>
                   {isProcessingRepayment ? (
                     <>
                       {repaymentState === "confirm" && "Initiating Payment..."}
-                      {repaymentState === "processing" && "Enter M-Pesa PIN on your phone..."}
-                      {repaymentState === "waiting" && "Waiting for confirmation..."}
+                      {repaymentState === "processing" &&
+                        "Enter M-Pesa PIN on your phone..."}
+                      {repaymentState === "waiting" &&
+                        "Waiting for confirmation..."}
                       {repaymentState === "success" && "Payment Successful!"}
                       {repaymentState === "failed" && "Payment Failed"}
                     </>
                   ) : (
                     <>
                       <Phone className="w-4 h-4 mr-2" />
-                      Pay KES {parseFloat(partialPaymentAmount || "0").toLocaleString()}
+                      Pay KES{" "}
+                      {parseFloat(partialPaymentAmount || "0").toLocaleString()}
                     </>
                   )}
                 </Button>

@@ -18,7 +18,7 @@ import {
   Shield,
   Smartphone,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 
 interface PaymentDialogProps {
   open: boolean;
@@ -47,6 +47,46 @@ const PaymentDialog = ({
   const [pollCount, setPollCount] = useState(0);
   const [targetCycle, setTargetCycle] = useState(cycle);
   const [hasPaidCurrentCycle, setHasPaidCurrentCycle] = useState(false);
+  const [pollingActive, setPollingActive] = useState(false);
+
+  // Listen for real-time payment confirmations via Socket.IO
+  useEffect(() => {
+    const socket = (window as any).socket;
+    if (!socket || !checkoutRequestID) return;
+
+    const handlePaymentCompleted = (data: any) => {
+      console.log("🔔 Real-time payment notification:", data);
+
+      // Check if this is our payment
+      if (
+        data.checkoutRequestID === checkoutRequestID ||
+        data.memberId === (memberData._id || memberData.id)
+      ) {
+        console.log("✅ Payment confirmed via Socket.IO - stopping polling");
+        setPollingActive(false); // Stop polling immediately
+        setTransactionId(data.mpesaReceiptNumber || "SUCCESS");
+        setPaymentStep("success");
+        setIsProcessing(false);
+
+        toast({
+          title: "Payment Successful!",
+          description: `KES ${amount} received. Receipt: ${
+            data.mpesaReceiptNumber || "Confirmed"
+          }`,
+        });
+
+        setTimeout(() => {
+          onPaymentSuccess();
+        }, 2000);
+      }
+    };
+
+    socket.on("payment:completed", handlePaymentCompleted);
+
+    return () => {
+      socket.off("payment:completed", handlePaymentCompleted);
+    };
+  }, [checkoutRequestID, memberData, amount, onPaymentSuccess]);
 
   // Determine target cycle when dialog opens
   useEffect(() => {
@@ -54,25 +94,29 @@ const PaymentDialog = ({
       try {
         const token = localStorage.getItem("smcf_token");
         const memberId = memberData._id || memberData.id;
-        
+
         // Fetch member's current payment status
         const response = await fetch(`${API_BASE}/api/members/${memberId}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
         });
-        
+
         if (response.ok) {
           const data = await response.json();
-          const isPaid = data.success ? data.data.payment_status === "paid" : false;
+          const isPaid = data.success
+            ? data.data.payment_status === "paid"
+            : false;
           setHasPaidCurrentCycle(isPaid);
-          
+
           // If already paid, set target to next cycle
           if (isPaid) {
             setTargetCycle(cycle + 1);
             toast({
               title: "Advance Payment",
-              description: `You've already paid for Cycle #${cycle}. This payment will be for Cycle #${cycle + 1}`,
+              description: `You've already paid for Cycle #${cycle}. This payment will be for Cycle #${
+                cycle + 1
+              }`,
               duration: 5000,
             });
           } else {
@@ -84,7 +128,7 @@ const PaymentDialog = ({
         setTargetCycle(cycle);
       }
     };
-    
+
     if (open) {
       checkPaymentStatus();
     }
@@ -126,6 +170,7 @@ const PaymentDialog = ({
         });
 
         // Start polling for payment status
+        setPollingActive(true);
         pollPaymentStatus(data.CheckoutRequestID);
       } else {
         setIsProcessing(false);
@@ -151,8 +196,15 @@ const PaymentDialog = ({
   };
 
   const pollPaymentStatus = async (requestID: string, count: number = 0) => {
-    if (count >= 30) {
-      // Stop polling after 30 attempts (60 seconds with 2s interval)
+    // Check if polling was stopped (by Socket.IO notification)
+    if (!pollingActive) {
+      console.log("⏹️ Polling stopped by real-time notification");
+      return;
+    }
+
+    if (count >= 40) {
+      // Stop polling after 40 attempts (max 60 seconds with adaptive interval)
+      setPollingActive(false);
       setPaymentStep("failed");
       setIsProcessing(false);
       toast({
@@ -179,37 +231,53 @@ const PaymentDialog = ({
 
       const data = await response.json();
 
-      console.log("💳 Payment status poll #" + (count + 1) + ":", {
-        success: data.success,
-        status: data.status,
-        ResultCode: data.ResultCode,
-        MpesaReceiptNumber: data.MpesaReceiptNumber,
-      });
+      console.log("💳 Payment status poll #" + (count + 1) + ":");
+      console.log("   Full API response:", JSON.stringify(data, null, 2));
+      console.log("   data.success:", data.success);
+      console.log("   data.status:", data.status);
+      console.log("   data.ResultCode:", data.ResultCode);
+      console.log("   data.MpesaReceiptNumber:", data.MpesaReceiptNumber);
 
-      // Check for successful payment
-      if (data.success && 
-          (data.status === "completed" || 
-           data.ResultCode === "0" || 
-           data.ResultCode === 0 ||
-           data.MpesaReceiptNumber)) {
-        setTransactionId(data.MpesaReceiptNumber || "SUCCESS");
+      // Check for successful payment - be more lenient with conditions
+      const isCompleted =
+        data.success &&
+        (data.status === "completed" ||
+          data.ResultCode === "0" ||
+          data.ResultCode === 0 ||
+          data.MpesaReceiptNumber ||
+          (data.data && data.data.status === "completed"));
+
+      if (isCompleted) {
+        setPollingActive(false); // Stop polling
+        const receiptNumber =
+          data.MpesaReceiptNumber ||
+          data.data?.MpesaReceiptNumber ||
+          data.data?.mpesaReceiptNumber ||
+          "SUCCESS";
+        setTransactionId(receiptNumber);
         setPaymentStep("success");
         setIsProcessing(false);
 
         toast({
           title: "Payment Successful!",
-          description: `KES ${amount} received. Receipt: ${data.MpesaReceiptNumber || "Confirmed"}`,
+          description: `KES ${amount} received. Receipt: ${receiptNumber}`,
         });
+
+        console.log("✅ Payment confirmed! Receipt:", receiptNumber);
 
         // Call success callback after a short delay
         setTimeout(() => {
           onPaymentSuccess();
         }, 2000);
-      } else if (data.ResultCode && 
-                 data.ResultCode !== "0" && 
-                 data.ResultCode !== 0 &&
-                 data.status === "failed") {
+        return; // STOP POLLING
+      } else if (
+        data.ResultCode &&
+        data.ResultCode !== "0" &&
+        data.ResultCode !== 0 &&
+        data.status === "failed"
+      ) {
         // Only mark as failed if explicitly failed status
+        setPollingActive(false); // Stop polling
         setPaymentStep("failed");
         setIsProcessing(false);
         toast({
@@ -217,15 +285,21 @@ const PaymentDialog = ({
           description: data.ResultDescription || "Payment was not completed",
           variant: "destructive",
         });
+        return; // STOP POLLING
       } else {
-        // Still pending, poll again with 2 second interval
+        // Still pending - use adaptive polling interval:
+        // First 15 checks: 1 second (fast response for quick PIN entry)
+        // Next 15 checks: 2 seconds
+        // Remaining: 3 seconds
+        const nextInterval = count < 15 ? 1000 : count < 30 ? 2000 : 3000;
         setPollCount(count + 1);
-        setTimeout(() => pollPaymentStatus(requestID, count + 1), 2000);
+        setTimeout(() => pollPaymentStatus(requestID, count + 1), nextInterval);
       }
     } catch (error) {
       console.error("Error polling payment status:", error);
-      // Continue polling on error with 2 second interval
-      setTimeout(() => pollPaymentStatus(requestID, count + 1), 2000);
+      // Continue polling on error with adaptive interval
+      const nextInterval = count < 15 ? 1000 : count < 30 ? 2000 : 3000;
+      setTimeout(() => pollPaymentStatus(requestID, count + 1), nextInterval);
     }
   };
 
@@ -273,7 +347,9 @@ const PaymentDialog = ({
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Payment For:</span>
-                  <span className="font-semibold text-primary">Cycle #{targetCycle}</span>
+                  <span className="font-semibold text-primary">
+                    Cycle #{targetCycle}
+                  </span>
                 </div>
                 {hasPaidCurrentCycle && (
                   <div className="bg-financial-success/10 p-2 rounded text-xs text-financial-success">
@@ -471,7 +547,8 @@ const PaymentDialog = ({
                 Payment Successful!
               </h3>
               <p className="text-muted-foreground mb-4">
-                Your KES {amount} contribution for Cycle #{targetCycle} has been received
+                Your KES {amount} contribution for Cycle #{targetCycle} has been
+                received
               </p>
               {hasPaidCurrentCycle && (
                 <p className="text-xs text-muted-foreground">

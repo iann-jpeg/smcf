@@ -1,6 +1,8 @@
+import smcfLogo from "@/assets/smcf-logo.png";
 import AddMemberDialog from "@/components/AddMemberDialog";
 import AnnouncementDialog from "@/components/AnnouncementDialog";
 import MpesaDisbursementDialog from "@/components/MpesaDisbursementDialog";
+import TransactionFeesReport from "@/components/TransactionFeesReport";
 import SavingsTab from "@/components/admin/SavingsTab";
 import ContributionCycleChart from "@/components/analytics/ContributionCycleChart";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -24,7 +26,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import TransactionFeesReport from "@/components/TransactionFeesReport";
 import { useToast } from "@/hooks/use-toast";
 import API_BASE from "@/lib/api";
 import { authService } from "@/lib/authService";
@@ -47,10 +48,10 @@ import {
   UserPlus,
   Wallet,
 } from "lucide-react";
-import smcfLogo from '@/assets/smcf-logo.png';
 import { useEffect, useRef, useState } from "react";
 import ApprovalsTab from "./admin/ApprovalsTab";
 import LoansTab from "./admin/LoansTab";
+import OnlineMembersCard from "./admin/OnlineMembersCard";
 import ProfileSettings from "./admin/ProfileSettings";
 import ReportsTab from "./admin/ReportsTab";
 // ...existing code...
@@ -103,7 +104,8 @@ const AdminDashboard = ({
   const [editingMember, setEditingMember] = useState<string | null>(null);
   const [editedMemberData, setEditedMemberData] = useState<any>({});
   const [contributionAmount, setContributionAmount] = useState<number>(224);
-  const [newContributionAmount, setNewContributionAmount] = useState<string>("");
+  const [newContributionAmount, setNewContributionAmount] =
+    useState<string>("");
 
   // Real-time data states
   const [recentPayments, setRecentPayments] = useState<any[]>([]);
@@ -129,13 +131,15 @@ const AdminDashboard = ({
 
   // Calculate paid members from actual payment records for CURRENT CYCLE ONLY
   const currentCycleNumber = currentCycle?.cycle_number || null;
-  
+
   // Filter payments for current cycle only (same as Dashboard and MemberDashboard)
   const currentCyclePayments = currentCycleNumber
     ? allPayments.filter((p: any) => p.cycle_number === currentCycleNumber)
     : allPayments;
-  
-  const completedPayments = currentCyclePayments.filter((p: any) => p.status === "completed");
+
+  const completedPayments = currentCyclePayments.filter(
+    (p: any) => p.status === "completed"
+  );
   const paidMemberIds = new Set(
     completedPayments.map((p: any) => p.member_id?._id || p.member_id)
   );
@@ -145,7 +149,7 @@ const AdminDashboard = ({
   const pendingMembers = orderedMembers.filter(
     (m: any) => m && !paidMemberIds.has(m._id || m.id)
   );
-  
+
   // Calculate total collected from current cycle payments only
   const totalCollected = completedPayments.reduce(
     (sum: number, p: any) => sum + (p.amount || 0),
@@ -165,7 +169,7 @@ const AdminDashboard = ({
       });
       const data = await res.json();
       const paymentsArray = Array.isArray(data) ? data : [];
-      
+
       // Store all payments for statistics calculation
       setAllPayments((prev) => {
         if (JSON.stringify(prev) !== JSON.stringify(paymentsArray)) {
@@ -173,7 +177,7 @@ const AdminDashboard = ({
         }
         return prev;
       });
-      
+
       // Store recent 5 for display
       setRecentPayments((prev) => {
         const newData = paymentsArray.slice(0, 5);
@@ -209,17 +213,23 @@ const AdminDashboard = ({
   };
 
   const generateDisbursementReceipt = (disbursement: any) => {
-    const transactionId = disbursement.mpesa_transaction_id || 
-      disbursement.transaction_id || 
-      `MAN${disbursement._id?.slice(-10) || Math.random().toString(36).substring(7).toUpperCase()}`;
-    
-    const date = new Date(disbursement.disbursement_date || disbursement.created_at);
-    const formattedDate = date.toLocaleDateString('en-GB', { 
-      day: 'numeric', 
-      month: 'long', 
-      year: 'numeric' 
+    const transactionId =
+      disbursement.mpesa_transaction_id ||
+      disbursement.transaction_id ||
+      `MAN${
+        disbursement._id?.slice(-10) ||
+        Math.random().toString(36).substring(7).toUpperCase()
+      }`;
+
+    const date = new Date(
+      disbursement.disbursement_date || disbursement.created_at
+    );
+    const formattedDate = date.toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
     });
-    
+
     const htmlContent = `
 <!DOCTYPE html>
 <html>
@@ -427,7 +437,9 @@ const AdminDashboard = ({
     <div class="amount-section">
       <div class="checkmark">✓</div>
       <div class="amount-label">Disbursed Amount</div>
-      <div class="amount">${(disbursement.amount || 0).toLocaleString()} KES</div>
+      <div class="amount">${(
+        disbursement.amount || 0
+      ).toLocaleString()} KES</div>
     </div>
     
     <div class="details-section">
@@ -446,19 +458,27 @@ const AdminDashboard = ({
       <div class="transaction-details-header">Transaction Details</div>
       <div class="detail-row">
         <span class="detail-label">To</span>
-        <span class="detail-value">${disbursement.recipient_id?.name || 'Unknown'}</span>
+        <span class="detail-value">${
+          disbursement.recipient_id?.name || "Unknown"
+        }</span>
       </div>
       <div class="detail-row">
         <span class="detail-label">Phone Number</span>
-        <span class="detail-value">${disbursement.recipient_id?.phone || disbursement.phone || 'N/A'}</span>
+        <span class="detail-value">${
+          disbursement.recipient_id?.phone || disbursement.phone || "N/A"
+        }</span>
       </div>
       <div class="detail-row">
         <span class="detail-label">Cycle Number</span>
-        <span class="detail-value">#${disbursement.cycle_id?.cycle_number || 'N/A'}</span>
+        <span class="detail-value">#${
+          disbursement.cycle_id?.cycle_number || "N/A"
+        }</span>
       </div>
       <div class="detail-row">
         <span class="detail-label">Method</span>
-        <span class="detail-value">${disbursement.method === 'mpesa' ? 'M-Pesa' : 'Manual'}</span>
+        <span class="detail-value">${
+          disbursement.method === "mpesa" ? "M-Pesa" : "Manual"
+        }</span>
       </div>
     </div>
     
@@ -484,10 +504,10 @@ const AdminDashboard = ({
 </html>
 `;
 
-    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const blob = new Blob([htmlContent], { type: "text/html" });
     const url = URL.createObjectURL(blob);
-    const newWindow = window.open(url, '_blank');
-    
+    const newWindow = window.open(url, "_blank");
+
     if (newWindow) {
       newWindow.onload = () => {
         setTimeout(() => {
@@ -495,7 +515,7 @@ const AdminDashboard = ({
         }, 250);
       };
     }
-    
+
     toast({
       title: "Receipt Generated",
       description: "Opening receipt in new window...",
@@ -503,8 +523,13 @@ const AdminDashboard = ({
   };
 
   const generateDisbursementsPDF = () => {
-    const totalDisbursed = disbursements.reduce((sum, d) => sum + (d.amount || 0), 0);
-    const completedDisbursements = disbursements.filter(d => d.status === 'completed').length;
+    const totalDisbursed = disbursements.reduce(
+      (sum, d) => sum + (d.amount || 0),
+      0
+    );
+    const completedDisbursements = disbursements.filter(
+      (d) => d.status === "completed"
+    ).length;
 
     const htmlContent = `
 <!DOCTYPE html>
@@ -573,16 +598,22 @@ const AdminDashboard = ({
         </tr>
       </thead>
       <tbody>
-        ${disbursements.map(d => `
+        ${disbursements
+          .map(
+            (d) => `
           <tr>
-            <td>#${d.cycle_id?.cycle_number || '-'}</td>
-            <td>${d.member_id?.name || 'Unknown'}</td>
+            <td>#${d.cycle_id?.cycle_number || "-"}</td>
+            <td>${d.member_id?.name || "Unknown"}</td>
             <td>KES ${(d.amount || 0).toLocaleString()}</td>
-            <td>${d.method || 'Manual'}</td>
-            <td class="status-${d.status}">${(d.status || 'pending').toUpperCase()}</td>
-            <td>${d.date ? new Date(d.date).toLocaleDateString() : '-'}</td>
+            <td>${d.method || "Manual"}</td>
+            <td class="status-${d.status}">${(
+              d.status || "pending"
+            ).toUpperCase()}</td>
+            <td>${d.date ? new Date(d.date).toLocaleDateString() : "-"}</td>
           </tr>
-        `).join('')}
+        `
+          )
+          .join("")}
       </tbody>
     </table>
   </div>
@@ -596,69 +627,86 @@ const AdminDashboard = ({
 </html>
     `;
 
-    const printWindow = window.open('', '_blank');
+    const printWindow = window.open("", "_blank");
     if (printWindow) {
       printWindow.document.write(htmlContent);
       printWindow.document.close();
       setTimeout(() => {
         printWindow.print();
         toast({
-          title: 'PDF Ready',
+          title: "PDF Ready",
           description: 'Print dialog opened. Choose "Save as PDF" to download.',
         });
       }, 500);
     } else {
       toast({
-        title: 'Pop-up Blocked',
-        description: 'Please allow pop-ups for this site.',
-        variant: 'destructive',
+        title: "Pop-up Blocked",
+        description: "Please allow pop-ups for this site.",
+        variant: "destructive",
       });
     }
   };
 
   const exportDisbursementsCSV = () => {
     try {
-      const totalDisbursed = disbursements.reduce((sum, d) => sum + (d.amount || 0), 0);
+      const totalDisbursed = disbursements.reduce(
+        (sum, d) => sum + (d.amount || 0),
+        0
+      );
 
       const csvData = [
-        ['SMCF - Smart Moves Cash Flow', 'Disbursements Report', `Generated: ${new Date().toLocaleString()}`],
+        [
+          "SMCF - Smart Moves Cash Flow",
+          "Disbursements Report",
+          `Generated: ${new Date().toLocaleString()}`,
+        ],
         [],
-        ['Cycle', 'Recipient', 'Member ID', 'Amount', 'Method', 'Status', 'Date'],
-        ...disbursements.map(d => [
-          `#${d.cycle_id?.cycle_number || '-'}`,
-          d.member_id?.name || 'Unknown',
-          d.member_id?.member_id || '-',
+        [
+          "Cycle",
+          "Recipient",
+          "Member ID",
+          "Amount",
+          "Method",
+          "Status",
+          "Date",
+        ],
+        ...disbursements.map((d) => [
+          `#${d.cycle_id?.cycle_number || "-"}`,
+          d.member_id?.name || "Unknown",
+          d.member_id?.member_id || "-",
           d.amount || 0,
-          d.method || 'Manual',
-          d.status || 'pending',
-          d.date ? new Date(d.date).toLocaleDateString() : '-',
+          d.method || "Manual",
+          d.status || "pending",
+          d.date ? new Date(d.date).toLocaleDateString() : "-",
         ]),
         [],
-        ['Summary'],
-        ['Total Disbursements', disbursements.length],
-        ['Total Amount Disbursed', `KES ${totalDisbursed.toLocaleString()}`],
+        ["Summary"],
+        ["Total Disbursements", disbursements.length],
+        ["Total Amount Disbursed", `KES ${totalDisbursed.toLocaleString()}`],
       ];
 
-      const csvContent = csvData.map(row => row.join(',')).join('\n');
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const csvContent = csvData.map((row) => row.join(",")).join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
+      const link = document.createElement("a");
       link.href = url;
-      link.download = `smcf-disbursements-report-${new Date().toISOString().split('T')[0]}.csv`;
+      link.download = `smcf-disbursements-report-${
+        new Date().toISOString().split("T")[0]
+      }.csv`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
       toast({
-        title: 'CSV Export Complete',
-        description: 'Disbursements report has been downloaded as CSV',
+        title: "CSV Export Complete",
+        description: "Disbursements report has been downloaded as CSV",
       });
     } catch (err) {
       toast({
-        title: 'CSV Export Failed',
-        description: 'Could not export CSV report',
-        variant: 'destructive',
+        title: "CSV Export Failed",
+        description: "Could not export CSV report",
+        variant: "destructive",
       });
     }
   };
@@ -667,24 +715,28 @@ const AdminDashboard = ({
     const amount = Number(newContributionAmount);
     if (!amount || amount <= 0) {
       toast({
-        title: 'Invalid Amount',
-        description: 'Please enter a valid contribution amount',
-        variant: 'destructive',
+        title: "Invalid Amount",
+        description: "Please enter a valid contribution amount",
+        variant: "destructive",
       });
       return;
     }
 
-    if (!confirm(`Are you sure you want to change the monthly contribution from KES ${contributionAmount} to KES ${amount}? This will affect all future payments and cycles.`)) {
+    if (
+      !confirm(
+        `Are you sure you want to change the monthly contribution from KES ${contributionAmount} to KES ${amount}? This will affect all future payments and cycles.`
+      )
+    ) {
       return;
     }
 
     try {
       // Update all members' monthly_contribution
-      const updatePromises = safeMembers.map(member => 
+      const updatePromises = safeMembers.map((member) =>
         fetch(`${API_BASE}/api/members/${member._id}`, {
-          method: 'PUT',
+          method: "PUT",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
             ...authService.getAuthHeaders(),
           },
           body: JSON.stringify({
@@ -698,9 +750,9 @@ const AdminDashboard = ({
       // Update current cycle if exists
       if (currentCycle?._id) {
         await fetch(`${API_BASE}/api/cycles/${currentCycle._id}`, {
-          method: 'PUT',
+          method: "PUT",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
             ...authService.getAuthHeaders(),
           },
           body: JSON.stringify({
@@ -717,15 +769,15 @@ const AdminDashboard = ({
       fetchCurrentCycle();
 
       toast({
-        title: 'Contribution Amount Updated',
+        title: "Contribution Amount Updated",
         description: `Monthly contribution changed to KES ${amount.toLocaleString()} for all members`,
       });
     } catch (error: any) {
-      console.error('Update contribution amount failed:', error);
+      console.error("Update contribution amount failed:", error);
       toast({
-        title: 'Update Failed',
-        description: error.message || 'Could not update contribution amount',
-        variant: 'destructive',
+        title: "Update Failed",
+        description: error.message || "Could not update contribution amount",
+        variant: "destructive",
       });
     }
   };
@@ -760,10 +812,10 @@ const AdminDashboard = ({
       });
       const data = await res.json();
       console.log("📊 Current cycle data:", data);
-      
+
       // Extract the actual cycle data from the response
       const cycleData = data.success ? data.data : data;
-      
+
       // Only update if data changed
       setCurrentCycle((prev) => {
         if (JSON.stringify(prev) !== JSON.stringify(cycleData)) {
@@ -791,7 +843,8 @@ const AdminDashboard = ({
       const data = await res.json();
       // Only update if data changed
       setSavingsData((prev) => {
-        const newData = data.success && Array.isArray(data.data) ? data.data : [];
+        const newData =
+          data.success && Array.isArray(data.data) ? data.data : [];
         if (JSON.stringify(prev) !== JSON.stringify(newData)) {
           return newData;
         }
@@ -804,15 +857,19 @@ const AdminDashboard = ({
 
   const fetchPendingWithdrawals = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/savings/admin/pending-withdrawals`, {
-        headers: {
-          ...authService.getAuthHeaders(),
-        },
-      });
+      const res = await fetch(
+        `${API_BASE}/api/savings/admin/pending-withdrawals`,
+        {
+          headers: {
+            ...authService.getAuthHeaders(),
+          },
+        }
+      );
       const data = await res.json();
       // Only update if data changed
       setPendingWithdrawals((prev) => {
-        const newData = data.success && Array.isArray(data.data) ? data.data : [];
+        const newData =
+          data.success && Array.isArray(data.data) ? data.data : [];
         if (JSON.stringify(prev) !== JSON.stringify(newData)) {
           return newData;
         }
@@ -830,12 +887,14 @@ const AdminDashboard = ({
           ...authService.getAuthHeaders(),
         },
       });
-      
+
       if (!res.ok) {
-        console.warn(`Fee summary endpoint returned ${res.status}, skipping...`);
+        console.warn(
+          `Fee summary endpoint returned ${res.status}, skipping...`
+        );
         return;
       }
-      
+
       const data = await res.json();
       if (data.success) {
         setFeeSummary(data.data);
@@ -949,15 +1008,25 @@ const AdminDashboard = ({
       socket.on("loanStatusUpdated", (data: any) => {
         console.log("💰 Loan status updated:", data);
         const statusMessages: Record<string, string> = {
-          approved: `Loan of KES ${data.amount.toLocaleString()} approved for ${data.memberName}`,
+          approved: `Loan of KES ${data.amount.toLocaleString()} approved for ${
+            data.memberName
+          }`,
           rejected: `Loan request from ${data.memberName} was rejected`,
-          disbursed: `Loan of KES ${data.amount.toLocaleString()} disbursed to ${data.memberName}`,
-          repaid: `${data.memberName} has repaid their loan of KES ${data.amount.toLocaleString()}`,
+          disbursed: `Loan of KES ${data.amount.toLocaleString()} disbursed to ${
+            data.memberName
+          }`,
+          repaid: `${
+            data.memberName
+          } has repaid their loan of KES ${data.amount.toLocaleString()}`,
         };
 
         toast({
-          title: `Loan ${data.status.charAt(0).toUpperCase() + data.status.slice(1)}`,
-          description: statusMessages[data.status] || `Loan status updated to ${data.status}`,
+          title: `Loan ${
+            data.status.charAt(0).toUpperCase() + data.status.slice(1)
+          }`,
+          description:
+            statusMessages[data.status] ||
+            `Loan status updated to ${data.status}`,
         });
         fetchAllData(); // Refresh all data including loans
       });
@@ -1012,7 +1081,9 @@ const AdminDashboard = ({
     // Group message for SMART MOVES CASH FLOW WhatsApp group
     const groupMessage = `🔔 *SMCF Payment Reminder - Cycle #${cycleNumber}* 🔔
 
-⏰ *${daysRemaining} ${daysRemaining === 1 ? "day" : "days"} remaining* to send your contribution!
+⏰ *${daysRemaining} ${
+      daysRemaining === 1 ? "day" : "days"
+    } remaining* to send your contribution!
 
 💰 *Amount Due:* KES ${contributionAmount}
 
@@ -1024,11 +1095,15 @@ ${unpaidList}
 Thank you for your cooperation! 🙏`;
 
     // Individual DM message
-    const individualMessage = (memberName: string) => `🔔 *SMCF Payment Reminder - Cycle #${cycleNumber}* 🔔
+    const individualMessage = (
+      memberName: string
+    ) => `🔔 *SMCF Payment Reminder - Cycle #${cycleNumber}* 🔔
 
 Hi ${memberName},
 
-⏰ You have *${daysRemaining} ${daysRemaining === 1 ? "day" : "days"} remaining* to send your contribution!
+⏰ You have *${daysRemaining} ${
+      daysRemaining === 1 ? "day" : "days"
+    } remaining* to send your contribution!
 
 💰 *Amount Due:* KES ${contributionAmount}
 
@@ -1047,7 +1122,7 @@ Thank you for your cooperation! 🙏`;
       if (member.phone) {
         // Clean phone number (remove spaces, dashes, etc.)
         let cleanPhone = member.phone.replace(/[\s\-\(\)]/g, "");
-        
+
         // Add country code if not present
         if (!cleanPhone.startsWith("254") && !cleanPhone.startsWith("+254")) {
           // Remove leading 0 if present
@@ -1057,24 +1132,26 @@ Thank you for your cooperation! 🙏`;
             cleanPhone = "254" + cleanPhone;
           }
         }
-        
+
         // Remove + if present
         cleanPhone = cleanPhone.replace("+", "");
-        
+
         const personalMessage = individualMessage(member.name);
         const encodedPersonalMessage = encodeURIComponent(personalMessage);
         const personalWhatsappUrl = `https://wa.me/${cleanPhone}?text=${encodedPersonalMessage}`;
-        
+
         // Delay each window opening by 2 seconds to avoid browser blocking
         setTimeout(() => {
           window.open(personalWhatsappUrl, "_blank");
         }, (index + 1) * 2000);
       }
     });
-    
+
     toast({
       title: "Opening WhatsApp",
-      description: `Opening ${pendingCount + 1} WhatsApp tabs (1 group + ${pendingCount} personal DMs). Please allow pop-ups if blocked.`,
+      description: `Opening ${
+        pendingCount + 1
+      } WhatsApp tabs (1 group + ${pendingCount} personal DMs). Please allow pop-ups if blocked.`,
       duration: 5000,
     });
   };
@@ -1187,19 +1264,23 @@ Thank you for your cooperation! 🙏`;
   const handleSaveMember = async (memberId: string) => {
     try {
       const id = memberId;
-      
+
       // Prepare payload, only include password if it's not empty
       const payload: any = {
         name: editedMemberData.name,
         phone: editedMemberData.phone,
-        monthly_contribution: Number(editedMemberData.monthly_contribution) || 0,
+        monthly_contribution:
+          Number(editedMemberData.monthly_contribution) || 0,
       };
-      
+
       // Only include password if it's been changed (not empty)
-      if (editedMemberData.password && editedMemberData.password.trim() !== "") {
+      if (
+        editedMemberData.password &&
+        editedMemberData.password.trim() !== ""
+      ) {
         payload.password = editedMemberData.password;
       }
-      
+
       const res = await fetch(`${API_BASE}/api/members/${id}`, {
         method: "PUT",
         headers: {
@@ -1348,10 +1429,10 @@ Thank you for your cooperation! 🙏`;
             "Content-Type": "application/json",
             ...authService.getAuthHeaders(),
           },
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             payment_status: newStatus,
             payment_date: null,
-            amount: 0
+            amount: 0,
           }),
         });
 
@@ -1370,10 +1451,9 @@ Thank you for your cooperation! 🙏`;
 
       // Refresh cycle data
       await fetchCurrentCycle();
-      
+
       // Refresh payments data
       await fetchPayments();
-
     } catch (err: any) {
       console.error("Update failed", err);
       toast({
@@ -1527,7 +1607,8 @@ Thank you for your cooperation! 🙏`;
             System Overview Dashboard
           </CardTitle>
           <CardDescription>
-            Real-time summary of all system metrics - Cycle #{currentCycle?.cycle_number || 1}
+            Real-time summary of all system metrics - Cycle #
+            {currentCycle?.cycle_number || 1}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -1537,8 +1618,12 @@ Thank you for your cooperation! 🙏`;
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-blue-600 dark:text-blue-400">Total Members</p>
-                    <p className="text-3xl font-bold text-blue-900 dark:text-blue-100">{safeMembers.length}</p>
+                    <p className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                      Total Members
+                    </p>
+                    <p className="text-3xl font-bold text-blue-900 dark:text-blue-100">
+                      {safeMembers.length}
+                    </p>
                     <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
                       Active participants
                     </p>
@@ -1553,17 +1638,28 @@ Thank you for your cooperation! 🙏`;
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-green-600 dark:text-green-400">Payments This Cycle</p>
+                    <p className="text-sm font-medium text-green-600 dark:text-green-400">
+                      Payments This Cycle
+                    </p>
                     <p className="text-3xl font-bold text-green-900 dark:text-green-100">
                       {paidMembers.length}/{safeMembers.length}
                     </p>
                     <div className="mt-2">
-                      <Progress 
-                        value={safeMembers.length > 0 ? (paidMembers.length / safeMembers.length) * 100 : 0} 
+                      <Progress
+                        value={
+                          safeMembers.length > 0
+                            ? (paidMembers.length / safeMembers.length) * 100
+                            : 0
+                        }
                         className="h-2"
                       />
                       <p className="text-xs text-green-700 dark:text-green-300 mt-1">
-                        {safeMembers.length > 0 ? Math.round((paidMembers.length / safeMembers.length) * 100) : 0}% complete
+                        {safeMembers.length > 0
+                          ? Math.round(
+                              (paidMembers.length / safeMembers.length) * 100
+                            )
+                          : 0}
+                        % complete
                       </p>
                     </div>
                   </div>
@@ -1577,12 +1673,18 @@ Thank you for your cooperation! 🙏`;
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">Collected Amount</p>
+                    <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
+                      Collected Amount
+                    </p>
                     <p className="text-3xl font-bold text-emerald-900 dark:text-emerald-100">
                       {totalCollected.toLocaleString()}
                     </p>
                     <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-1">
-                      of {(safeMembers.length * contributionAmount).toLocaleString()} KES
+                      of{" "}
+                      {(
+                        safeMembers.length * contributionAmount
+                      ).toLocaleString()}{" "}
+                      KES
                     </p>
                   </div>
                   <DollarSign className="w-12 h-12 text-emerald-300 dark:text-emerald-700" />
@@ -1595,10 +1697,14 @@ Thank you for your cooperation! 🙏`;
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-amber-600 dark:text-amber-400">Pending Members</p>
-                    <p className="text-3xl font-bold text-amber-900 dark:text-amber-100">{pendingMembers.length}</p>
+                    <p className="text-sm font-medium text-amber-600 dark:text-amber-400">
+                      Pending Members
+                    </p>
+                    <p className="text-3xl font-bold text-amber-900 dark:text-amber-100">
+                      {pendingMembers.length}
+                    </p>
                     <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                      {pendingMembers.length > 0 ? 'Need to pay' : 'All paid!'}
+                      {pendingMembers.length > 0 ? "Need to pay" : "All paid!"}
                     </p>
                   </div>
                   <AlertTriangle className="w-12 h-12 text-amber-300 dark:text-amber-700" />
@@ -1611,13 +1717,27 @@ Thank you for your cooperation! 🙏`;
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-purple-600 dark:text-purple-400">Active Loans</p>
+                    <p className="text-sm font-medium text-purple-600 dark:text-purple-400">
+                      Active Loans
+                    </p>
                     <p className="text-3xl font-bold text-purple-900 dark:text-purple-100">
-                      {loans.filter((l: any) => ['approved', 'disbursed'].includes(l.status)).length}
+                      {
+                        loans.filter((l: any) =>
+                          ["approved", "disbursed"].includes(l.status)
+                        ).length
+                      }
                     </p>
                     <p className="text-xs text-purple-700 dark:text-purple-300 mt-1">
-                      Total: KES {loans.filter((l: any) => ['approved', 'disbursed'].includes(l.status))
-                        .reduce((sum: number, l: any) => sum + (l.amount || 0), 0).toLocaleString()}
+                      Total: KES{" "}
+                      {loans
+                        .filter((l: any) =>
+                          ["approved", "disbursed"].includes(l.status)
+                        )
+                        .reduce(
+                          (sum: number, l: any) => sum + (l.amount || 0),
+                          0
+                        )
+                        .toLocaleString()}
                     </p>
                   </div>
                   <TrendingUp className="w-12 h-12 text-purple-300 dark:text-purple-700" />
@@ -1630,9 +1750,11 @@ Thank you for your cooperation! 🙏`;
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-orange-600 dark:text-orange-400">Pending Loans</p>
+                    <p className="text-sm font-medium text-orange-600 dark:text-orange-400">
+                      Pending Loans
+                    </p>
                     <p className="text-3xl font-bold text-orange-900 dark:text-orange-100">
-                      {loans.filter((l: any) => l.status === 'pending').length}
+                      {loans.filter((l: any) => l.status === "pending").length}
                     </p>
                     <p className="text-xs text-orange-700 dark:text-orange-300 mt-1">
                       Awaiting approval
@@ -1648,13 +1770,25 @@ Thank you for your cooperation! 🙏`;
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-cyan-600 dark:text-cyan-400">Total Disbursed</p>
+                    <p className="text-sm font-medium text-cyan-600 dark:text-cyan-400">
+                      Total Disbursed
+                    </p>
                     <p className="text-3xl font-bold text-cyan-900 dark:text-cyan-100">
-                      {disbursements.filter((d: any) => d.status === 'completed').length}
+                      {
+                        disbursements.filter(
+                          (d: any) => d.status === "completed"
+                        ).length
+                      }
                     </p>
                     <p className="text-xs text-cyan-700 dark:text-cyan-300 mt-1">
-                      KES {disbursements.filter((d: any) => d.status === 'completed')
-                        .reduce((sum: number, d: any) => sum + (d.amount || 0), 0).toLocaleString()}
+                      KES{" "}
+                      {disbursements
+                        .filter((d: any) => d.status === "completed")
+                        .reduce(
+                          (sum: number, d: any) => sum + (d.amount || 0),
+                          0
+                        )
+                        .toLocaleString()}
                     </p>
                   </div>
                   <Wallet className="w-12 h-12 text-cyan-300 dark:text-cyan-700" />
@@ -1667,7 +1801,9 @@ Thank you for your cooperation! 🙏`;
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-indigo-600 dark:text-indigo-400">Days Remaining</p>
+                    <p className="text-sm font-medium text-indigo-600 dark:text-indigo-400">
+                      Days Remaining
+                    </p>
                     <p className="text-3xl font-bold text-indigo-900 dark:text-indigo-100">
                       {currentCycle?.days_left || 0}
                     </p>
@@ -1685,7 +1821,9 @@ Thank you for your cooperation! 🙏`;
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-teal-600 dark:text-teal-400">Transaction Fees</p>
+                    <p className="text-sm font-medium text-teal-600 dark:text-teal-400">
+                      Transaction Fees
+                    </p>
                     <p className="text-3xl font-bold text-teal-900 dark:text-teal-100">
                       KES {feeSummary?.totalCollected?.toLocaleString() || 0}
                     </p>
@@ -1705,13 +1843,19 @@ Thank you for your cooperation! 🙏`;
               <div>
                 <p className="text-xs text-muted-foreground">Collection Rate</p>
                 <p className="text-lg font-bold text-primary">
-                  {safeMembers.length > 0 ? Math.round((paidMembers.length / safeMembers.length) * 100) : 0}%
+                  {safeMembers.length > 0
+                    ? Math.round(
+                        (paidMembers.length / safeMembers.length) * 100
+                      )
+                    : 0}
+                  %
                 </p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Expected Total</p>
                 <p className="text-lg font-bold text-financial-success">
-                  KES {(safeMembers.length * contributionAmount).toLocaleString()}
+                  KES{" "}
+                  {(safeMembers.length * contributionAmount).toLocaleString()}
                 </p>
               </div>
               <div>
@@ -1727,7 +1871,9 @@ Thank you for your cooperation! 🙏`;
                 </p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Total Announcements</p>
+                <p className="text-xs text-muted-foreground">
+                  Total Announcements
+                </p>
                 <p className="text-lg font-bold text-purple-600">
                   {announcements?.length || 0}
                 </p>
@@ -1755,9 +1901,13 @@ Thank you for your cooperation! 🙏`;
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">Total Savings</p>
+                    <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                      Total Savings
+                    </p>
                     <p className="text-3xl font-bold text-emerald-900 dark:text-emerald-100">
-                      {savingsData.reduce((sum, m) => sum + (m.totalDeposits || 0), 0).toLocaleString()}
+                      {savingsData
+                        .reduce((sum, m) => sum + (m.totalDeposits || 0), 0)
+                        .toLocaleString()}
                     </p>
                     <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-1">
                       KES - All deposits
@@ -1773,9 +1923,13 @@ Thank you for your cooperation! 🙏`;
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-teal-700 dark:text-teal-300">Wallet Balances</p>
+                    <p className="text-sm font-medium text-teal-700 dark:text-teal-300">
+                      Wallet Balances
+                    </p>
                     <p className="text-3xl font-bold text-teal-900 dark:text-teal-100">
-                      {safeMembers.reduce((sum, m) => sum + (m.wallet_balance || 0), 0).toLocaleString()}
+                      {safeMembers
+                        .reduce((sum, m) => sum + (m.wallet_balance || 0), 0)
+                        .toLocaleString()}
                     </p>
                     <p className="text-xs text-teal-700 dark:text-teal-300 mt-1">
                       KES - Available funds
@@ -1791,9 +1945,14 @@ Thank you for your cooperation! 🙏`;
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-green-700 dark:text-green-300">Active Savers</p>
+                    <p className="text-sm font-medium text-green-700 dark:text-green-300">
+                      Active Savers
+                    </p>
                     <p className="text-3xl font-bold text-green-900 dark:text-green-100">
-                      {savingsData.filter(m => (m.totalDeposits || 0) > 0).length}
+                      {
+                        savingsData.filter((m) => (m.totalDeposits || 0) > 0)
+                          .length
+                      }
                     </p>
                     <p className="text-xs text-green-700 dark:text-green-300 mt-1">
                       of {safeMembers.length} members
@@ -1809,19 +1968,33 @@ Thank you for your cooperation! 🙏`;
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-yellow-700 dark:text-yellow-300">Top Saver</p>
+                    <p className="text-sm font-medium text-yellow-700 dark:text-yellow-300">
+                      Top Saver
+                    </p>
                     <p className="text-xl font-bold text-yellow-900 dark:text-yellow-100 truncate">
-                      {savingsData.length > 0 
-                        ? savingsData.reduce((top, m) => 
-                            (m.totalDeposits || 0) > (top.totalDeposits || 0) ? m : top
-                          , savingsData[0]).name || "N/A"
+                      {savingsData.length > 0
+                        ? savingsData.reduce(
+                            (top, m) =>
+                              (m.totalDeposits || 0) > (top.totalDeposits || 0)
+                                ? m
+                                : top,
+                            savingsData[0]
+                          ).name || "N/A"
                         : "N/A"}
                     </p>
                     <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
-                      KES {savingsData.length > 0 
-                        ? (savingsData.reduce((top, m) => 
-                            (m.totalDeposits || 0) > (top.totalDeposits || 0) ? m : top
-                          , savingsData[0]).totalDeposits || 0).toLocaleString()
+                      KES{" "}
+                      {savingsData.length > 0
+                        ? (
+                            savingsData.reduce(
+                              (top, m) =>
+                                (m.totalDeposits || 0) >
+                                (top.totalDeposits || 0)
+                                  ? m
+                                  : top,
+                              savingsData[0]
+                            ).totalDeposits || 0
+                          ).toLocaleString()
                         : "0"}
                     </p>
                   </div>
@@ -1835,12 +2008,17 @@ Thank you for your cooperation! 🙏`;
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-orange-700 dark:text-orange-300">Pending Withdrawals</p>
+                    <p className="text-sm font-medium text-orange-700 dark:text-orange-300">
+                      Pending Withdrawals
+                    </p>
                     <p className="text-3xl font-bold text-orange-900 dark:text-orange-100">
                       {pendingWithdrawals.length}
                     </p>
                     <p className="text-xs text-orange-700 dark:text-orange-300 mt-1">
-                      KES {pendingWithdrawals.reduce((sum, w) => sum + (w.amount || 0), 0).toLocaleString()}
+                      KES{" "}
+                      {pendingWithdrawals
+                        .reduce((sum, w) => sum + (w.amount || 0), 0)
+                        .toLocaleString()}
                     </p>
                   </div>
                   <AlertCircle className="w-12 h-12 text-orange-400 dark:text-orange-600" />
@@ -1853,9 +2031,16 @@ Thank you for your cooperation! 🙏`;
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-purple-700 dark:text-purple-300">Total Interest</p>
+                    <p className="text-sm font-medium text-purple-700 dark:text-purple-300">
+                      Total Interest
+                    </p>
                     <p className="text-3xl font-bold text-purple-900 dark:text-purple-100">
-                      {savingsData.reduce((sum, m) => sum + (m.totalInterestEarned || 0), 0).toLocaleString()}
+                      {savingsData
+                        .reduce(
+                          (sum, m) => sum + (m.totalInterestEarned || 0),
+                          0
+                        )
+                        .toLocaleString()}
                     </p>
                     <p className="text-xs text-purple-700 dark:text-purple-300 mt-1">
                       KES - All members
@@ -1873,36 +2058,65 @@ Thank you for your cooperation! 🙏`;
               <div>
                 <p className="text-xs text-muted-foreground">Average Savings</p>
                 <p className="text-lg font-bold text-emerald-600">
-                  KES {savingsData.length > 0 
-                    ? Math.round(savingsData.reduce((sum, m) => sum + (m.totalDeposits || 0), 0) / savingsData.length).toLocaleString()
+                  KES{" "}
+                  {savingsData.length > 0
+                    ? Math.round(
+                        savingsData.reduce(
+                          (sum, m) => sum + (m.totalDeposits || 0),
+                          0
+                        ) / savingsData.length
+                      ).toLocaleString()
                     : "0"}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Participation</p>
                 <p className="text-lg font-bold text-teal-600">
-                  {safeMembers.length > 0 
-                    ? Math.round((savingsData.filter(m => (m.totalDeposits || 0) > 0).length / safeMembers.length) * 100)
-                    : 0}%
+                  {safeMembers.length > 0
+                    ? Math.round(
+                        (savingsData.filter((m) => (m.totalDeposits || 0) > 0)
+                          .length /
+                          safeMembers.length) *
+                          100
+                      )
+                    : 0}
+                  %
                 </p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Total Withdrawals</p>
+                <p className="text-xs text-muted-foreground">
+                  Total Withdrawals
+                </p>
                 <p className="text-lg font-bold text-orange-600">
-                  KES {savingsData.reduce((sum, m) => sum + (m.totalWithdrawals || 0), 0).toLocaleString()}
+                  KES{" "}
+                  {savingsData
+                    .reduce((sum, m) => sum + (m.totalWithdrawals || 0), 0)
+                    .toLocaleString()}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Interest Earned</p>
                 <p className="text-lg font-bold text-purple-600">
-                  KES {savingsData.reduce((sum, m) => sum + (m.totalInterestEarned || 0), 0).toLocaleString()}
+                  KES{" "}
+                  {savingsData
+                    .reduce((sum, m) => sum + (m.totalInterestEarned || 0), 0)
+                    .toLocaleString()}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Combined Total</p>
                 <p className="text-lg font-bold text-emerald-700">
-                  KES {(savingsData.reduce((sum, m) => sum + (m.totalDeposits || 0), 0) + 
-                    safeMembers.reduce((sum, m) => sum + (m.wallet_balance || 0), 0)).toLocaleString()}
+                  KES{" "}
+                  {(
+                    savingsData.reduce(
+                      (sum, m) => sum + (m.totalDeposits || 0),
+                      0
+                    ) +
+                    safeMembers.reduce(
+                      (sum, m) => sum + (m.wallet_balance || 0),
+                      0
+                    )
+                  ).toLocaleString()}
                 </p>
               </div>
             </div>
@@ -1910,30 +2124,44 @@ Thank you for your cooperation! 🙏`;
 
           {/* Top Savers List */}
           <div className="mt-6">
-            <h4 className="text-sm font-semibold text-muted-foreground mb-3">Top 5 Savers</h4>
+            <h4 className="text-sm font-semibold text-muted-foreground mb-3">
+              Top 5 Savers
+            </h4>
             <div className="space-y-2">
               {savingsData
                 .sort((a, b) => (b.totalDeposits || 0) - (a.totalDeposits || 0))
                 .slice(0, 5)
                 .map((member, index) => (
-                  <div key={member._id} className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border border-emerald-100 dark:border-emerald-900">
+                  <div
+                    key={member._id}
+                    className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border border-emerald-100 dark:border-emerald-900">
                     <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
-                        index === 0 ? 'bg-yellow-400 text-yellow-900' :
-                        index === 1 ? 'bg-gray-300 text-gray-700' :
-                        index === 2 ? 'bg-amber-600 text-amber-100' :
-                        'bg-emerald-100 text-emerald-700'
-                      }`}>
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                          index === 0
+                            ? "bg-yellow-400 text-yellow-900"
+                            : index === 1
+                            ? "bg-gray-300 text-gray-700"
+                            : index === 2
+                            ? "bg-amber-600 text-amber-100"
+                            : "bg-emerald-100 text-emerald-700"
+                        }`}>
                         {index + 1}
                       </div>
                       <div>
                         <p className="font-medium text-sm">{member.name}</p>
-                        <p className="text-xs text-muted-foreground">{member.member_id}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {member.member_id}
+                        </p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="font-bold text-emerald-600">KES {(member.totalDeposits || 0).toLocaleString()}</p>
-                      <p className="text-xs text-muted-foreground">{member.transactionCount || 0} transactions</p>
+                      <p className="font-bold text-emerald-600">
+                        KES {(member.totalDeposits || 0).toLocaleString()}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {member.transactionCount || 0} transactions
+                      </p>
                     </div>
                   </div>
                 ))}
@@ -1970,49 +2198,61 @@ Thank you for your cooperation! 🙏`;
               <Button
                 onClick={async () => {
                   try {
-                    const recipientId = currentCycle.next_recipient?._id || currentCycle.recipient_id?._id || currentCycle.recipient_id;
+                    const recipientId =
+                      currentCycle.next_recipient?._id ||
+                      currentCycle.recipient_id?._id ||
+                      currentCycle.recipient_id;
                     const recipientPhone = currentCycle.next_recipient?.phone;
                     const cycleId = currentCycle._id || currentCycle.id;
-                    const disbursementAmount = safeMembers.length * contributionAmount;
+                    const disbursementAmount =
+                      safeMembers.length * contributionAmount;
 
                     if (!recipientId || !cycleId || !recipientPhone) {
                       throw new Error("Missing recipient information");
                     }
 
-                    const response = await fetch(`${API_BASE}/api/disbursements`, {
-                      method: "POST",
-                      headers: {
-                        "Content-Type": "application/json",
-                        ...authService.getAuthHeaders(),
-                      },
-                      body: JSON.stringify({
-                        cycle_id: cycleId,
-                        recipient_id: recipientId,
-                        phone: recipientPhone,
-                        amount: disbursementAmount,
-                        method: "manual",
-                        status: "completed",
-                      }),
-                    });
+                    const response = await fetch(
+                      `${API_BASE}/api/disbursements`,
+                      {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                          ...authService.getAuthHeaders(),
+                        },
+                        body: JSON.stringify({
+                          cycle_id: cycleId,
+                          recipient_id: recipientId,
+                          phone: recipientPhone,
+                          amount: disbursementAmount,
+                          method: "manual",
+                          status: "completed",
+                        }),
+                      }
+                    );
 
                     const data = await response.json();
 
                     if (response.ok && data.success) {
                       toast({
                         title: "Disbursement Recorded",
-                        description: `KES ${disbursementAmount.toLocaleString()} marked as disbursed to ${currentCycle.next_recipient?.name || 'recipient'}`,
+                        description: `KES ${disbursementAmount.toLocaleString()} marked as disbursed to ${
+                          currentCycle.next_recipient?.name || "recipient"
+                        }`,
                       });
                       fetchDisbursements();
                       fetchCurrentCycle();
                       fetchAllData();
                     } else {
-                      throw new Error(data.error || "Failed to record disbursement");
+                      throw new Error(
+                        data.error || "Failed to record disbursement"
+                      );
                     }
                   } catch (error: any) {
                     console.error("Disbursement error:", error);
                     toast({
                       title: "Error",
-                      description: error.message || "Failed to record disbursement",
+                      description:
+                        error.message || "Failed to record disbursement",
                       variant: "destructive",
                     });
                   }
@@ -2100,8 +2340,15 @@ Thank you for your cooperation! 🙏`;
             </TabsTrigger>
             <TabsTrigger
               value="savings"
-              className="text-xs sm:text-sm whitespace-nowrap">
+              className="text-xs sm:text-sm whitespace-nowrap relative">
               Savings
+              {pendingWithdrawals.length > 0 && (
+                <Badge
+                  variant="destructive"
+                  className="ml-2 h-5 min-w-5 px-1.5 text-xs">
+                  {pendingWithdrawals.length}
+                </Badge>
+              )}
             </TabsTrigger>
             <TabsTrigger
               value="disbursements"
@@ -2110,13 +2357,30 @@ Thank you for your cooperation! 🙏`;
             </TabsTrigger>
             <TabsTrigger
               value="loans"
-              className="text-xs sm:text-sm whitespace-nowrap">
+              className="text-xs sm:text-sm whitespace-nowrap relative">
               Loans
+              {loans.filter((l: any) => l.status === "pending").length > 0 && (
+                <Badge
+                  variant="destructive"
+                  className="ml-2 h-5 min-w-5 px-1.5 text-xs">
+                  {loans.filter((l: any) => l.status === "pending").length}
+                </Badge>
+              )}
             </TabsTrigger>
             <TabsTrigger
               value="approvals"
-              className="text-xs sm:text-sm whitespace-nowrap">
+              className="text-xs sm:text-sm whitespace-nowrap relative">
               Approvals
+              {pendingWithdrawals.length +
+                loans.filter((l: any) => l.status === "pending").length >
+                0 && (
+                <Badge
+                  variant="destructive"
+                  className="ml-2 h-5 min-w-5 px-1.5 text-xs">
+                  {pendingWithdrawals.length +
+                    loans.filter((l: any) => l.status === "pending").length}
+                </Badge>
+              )}
             </TabsTrigger>
             <TabsTrigger
               value="fees"
@@ -2137,15 +2401,23 @@ Thank you for your cooperation! 🙏`;
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <TrendingUp className="w-5 h-5" />
-                Current Cycle #{currentCycle?.cycle_number || currentCycle?.data?.cycle_number || userData?.cycleData?.currentCycle || '—'}
+                Current Cycle #
+                {currentCycle?.cycle_number ||
+                  currentCycle?.data?.cycle_number ||
+                  userData?.cycleData?.currentCycle ||
+                  "—"}
               </CardTitle>
               <CardDescription>
-                Started: {currentCycle?.start_date 
+                Started:{" "}
+                {currentCycle?.start_date
                   ? new Date(currentCycle.start_date).toLocaleDateString()
-                  : currentCycle?.data?.start_date 
-                    ? new Date(currentCycle.data.start_date).toLocaleDateString()
-                    : userData?.cycleData?.cycleStartDate || 'Not Started'
-                } | Status: {currentCycle?.status || currentCycle?.data?.status || 'Inactive'}
+                  : currentCycle?.data?.start_date
+                  ? new Date(currentCycle.data.start_date).toLocaleDateString()
+                  : userData?.cycleData?.cycleStartDate || "Not Started"}{" "}
+                | Status:{" "}
+                {currentCycle?.status ||
+                  currentCycle?.data?.status ||
+                  "Inactive"}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -2179,7 +2451,10 @@ Thank you for your cooperation! 🙏`;
                     Target Amount
                   </div>
                   <div className="text-2xl font-bold">
-                    KES {((safeMembers.length || 14) * contributionAmount).toLocaleString()}
+                    KES{" "}
+                    {(
+                      (safeMembers.length || 14) * contributionAmount
+                    ).toLocaleString()}
                   </div>
                 </div>
                 <div>
@@ -2187,7 +2462,9 @@ Thank you for your cooperation! 🙏`;
                     Disbursement
                   </div>
                   <div className="text-xl font-bold">
-                    {currentCycle?.disbursement_status || currentCycle?.data?.disbursement_status || "Pending"}
+                    {currentCycle?.disbursement_status ||
+                      currentCycle?.data?.disbursement_status ||
+                      "Pending"}
                   </div>
                 </div>
               </div>
@@ -2199,14 +2476,21 @@ Thank you for your cooperation! 🙏`;
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="font-semibold mb-1 text-red-700 dark:text-red-400">Reset System & Start from Cycle #1</h3>
+                  <h3 className="font-semibold mb-1 text-red-700 dark:text-red-400">
+                    Reset System & Start from Cycle #1
+                  </h3>
                   <p className="text-sm text-muted-foreground">
-                    Clear all payments, disbursements, and cycles. Start fresh from Cycle #1 with Member #1
+                    Clear all payments, disbursements, and cycles. Start fresh
+                    from Cycle #1 with Member #1
                   </p>
                 </div>
                 <Button
                   onClick={async () => {
-                    if (!window.confirm("⚠️ WARNING: This will DELETE all payments, disbursements, and cycles. Are you sure?")) {
+                    if (
+                      !window.confirm(
+                        "⚠️ WARNING: This will DELETE all payments, disbursements, and cycles. Are you sure?"
+                      )
+                    ) {
                       return;
                     }
                     try {
@@ -2216,7 +2500,7 @@ Thank you for your cooperation! 🙏`;
                         headers: { ...authService.getAuthHeaders() },
                       });
 
-                      // Delete all disbursements  
+                      // Delete all disbursements
                       await fetch(`${API_BASE}/api/disbursements`, {
                         method: "DELETE",
                         headers: { ...authService.getAuthHeaders() },
@@ -2231,7 +2515,7 @@ Thank you for your cooperation! 🙏`;
                       // Reset all members' payment status
                       const members = await fetch(`${API_BASE}/api/members`, {
                         headers: { ...authService.getAuthHeaders() },
-                      }).then(r => r.json());
+                      }).then((r) => r.json());
 
                       for (const member of members) {
                         await fetch(`${API_BASE}/api/members/${member._id}`, {
@@ -2249,7 +2533,9 @@ Thank you for your cooperation! 🙏`;
                       }
 
                       // Start fresh cycle #1 with first member
-                      const firstMember = members.sort((a, b) => a.position - b.position)[0];
+                      const firstMember = members.sort(
+                        (a, b) => a.position - b.position
+                      )[0];
                       await fetch(`${API_BASE}/api/cycles/start`, {
                         method: "POST",
                         headers: {
@@ -2263,9 +2549,10 @@ Thank you for your cooperation! 🙏`;
 
                       toast({
                         title: "System Reset Complete",
-                        description: "All data cleared. Starting fresh from Cycle #1",
+                        description:
+                          "All data cleared. Starting fresh from Cycle #1",
                       });
-                      
+
                       // Refresh all data
                       setTimeout(() => {
                         window.location.reload();
@@ -2288,7 +2575,7 @@ Thank you for your cooperation! 🙏`;
           </Card>
 
           {/* Member Status Overview */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -2318,11 +2605,17 @@ Thank you for your cooperation! 🙏`;
                   {pendingMembers.length}
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  KES {(pendingMembers.length * contributionAmount).toLocaleString()}{" "}
+                  KES{" "}
+                  {(
+                    pendingMembers.length * contributionAmount
+                  ).toLocaleString()}{" "}
                   outstanding
                 </div>
               </CardContent>
             </Card>
+
+            {/* Online Members Card */}
+            <OnlineMembersCard currentUser={userData} />
           </div>
 
           {/* Member List */}
@@ -2387,7 +2680,9 @@ Thank you for your cooperation! 🙏`;
                             <Input
                               id={`amount-${member._id || member.id}`}
                               type="number"
-                              value={editedMemberData.monthly_contribution || ""}
+                              value={
+                                editedMemberData.monthly_contribution || ""
+                              }
                               onChange={(e) =>
                                 setEditedMemberData((prev) => ({
                                   ...prev,
@@ -2421,7 +2716,9 @@ Thank you for your cooperation! 🙏`;
                         <div className="flex gap-2">
                           <Button
                             size="sm"
-                            onClick={() => handleSaveMember(member._id || member.id)}>
+                            onClick={() =>
+                              handleSaveMember(member._id || member.id)
+                            }>
                             <Save className="w-3 h-3 mr-1" />
                             Save
                           </Button>
@@ -2535,9 +2832,9 @@ Thank you for your cooperation! 🙏`;
 
         <TabsContent value="analytics" className="space-y-6">
           {/* Contribution Cycle Analytics */}
-          <ContributionCycleChart 
-            payments={allPayments} 
-            totalMembers={safeMembers.length} 
+          <ContributionCycleChart
+            payments={allPayments}
+            totalMembers={safeMembers.length}
           />
 
           {/* Statistics Overview */}
@@ -2550,7 +2847,9 @@ Thank you for your cooperation! 🙏`;
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {currentCycle?.cycle_number ? currentCycle.cycle_number - 1 : 0}
+                  {currentCycle?.cycle_number
+                    ? currentCycle.cycle_number - 1
+                    : 0}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   Current cycle: #{currentCycle?.cycle_number || 1}
@@ -2566,9 +2865,12 @@ Thank you for your cooperation! 🙏`;
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {safeMembers.length > 0 
-                    ? Math.round((paidMembers.length / safeMembers.length) * 100)
-                    : 0}%
+                  {safeMembers.length > 0
+                    ? Math.round(
+                        (paidMembers.length / safeMembers.length) * 100
+                      )
+                    : 0}
+                  %
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   {paidMembers.length} of {safeMembers.length} members
@@ -2616,9 +2918,7 @@ Thank you for your cooperation! 🙏`;
                     <span>
                       {safeMembers.length > 0
                         ? Math.round(
-                            (paidMembers.length /
-                              safeMembers.length) *
-                              100
+                            (paidMembers.length / safeMembers.length) * 100
                           )
                         : 0}
                       %
@@ -2627,9 +2927,7 @@ Thank you for your cooperation! 🙏`;
                   <Progress
                     value={
                       safeMembers.length > 0
-                        ? (paidMembers.length /
-                            safeMembers.length) *
-                          100
+                        ? (paidMembers.length / safeMembers.length) * 100
                         : 0
                     }
                     className="h-3"
@@ -2785,7 +3083,10 @@ Thank you for your cooperation! 🙏`;
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Amount:</span>
                       <span className="font-semibold text-accent">
-                        KES {(safeMembers.length * contributionAmount).toLocaleString()}
+                        KES{" "}
+                        {(
+                          safeMembers.length * contributionAmount
+                        ).toLocaleString()}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -2794,81 +3095,94 @@ Thank you for your cooperation! 🙏`;
                         variant={
                           currentCycle.disbursement_status === "completed"
                             ? "default"
-                            : currentCycle.paid_members_count === safeMembers.length
+                            : currentCycle.paid_members_count ===
+                              safeMembers.length
                             ? "default"
                             : "secondary"
                         }>
                         {currentCycle.disbursement_status ||
-                          (currentCycle.paid_members_count === safeMembers.length
+                          (currentCycle.paid_members_count ===
+                          safeMembers.length
                             ? "Ready"
                             : `Waiting (${currentCycle.paid_members_count}/${safeMembers.length})`)}
                       </Badge>
                     </div>
                   </div>
-                  
+
                   {/* Mark as Disbursed Button */}
-                  {currentCycle.disbursement_status !== "completed" && 
-                   currentCycle.recipient_id && (
-                    <Button
-                      onClick={async () => {
-                        try {
-                          const response = await fetch(`${API_BASE}/api/disbursements`, {
-                            method: "POST",
-                            headers: {
-                              "Content-Type": "application/json",
-                              ...authService.getAuthHeaders(),
-                            },
-                            body: JSON.stringify({
-                              cycle_id: currentCycle._id,
-                              recipient_id: currentCycle.recipient_id._id || currentCycle.recipient_id,
-                              amount: safeMembers.length * 204,
-                              method: "manual",
-                              status: "completed",
-                            }),
-                          });
+                  {currentCycle.disbursement_status !== "completed" &&
+                    currentCycle.recipient_id && (
+                      <Button
+                        onClick={async () => {
+                          try {
+                            const response = await fetch(
+                              `${API_BASE}/api/disbursements`,
+                              {
+                                method: "POST",
+                                headers: {
+                                  "Content-Type": "application/json",
+                                  ...authService.getAuthHeaders(),
+                                },
+                                body: JSON.stringify({
+                                  cycle_id: currentCycle._id,
+                                  recipient_id:
+                                    currentCycle.recipient_id._id ||
+                                    currentCycle.recipient_id,
+                                  amount: safeMembers.length * 204,
+                                  method: "manual",
+                                  status: "completed",
+                                }),
+                              }
+                            );
 
-                          const data = await response.json();
+                            const data = await response.json();
 
-                          if (response.ok && data.success) {
+                            if (response.ok && data.success) {
+                              toast({
+                                title: "Disbursement Recorded",
+                                description: `Successfully marked disbursement to ${currentCycle.recipient_id?.name} as completed`,
+                              });
+                              fetchDisbursements();
+                              fetchCurrentCycle();
+
+                              // Auto-generate receipt after marking as disbursed
+                              setTimeout(() => {
+                                const disbursementData = data.disbursement || {
+                                  _id: data.id,
+                                  recipient_id: currentCycle.recipient_id,
+                                  cycle_id: currentCycle,
+                                  amount: safeMembers.length * 204,
+                                  method: "manual",
+                                  status: "completed",
+                                  disbursement_date: new Date().toISOString(),
+                                };
+                                generateDisbursementReceipt(disbursementData);
+                              }, 1000);
+                            } else {
+                              throw new Error(
+                                data.error || "Failed to record disbursement"
+                              );
+                            }
+                          } catch (error: any) {
                             toast({
-                              title: "Disbursement Recorded",
-                              description: `Successfully marked disbursement to ${currentCycle.recipient_id?.name} as completed`,
+                              title: "Error",
+                              description:
+                                error.message ||
+                                "Failed to record disbursement",
+                              variant: "destructive",
                             });
-                            fetchDisbursements();
-                            fetchCurrentCycle();
-                            
-                            // Auto-generate receipt after marking as disbursed
-                            setTimeout(() => {
-                              const disbursementData = data.disbursement || {
-                                _id: data.id,
-                                recipient_id: currentCycle.recipient_id,
-                                cycle_id: currentCycle,
-                                amount: safeMembers.length * 204,
-                                method: "manual",
-                                status: "completed",
-                                disbursement_date: new Date().toISOString(),
-                              };
-                              generateDisbursementReceipt(disbursementData);
-                            }, 1000);
-                          } else {
-                            throw new Error(data.error || "Failed to record disbursement");
                           }
-                        } catch (error: any) {
-                          toast({
-                            title: "Error",
-                            description: error.message || "Failed to record disbursement",
-                            variant: "destructive",
-                          });
-                        }
-                      }}
-                      className="w-full"
-                      variant="default"
-                      disabled={currentCycle.paid_members_count !== safeMembers.length}>
-                      <CheckCircle className="w-4 h-4 mr-2" />
-                      Mark as Disbursed
-                    </Button>
-                  )}
-                  
+                        }}
+                        className="w-full"
+                        variant="default"
+                        disabled={
+                          currentCycle.paid_members_count !== safeMembers.length
+                        }>
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        Mark as Disbursed
+                      </Button>
+                    )}
+
                   {currentCycle.disbursement_status === "completed" && (
                     <div className="flex items-center gap-2 text-financial-success text-sm">
                       <CheckCircle className="w-4 h-4" />
@@ -2890,50 +3204,61 @@ Thank you for your cooperation! 🙏`;
                 </div>
                 <div className="flex gap-2">
                   {/* Quick Mark as Disbursed Button */}
-                  {currentCycle && currentCycle.recipient_id && currentCycle.disbursement_status !== "completed" && (
-                    <Button
-                      size="sm"
-                      onClick={async () => {
-                        try {
-                          const response = await fetch(`${API_BASE}/api/disbursements`, {
-                            method: "POST",
-                            headers: {
-                              "Content-Type": "application/json",
-                              ...authService.getAuthHeaders(),
-                            },
-                            body: JSON.stringify({
-                              cycle_id: currentCycle._id,
-                              recipient_id: currentCycle.recipient_id._id || currentCycle.recipient_id,
-                              amount: safeMembers.length * 204,
-                              method: "manual",
-                              status: "completed",
-                            }),
-                          });
+                  {currentCycle &&
+                    currentCycle.recipient_id &&
+                    currentCycle.disbursement_status !== "completed" && (
+                      <Button
+                        size="sm"
+                        onClick={async () => {
+                          try {
+                            const response = await fetch(
+                              `${API_BASE}/api/disbursements`,
+                              {
+                                method: "POST",
+                                headers: {
+                                  "Content-Type": "application/json",
+                                  ...authService.getAuthHeaders(),
+                                },
+                                body: JSON.stringify({
+                                  cycle_id: currentCycle._id,
+                                  recipient_id:
+                                    currentCycle.recipient_id._id ||
+                                    currentCycle.recipient_id,
+                                  amount: safeMembers.length * 204,
+                                  method: "manual",
+                                  status: "completed",
+                                }),
+                              }
+                            );
 
-                          const data = await response.json();
+                            const data = await response.json();
 
-                          if (response.ok && data.success) {
+                            if (response.ok && data.success) {
+                              toast({
+                                title: "Disbursement Recorded",
+                                description: `Successfully marked disbursement to ${currentCycle.recipient_id?.name} as completed`,
+                              });
+                              fetchDisbursements();
+                              fetchCurrentCycle();
+                            } else {
+                              throw new Error(
+                                data.error || "Failed to record disbursement"
+                              );
+                            }
+                          } catch (error: any) {
                             toast({
-                              title: "Disbursement Recorded",
-                              description: `Successfully marked disbursement to ${currentCycle.recipient_id?.name} as completed`,
+                              title: "Error",
+                              description:
+                                error.message ||
+                                "Failed to record disbursement",
+                              variant: "destructive",
                             });
-                            fetchDisbursements();
-                            fetchCurrentCycle();
-                          } else {
-                            throw new Error(data.error || "Failed to record disbursement");
                           }
-                        } catch (error: any) {
-                          toast({
-                            title: "Error",
-                            description: error.message || "Failed to record disbursement",
-                            variant: "destructive",
-                          });
-                        }
-                      }}>
-                      <CheckCircle className="w-4 h-4 mr-2" />
-                      Mark as Disbursed
-                    </Button>
-                  )}
+                        }}>
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        Mark as Disbursed
+                      </Button>
+                    )}
                   <Button
                     size="sm"
                     variant="outline"
@@ -3008,7 +3333,9 @@ Thank you for your cooperation! 🙏`;
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => generateDisbursementReceipt(disbursement)}
+                          onClick={() =>
+                            generateDisbursementReceipt(disbursement)
+                          }
                           title="Download Receipt">
                           <Download className="w-4 h-4" />
                         </Button>
@@ -3085,17 +3412,23 @@ Thank you for your cooperation! 🙏`;
               Configure system-wide settings for SMCF
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-6 py-4">
             {/* Current Contribution Amount */}
             <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
-              <div className="text-sm text-muted-foreground mb-1">Current Monthly Contribution</div>
-              <div className="text-3xl font-bold text-primary">KES {contributionAmount.toLocaleString()}</div>
+              <div className="text-sm text-muted-foreground mb-1">
+                Current Monthly Contribution
+              </div>
+              <div className="text-3xl font-bold text-primary">
+                KES {contributionAmount.toLocaleString()}
+              </div>
             </div>
 
             {/* Update Contribution Amount */}
             <div className="space-y-3">
-              <Label htmlFor="new-contribution">New Monthly Contribution Amount (KES)</Label>
+              <Label htmlFor="new-contribution">
+                New Monthly Contribution Amount (KES)
+              </Label>
               <Input
                 id="new-contribution"
                 type="number"
@@ -3105,7 +3438,8 @@ Thank you for your cooperation! 🙏`;
                 min="0"
               />
               <p className="text-xs text-muted-foreground">
-                This will update the contribution amount for all members and future cycles. Current payments will not be affected.
+                This will update the contribution amount for all members and
+                future cycles. Current payments will not be affected.
               </p>
             </div>
 
@@ -3115,17 +3449,37 @@ Thank you for your cooperation! 🙏`;
                 <div className="text-sm font-medium">Impact Summary:</div>
                 <div className="text-sm space-y-1">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Members affected:</span>
+                    <span className="text-muted-foreground">
+                      Members affected:
+                    </span>
                     <span className="font-medium">{safeMembers.length}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">New cycle total:</span>
-                    <span className="font-medium">KES {(safeMembers.length * Number(newContributionAmount)).toLocaleString()}</span>
+                    <span className="text-muted-foreground">
+                      New cycle total:
+                    </span>
+                    <span className="font-medium">
+                      KES{" "}
+                      {(
+                        safeMembers.length * Number(newContributionAmount)
+                      ).toLocaleString()}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Change:</span>
-                    <span className={`font-medium ${Number(newContributionAmount) > contributionAmount ? 'text-red-600' : 'text-green-600'}`}>
-                      {Number(newContributionAmount) > contributionAmount ? '+' : ''}KES {(Number(newContributionAmount) - contributionAmount).toLocaleString()}
+                    <span
+                      className={`font-medium ${
+                        Number(newContributionAmount) > contributionAmount
+                          ? "text-red-600"
+                          : "text-green-600"
+                      }`}>
+                      {Number(newContributionAmount) > contributionAmount
+                        ? "+"
+                        : ""}
+                      KES{" "}
+                      {(
+                        Number(newContributionAmount) - contributionAmount
+                      ).toLocaleString()}
                     </span>
                   </div>
                 </div>
@@ -3146,7 +3500,9 @@ Thank you for your cooperation! 🙏`;
                 variant="default"
                 className="flex-1"
                 onClick={updateContributionAmount}
-                disabled={!newContributionAmount || Number(newContributionAmount) <= 0}>
+                disabled={
+                  !newContributionAmount || Number(newContributionAmount) <= 0
+                }>
                 <Save className="w-4 h-4 mr-2" />
                 Update Amount
               </Button>

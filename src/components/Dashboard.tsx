@@ -65,156 +65,158 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
 
   // Fetch fresh cycle data and members count
   const fetchData = async () => {
-      try {
-        console.log("🔄 Starting data fetch for userRole:", userRole);
+    try {
+      console.log("🔄 Starting data fetch for userRole:", userRole);
 
-        // Fetch cycle data and payments (members endpoint requires admin auth)
-        const requests = [
-          fetch(`${API_BASE}/api/cycles/current`, {
-            headers: { ...authService.getAuthHeaders() },
-          }),
-          fetch(`${API_BASE}/api/payments`, {
-            headers: { ...authService.getAuthHeaders() },
-          }),
-        ];
+      // Fetch cycle data and payments (members endpoint requires admin auth)
+      const requests = [
+        fetch(`${API_BASE}/api/cycles/current`, {
+          headers: { ...authService.getAuthHeaders() },
+        }),
+        fetch(`${API_BASE}/api/payments`, {
+          headers: { ...authService.getAuthHeaders() },
+        }),
+      ];
 
-        const responses = await Promise.all(requests);
+      const responses = await Promise.all(requests);
 
-        if (!responses[0].ok || !responses[1].ok) {
-          console.error("❌ API request failed:", {
-            cycleStatus: responses[0].status,
-            paymentsStatus: responses[1].status,
-          });
-          setIsLoadingData(false);
-          return;
-        }
-
-        const cycleData = await responses[0].json();
-        const paymentsResponse = await responses[1].json();
-
-        console.log("📊 Dashboard raw responses:", {
-          userRole,
-          cycleSuccess: cycleData?.success,
-          cycleDataExists: !!cycleData?.data,
-          paymentsCount: Array.isArray(paymentsResponse)
-            ? paymentsResponse.length
-            : 0,
+      if (!responses[0].ok || !responses[1].ok) {
+        console.error("❌ API request failed:", {
+          cycleStatus: responses[0].status,
+          paymentsStatus: responses[1].status,
         });
-
-        // Extract payments array
-        const paymentsData = Array.isArray(paymentsResponse)
-          ? paymentsResponse
-          : [];
-
-        // Get current cycle number
-        const currentCycleNumber = cycleData?.data?.cycle_number || null;
-
-        // Filter payments for CURRENT CYCLE ONLY (same as AdminDashboard & MemberDashboard)
-        const currentCyclePayments = currentCycleNumber
-          ? paymentsData.filter((p: any) => p.cycle_number === currentCycleNumber)
-          : paymentsData;
-
-        console.log("👥 Extracted data:", {
-          totalPayments: paymentsData.length,
-          currentCycleNumber,
-          currentCyclePayments: currentCyclePayments.length,
-        });
-
-        // Calculate paid members from CURRENT CYCLE PAYMENTS ONLY
-        // Count unique members who have paid (completed payments only)
-        const completedPayments = currentCyclePayments.filter((p: any) => p.status === "completed");
-        const uniquePaidMembers = new Set(
-          completedPayments.map((p: any) => p.member_id?._id || p.member_id)
-        ).size;
-
-        // Calculate total collected from current cycle completed payments
-        const totalCollected = completedPayments.reduce(
-          (sum: number, p: any) => sum + (p.amount || 0),
-          0
-        );
-
-        console.log("💰 Payment calculation (CURRENT CYCLE ONLY):", {
-          currentCycleNumber,
-          totalPayments: paymentsData.length,
-          currentCyclePayments: currentCyclePayments.length,
-          completedPayments: completedPayments.length,
-          uniquePaidMembers,
-          totalCollected,
-        });
-
-        // Get total members count from cycle data (includes ALL members)
-        const totalMembersCount = cycleData?.data?.total_members || 14;
-        const paidMembersCount = uniquePaidMembers; // Use payment-based count
-        const expectedAmount = totalMembersCount * 224;
-
-        console.log("📈 Calculated stats from PAYMENTS data:", {
-          totalMembersCount,
-          paidMembersCount,
-          percentage:
-            totalMembersCount > 0
-              ? Math.round((paidMembersCount / totalMembersCount) * 100)
-              : 0,
-          totalCollected,
-          expectedAmount,
-        });
-
-        if (cycleData.success && cycleData.data) {
-          const cycle = cycleData.data;
-          const newCycleData = {
-            currentCycle: cycle.cycle_number || 1,
-            daysLeft: cycle.days_left || 0,
-            totalMembers: totalMembersCount, // From cycle data
-            paidMembers: paidMembersCount, // From payments count
-            nextRecipient:
-              cycle.next_recipient?.name ||
-              cycle.next_recipient_name ||
-              "No Active Cycle",
-            totalAmount: expectedAmount,
-            collectedAmount: totalCollected,
-            cycleStartDate: cycle.start_date
-              ? new Date(cycle.start_date).toLocaleDateString()
-              : new Date().toLocaleDateString(),
-            paymentDeadline: cycle.end_date
-              ? new Date(cycle.end_date).toLocaleDateString()
-              : "Not Set",
-          };
-          console.log(
-            "✅ Setting cycle data with real member counts:",
-            newCycleData
-          );
-          setCycleData(newCycleData);
-        } else {
-          // No active cycle - still use real member data
-          console.log("⚠️ No active cycle found in database");
-          console.log("📊 Using fallback with real member/payment data:", {
-            totalMembers: totalMembersCount,
-            paidMembers: paidMembersCount,
-            totalCollected,
-          });
-          
-          const newCycleData = {
-            currentCycle: 1, // Default to cycle 1 if no active cycle
-            daysLeft: 0,
-            totalMembers: totalMembersCount, // Use actual member count
-            paidMembers: paidMembersCount, // Use actual paid count
-            nextRecipient: "No Active Cycle",
-            totalAmount: expectedAmount,
-            collectedAmount: totalCollected,
-            cycleStartDate: new Date().toLocaleDateString(),
-            paymentDeadline: "Not Set",
-          };
-          console.log(
-            "✅ Setting fallback cycle data with real counts:",
-            newCycleData
-          );
-          setCycleData(newCycleData);
-        }
-
         setIsLoadingData(false);
-      } catch (err) {
-        console.error("❌ Failed to fetch data:", err);
-        setIsLoadingData(false);
+        return;
       }
+
+      const cycleData = await responses[0].json();
+      const paymentsResponse = await responses[1].json();
+
+      console.log("📊 Dashboard raw responses:", {
+        userRole,
+        cycleSuccess: cycleData?.success,
+        cycleDataExists: !!cycleData?.data,
+        paymentsCount: Array.isArray(paymentsResponse)
+          ? paymentsResponse.length
+          : 0,
+      });
+
+      // Extract payments array
+      const paymentsData = Array.isArray(paymentsResponse)
+        ? paymentsResponse
+        : [];
+
+      // Get current cycle number
+      const currentCycleNumber = cycleData?.data?.cycle_number || null;
+
+      // Filter payments for CURRENT CYCLE ONLY (same as AdminDashboard & MemberDashboard)
+      const currentCyclePayments = currentCycleNumber
+        ? paymentsData.filter((p: any) => p.cycle_number === currentCycleNumber)
+        : paymentsData;
+
+      console.log("👥 Extracted data:", {
+        totalPayments: paymentsData.length,
+        currentCycleNumber,
+        currentCyclePayments: currentCyclePayments.length,
+      });
+
+      // Calculate paid members from CURRENT CYCLE PAYMENTS ONLY
+      // Count unique members who have paid (completed payments only)
+      const completedPayments = currentCyclePayments.filter(
+        (p: any) => p.status === "completed"
+      );
+      const uniquePaidMembers = new Set(
+        completedPayments.map((p: any) => p.member_id?._id || p.member_id)
+      ).size;
+
+      // Calculate total collected from current cycle completed payments
+      const totalCollected = completedPayments.reduce(
+        (sum: number, p: any) => sum + (p.amount || 0),
+        0
+      );
+
+      console.log("💰 Payment calculation (CURRENT CYCLE ONLY):", {
+        currentCycleNumber,
+        totalPayments: paymentsData.length,
+        currentCyclePayments: currentCyclePayments.length,
+        completedPayments: completedPayments.length,
+        uniquePaidMembers,
+        totalCollected,
+      });
+
+      // Get total members count from cycle data (includes ALL members)
+      const totalMembersCount = cycleData?.data?.total_members || 14;
+      const paidMembersCount = uniquePaidMembers; // Use payment-based count
+      const expectedAmount = totalMembersCount * 224;
+
+      console.log("📈 Calculated stats from PAYMENTS data:", {
+        totalMembersCount,
+        paidMembersCount,
+        percentage:
+          totalMembersCount > 0
+            ? Math.round((paidMembersCount / totalMembersCount) * 100)
+            : 0,
+        totalCollected,
+        expectedAmount,
+      });
+
+      if (cycleData.success && cycleData.data) {
+        const cycle = cycleData.data;
+        const newCycleData = {
+          currentCycle: cycle.cycle_number || 1,
+          daysLeft: cycle.days_left || 0,
+          totalMembers: totalMembersCount, // From cycle data
+          paidMembers: paidMembersCount, // From payments count
+          nextRecipient:
+            cycle.next_recipient?.name ||
+            cycle.next_recipient_name ||
+            "No Active Cycle",
+          totalAmount: expectedAmount,
+          collectedAmount: totalCollected,
+          cycleStartDate: cycle.start_date
+            ? new Date(cycle.start_date).toLocaleDateString()
+            : new Date().toLocaleDateString(),
+          paymentDeadline: cycle.end_date
+            ? new Date(cycle.end_date).toLocaleDateString()
+            : "Not Set",
+        };
+        console.log(
+          "✅ Setting cycle data with real member counts:",
+          newCycleData
+        );
+        setCycleData(newCycleData);
+      } else {
+        // No active cycle - still use real member data
+        console.log("⚠️ No active cycle found in database");
+        console.log("📊 Using fallback with real member/payment data:", {
+          totalMembers: totalMembersCount,
+          paidMembers: paidMembersCount,
+          totalCollected,
+        });
+
+        const newCycleData = {
+          currentCycle: 1, // Default to cycle 1 if no active cycle
+          daysLeft: 0,
+          totalMembers: totalMembersCount, // Use actual member count
+          paidMembers: paidMembersCount, // Use actual paid count
+          nextRecipient: "No Active Cycle",
+          totalAmount: expectedAmount,
+          collectedAmount: totalCollected,
+          cycleStartDate: new Date().toLocaleDateString(),
+          paymentDeadline: "Not Set",
+        };
+        console.log(
+          "✅ Setting fallback cycle data with real counts:",
+          newCycleData
+        );
+        setCycleData(newCycleData);
+      }
+
+      setIsLoadingData(false);
+    } catch (err) {
+      console.error("❌ Failed to fetch data:", err);
+      setIsLoadingData(false);
+    }
   };
 
   useEffect(() => {
@@ -247,7 +249,20 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
 
   useEffect(() => {
     console.log("🎧 Dashboard: Setting up Socket.IO listeners");
-    
+
+    // Notify server that user is online
+    if (userData) {
+      socket.emit("user:online", {
+        userId: userData._id || userData.id,
+        username: userData.username || userData.name,
+        role: userData.role,
+      });
+      console.log(
+        "👤 Notified server: user is online",
+        userData.username || userData.name
+      );
+    }
+
     socket.on("announcement:new", (announcement) => {
       console.log("📢 Dashboard received: announcement:new", announcement);
       setAnnouncements((prev) => [announcement, ...prev]);
@@ -276,7 +291,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
       socket.off("payment:new");
       socket.off("cycle:updated");
     };
-  }, []);
+  }, [userData]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-primary/5">
