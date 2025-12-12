@@ -43,13 +43,16 @@ const resetToCycleOne = async () => {
     });
     console.log(`✅ Deleted ${deleteResult.deletedCount} old cycle(s)`);
     
-    // Now update the active cycle to #1
+    // Now update the active cycle to #1 starting January 5, 2026
     activeCycle.cycle_number = 1;
-    activeCycle.start_date = new Date(); // Set start date to today
+    activeCycle.start_date = new Date('2026-01-05T00:00:00.000Z'); // January 5, 2026
+    activeCycle.end_date = new Date('2026-01-10T00:00:00.000Z'); // 5 days later (January 10, 2026)
     await activeCycle.save();
 
     console.log(`\n✅ Updated cycle number to: #${activeCycle.cycle_number}`);
     console.log(`✅ Updated start date to: ${activeCycle.start_date}`);
+    console.log(`✅ Updated end date to: ${activeCycle.end_date}`);
+    console.log(`✅ Cycle duration: 5 days`);
 
     // Reset all members' payment status to pending for the new cycle
     const members = await Member.find({ status: "active" });
@@ -63,11 +66,18 @@ const resetToCycleOne = async () => {
     console.log(`✅ All member payment statuses reset to "pending"`);
 
     // Display summary
+    const now = new Date();
+    const cycleStart = new Date(activeCycle.start_date);
+    const cycleEnd = new Date(activeCycle.end_date);
+    const daysUntilStart = Math.ceil((cycleStart - now) / (1000 * 60 * 60 * 24));
+    
     console.log("\n" + "=".repeat(50));
     console.log("📋 CYCLE RESET SUMMARY");
     console.log("=".repeat(50));
     console.log(`✅ Cycle Number: #${activeCycle.cycle_number}`);
-    console.log(`✅ Start Date: ${activeCycle.start_date.toLocaleDateString()}`);
+    console.log(`✅ Start Date: ${cycleStart.toLocaleDateString()} (${daysUntilStart} days from now)`);
+    console.log(`✅ End Date: ${cycleEnd.toLocaleDateString()}`);
+    console.log(`✅ Cycle Duration: 5 days`);
     console.log(`✅ Active Members: ${members.length}`);
     console.log(`✅ All members set to: PENDING payment status`);
     console.log(`✅ All previous data preserved (payments, savings, loans intact)`);
