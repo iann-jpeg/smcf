@@ -388,7 +388,7 @@ router.post("/query-status", protect, async (req, res) => {
             // Emit Socket.IO events
             const io = req.app.get("io");
             if (io) {
-              io.emit("payment:completed", {
+              const socketPayload = {
                 memberId: payment.member_id.toString(),
                 checkoutRequestID: payment.checkout_request_id,
                 mpesaReceiptNumber: result.mpesaReceiptNumber,
@@ -400,7 +400,10 @@ router.post("/query-status", protect, async (req, res) => {
                 },
                 amount: payment.amount,
                 type: "cycle_payment",
-              });
+              };
+              
+              console.log("📡 Emitting payment:completed event:", JSON.stringify(socketPayload, null, 2));
+              io.emit("payment:completed", socketPayload);
 
               io.emit("payment:new", payment);
               io.emit("cycle:updated", cycle);

@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import API_BASE from "@/lib/api";
 import { authService } from "@/lib/authService";
 import { CheckCircle, Loader2, QrCode } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
 interface CycleQRPaymentProps {
   onPaymentSuccess?: () => void;
@@ -32,6 +32,7 @@ const CycleQRPayment = ({
   const [checkoutRequestID, setCheckoutRequestID] = useState("");
   const [scannedMember, setScannedMember] = useState<any>(null);
   const [pollingActive, setPollingActive] = useState(false);
+  const pollingActiveRef = useRef(false);
   const { toast } = useToast();
 
   // Listen for real-time payment confirmations via Socket.IO
@@ -41,14 +42,19 @@ const CycleQRPayment = ({
 
     const handlePaymentCompleted = (data: any) => {
       console.log("🔔 QR Payment: Real-time payment notification:", data);
+      console.log("   Checking against checkoutRequestID:", checkoutRequestID);
+      console.log("   Checking against scannedMember.userId:", scannedMember?.userId);
+      console.log("   Event memberId:", data.memberId);
+      console.log("   Event checkoutRequestID:", data.checkoutRequestID);
 
-      // Check if this is our payment
+      // Check if this is our payment by checkoutRequestID or recipient's userId (ObjectId)
       if (
         data.checkoutRequestID === checkoutRequestID ||
-        data.memberId === scannedMember?.memberId
+        data.memberId === scannedMember?.userId
       ) {
         console.log("✅ QR Payment confirmed via Socket.IO - stopping polling");
-        setPollingActive(false); // Stop polling immediately
+        pollingActiveRef.current = false; // Stop polling immediately
+        setPollingActive(false);
         setPaymentState("success");
         setIsProcessing(false);
 
@@ -102,7 +108,7 @@ const CycleQRPayment = ({
     retryCount = 0
   ): Promise<void> => {
     // Check if polling was stopped (by Socket.IO notification)
-    if (!pollingActive) {
+    if (!pollingActiveRef.current) {
       console.log("⏹️ QR Payment polling stopped by real-time notification");
       return;
     }
@@ -110,6 +116,7 @@ const CycleQRPayment = ({
     const maxRetries = 40; // Max 60 seconds with adaptive intervals
 
     if (retryCount >= maxRetries) {
+      pollingActiveRef.current = false;
       setPollingActive(false);
       setPaymentState("failed");
       setIsProcessing(false);
@@ -151,7 +158,8 @@ const CycleQRPayment = ({
           (data.data && data.data.status === "completed"));
 
       if (isCompleted) {
-        setPollingActive(false); // Stop polling
+        pollingActiveRef.current = false; // Stop polling
+        setPollingActive(false);
         setPaymentState("success");
         setIsProcessing(false);
 
@@ -186,7 +194,8 @@ const CycleQRPayment = ({
           data.ResultCode !== 0 &&
           data.status === "failed")
       ) {
-        setPollingActive(false); // Stop polling
+        pollingActiveRef.current = false; // Stop polling
+        setPollingActive(false);
         setPaymentState("failed");
         setIsProcessing(false);
         toast({
@@ -269,7 +278,8 @@ const CycleQRPayment = ({
         // STK Push sent successfully
         setCheckoutRequestID(data.CheckoutRequestID);
         setPaymentState("processing");
-        setPollingActive(true); // Start polling flag
+        pollingActiveRef.current = true; // Start polling flag
+        setPollingActive(true);
 
         toast({
           title: "STK Push Sent 📱",
