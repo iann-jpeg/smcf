@@ -17,11 +17,6 @@ router.get("/summary", protect, async (req, res) => {
   try {
     const memberId = req.member ? req.member._id : req.admin._id;
 
-    // Get member's wallet_balance from Member model
-    const Member = (await import("../models/Member.js")).default;
-    const member = await Member.findById(memberId).select("wallet_balance");
-    const currentBalance = member ? (member.wallet_balance || 0) : 0;
-
     // Get all completed savings transactions for this member
     const transactions = await Saving.find({ 
       member_id: memberId,
@@ -42,6 +37,18 @@ router.get("/summary", protect, async (req, res) => {
     const totalInterestEarned = transactions
       .filter((t) => t.transaction_type === "interest")
       .reduce((sum, t) => sum + t.amount, 0);
+
+    // Get current balance from the most recent transaction's balance_after
+    // This ensures accuracy based on actual transaction history
+    const lastTransaction = transactions.length > 0 ? transactions[0] : null;
+    const currentBalance = lastTransaction ? (lastTransaction.balance_after || 0) : 0;
+
+    console.log("📊 Wallet summary for member:", memberId);
+    console.log("   Current Balance:", currentBalance);
+    console.log("   Total Deposits:", totalDeposits);
+    console.log("   Total Withdrawals:", totalWithdrawals);
+    console.log("   Total Interest:", totalInterestEarned);
+    console.log("   Transaction Count:", transactions.length);
 
     res.json({
       success: true,
