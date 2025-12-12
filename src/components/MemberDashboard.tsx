@@ -384,11 +384,29 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
       // Listen for payment completion (new event name)
       socket.on("payment:completed", (data: any) => {
         console.log("💰 MemberDashboard received: payment:completed", data);
-        toast({
-          title: "Payment Confirmed!",
-          description: `Payment of KES ${data.amount} has been confirmed`,
-        });
-        fetchData(); // Refresh data immediately
+        
+        // Check if this payment involves current user (as recipient OR payer)
+        const isMyPayment = data.memberId === userData._id.toString() || 
+                           data.memberId === userData.id?.toString() ||
+                           data.payerId === userData._id.toString() ||
+                           data.payerId === userData.id?.toString();
+        
+        if (isMyPayment || data.type === "cycle_payment") {
+          // Show toast notification
+          if (data.isQRPayment && data.payerId === userData._id.toString()) {
+            // User paid for someone else via QR
+            toast({
+              title: "Payment Sent!",
+              description: `Payment of KES ${data.amount} sent successfully`,
+            });
+          } else {
+            toast({
+              title: "Payment Confirmed!",
+              description: `Payment of KES ${data.amount} has been confirmed`,
+            });
+          }
+          fetchData(); // Refresh data immediately
+        }
       });
 
       // Listen for any new payment

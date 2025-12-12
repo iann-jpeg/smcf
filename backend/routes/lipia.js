@@ -389,7 +389,8 @@ router.post("/query-status", protect, async (req, res) => {
             const io = req.app.get("io");
             if (io) {
               const socketPayload = {
-                memberId: payment.member_id.toString(),
+                memberId: payment.member_id.toString(), // Recipient (who got credited)
+                payerId: payment.paid_by.toString(), // Payer (who actually paid)
                 checkoutRequestID: payment.checkout_request_id,
                 mpesaReceiptNumber: result.mpesaReceiptNumber,
                 payment: {
@@ -397,9 +398,11 @@ router.post("/query-status", protect, async (req, res) => {
                   amount: payment.amount,
                   status: "completed",
                   cycle_number: payment.cycle_number,
+                  payment_method: payment.payment_method,
                 },
                 amount: payment.amount,
                 type: "cycle_payment",
+                isQRPayment: payment.payment_method === "qr_transfer",
               };
               
               console.log("📡 Emitting payment:completed event:", JSON.stringify(socketPayload, null, 2));
@@ -1050,10 +1053,30 @@ router.post("/callback", async (req, res) => {
 
           io.emit("paymentCompleted", {
             paymentId: payment._id,
-            memberId: payment.member_id,
+            memberId: payment.member_id.toString(),
+            payerId: payment.paid_by.toString(),
             amount: payment.amount,
             transactionId: callbackData.mpesaReceiptNumber,
             timestamp: new Date(),
+            isQRPayment: payment.payment_method === "qr_transfer",
+            type: "cycle_payment",
+          });
+
+          io.emit("payment:completed", {
+            memberId: payment.member_id.toString(),
+            payerId: payment.paid_by.toString(),
+            checkoutRequestID: payment.checkout_request_id,
+            mpesaReceiptNumber: callbackData.mpesaReceiptNumber,
+            payment: {
+              _id: payment._id,
+              amount: payment.amount,
+              status: "completed",
+              cycle_number: payment.cycle_number,
+              payment_method: payment.payment_method,
+            },
+            amount: payment.amount,
+            type: "cycle_payment",
+            isQRPayment: payment.payment_method === "qr_transfer",
           });
 
           io.emit("memberUpdated", {

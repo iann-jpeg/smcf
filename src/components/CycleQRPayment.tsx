@@ -63,12 +63,16 @@ const CycleQRPayment = ({
           description: `KES ${contributionAmount} cycle contribution recorded for ${scannedMember.memberName}`,
         });
 
+        // Trigger immediate refetch to update stats
+        setTimeout(() => {
+          onPaymentSuccess?.();
+        }, 1000);
+
         setTimeout(() => {
           setShowDialog(false);
           setQrData("");
           setScannedMember(null);
           setPaymentState("idle");
-          onPaymentSuccess?.();
         }, 2000);
       }
     };
@@ -176,12 +180,16 @@ const CycleQRPayment = ({
 
         console.log("✅ QR Payment confirmed! Receipt:", receiptNumber);
 
+        // Trigger immediate refetch to update stats
+        setTimeout(() => {
+          onPaymentSuccess?.();
+        }, 1000);
+
         setTimeout(() => {
           setShowDialog(false);
           setQrData("");
           setScannedMember(null);
           setPaymentState("idle");
-          onPaymentSuccess?.();
         }, 2000);
         return; // STOP POLLING
       }
