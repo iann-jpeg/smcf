@@ -291,12 +291,27 @@ async function pollLipiaPaymentStatus(
       mpesaReceipt: status.mpesaReceiptNumber,
     });
 
-    if (status.status === "completed" || status.status === "success") {
+    // CRITICAL: Only mark as completed if we have CONFIRMED M-Pesa receipt
+    // Don't trust just status === "completed" - verify actual payment proof
+    const hasValidReceipt = status.mpesaReceiptNumber && status.mpesaReceiptNumber.length > 5;
+    const isSuccessCode = status.resultCode === "0" || status.resultCode === 0;
+    const isConfirmedSuccess = (status.status === "completed" || status.status === "success") && hasValidReceipt && isSuccessCode;
+
+    console.log("🔐 Payment verification:", {
+      hasValidReceipt,
+      isSuccessCode,
+      isConfirmedSuccess,
+      receipt: status.mpesaReceiptNumber,
+      resultCode: status.resultCode,
+    });
+
+    if (isConfirmedSuccess) {
       // Payment successful - Update payment record
-      console.log("✅ PAYMENT SUCCESSFUL - Processing completion:", {
+      console.log("✅ PAYMENT CONFIRMED - M-Pesa receipt verified:", {
         checkoutRequestId,
         mpesaReceipt: status.mpesaReceiptNumber,
-        amount,
+        resultCode: status.resultCode,
+        amount, // This is the parameter amount
       });
 
       const payment = await Payment.findByIdAndUpdate(
@@ -306,10 +321,19 @@ async function pollLipiaPaymentStatus(
           mpesa_transaction_id:
             status.mpesaReceiptNumber || status.transactionId || reference,
           transaction_date: status.transactionDate || new Date(),
-          notes: `Payment completed - ${status.resultDescription || "Success"}`,
+          notes: `Payment completed - ${status.resultDescription || "Success"} - Receipt: ${status.mpesaReceiptNumber}`,
         },
         { new: true }
       );
+
+      if (!payment) {
+        console.error("❌ Payment record not found:", paymentId);
+        return;
+      }
+
+      // Use payment.amount from database, NOT the parameter amount
+      const actualAmount = payment.amount;
+      console.log("💰 Actual payment amount from database:", actualAmount);
 
       // Get member details
       const member = await Member.findById(memberId);
@@ -325,76 +349,47 @@ async function pollLipiaPaymentStatus(
 
       if (paymentType === "wallet_deposit") {
         // Create Saving record for wallet deposit
+        // NOTE: Wallet deposits are FREE - no fees charged
         const Saving = (await import("../models/Saving.js")).default;
-        const TransactionFee = (await import("../models/TransactionFee.js")).default;
-        const { calculateTopUpFee } = await import("../services/feeService.js");
-
-        // Calculate top-up fee
-        const topUpFee = calculateTopUpFee("mpesa", amount);
-        const netDeposit = amount - topUpFee;
 
         // Get current balance
         const lastSaving = await Saving.findOne({ member_id: memberId }).sort({
           created_at: -1,
         });
         const balanceBefore = lastSaving ? lastSaving.balance_after : 0;
-        const balanceAfter = balanceBefore + netDeposit; // Only net amount affects balance
+        const balanceAfter = balanceBefore + actualAmount; // Full amount - no fees on deposits!
 
-        console.log("💰 Updating wallet balance:", {
-          grossAmount: amount,
-          topUpFee,
-          netDeposit,
+        console.log("💰 Updating wallet balance (NO FEES):", {
+          amount: actualAmount,
           before: balanceBefore,
           after: balanceAfter,
         });
 
-        // Create saving record with net deposit amount
+        // Create saving record - FULL AMOUNT, NO FEES!
         const savingRecord = await Saving.create({
           member_id: memberId,
-          amount: netDeposit,
+          amount: actualAmount, // Full amount
           transaction_type: "deposit",
           balance_before: balanceBefore,
           balance_after: balanceAfter,
           status: "completed",
           payment_method: "mpesa",
           transaction_ref: status.transactionId || reference,
-          notes: `Wallet deposit via M-Pesa${topUpFee > 0 ? ` | Fee: KES ${topUpFee}` : ''} - ${reference}`,
+          notes: `Wallet deposit via M-Pesa - ${reference}`,
         });
 
-        // Update member's total_savings AND wallet_balance with NET amount only
+        // Update member's total_savings AND wallet_balance with FULL amount
         await Member.findByIdAndUpdate(memberId, {
           $inc: {
-            total_savings: netDeposit,
-            wallet_balance: netDeposit,
+            total_savings: actualAmount,
+            wallet_balance: actualAmount,
           },
         });
 
-        // Record top-up fee if applicable
-        if (topUpFee > 0) {
-          await TransactionFee.create({
-            transaction_type: "top_up",
-            member_id: memberId,
-            transaction_amount: amount,
-            fee_amount: topUpFee,
-            payment_method: "mpesa",
-            fee_description: `Top-up fee for M-Pesa deposit of KES ${amount.toLocaleString()}`,
-            reference_id: savingRecord._id.toString(),
-            status: "collected",
-          });
-
-          console.log("💵 Top-up fee recorded:", {
-            grossAmount: amount,
-            fee: topUpFee,
-            netDeposit,
-          });
-        }
-
-        console.log("✅ Wallet deposit completed:", {
+        console.log("✅ Wallet deposit completed (FREE - No fees):", {
           member: member.name,
           memberId,
-          grossAmount: amount,
-          fee: topUpFee,
-          netAmount: netDeposit,
+          amount: actualAmount,
           reference,
           newBalance: balanceAfter,
         });
@@ -408,22 +403,20 @@ async function pollLipiaPaymentStatus(
           console.log("🔔 Event data:", {
             memberId: memberId.toString(),
             type: "wallet_deposit",
-            amount,
+            amount: actualAmount,
           });
 
           // Emit to ALL clients (broadcast)
           io.emit("payment:completed", {
             memberId: memberId.toString(),
+            checkoutRequestID: checkoutRequestId,
+            mpesaReceiptNumber: status.mpesaReceiptNumber,
             payment: {
               _id: payment._id.toString(),
-              amount: netDeposit, // Net amount after fee
-              grossAmount: amount, // Original amount
-              fee: topUpFee,
+              amount: actualAmount, // Full amount - no fees
               status: payment.status,
             },
-            amount: netDeposit,
-            grossAmount: amount,
-            fee: topUpFee,
+            amount: actualAmount,
             type: "wallet_deposit",
           });
 
@@ -438,9 +431,7 @@ async function pollLipiaPaymentStatus(
           io.emit("savingDeposit", {
             memberId: memberId.toString(),
             member: member.name,
-            amount: netDeposit, // Net amount after fee
-            grossAmount: amount, // Original amount
-            fee: topUpFee,
+            amount: actualAmount, // Full amount
             newBalance: balanceAfter,
           });
 
