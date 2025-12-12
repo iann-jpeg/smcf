@@ -230,9 +230,12 @@ const CycleQRPayment = ({
     setPaymentState("confirm");
 
     try {
-      // Make cycle payment via QR - this will initiate STK Push
+      // Get current user's phone for STK push
+      const currentUser = authService.getCurrentUser();
+      
+      // Make cycle payment via Lipia STK Push
       const response = await fetch(
-        `${API_BASE}/api/payments/qr-cycle-payment`,
+        `${API_BASE}/api/lipia/stk-push`,
         {
           method: "POST",
           headers: {
@@ -240,9 +243,13 @@ const CycleQRPayment = ({
             ...authService.getAuthHeaders(),
           },
           body: JSON.stringify({
-            organizationMemberId: scannedMember.userId,
+            phone: currentUser?.phoneNumber || currentUser?.phone,
             amount: contributionAmount,
-            qrData: scannedMember,
+            cycleNumber: null, // Will be determined by backend based on recipient's status
+            type: "cycle_payment",
+            recipientMemberId: scannedMember.userId,
+            notes: `QR Payment for ${scannedMember.memberName} (${scannedMember.memberId})`,
+            description: `Cycle contribution for ${scannedMember.memberName}`,
           }),
         }
       );

@@ -18,7 +18,7 @@ const router = express.Router();
  */
 router.post("/stk-push", protect, async (req, res) => {
   try {
-    const { phone, amount, cycleNumber, type, notes } = req.body;
+    const { phone, amount, cycleNumber, type, notes, recipientMemberId } = req.body;
 
     if (!phone || !amount) {
       return res.status(400).json({
@@ -29,14 +29,21 @@ router.post("/stk-push", protect, async (req, res) => {
 
     // Determine payment type (default to cycle_payment for backward compatibility)
     const paymentType = type || "cycle_payment";
+    
+    // Determine who the payment is for (payer vs recipient)
+    const payerId = req.user._id;
+    const recipientId = recipientMemberId || req.user._id; // Use recipient if provided (QR payment)
 
     // Generate unique reference
-    const reference = `SMCF-${Date.now()}-${req.user._id}`;
+    const reference = `SMCF-${Date.now()}-${payerId}`;
 
     // Create description based on payment type
     let description = `SMCF Contribution - Cycle ${cycleNumber || "Current"}`;
     if (paymentType === "wallet_deposit") {
       description = notes || `Wallet deposit - KES ${amount}`;
+    } else if (recipientMemberId && recipientMemberId !== payerId) {
+      // QR payment for another member
+      description = notes || `Cycle payment for another member`;
     }
 
     // Initiate payment via Lipia
@@ -65,14 +72,14 @@ router.post("/stk-push", protect, async (req, res) => {
 
     // Create pending payment record
     const payment = await Payment.create({
-      member_id: req.user._id,
-      paid_by: req.user._id, // Self-payment
+      member_id: recipientId, // Payment credited to recipient (or self if no recipient)
+      paid_by: payerId, // Who actually paid (payer's phone receives STK)
       phone: phone,
       amount: parseFloat(amount),
       cycle_number: cycleNumber,
       status: "pending",
       type: paymentType, // Use the type from request body
-      payment_method: "lipia", // Explicitly set payment method
+      payment_method: recipientMemberId ? "qr_transfer" : "lipia", // QR transfer if paying for another
       mpesa_transaction_id: reference,
       checkout_request_id: result.checkoutRequestID,
       merchant_request_id: result.merchantRequestID,
