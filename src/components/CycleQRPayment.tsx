@@ -18,6 +18,8 @@ const CycleQRPayment = ({ onPaymentSuccess, contributionAmount = 224 }: CycleQRP
   const [showDialog, setShowDialog] = useState(false);
   const [qrData, setQrData] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [paymentState, setPaymentState] = useState<"idle" | "confirm" | "processing" | "waiting" | "success" | "failed">("idle");
+  const [checkoutRequestID, setCheckoutRequestID] = useState("");
   const [scannedMember, setScannedMember] = useState<any>(null);
   const { toast } = useToast();
 
@@ -43,6 +45,77 @@ const CycleQRPayment = ({ onPaymentSuccess, contributionAmount = 224 }: CycleQRP
     }
   };
 
+  // Poll payment status
+  const pollPaymentStatus = async (requestID: string, retryCount = 0): Promise<void> => {
+    const maxRetries = 30; // 60 seconds (2 seconds interval)
+
+    if (retryCount >= maxRetries) {
+      setPaymentState("failed");
+      setIsProcessing(false);
+      toast({
+        title: "Payment Timeout",
+        description: "Payment verification timed out. Please check your transaction history.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/api/lipia/query-status`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...authService.getAuthHeaders(),
+        },
+        body: JSON.stringify({ checkoutRequestID: requestID }),
+      });
+
+      const data = await response.json();
+
+      // Check for success
+      if (data.ResultCode === "0" || data.MpesaReceiptNumber) {
+        setPaymentState("success");
+        setIsProcessing(false);
+        
+        toast({
+          title: "Payment Successful! 🎉",
+          description: `KES ${contributionAmount} cycle contribution recorded for ${scannedMember.memberName}`,
+        });
+
+        setTimeout(() => {
+          setShowDialog(false);
+          setQrData("");
+          setScannedMember(null);
+          setPaymentState("idle");
+          onPaymentSuccess?.();
+        }, 2000);
+        return;
+      }
+
+      // If status is explicitly failed
+      if (data.status === "failed") {
+        setPaymentState("failed");
+        setIsProcessing(false);
+        toast({
+          title: "Payment Failed",
+          description: data.ResultDescription || "Payment was not completed",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Continue polling
+      setTimeout(() => {
+        pollPaymentStatus(requestID, retryCount + 1);
+      }, 2000);
+    } catch (error) {
+      console.error("Payment status check error:", error);
+      setTimeout(() => {
+        pollPaymentStatus(requestID, retryCount + 1);
+      }, 2000);
+    }
+  };
+
   const handleMakePayment = async () => {
     if (!scannedMember) {
       toast({
@@ -54,10 +127,10 @@ const CycleQRPayment = ({ onPaymentSuccess, contributionAmount = 224 }: CycleQRP
     }
 
     setIsProcessing(true);
+    setPaymentState("confirm");
 
     try {
-      // Make cycle payment via QR
-      // STK Push will be sent to YOUR phone, but payment will be credited to the scanned member
+      // Make cycle payment via QR - this will initiate STK Push
       const response = await fetch(`${API_BASE}/api/payments/qr-cycle-payment`, {
         method: "POST",
         headers: {
@@ -82,25 +155,28 @@ const CycleQRPayment = ({ onPaymentSuccess, contributionAmount = 224 }: CycleQRP
       const data = await response.json();
       console.log("QR Cycle Payment Response:", data);
 
-      if (data.success) {
+      if (data.success && data.CheckoutRequestID) {
+        // STK Push sent successfully
+        setCheckoutRequestID(data.CheckoutRequestID);
+        setPaymentState("processing");
+        
         toast({
-          title: "Payment Successful! 🎉",
-          description: `KES ${contributionAmount} cycle contribution recorded for ${scannedMember.memberName}`,
+          title: "STK Push Sent 📱",
+          description: data.message || "Please enter your M-Pesa PIN on your phone",
         });
-        setShowDialog(false);
-        setQrData("");
-        setScannedMember(null);
-        onPaymentSuccess?.();
+
+        // Start polling for payment status
+        pollPaymentStatus(data.CheckoutRequestID);
       } else {
-        throw new Error(data.error || "Payment failed");
+        throw new Error(data.error || "Payment initiation failed");
       }
     } catch (error: any) {
+      setPaymentState("failed");
       toast({
         title: "Payment Failed",
         description: error.message || "Unable to process payment",
         variant: "destructive",
       });
-    } finally {
       setIsProcessing(false);
     }
   };
@@ -181,7 +257,11 @@ const CycleQRPayment = ({ onPaymentSuccess, contributionAmount = 224 }: CycleQRP
               {isProcessing ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Processing Payment...
+                  {paymentState === "confirm" && "Initiating Payment..."}
+                  {paymentState === "processing" && "Enter M-Pesa PIN on your phone..."}
+                  {paymentState === "waiting" && "Waiting for confirmation..."}
+                  {paymentState === "success" && "Payment Successful!"}
+                  {paymentState === "failed" && "Payment Failed"}
                 </>
               ) : (
                 `Pay KES ${contributionAmount}`

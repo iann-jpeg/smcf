@@ -3,6 +3,7 @@ import { protect } from "../middleware/auth.js";
 import Cycle from "../models/Cycle.js";
 import Member from "../models/Member.js";
 import Payment from "../models/Payment.js";
+import { initiateLipiaPayment } from "../services/lipiaService.js";
 
 const router = express.Router();
 
@@ -1054,62 +1055,62 @@ router.post("/qr-cycle-payment", protect, async (req, res) => {
       ? currentCycle.cycle_number + 1 
       : currentCycle.cycle_number;
 
-    // Create payment record - credit goes to recipient, but paid by payer
-    const payment = await Payment.create({
-      member_id: organizationMemberId, // Payment credited to recipient
-      amount: amount,
-      phone: payer.phone, // STK Push sent to payer's phone
-      payment_method: "qr_transfer",
-      cycle_number: targetCycle, // Use target cycle (current or next)
-      status: "completed",
-      mpesa_transaction_id: `QR-${Date.now()}`,
-      paid_by: payerId, // Track who actually paid
-    });
+    // Generate unique reference
+    const reference = `QR-${Date.now()}-${payerId}`;
 
-    // Update recipient's contribution tracking (they received the payment)
-    recipient.total_contributed = (recipient.total_contributed || 0) + amount;
-    recipient.payment_status = "paid";
-    await recipient.save();
+    // Initiate STK Push payment via Lipia
+    const lipiaResult = await initiateLipiaPayment(
+      payer.phone || payer.phoneNumber,
+      amount,
+      reference,
+      `SMCF Cycle ${targetCycle} Payment for ${recipient.name}`
+    );
 
-    // Emit Socket.IO event
-    const io = req.app.get("io");
-    if (io) {
-      io.emit("paymentRecorded", {
-        payment: {
-          ...payment.toObject(),
-          member_id: {
-            _id: recipient._id,
-            name: recipient.name,
-            member_id: recipient.member_id,
-          },
-          payer_info: {
-            _id: payer._id,
-            name: payer.name,
-            member_id: payer.member_id,
-          },
-        },
-        timestamp: new Date(),
+    if (!lipiaResult.success) {
+      return res.status(400).json({
+        success: false,
+        error: lipiaResult.error,
+        responseDescription: lipiaResult.responseDescription,
       });
     }
 
+    // Create pending payment record - credit goes to recipient, paid by payer
+    const payment = await Payment.create({
+      member_id: organizationMemberId, // Payment credited to recipient
+      paid_by: payerId, // Track who actually paid (payer)
+      amount: amount,
+      phone: payer.phone || payer.phoneNumber, // STK Push sent to payer's phone
+      payment_method: "qr_transfer",
+      cycle_number: targetCycle, // Use target cycle (current or next)
+      status: "pending", // Pending until STK confirmed
+      mpesa_transaction_id: reference,
+      checkout_request_id: lipiaResult.checkoutRequestID,
+      merchant_request_id: lipiaResult.merchantRequestID,
+      date: new Date(),
+    });
+
+    // Return STK push details for polling
     res.json({
       success: true,
-      message: `Cycle payment of KES ${amount} recorded successfully for ${recipient.name}`,
-      data: {
-        payment: payment,
-        recipient: {
-          id: recipient._id,
-          name: recipient.name,
-          member_id: recipient.member_id,
-          total_contributed: recipient.total_contributed,
-        },
-        payer: {
-          id: payer._id,
-          name: payer.name,
-          member_id: payer.member_id,
-        },
-        cycle: currentCycle.cycle_number,
+      message: lipiaResult.customerMessage || `STK Push sent to ${payer.phone}. Please enter your M-Pesa PIN.`,
+      ResponseCode: lipiaResult.responseCode,
+      ResponseDescription: lipiaResult.responseDescription,
+      CheckoutRequestID: lipiaResult.checkoutRequestID,
+      TransactionReference: lipiaResult.checkoutRequestID, // For status queries
+      MerchantRequestID: lipiaResult.merchantRequestID,
+      CustomerMessage: lipiaResult.customerMessage,
+      paymentId: payment._id,
+      recipient: {
+        id: recipient._id,
+        name: recipient.name,
+        member_id: recipient.member_id,
       },
+      payer: {
+        id: payer._id,
+        name: payer.name,
+        member_id: payer.member_id,
+      },
+      cycleNumber: targetCycle,
     });
   } catch (error) {
     console.error("Error processing QR cycle payment:", error);
