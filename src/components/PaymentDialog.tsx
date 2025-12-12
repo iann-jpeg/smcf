@@ -18,7 +18,7 @@ import {
   Shield,
   Smartphone,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
 interface PaymentDialogProps {
   open: boolean;
@@ -48,6 +48,7 @@ const PaymentDialog = ({
   const [targetCycle, setTargetCycle] = useState(cycle);
   const [hasPaidCurrentCycle, setHasPaidCurrentCycle] = useState(false);
   const [pollingActive, setPollingActive] = useState(false);
+  const pollingActiveRef = useRef(false);
 
   // Listen for real-time payment confirmations via Socket.IO
   useEffect(() => {
@@ -63,7 +64,8 @@ const PaymentDialog = ({
         data.memberId === (memberData._id || memberData.id)
       ) {
         console.log("✅ Payment confirmed via Socket.IO - stopping polling");
-        setPollingActive(false); // Stop polling immediately
+        pollingActiveRef.current = false; // Stop polling immediately
+        setPollingActive(false);
         setTransactionId(data.mpesaReceiptNumber || "SUCCESS");
         setPaymentStep("success");
         setIsProcessing(false);
@@ -150,6 +152,7 @@ const PaymentDialog = ({
           phone: memberData.phone || memberData.phoneNumber,
           amount: amount,
           cycleNumber: targetCycle,
+          type: "cycle_payment",
           description: `SMCF Contribution Payment - Cycle #${targetCycle}`,
         }),
       });
@@ -170,6 +173,7 @@ const PaymentDialog = ({
         });
 
         // Start polling for payment status
+        pollingActiveRef.current = true;
         setPollingActive(true);
         pollPaymentStatus(data.CheckoutRequestID);
       } else {
@@ -197,13 +201,14 @@ const PaymentDialog = ({
 
   const pollPaymentStatus = async (requestID: string, count: number = 0) => {
     // Check if polling was stopped (by Socket.IO notification)
-    if (!pollingActive) {
+    if (!pollingActiveRef.current) {
       console.log("⏹️ Polling stopped by real-time notification");
       return;
     }
 
     if (count >= 40) {
       // Stop polling after 40 attempts (max 60 seconds with adaptive interval)
+      pollingActiveRef.current = false;
       setPollingActive(false);
       setPaymentStep("failed");
       setIsProcessing(false);
@@ -248,7 +253,8 @@ const PaymentDialog = ({
           (data.data && data.data.status === "completed"));
 
       if (isCompleted) {
-        setPollingActive(false); // Stop polling
+        pollingActiveRef.current = false; // Stop polling
+        setPollingActive(false);
         const receiptNumber =
           data.MpesaReceiptNumber ||
           data.data?.MpesaReceiptNumber ||
@@ -277,7 +283,8 @@ const PaymentDialog = ({
         data.status === "failed"
       ) {
         // Only mark as failed if explicitly failed status
-        setPollingActive(false); // Stop polling
+        pollingActiveRef.current = false; // Stop polling
+        setPollingActive(false);
         setPaymentStep("failed");
         setIsProcessing(false);
         toast({
@@ -440,7 +447,7 @@ const PaymentDialog = ({
               <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full">
                 <Clock className="w-4 h-4 animate-spin text-primary" />
                 <span className="text-sm font-medium">
-                  Polling... ({pollCount}/20)
+                  Polling... ({pollCount}/40)
                 </span>
               </div>
             </div>
@@ -448,7 +455,7 @@ const PaymentDialog = ({
             <Card>
               <CardContent className="pt-6">
                 <div className="space-y-4">
-                  <Progress value={(pollCount / 20) * 100} className="h-2" />
+                  <Progress value={(pollCount / 40) * 100} className="h-2" />
 
                   <div className="bg-financial-success/10 p-4 rounded-lg space-y-2">
                     <div className="flex items-center gap-2">

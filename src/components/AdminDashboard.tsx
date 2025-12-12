@@ -972,9 +972,24 @@ const AdminDashboard = ({
         fetchAllData(); // Refresh data
       });
 
-      // Listen for cycle updates
+      // Listen for cycle updates (both formats)
       socket.on("cycleUpdated", (data: any) => {
         console.log("🔄 Cycle updated:", data);
+        fetchAllData(); // Refresh data
+      });
+
+      socket.on("cycle:updated", (data: any) => {
+        console.log("🔄 Cycle updated (colon format):", data);
+        fetchAllData(); // Refresh data
+      });
+
+      // Listen for payment completion with colon format
+      socket.on("payment:completed", (data: any) => {
+        console.log("💰 Payment completed (colon format):", data);
+        toast({
+          title: "Payment Received!",
+          description: `Payment confirmed from member`,
+        });
         fetchAllData(); // Refresh data
       });
 
