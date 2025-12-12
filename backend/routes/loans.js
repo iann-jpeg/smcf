@@ -1,6 +1,8 @@
 import express from "express";
 import { adminOnly, protect } from "../middleware/auth.js";
 import Loan from "../models/Loan.js";
+import Payment from "../models/Payment.js";
+import { initiateLipiaPayment } from "../services/lipiaService.js";
 
 const router = express.Router();
 
@@ -116,11 +118,12 @@ router.put("/:id/status", protect, adminOnly, async (req, res) => {
   }
 });
 
-// Make partial loan repayment (member or admin)
+// Make partial loan repayment with STK Push (member or admin)
 router.post("/:id/repay", protect, async (req, res) => {
   try {
-    const { amount, payment_method, transaction_ref, notes } = req.body;
+    const { amount } = req.body;
     const loanId = req.params.id;
+    const payerId = req.member ? req.member._id : req.admin._id;
 
     if (!amount || amount <= 0) {
       return res.status(400).json({
@@ -129,7 +132,7 @@ router.post("/:id/repay", protect, async (req, res) => {
       });
     }
 
-    const loan = await Loan.findById(loanId).populate("member_id", "name phone member_id");
+    const loan = await Loan.findById(loanId).populate("member_id", "name phone phoneNumber member_id");
     if (!loan) {
       return res.status(404).json({ success: false, error: "Loan not found" });
     }
@@ -151,53 +154,64 @@ router.post("/:id/repay", protect, async (req, res) => {
       });
     }
 
-    // Add payment to history
-    loan.payment_history.push({
-      amount,
-      payment_date: new Date(),
-      payment_method: payment_method || "cash",
-      transaction_ref: transaction_ref || "",
-      notes: notes || "",
-    });
+    // Generate unique reference
+    const reference = `LOAN-${Date.now()}-${payerId}`;
 
-    // Update paid amount
-    loan.amount_paid = (loan.amount_paid || 0) + amount;
-
-    // Save will trigger pre-save hook to calculate remaining and update status
-    await loan.save();
-
-    // Emit Socket.IO event
-    const io = req.app.get("io");
-    if (io && loan.member_id) {
-      io.emit("loanPayment", {
-        loanId: loan._id,
-        memberId: loan.member_id._id,
-        memberName: loan.member_id.name,
-        paymentAmount: amount,
-        totalPaid: loan.amount_paid,
-        remaining: loan.amount_remaining,
-        isFullyPaid: loan.status === "repaid",
-        timestamp: new Date(),
+    // Get payer's phone number
+    const payerPhone = loan.member_id.phone || loan.member_id.phoneNumber;
+    if (!payerPhone) {
+      return res.status(400).json({
+        success: false,
+        error: "Member phone number not found",
       });
-
-      console.log(
-        `💰 Loan payment: KES ${amount} received from ${loan.member_id.name}. Total paid: KES ${loan.amount_paid}, Remaining: KES ${loan.amount_remaining}`
-      );
     }
 
+    // Initiate STK Push payment via Lipia
+    const lipiaResult = await initiateLipiaPayment(
+      payerPhone,
+      amount,
+      reference,
+      `SMCF Loan Repayment - ${loan.member_id.name}`
+    );
+
+    if (!lipiaResult.success) {
+      return res.status(400).json({
+        success: false,
+        error: lipiaResult.error,
+        responseDescription: lipiaResult.responseDescription,
+      });
+    }
+
+    // Create pending payment record
+    const payment = await Payment.create({
+      member_id: loan.member_id._id,
+      paid_by: payerId,
+      amount: amount,
+      phone: payerPhone,
+      payment_method: "lipia",
+      type: "loan_repayment",
+      status: "pending",
+      mpesa_transaction_id: reference,
+      checkout_request_id: lipiaResult.checkoutRequestID,
+      merchant_request_id: lipiaResult.merchantRequestID,
+      notes: `Loan repayment for loan ID: ${loanId}`,
+      date: new Date(),
+    });
+
+    // Return STK push details for polling
     res.json({
       success: true,
-      message: loan.status === "repaid" 
-        ? `Loan fully repaid! Total paid: KES ${loan.amount_paid}`
-        : `Payment of KES ${amount} recorded. Remaining: KES ${loan.amount_remaining}`,
-      data: {
-        loan,
-        paymentAmount: amount,
-        totalPaid: loan.amount_paid,
-        remaining: loan.amount_remaining,
-        isFullyPaid: loan.status === "repaid",
-        paymentsCount: loan.payment_history.length,
-      },
+      message: lipiaResult.customerMessage || `STK Push sent to ${payerPhone}. Please enter your M-Pesa PIN.`,
+      ResponseCode: lipiaResult.responseCode,
+      ResponseDescription: lipiaResult.responseDescription,
+      CheckoutRequestID: lipiaResult.checkoutRequestID,
+      TransactionReference: lipiaResult.checkoutRequestID,
+      MerchantRequestID: lipiaResult.merchantRequestID,
+      CustomerMessage: lipiaResult.customerMessage,
+      paymentId: payment._id,
+      loanId: loanId,
+      amount: amount,
+      remaining: currentRemaining - amount,
     });
   } catch (error) {
     console.error("Error processing loan repayment:", error);

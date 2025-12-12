@@ -208,10 +208,14 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
             // Fetch updated wallet data
             fetchWalletData();
 
-            // Show success notification
+            // Show success notification with fee info if applicable
+            const feeMessage = data.fee && data.fee > 0
+              ? `(Fee: KES ${data.fee.toLocaleString()}, Net: KES ${data.amount.toLocaleString()})`
+              : '';
+            
             toast({
               title: "Payment Successful! 🎉",
-              description: `KES ${data.amount.toLocaleString()} has been added to your wallet`,
+              description: `KES ${data.grossAmount?.toLocaleString() || data.amount.toLocaleString()} deposited ${feeMessage}`,
               duration: 5000,
             });
           }

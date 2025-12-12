@@ -265,6 +265,70 @@ router.post("/query-status", protect, async (req, res) => {
               console.log("📡 Socket.IO events emitted for cycle payment");
             }
           }
+        } else if (payment.type === "loan_repayment") {
+          // Loan repayment - update loan payment history
+          const Loan = (await import("../models/Loan.js")).default;
+          
+          // Extract loan ID from payment notes
+          const loanIdMatch = payment.notes?.match(/loan ID: (.+)/);
+          if (loanIdMatch) {
+            const loanId = loanIdMatch[1];
+            const loan = await Loan.findById(loanId).populate("member_id", "name phone member_id");
+            
+            if (loan) {
+              // Add payment to loan history
+              loan.payment_history.push({
+                amount: payment.amount,
+                payment_date: new Date(),
+                payment_method: "mpesa",
+                transaction_ref: result.mpesaReceiptNumber || payment.mpesa_transaction_id,
+                notes: `M-Pesa payment - ${result.mpesaReceiptNumber}`,
+              });
+
+              // Update paid amount
+              loan.amount_paid = (loan.amount_paid || 0) + payment.amount;
+
+              // Save will trigger pre-save hook to calculate remaining and update status
+              await loan.save();
+
+              console.log("✅ Loan repayment completed:", {
+                member: loan.member_id?.name,
+                loanId: loan._id,
+                paymentAmount: payment.amount,
+                totalPaid: loan.amount_paid,
+                remaining: loan.amount_remaining,
+                isFullyPaid: loan.status === "repaid",
+              });
+
+              // Emit Socket.IO event
+              const io = req.app.get("io");
+              if (io) {
+                io.emit("loanPayment", {
+                  loanId: loan._id,
+                  memberId: loan.member_id._id,
+                  memberName: loan.member_id.name,
+                  paymentAmount: payment.amount,
+                  totalPaid: loan.amount_paid,
+                  remaining: loan.amount_remaining,
+                  isFullyPaid: loan.status === "repaid",
+                  timestamp: new Date(),
+                });
+
+                io.emit("payment:completed", {
+                  memberId: payment.member_id.toString(),
+                  payment: {
+                    _id: payment._id,
+                    amount: payment.amount,
+                    status: "completed",
+                  },
+                  amount: payment.amount,
+                  type: "loan_repayment",
+                });
+
+                console.log("📡 Socket.IO events emitted for loan repayment");
+              }
+            }
+          }
         }
       }
     }

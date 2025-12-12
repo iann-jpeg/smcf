@@ -326,44 +326,75 @@ async function pollLipiaPaymentStatus(
       if (paymentType === "wallet_deposit") {
         // Create Saving record for wallet deposit
         const Saving = (await import("../models/Saving.js")).default;
+        const TransactionFee = (await import("../models/TransactionFee.js")).default;
+        const { calculateTopUpFee } = await import("../services/feeService.js");
+
+        // Calculate top-up fee
+        const topUpFee = calculateTopUpFee("mpesa", amount);
+        const netDeposit = amount - topUpFee;
 
         // Get current balance
         const lastSaving = await Saving.findOne({ member_id: memberId }).sort({
           created_at: -1,
         });
         const balanceBefore = lastSaving ? lastSaving.balance_after : 0;
-        const balanceAfter = balanceBefore + amount;
+        const balanceAfter = balanceBefore + netDeposit; // Only net amount affects balance
 
         console.log("💰 Updating wallet balance:", {
+          grossAmount: amount,
+          topUpFee,
+          netDeposit,
           before: balanceBefore,
-          deposit: amount,
           after: balanceAfter,
         });
 
+        // Create saving record with net deposit amount
         const savingRecord = await Saving.create({
           member_id: memberId,
-          amount: amount,
+          amount: netDeposit,
           transaction_type: "deposit",
           balance_before: balanceBefore,
           balance_after: balanceAfter,
           status: "completed",
           payment_method: "mpesa",
           transaction_ref: status.transactionId || reference,
-          notes: `Wallet deposit via M-Pesa - ${reference}`,
+          notes: `Wallet deposit via M-Pesa${topUpFee > 0 ? ` | Fee: KES ${topUpFee}` : ''} - ${reference}`,
         });
 
-        // Update member's total_savings AND wallet_balance
+        // Update member's total_savings AND wallet_balance with NET amount only
         await Member.findByIdAndUpdate(memberId, {
           $inc: {
-            total_savings: amount,
-            wallet_balance: amount,
+            total_savings: netDeposit,
+            wallet_balance: netDeposit,
           },
         });
+
+        // Record top-up fee if applicable
+        if (topUpFee > 0) {
+          await TransactionFee.create({
+            transaction_type: "top_up",
+            member_id: memberId,
+            transaction_amount: amount,
+            fee_amount: topUpFee,
+            payment_method: "mpesa",
+            fee_description: `Top-up fee for M-Pesa deposit of KES ${amount.toLocaleString()}`,
+            reference_id: savingRecord._id.toString(),
+            status: "collected",
+          });
+
+          console.log("💵 Top-up fee recorded:", {
+            grossAmount: amount,
+            fee: topUpFee,
+            netDeposit,
+          });
+        }
 
         console.log("✅ Wallet deposit completed:", {
           member: member.name,
           memberId,
-          amount,
+          grossAmount: amount,
+          fee: topUpFee,
+          netAmount: netDeposit,
           reference,
           newBalance: balanceAfter,
         });
@@ -385,10 +416,14 @@ async function pollLipiaPaymentStatus(
             memberId: memberId.toString(),
             payment: {
               _id: payment._id.toString(),
-              amount: payment.amount,
+              amount: netDeposit, // Net amount after fee
+              grossAmount: amount, // Original amount
+              fee: topUpFee,
               status: payment.status,
             },
-            amount,
+            amount: netDeposit,
+            grossAmount: amount,
+            fee: topUpFee,
             type: "wallet_deposit",
           });
 
@@ -403,7 +438,9 @@ async function pollLipiaPaymentStatus(
           io.emit("savingDeposit", {
             memberId: memberId.toString(),
             member: member.name,
-            amount,
+            amount: netDeposit, // Net amount after fee
+            grossAmount: amount, // Original amount
+            fee: topUpFee,
             newBalance: balanceAfter,
           });
 

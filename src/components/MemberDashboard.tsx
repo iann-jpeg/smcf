@@ -52,6 +52,8 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
   const [showRepayment, setShowRepayment] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<any>(null);
   const [isProcessingRepayment, setIsProcessingRepayment] = useState(false);
+  const [repaymentState, setRepaymentState] = useState<"idle" | "confirm" | "processing" | "waiting" | "success" | "failed">("idle");
+  const [checkoutRequestID, setCheckoutRequestID] = useState("");
   const [partialPaymentAmount, setPartialPaymentAmount] = useState("");
   const { toast } = useToast();
   const [paymentHistory, setPaymentHistory] = useState([]);
@@ -458,6 +460,82 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
     }, 1500);
   };
 
+  // Poll loan repayment status
+  const pollRepaymentStatus = async (requestID: string, retryCount = 0): Promise<void> => {
+    const maxRetries = 30; // 60 seconds
+
+    if (retryCount >= maxRetries) {
+      setRepaymentState("failed");
+      setIsProcessingRepayment(false);
+      toast({
+        title: "Payment Timeout",
+        description: "Payment verification timed out. Please check your transaction history.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/api/lipia/query-status`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...authService.getAuthHeaders(),
+        },
+        body: JSON.stringify({ checkoutRequestID: requestID }),
+      });
+
+      const data = await response.json();
+
+      // Check for success
+      if (data.ResultCode === "0" || data.MpesaReceiptNumber) {
+        setRepaymentState("success");
+        setIsProcessingRepayment(false);
+
+        const isFullyPaid = selectedLoan && 
+          (selectedLoan.amount_remaining - parseFloat(partialPaymentAmount)) <= 0;
+        
+        toast({
+          title: isFullyPaid ? "Loan Fully Repaid! 🎉" : "Payment Successful!",
+          description: isFullyPaid 
+            ? "Congratulations! Your loan has been fully repaid."
+            : `Payment of KES ${parseFloat(partialPaymentAmount).toLocaleString()} recorded successfully.`,
+        });
+
+        setTimeout(() => {
+          setShowRepayment(false);
+          setSelectedLoan(null);
+          setPartialPaymentAmount("");
+          setRepaymentState("idle");
+          fetchData(); // Refresh data
+        }, 2000);
+        return;
+      }
+
+      // If status is explicitly failed
+      if (data.status === "failed") {
+        setRepaymentState("failed");
+        setIsProcessingRepayment(false);
+        toast({
+          title: "Payment Failed",
+          description: data.ResultDescription || "Payment was not completed",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Continue polling
+      setTimeout(() => {
+        pollRepaymentStatus(requestID, retryCount + 1);
+      }, 2000);
+    } catch (error) {
+      console.error("Repayment status check error:", error);
+      setTimeout(() => {
+        pollRepaymentStatus(requestID, retryCount + 1);
+      }, 2000);
+    }
+  };
+
   const handleLoanRepayment = async () => {
     if (!selectedLoan || !partialPaymentAmount) return;
 
@@ -482,9 +560,10 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
     }
 
     setIsProcessingRepayment(true);
+    setRepaymentState("confirm");
 
     try {
-      // Make partial payment via backend
+      // Initiate STK Push for loan repayment
       const response = await fetch(`${API_BASE}/api/loans/${selectedLoan._id}/repay`, {
         method: 'POST',
         headers: {
@@ -493,36 +572,34 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         },
         body: JSON.stringify({
           amount: paymentAmount,
-          payment_method: 'cash',
-          notes: 'Member loan repayment',
         }),
       });
 
       const data = await response.json();
 
       if (!data.success) {
-        throw new Error(data.error || 'Failed to process payment');
+        throw new Error(data.error || 'Failed to initiate payment');
       }
 
-      const isFullyPaid = data.data?.isFullyPaid;
-      
-      toast({
-        title: isFullyPaid ? "Loan Fully Repaid! 🎉" : "Payment Recorded",
-        description: isFullyPaid 
-          ? `Congratulations! Your loan has been fully repaid.`
-          : `Payment of KES ${paymentAmount.toLocaleString()} recorded. Remaining: KES ${data.data?.remaining.toLocaleString()}`,
-      });
+      if (data.CheckoutRequestID) {
+        // STK Push sent successfully
+        setCheckoutRequestID(data.CheckoutRequestID);
+        setRepaymentState("processing");
+        
+        toast({
+          title: "STK Push Sent 📱",
+          description: data.message || "Please enter your M-Pesa PIN on your phone",
+        });
 
-      setIsProcessingRepayment(false);
-      setShowRepayment(false);
-      setSelectedLoan(null);
-      setPartialPaymentAmount("");
-
-      // Refresh data
-      fetchData();
+        // Start polling for payment status
+        pollRepaymentStatus(data.CheckoutRequestID);
+      } else {
+        throw new Error("Payment initiation failed");
+      }
 
     } catch (error: any) {
       console.error('Repayment error:', error);
+      setRepaymentState("failed");
       toast({
         title: "Payment Failed",
         description: error.message || "Failed to process loan payment",
@@ -1530,7 +1607,13 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                   onClick={handleLoanRepayment}
                   disabled={isProcessingRepayment || !partialPaymentAmount || parseFloat(partialPaymentAmount) <= 0}>
                   {isProcessingRepayment ? (
-                    <>Processing...</>
+                    <>
+                      {repaymentState === "confirm" && "Initiating Payment..."}
+                      {repaymentState === "processing" && "Enter M-Pesa PIN on your phone..."}
+                      {repaymentState === "waiting" && "Waiting for confirmation..."}
+                      {repaymentState === "success" && "Payment Successful!"}
+                      {repaymentState === "failed" && "Payment Failed"}
+                    </>
                   ) : (
                     <>
                       <Phone className="w-4 h-4 mr-2" />
