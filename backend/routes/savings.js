@@ -245,28 +245,34 @@ router.post("/withdraw", protect, async (req, res) => {
       });
     }
 
-    // Get current balance
-    const lastTransaction = await Saving.findOne({ member_id: memberId }).sort({
-      created_at: -1,
-    });
+    // Calculate withdrawal fee to check if member can afford it
+    const withdrawalFee = calculateWithdrawalFee(amount);
+    const totalDeduction = amount + withdrawalFee;
+
+    // Get current balance from most recent completed transaction
+    const lastTransaction = await Saving.findOne({ 
+      member_id: memberId,
+      status: "completed" 
+    }).sort({ created_at: -1 });
     const currentBalance = lastTransaction ? lastTransaction.balance_after : 0;
 
-    if (amount > currentBalance) {
+    // Check if member has enough balance for withdrawal amount + fee
+    if (currentBalance < totalDeduction) {
       return res.status(400).json({
         success: false,
-        error: "Insufficient balance",
+        error: `Insufficient balance. Withdrawal: KES ${amount}, Fee: KES ${withdrawalFee}, Total needed: KES ${totalDeduction}, Your balance: KES ${currentBalance}`,
       });
     }
 
-    // Create withdrawal transaction
+    // Create withdrawal transaction (balance_after will be set when admin approves)
     const saving = await Saving.create({
       member_id: memberId,
       amount,
       transaction_type: "withdrawal",
       balance_before: currentBalance,
-      balance_after: currentBalance - amount,
+      balance_after: currentBalance, // Will be updated on approval to reflect actual deduction
       status: "pending", // Requires admin approval
-      notes: notes || "",
+      notes: notes ? `${notes} | Est. fee: KES ${withdrawalFee}` : `Estimated withdrawal fee: KES ${withdrawalFee}`,
     });
 
     // Emit Socket.IO event
@@ -598,30 +604,39 @@ router.post("/admin/approve-withdrawal/:id", protect, adminOnly, async (req, res
       });
     }
 
-    // Check if member has enough balance for amount + fee
-    if (member.wallet_balance < totalDeduction) {
+    // Get the ACTUAL current balance from most recent completed transaction (not wallet_balance field)
+    const latestTransaction = await Saving.findOne({ 
+      member_id: saving.member_id._id,
+      status: "completed"
+    }).sort({ created_at: -1 });
+    const actualCurrentBalance = latestTransaction ? latestTransaction.balance_after : 0;
+
+    // Check if member has enough balance for amount + fee using ACTUAL balance
+    if (actualCurrentBalance < totalDeduction) {
       return res.status(400).json({
         success: false,
-        error: `Insufficient balance. Withdrawal amount: KES ${saving.amount}, Fee: KES ${withdrawalFee}, Total required: KES ${totalDeduction}, Current balance: KES ${member.wallet_balance}`,
+        error: `Insufficient balance. Withdrawal amount: KES ${saving.amount}, Fee: KES ${withdrawalFee}, Total required: KES ${totalDeduction}, Current balance: KES ${actualCurrentBalance}`,
       });
     }
 
-    // Deduct from member's wallet_balance and total_savings (amount + fee)
+    // Update member's total_savings, wallet_balance and total_transaction_fees
     await Member.findByIdAndUpdate(saving.member_id._id, {
       $inc: { 
         total_savings: -totalDeduction,
-        wallet_balance: -totalDeduction 
+        wallet_balance: -totalDeduction,
+        total_transaction_fees: withdrawalFee
       },
     });
 
-    // Update saving record
+    // Update saving record with proper balance tracking
+    saving.balance_before = actualCurrentBalance;
+    saving.balance_after = actualCurrentBalance - totalDeduction;
     saving.notes = saving.notes 
       ? `${saving.notes}${withdrawalFee > 0 ? ` | Fee: KES ${withdrawalFee}` : ''}`
       : (withdrawalFee > 0 ? `Withdrawal fee: KES ${withdrawalFee}` : '');
     saving.status = "completed";
     saving.processed_by = req.admin._id;
     saving.processed_at = new Date();
-    saving.balance_after = member.wallet_balance - totalDeduction;
     await saving.save();
 
     // Record withdrawal fee if applicable
