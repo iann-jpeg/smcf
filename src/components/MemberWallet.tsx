@@ -86,9 +86,9 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
         fetch(`${API_BASE}/api/savings/all-members`, {
           headers: { ...authService.getAuthHeaders() },
         }),
-        fetch(`${API_BASE}/api/savings/admin/fees?limit=20`, {
+        fetch(`${API_BASE}/api/savings/fees?limit=50`, {
           headers: { ...authService.getAuthHeaders() },
-        }).catch(() => ({ json: async () => ({ success: false, data: { fees: [] } }) })),
+        }),
       ]);
 
       const summaryData = await summaryRes.json();
@@ -98,22 +98,25 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
 
       if (summaryData.success) {
         setSummary(summaryData.data);
+        // Use totalTransactionFees from summary if available
+        if (summaryData.data.totalTransactionFees !== undefined) {
+          setTotalFeesPaid(summaryData.data.totalTransactionFees);
+        }
       }
 
       if (transactionsData.success) {
         setTransactions(transactionsData.data);
       }
 
-      // Filter fees for current member
-      if (feesData.success && feesData.data?.fees) {
-        const myFees = feesData.data.fees.filter(
-          (fee: any) => String(fee.member_id?._id || fee.member_id) === String(userData._id || userData.id)
-        );
-        setTransactionFees(myFees);
+      // Get member's own fees from the dedicated endpoint
+      if (feesData.success && feesData.data) {
+        const memberFees = feesData.data.fees || [];
+        setTransactionFees(memberFees);
         
-        // Calculate total fees paid
-        const totalFees = myFees.reduce((sum: number, fee: any) => sum + (fee.fee_amount || 0), 0);
-        setTotalFeesPaid(totalFees);
+        // Use the totalFees from backend response
+        if (feesData.data.totalFees !== undefined) {
+          setTotalFeesPaid(feesData.data.totalFees);
+        }
       }
 
       // Determine if this member is the top saver based on total deposits

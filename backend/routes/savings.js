@@ -55,6 +55,7 @@ router.get("/summary", protect, async (req, res) => {
     console.log("   Total Deposits:", totalDeposits);
     console.log("   Total Withdrawals:", totalWithdrawals);
     console.log("   Total Interest:", totalInterestEarned);
+    console.log("   Total Transaction Fees:", totalTransactionFees);
     console.log("   Transaction Count:", transactions.length);
 
     res.json({
@@ -64,6 +65,7 @@ router.get("/summary", protect, async (req, res) => {
         totalDeposits,
         totalWithdrawals,
         totalInterestEarned,
+        totalTransactionFees,
         transactionCount: transactions.length,
       },
     });
@@ -99,6 +101,40 @@ router.get("/transactions", protect, async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching transactions:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get member's transaction fees
+router.get("/fees", protect, async (req, res) => {
+  try {
+    const memberId = req.member ? req.member._id : req.admin._id;
+    const { limit = 50 } = req.query;
+
+    const TransactionFee = (await import("../models/TransactionFee.js")).default;
+
+    // Get fees for this member
+    const fees = await TransactionFee.find({ 
+      member_id: memberId,
+      status: "collected"
+    })
+      .populate("recipient_id", "name member_id")
+      .sort({ created_at: -1 })
+      .limit(parseInt(limit));
+
+    // Calculate total fees paid by this member
+    const totalFees = fees.reduce((sum, fee) => sum + fee.fee_amount, 0);
+
+    res.json({
+      success: true,
+      data: {
+        fees,
+        totalFees,
+        count: fees.length,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching member fees:", error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
