@@ -38,10 +38,9 @@ router.get("/summary", protect, async (req, res) => {
       .filter((t) => t.transaction_type === "interest")
       .reduce((sum, t) => sum + t.amount, 0);
 
-    // Get current balance from the most recent transaction's balance_after
-    // This ensures accuracy based on actual transaction history
-    const lastTransaction = transactions.length > 0 ? transactions[0] : null;
-    const currentBalance = lastTransaction ? (lastTransaction.balance_after || 0) : 0;
+    // Calculate current balance from transaction history:
+    // Current Balance = Total Deposits + Interest Earned - Withdrawals
+    const currentBalance = totalDeposits + totalInterestEarned - totalWithdrawals;
 
     console.log("📊 Wallet summary for member:", memberId);
     console.log("   Current Balance:", currentBalance);
