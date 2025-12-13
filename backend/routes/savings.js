@@ -293,10 +293,12 @@ router.put("/:id/status", protect, adminOnly, async (req, res) => {
         }
 
         // Deduct from member's total savings AND wallet_balance (amount + fee)
+        // Also update total_transaction_fees if there's a fee
         await Member.findByIdAndUpdate(saving.member_id, {
           $inc: { 
             total_savings: -totalDeduction,
-            wallet_balance: -totalDeduction 
+            wallet_balance: -totalDeduction,
+            total_transaction_fees: withdrawalFee
           },
         });
 
@@ -814,6 +816,9 @@ router.post("/qr-transfer", protect, async (req, res) => {
 
     // Deduct from sender (amount + fee)
     sender.wallet_balance -= totalDeduction;
+    if (transferFee > 0) {
+      sender.total_transaction_fees = (sender.total_transaction_fees || 0) + transferFee;
+    }
     await sender.save();
 
     // Add to recipient (only the transfer amount, not the fee)
