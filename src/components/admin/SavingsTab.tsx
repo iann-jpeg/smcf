@@ -147,23 +147,29 @@ const AdminSavingsTab = () => {
   ) => {
     setIsProcessing(true);
     try {
-      const res = await fetch(
-        `${API_BASE}/api/savings/${withdrawalId}/status`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            ...authService.getAuthHeaders(),
-          },
-          body: JSON.stringify({ status }),
-        }
-      );
+      // Use the new dedicated endpoints for approval/rejection
+      const endpoint = status === "completed" 
+        ? `${API_BASE}/api/savings/admin/approve-withdrawal/${withdrawalId}`
+        : `${API_BASE}/api/savings/admin/reject-withdrawal/${withdrawalId}`;
+      
+      const requestBody = status === "failed" 
+        ? { rejection_reason: "Rejected by admin from Savings Management tab" }
+        : undefined;
+      
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...authService.getAuthHeaders(),
+        },
+        ...(requestBody && { body: JSON.stringify(requestBody) }),
+      });
 
       const data = await res.json();
 
       if (data.success) {
         toast({
-          title: `Withdrawal ${status}`,
+          title: status === "completed" ? "Withdrawal Approved" : "Withdrawal Rejected",
           description: data.message,
         });
         fetchSavingsData();

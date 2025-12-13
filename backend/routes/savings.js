@@ -38,9 +38,17 @@ router.get("/summary", protect, async (req, res) => {
       .filter((t) => t.transaction_type === "interest")
       .reduce((sum, t) => sum + t.amount, 0);
 
+    // Get total transaction fees for this member
+    const TransactionFee = (await import("../models/TransactionFee.js")).default;
+    const transactionFees = await TransactionFee.find({
+      member_id: memberId,
+      status: "collected"
+    });
+    const totalTransactionFees = transactionFees.reduce((sum, fee) => sum + fee.fee_amount, 0);
+
     // Calculate current balance from transaction history:
-    // Current Balance = Total Deposits + Interest Earned - Withdrawals
-    const currentBalance = totalDeposits + totalInterestEarned - totalWithdrawals;
+    // Current Balance = Total Deposits + Interest Earned - Withdrawals - Transaction Fees
+    const currentBalance = totalDeposits + totalInterestEarned - totalWithdrawals - totalTransactionFees;
 
     console.log("📊 Wallet summary for member:", memberId);
     console.log("   Current Balance:", currentBalance);
@@ -247,7 +255,10 @@ router.post("/withdraw", protect, async (req, res) => {
   }
 });
 
-// Approve/Reject withdrawal (admin only)
+// DEPRECATED: Old withdrawal approval route - replaced by /admin/approve-withdrawal and /admin/reject-withdrawal
+// This route is commented out to prevent duplicate TransactionFee creation
+// Use the new routes in ApprovalsTab instead
+/*
 router.put("/:id/status", protect, adminOnly, async (req, res) => {
   try {
     const { status } = req.body; // 'completed' or 'failed'
@@ -376,6 +387,7 @@ router.put("/:id/status", protect, adminOnly, async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+*/
 
 // Get all members' savings (admin only)
 // Get all members savings summary (accessible to all authenticated users for top saver badge)
@@ -455,8 +467,10 @@ router.get("/admin/all", protect, adminOnly, async (req, res) => {
         const totalTransactionFees = transactionFees.reduce((sum, fee) => sum + fee.fee_amount, 0);
 
         // Calculate current balance from transaction history:
-        // Current Balance = Total Deposits + Interest Earned - Withdrawals
-        const currentBalance = totalDeposits + totalInterestEarned - totalWithdrawals;
+        // Current Balance = Total Deposits + Interest Earned - Withdrawals - Transaction Fees
+        // Note: Fees are already deducted when withdrawals/transfers happen (balance_after includes fee deduction)
+        // But to show accurate balance matching the actual wallet state, we need to account for them
+        const currentBalance = totalDeposits + totalInterestEarned - totalWithdrawals - totalTransactionFees;
 
         return {
           _id: member._id,
