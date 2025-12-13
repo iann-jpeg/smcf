@@ -39,7 +39,7 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
 interface MemberDashboardProps {
   userData: any;
@@ -58,6 +58,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
   const [checkoutRequestID, setCheckoutRequestID] = useState("");
   const [partialPaymentAmount, setPartialPaymentAmount] = useState("");
   const { toast } = useToast();
+  const repaymentPollingActiveRef = useRef(false);
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [memberLoans, setMemberLoans] = useState<any[]>([]);
   const [announcements, setAnnouncements] = useState<any[]>([]);
@@ -459,6 +460,38 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         }
       });
 
+      // Listen for loan repayment updates
+      socket.on("loanPayment", (data: any) => {
+        console.log("💰 MemberDashboard received: loanPayment", data);
+        console.log("   Current user ID:", userData._id, "or", userData.id);
+        console.log("   Loan memberId:", data.memberId);
+        
+        if (data.memberId === userData._id?.toString() || data.memberId === userData.id?.toString()) {
+          const isFullyPaid = data.isFullyPaid || data.remaining <= 0;
+          
+          // Stop polling immediately
+          repaymentPollingActiveRef.current = false;
+          setIsProcessingRepayment(false);
+          setRepaymentState("success");
+          
+          toast({
+            title: isFullyPaid ? "Loan Fully Repaid! 🎉" : "Loan Payment Received!",
+            description: isFullyPaid
+              ? `Congratulations! Your loan of KES ${data.totalPaid.toLocaleString()} has been fully repaid.`
+              : `Payment of KES ${data.paymentAmount.toLocaleString()} received. Remaining: KES ${data.remaining.toLocaleString()}`,
+          });
+          
+          // Refresh loan data immediately, then close dialog
+          setTimeout(() => {
+            setShowRepayment(false);
+            setSelectedLoan(null);
+            setPartialPaymentAmount("");
+            setRepaymentState("idle");
+            fetchData();
+          }, 2000);
+        }
+      });
+
       // Listen for new announcements
       socket.on("announcementCreated", (announcement: any) => {
         console.log("📢 New announcement received:", announcement);
@@ -497,6 +530,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         socket.off("payment:new");
         socket.off("cycle:updated");
         socket.off("loanStatusUpdated");
+        socket.off("loanPayment");
         socket.off("announcementCreated");
         socket.off("member:new");
       }
@@ -528,9 +562,16 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
     requestID: string,
     retryCount = 0
   ): Promise<void> => {
-    const maxRetries = 30; // 60 seconds
+    const maxRetries = 40; // 40 retries with adaptive intervals
+
+    // Check if polling was stopped via Socket.IO
+    if (!repaymentPollingActiveRef.current) {
+      console.log("⏹️ Loan repayment polling stopped (Socket.IO event received)");
+      return;
+    }
 
     if (retryCount >= maxRetries) {
+      repaymentPollingActiveRef.current = false;
       setRepaymentState("failed");
       setIsProcessingRepayment(false);
       toast({
@@ -556,6 +597,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
 
       // Check for success
       if (data.ResultCode === "0" || data.MpesaReceiptNumber) {
+        repaymentPollingActiveRef.current = false;
         setRepaymentState("success");
         setIsProcessingRepayment(false);
 
@@ -584,6 +626,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
 
       // If status is explicitly failed
       if (data.status === "failed") {
+        repaymentPollingActiveRef.current = false;
         setRepaymentState("failed");
         setIsProcessingRepayment(false);
         toast({
@@ -594,15 +637,31 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         return;
       }
 
+      // Check if polling still active before continuing
+      if (!repaymentPollingActiveRef.current) {
+        console.log("⏹️ Loan repayment polling stopped during check");
+        return;
+      }
+
+      // Adaptive polling intervals (1s -> 2s -> 3s)
+      const interval = retryCount < 15 ? 1000 : retryCount < 30 ? 2000 : 3000;
+
       // Continue polling
       setTimeout(() => {
         pollRepaymentStatus(requestID, retryCount + 1);
-      }, 2000);
+      }, interval);
     } catch (error) {
       console.error("Repayment status check error:", error);
+      
+      // Check if polling still active
+      if (!repaymentPollingActiveRef.current) {
+        return;
+      }
+      
+      const interval = retryCount < 15 ? 1000 : retryCount < 30 ? 2000 : 3000;
       setTimeout(() => {
         pollRepaymentStatus(requestID, retryCount + 1);
-      }, 2000);
+      }, interval);
     }
   };
 
@@ -668,13 +727,15 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
             data.message || "Please enter your M-Pesa PIN on your phone",
         });
 
-        // Start polling for payment status
+        // Start polling for payment status with ref control
+        repaymentPollingActiveRef.current = true;
         pollRepaymentStatus(data.CheckoutRequestID);
       } else {
         throw new Error("Payment initiation failed");
       }
     } catch (error: any) {
       console.error("Repayment error:", error);
+      repaymentPollingActiveRef.current = false;
       setRepaymentState("failed");
       toast({
         title: "Payment Failed",

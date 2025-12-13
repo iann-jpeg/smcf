@@ -1053,6 +1053,23 @@ const AdminDashboard = ({
         });
         fetchAllData(); // Refresh all data including loans
       });
+
+      // Listen for loan repayment updates
+      socket.on("loanPayment", (data: any) => {
+        console.log("💰 AdminDashboard received: loanPayment", data);
+        
+        const isFullyPaid = data.isFullyPaid || data.remaining <= 0;
+        
+        toast({
+          title: isFullyPaid ? "Loan Fully Repaid! 🎉" : "Loan Payment Received!",
+          description: isFullyPaid
+            ? `${data.memberName} has fully repaid their loan (KES ${data.totalPaid.toLocaleString()})`
+            : `${data.memberName} paid KES ${data.paymentAmount.toLocaleString()}. Remaining: KES ${data.remaining.toLocaleString()}`,
+        });
+        
+        // Refresh all data to update loan statistics
+        fetchAllData();
+      });
     }
 
     return () => {
@@ -1067,6 +1084,7 @@ const AdminDashboard = ({
         socket.off("paymentFailed");
         socket.off("nextRecipientUpdated");
         socket.off("loanStatusUpdated");
+        socket.off("loanPayment");
       }
     };
   }, []);

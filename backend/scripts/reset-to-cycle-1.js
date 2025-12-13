@@ -54,16 +54,22 @@ const resetToCycleOne = async () => {
     console.log(`✅ Updated end date to: ${activeCycle.end_date}`);
     console.log(`✅ Cycle duration: 5 days`);
 
-    // Reset all members' payment status to pending for the new cycle
+    // Reset all members' payment status and cycle contributions for the new cycle
     const members = await Member.find({ status: "active" });
-    console.log(`\n👥 Resetting payment status for ${members.length} active members...`);
+    console.log(`\n👥 Resetting payment status and cycle contributions for ${members.length} active members...`);
     
     for (const member of members) {
       member.payment_status = "pending";
+      // Reset cycle contribution amounts (keeping savings and loans intact)
+      member.total_cycle_contribution = 0;
+      member.total_member_credit = 0;
+      member.total_transaction_fees = 0;
+      member.total_contributed = 0;
       await member.save();
     }
 
     console.log(`✅ All member payment statuses reset to "pending"`);
+    console.log(`✅ All cycle contribution amounts reset to 0`);
 
     // Display summary
     const now = new Date();
@@ -80,6 +86,7 @@ const resetToCycleOne = async () => {
     console.log(`✅ Cycle Duration: 5 days`);
     console.log(`✅ Active Members: ${members.length}`);
     console.log(`✅ All members set to: PENDING payment status`);
+    console.log(`✅ Cycle contributions reset to: KES 0 (total_cycle_contribution, total_member_credit, total_transaction_fees, total_contributed)`);
     console.log(`✅ All previous data preserved (payments, savings, loans intact)`);
     console.log("=".repeat(50));
 
