@@ -446,6 +446,14 @@ router.get("/admin/all", protect, adminOnly, async (req, res) => {
           .filter((t) => t.transaction_type === "interest")
           .reduce((sum, t) => sum + t.amount, 0);
 
+        // Get total transaction fees for this member
+        const TransactionFee = (await import("../models/TransactionFee.js")).default;
+        const transactionFees = await TransactionFee.find({
+          member_id: member._id,
+          status: "collected"
+        });
+        const totalTransactionFees = transactionFees.reduce((sum, fee) => sum + fee.fee_amount, 0);
+
         // Calculate current balance from transaction history:
         // Current Balance = Total Deposits + Interest Earned - Withdrawals
         const currentBalance = totalDeposits + totalInterestEarned - totalWithdrawals;
@@ -460,6 +468,7 @@ router.get("/admin/all", protect, adminOnly, async (req, res) => {
           totalDeposits,
           totalWithdrawals,
           totalInterestEarned,
+          totalTransactionFees,
           lastTransaction:
             transactions.length > 0 ? transactions[0].created_at : null,
         };

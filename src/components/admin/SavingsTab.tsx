@@ -567,6 +567,7 @@ const AdminSavingsTab = () => {
                       <TableHead>Current Balance</TableHead>
                       <TableHead>Total Deposits</TableHead>
                       <TableHead>Interest Earned</TableHead>
+                      <TableHead>Transaction Fees</TableHead>
                       <TableHead>Last Transaction</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -600,6 +601,9 @@ const AdminSavingsTab = () => {
                         </TableCell>
                         <TableCell className="text-blue-600">
                           KES {(member.totalInterestEarned || 0).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-amber-600">
+                          KES {(member.totalTransactionFees || 0).toLocaleString()}
                         </TableCell>
                         <TableCell>
                           {member.lastTransaction
