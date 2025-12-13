@@ -265,6 +265,24 @@ router.post("/query-status", protect, async (req, res) => {
           // Wallet deposit - create Saving record
           const Saving = (await import("../models/Saving.js")).default;
 
+          // Check if this transaction already exists (prevent duplicates)
+          const existingSaving = await Saving.findOne({
+            member_id: payment.member_id,
+            transaction_ref: result.mpesaReceiptNumber,
+            transaction_type: "deposit"
+          });
+
+          if (existingSaving) {
+            console.log("⚠️ Deposit already recorded for transaction:", result.mpesaReceiptNumber);
+            return res.json({
+              success: true,
+              status: "completed",
+              ResultCode: "0",
+              ResultDescription: "Transaction already processed",
+              MpesaReceiptNumber: result.mpesaReceiptNumber,
+            });
+          }
+
           const lastSaving = await Saving.findOne({
             member_id: payment.member_id,
           }).sort({ created_at: -1 });
@@ -937,6 +955,22 @@ router.post("/callback", async (req, res) => {
         
         // Wallet deposit - create Saving record
         const Saving = (await import("../models/Saving.js")).default;
+
+        // Check if this transaction already exists (prevent duplicates)
+        const existingSaving = await Saving.findOne({
+          member_id: payment.member_id,
+          transaction_ref: callbackData.mpesaReceiptNumber,
+          transaction_type: "deposit"
+        });
+
+        if (existingSaving) {
+          console.log("⚠️ Deposit already recorded via callback for transaction:", callbackData.mpesaReceiptNumber);
+          return res.json({
+            success: true,
+            ResultCode: "0",
+            ResultDescription: "Transaction already processed",
+          });
+        }
 
         const lastSaving = await Saving.findOne({
           member_id: payment.member_id,
