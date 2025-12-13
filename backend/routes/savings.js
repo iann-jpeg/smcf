@@ -292,6 +292,13 @@ router.put("/:id/status", protect, adminOnly, async (req, res) => {
           });
         }
 
+        // Get the actual current balance from most recent transaction
+        const latestTransaction = await Saving.findOne({ 
+          member_id: saving.member_id,
+          status: "completed"
+        }).sort({ created_at: -1 });
+        const actualCurrentBalance = latestTransaction ? latestTransaction.balance_after : 0;
+
         // Deduct from member's total savings AND wallet_balance (amount + fee)
         // Also update total_transaction_fees if there's a fee
         await Member.findByIdAndUpdate(saving.member_id, {
@@ -302,7 +309,9 @@ router.put("/:id/status", protect, adminOnly, async (req, res) => {
           },
         });
 
-        // Update saving notes to include fee
+        // Update saving record with correct balances and fee info
+        saving.balance_before = actualCurrentBalance;
+        saving.balance_after = actualCurrentBalance - totalDeduction;
         saving.notes = saving.notes 
           ? `${saving.notes}${withdrawalFee > 0 ? ` | Fee: KES ${withdrawalFee}` : ''}`
           : (withdrawalFee > 0 ? `Withdrawal fee: KES ${withdrawalFee}` : '');
@@ -826,15 +835,30 @@ router.post("/qr-transfer", protect, async (req, res) => {
     recipient.total_savings += amount;
     await recipient.save();
 
+    // Get sender's balance before transfer
+    const senderLastTxn = await Saving.findOne({ 
+      member_id: senderId,
+      status: "completed"
+    }).sort({ created_at: -1 });
+    const senderBalanceBefore = senderLastTxn ? senderLastTxn.balance_after : 0;
+
     // Create withdrawal transaction for sender
     const withdrawalTxn = await Saving.create({
       member_id: senderId,
       amount: amount,
       transaction_type: "withdrawal",
       status: "completed",
-      notes: `QR Transfer to ${recipient.name} (${recipient.member_id})${transferFee > 0 ? ` | Fee: KES ${transferFee}` : ''}`,
+      balance_before: senderBalanceBefore,
       balance_after: sender.wallet_balance,
+      notes: `QR Transfer to ${recipient.name} (${recipient.member_id})${transferFee > 0 ? ` | Fee: KES ${transferFee}` : ''}`,
     });
+
+    // Get recipient's balance before transfer
+    const recipientLastTxn = await Saving.findOne({ 
+      member_id: recipientId,
+      status: "completed"
+    }).sort({ created_at: -1 });
+    const recipientBalanceBefore = recipientLastTxn ? recipientLastTxn.balance_after : 0;
 
     // Create deposit transaction for recipient
     const depositTxn = await Saving.create({
@@ -842,8 +866,9 @@ router.post("/qr-transfer", protect, async (req, res) => {
       amount: amount,
       transaction_type: "deposit",
       status: "completed",
-      notes: `QR Transfer from ${sender.name} (${sender.member_id})`,
+      balance_before: recipientBalanceBefore,
       balance_after: recipient.wallet_balance,
+      notes: `QR Transfer from ${sender.name} (${sender.member_id})`,
     });
 
     // Record transfer fee if applicable
