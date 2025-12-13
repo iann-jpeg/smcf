@@ -1877,7 +1877,7 @@ Thank you for your cooperation! 🙏`;
               </CardContent>
             </Card>
 
-            {/* Available Funds (Total Interest + Wallet Balance) */}
+            {/* Available Funds (Savings Pool + Organization Profit) */}
             <Card className="bg-gradient-to-br from-rose-50 to-rose-100 dark:from-rose-950 dark:to-rose-900 border-rose-200">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
@@ -1889,24 +1889,35 @@ Thank you for your cooperation! 🙏`;
                       KES{" "}
                       {(
                         (savingsData.reduce(
-                          (sum, m) => sum + (m.totalInterestEarned || 0),
-                          0
-                        ) || 0) +
-                        (savingsData.reduce(
                           (sum, m) => sum + (m.currentBalance || 0),
                           0
-                        ) || 0)
+                        ) || 0) +
+                        ((feeSummary?.totalCollected || 0) +
+                        (loans
+                          .filter((l: any) => l.status === "repaid")
+                          .reduce(
+                            (sum: number, l: any) =>
+                              sum + ((l.total_repayable || 0) - (l.amount || 0)),
+                            0
+                          ) || 0))
                       ).toLocaleString()}
                     </p>
                     <p className="text-xs text-rose-700 dark:text-rose-300 mt-1">
-                      Interest: KES{" "}
-                      {savingsData
-                        .reduce((sum, m) => sum + (m.totalInterestEarned || 0), 0)
-                        .toLocaleString()}{" "}
-                      | Wallet: KES{" "}
+                      Savings Pool: KES{" "}
                       {savingsData
                         .reduce((sum, m) => sum + (m.currentBalance || 0), 0)
-                        .toLocaleString()}
+                        .toLocaleString()}{" "}
+                      | Org Profit: KES{" "}
+                      {(
+                        (feeSummary?.totalCollected || 0) +
+                        (loans
+                          .filter((l: any) => l.status === "repaid")
+                          .reduce(
+                            (sum: number, l: any) =>
+                              sum + ((l.total_repayable || 0) - (l.amount || 0)),
+                            0
+                          ) || 0)
+                      ).toLocaleString()}
                     </p>
                   </div>
                   <Wallet className="w-12 h-12 text-rose-300 dark:text-rose-700" />
