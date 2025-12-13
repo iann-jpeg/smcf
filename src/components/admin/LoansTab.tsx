@@ -649,8 +649,10 @@ const LoansTab = () => {
                         <TableCell className="font-semibold">
                           KES {loan.amount.toLocaleString()}
                         </TableCell>
-                        <TableCell className="max-w-xs truncate">
-                          {loan.purpose}
+                        <TableCell className="max-w-md">
+                          <div className="text-sm break-words whitespace-normal">
+                            {loan.purpose}
+                          </div>
                         </TableCell>
                         <TableCell>{loan.interest_rate}%</TableCell>
                         <TableCell className="font-semibold">
@@ -726,8 +728,10 @@ const LoansTab = () => {
                         <TableCell className="font-semibold">
                           KES {loan.amount.toLocaleString()}
                         </TableCell>
-                        <TableCell className="max-w-xs truncate">
-                          {loan.purpose}
+                        <TableCell className="max-w-md">
+                          <div className="text-sm break-words whitespace-normal">
+                            {loan.purpose}
+                          </div>
                         </TableCell>
                         <TableCell>
                           {loan.approved_by?.name || "Admin"}
