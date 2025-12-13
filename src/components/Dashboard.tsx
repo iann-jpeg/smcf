@@ -1,4 +1,5 @@
 import AdminDashboard from "@/components/AdminDashboard";
+import JingleBells from "@/components/JingleBells";
 import MemberDashboard from "@/components/MemberDashboard";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
@@ -295,6 +296,9 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-primary/5">
+      {/* Festive Jingle Bells */}
+      <JingleBells />
+      
       {/* Header */}
       <header className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
