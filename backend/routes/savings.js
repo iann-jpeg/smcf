@@ -424,9 +424,6 @@ router.get("/admin/all", protect, adminOnly, async (req, res) => {
           created_at: -1,
         });
 
-        // Use wallet_balance from member model
-        const currentBalance = member.wallet_balance || 0;
-
         const totalDeposits = transactions
           .filter((t) => t.transaction_type === "deposit")
           .reduce((sum, t) => sum + t.amount, 0);
@@ -438,6 +435,10 @@ router.get("/admin/all", protect, adminOnly, async (req, res) => {
         const totalInterestEarned = transactions
           .filter((t) => t.transaction_type === "interest")
           .reduce((sum, t) => sum + t.amount, 0);
+
+        // Calculate current balance from transaction history:
+        // Current Balance = Total Deposits + Interest Earned - Withdrawals
+        const currentBalance = totalDeposits + totalInterestEarned - totalWithdrawals;
 
         return {
           _id: member._id,
