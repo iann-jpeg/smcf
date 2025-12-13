@@ -284,20 +284,20 @@ router.put("/:id/status", protect, adminOnly, async (req, res) => {
           });
         }
 
-        // Check if member has enough balance for amount + fee
-        if (member.wallet_balance < totalDeduction) {
-          return res.status(400).json({
-            success: false,
-            error: `Insufficient balance. Withdrawal fee: KES ${withdrawalFee}. Total required: KES ${totalDeduction}`,
-          });
-        }
-
-        // Get the actual current balance from most recent transaction
+        // Get the actual current balance from most recent transaction (not wallet_balance field)
         const latestTransaction = await Saving.findOne({ 
           member_id: saving.member_id,
           status: "completed"
         }).sort({ created_at: -1 });
         const actualCurrentBalance = latestTransaction ? latestTransaction.balance_after : 0;
+
+        // Check if member has enough balance for amount + fee
+        if (actualCurrentBalance < totalDeduction) {
+          return res.status(400).json({
+            success: false,
+            error: `Insufficient balance. Current: KES ${actualCurrentBalance}. Withdrawal fee: KES ${withdrawalFee}. Total required: KES ${totalDeduction}`,
+          });
+        }
 
         // Deduct from member's total savings AND wallet_balance (amount + fee)
         // Also update total_transaction_fees if there's a fee
