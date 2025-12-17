@@ -474,63 +474,63 @@ const LoansTab = () => {
   return (
     <div className="space-y-6">
       {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+            <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
               Pending Requests
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-between">
-              <div className="text-2xl font-bold">{pendingLoans.length}</div>
-              <Clock className="w-8 h-8 text-amber-600" />
+              <div className="text-xl sm:text-2xl font-bold">{pendingLoans.length}</div>
+              <Clock className="w-6 h-6 sm:w-8 sm:h-8 text-amber-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+            <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
               Active Loans
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-between">
-              <div className="text-2xl font-bold">{activeLoans}</div>
-              <HandCoins className="w-8 h-8 text-blue-600" />
+              <div className="text-xl sm:text-2xl font-bold">{activeLoans}</div>
+              <HandCoins className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+            <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
               Total Loaned
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-between">
-              <div className="text-2xl font-bold">
+              <div className="text-xl sm:text-2xl font-bold">
                 {totalLoaned.toLocaleString()}
               </div>
-              <DollarSign className="w-8 h-8 text-financial-primary" />
+              <DollarSign className="w-6 h-6 sm:w-8 sm:h-8 text-financial-primary" />
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+            <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
               Total Repaid
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-between">
-              <div className="text-2xl font-bold">
+              <div className="text-xl sm:text-2xl font-bold">
                 {totalRepaid.toLocaleString()}
               </div>
-              <CheckCircle className="w-8 h-8 text-financial-success" />
+              <CheckCircle className="w-6 h-6 sm:w-8 sm:h-8 text-financial-success" />
             </div>
           </CardContent>
         </Card>
@@ -544,14 +544,14 @@ const LoansTab = () => {
       {/* Loans Management Tabs */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-4">
             <div>
-              <CardTitle>Loan Management</CardTitle>
-              <CardDescription>
+              <CardTitle className="text-base sm:text-lg">Loan Management</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
                 Review and manage member loan requests
               </CardDescription>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button onClick={fetchLoans} variant="outline" size="sm">
                 Refresh
               </Button>
@@ -584,8 +584,8 @@ const LoansTab = () => {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="pending" className="w-full">
-            <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">
-            <TabsList className="inline-flex w-auto md:grid md:w-full md:grid-cols-4 min-w-max">
+            <div className="overflow-x-auto -mx-1 px-1 md:mx-0 md:px-0">
+            <TabsList className="inline-flex w-auto md:grid md:w-full md:grid-cols-4 min-w-max text-xs sm:text-sm">
               <TabsTrigger value="pending">
                 Pending ({pendingLoans.length})
               </TabsTrigger>

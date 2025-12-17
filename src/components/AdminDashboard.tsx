@@ -1595,21 +1595,21 @@ Thank you for your cooperation! 🙏`;
   };
 
   return (
-    <div className="space-y-4 md:space-y-6 p-2 md:p-0">
+    <div className="space-y-4 md:space-y-6 p-2 sm:p-4 md:p-0">
       {/* Festive Jingle Bells */}
       <JingleBells />
       
       {/* Header with Profile and Logout */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3">
         <div>
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold">
+          <h1 className="text-lg sm:text-xl md:text-2xl font-bold">
             Admin Dashboard
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs sm:text-sm text-muted-foreground">
             Welcome back, {userData?.name || "Admin"}
           </p>
         </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-1 sm:gap-2 w-full sm:w-auto">
           <ThemeToggle />
           <Button
             variant="outline"

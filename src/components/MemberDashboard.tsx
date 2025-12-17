@@ -747,22 +747,22 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
   };
 
   return (
-    <div className="space-y-4 md:space-y-6 p-2 md:p-0">
+    <div className="space-y-4 md:space-y-6 p-2 sm:p-4 md:p-0">
       {/* Top Saver Badge */}
       {isTopSaver && (
         <Card className="bg-gradient-to-r from-yellow-50 to-yellow-100 dark:from-yellow-950 dark:to-yellow-900 border-yellow-300">
           <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               <TopSaverBadge
                 isTopSaver={true}
                 currentBalance={savingsBalance}
-                className="text-base"
+                className="text-sm sm:text-base"
               />
               <div>
-                <p className="font-semibold text-yellow-900 dark:text-yellow-100">
+                <p className="font-semibold text-yellow-900 dark:text-yellow-100 text-xs sm:text-base">
                   Congratulations! You're the Top Saver!
                 </p>
-                <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                <p className="text-xs sm:text-sm text-yellow-700 dark:text-yellow-300">
                   You have the highest savings balance among all members
                 </p>
               </div>
@@ -775,17 +775,17 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
       {isTopSaver && (
         <Card className="bg-gradient-to-r from-yellow-50 to-yellow-100 dark:from-yellow-950 dark:to-yellow-900 border-yellow-300">
           <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               <TopSaverBadge
                 isTopSaver={true}
                 currentBalance={savingsBalance}
-                className="text-base"
+                className="text-sm sm:text-base"
               />
               <div>
-                <p className="font-semibold text-yellow-900 dark:text-yellow-100">
+                <p className="font-semibold text-yellow-900 dark:text-yellow-100 text-xs sm:text-base">
                   Congratulations! You're the Top Saver!
                 </p>
-                <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                <p className="text-xs sm:text-sm text-yellow-700 dark:text-yellow-300">
                   You have the highest savings balance among all members
                 </p>
               </div>
@@ -801,21 +801,21 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
             ? "border-l-financial-success bg-financial-success/5"
             : "border-l-financial-warning bg-financial-warning/5"
         }`}>
-        <CardContent className="pt-4 md:pt-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2 md:gap-3">
+        <CardContent className="pt-4 sm:pt-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3">
+            <div className="flex items-center gap-1 sm:gap-2 md:gap-3">
               {memberStats.hasPaidThisCycle ? (
-                <CheckCircle className="w-5 h-5 md:w-6 md:h-6 text-financial-success flex-shrink-0" />
+                <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-financial-success flex-shrink-0" />
               ) : (
-                <AlertCircle className="w-5 h-5 md:w-6 md:h-6 text-financial-warning flex-shrink-0" />
+                <AlertCircle className="w-4 h-4 md:w-5 md:h-5 text-financial-warning flex-shrink-0" />
               )}
               <div>
-                <h3 className="text-sm md:text-base font-semibold">
+                <h3 className="text-xs sm:text-sm md:text-base font-semibold">
                   {memberStats.hasPaidThisCycle
                     ? "Payment Complete"
                     : "Payment Required"}
                 </h3>
-                <p className="text-xs md:text-sm text-muted-foreground">
+                <p className="text-xs sm:text-sm md:text-base text-muted-foreground">
                   {memberStats.hasPaidThisCycle
                     ? `You've contributed KES 224 for cycle #${currentCycleData?.currentCycle}`
                     : `KES 224 payment due in ${
@@ -828,7 +828,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
               onClick={handleMakePayment}
               variant={memberStats.hasPaidThisCycle ? "default" : "mpesa"}
               size="sm"
-              className="w-full sm:w-auto text-xs md:text-sm">
+              className="w-full sm:w-auto text-xs sm:text-sm md:text-base">
               <Phone className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
               {memberStats.hasPaidThisCycle
                 ? "Pay for Next Cycle"

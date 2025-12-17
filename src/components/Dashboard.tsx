@@ -301,21 +301,21 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
       
       {/* Header */}
       <header className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 bg-gradient-primary rounded-full flex items-center justify-center text-primary-foreground font-bold">
+        <div className="container mx-auto px-2 sm:px-4 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-primary rounded-full flex items-center justify-center text-primary-foreground font-bold">
               {userRole === "admin" ? "A" : "M"}
             </div>
             <div>
-              <h1 className="text-xl font-bold text-primary">
+              <h1 className="text-lg sm:text-xl font-bold text-primary">
                 {userRole === "admin" ? "Admin Dashboard" : "Member Dashboard"}
               </h1>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 Welcome, {userData?.name || "User"}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4 w-full sm:w-auto">
             <Badge variant={userRole === "admin" ? "default" : "secondary"}>
               {userRole === "admin"
                 ? "Administrator"
@@ -324,7 +324,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
             <ThemeToggle />
             <Button
               onClick={() => {
-                console.log("🔄 Manual refresh triggered");
+                console.log("504 Manual refresh triggered");
                 setIsLoadingData(true);
                 window.location.reload();
               }}
@@ -341,12 +341,12 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
       </header>
 
       {/* Dashboard Content */}
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-2 sm:px-4 py-6 sm:py-8">
         {/* Overview Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <Card className="hover:shadow-financial transition-all duration-300">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
+          <Card className="hover:shadow-financial transition-all duration-300 min-w-0">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
+              <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
                 Current Cycle
               </CardTitle>
             </CardHeader>
@@ -355,10 +355,10 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
                 <div className="text-sm text-muted-foreground">Loading...</div>
               ) : (
                 <>
-                  <div className="text-2xl font-bold text-primary mb-2">
+                  <div className="text-xl sm:text-2xl font-bold text-primary mb-2">
                     #{cycleData.currentCycle || 1}
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm text-muted-foreground">
                     <Clock className="w-4 h-4" />
                     {cycleData.daysLeft} days left
                   </div>
@@ -367,9 +367,9 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-financial transition-all duration-300">
+          <Card className="hover:shadow-financial transition-all duration-300 min-w-0">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
+              <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
                 Collection Progress
               </CardTitle>
             </CardHeader>
@@ -378,7 +378,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
                 <div className="text-sm text-muted-foreground">Loading...</div>
               ) : (
                 <>
-                  <div className="text-2xl font-bold text-financial-success mb-2">
+                  <div className="text-xl sm:text-2xl font-bold text-financial-success mb-2">
                     {cycleData.totalMembers > 0
                       ? Math.round(
                           (cycleData.paidMembers / cycleData.totalMembers) * 100
@@ -394,7 +394,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
                     }
                     className="h-2"
                   />
-                  <div className="text-sm text-muted-foreground mt-2">
+                  <div className="text-xs sm:text-sm text-muted-foreground mt-2">
                     {cycleData.paidMembers}/{cycleData.totalMembers} members
                     paid
                   </div>
@@ -403,9 +403,9 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-financial transition-all duration-300">
+          <Card className="hover:shadow-financial transition-all duration-300 min-w-0">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
+              <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
                 Amount Collected
               </CardTitle>
             </CardHeader>
@@ -414,10 +414,10 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
                 <div className="text-sm text-muted-foreground">Loading...</div>
               ) : (
                 <>
-                  <div className="text-2xl font-bold text-accent mb-2">
+                  <div className="text-xl sm:text-2xl font-bold text-accent mb-2">
                     KES {cycleData.collectedAmount.toLocaleString()}
                   </div>
-                  <div className="text-sm text-muted-foreground">
+                  <div className="text-xs sm:text-sm text-muted-foreground">
                     of KES {cycleData.totalAmount.toLocaleString()}
                   </div>
                 </>
@@ -425,9 +425,9 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-financial transition-all duration-300">
+          <Card className="hover:shadow-financial transition-all duration-300 min-w-0">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
+              <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
                 Next Recipient
               </CardTitle>
             </CardHeader>
@@ -436,10 +436,10 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
                 <div className="text-sm text-muted-foreground">Loading...</div>
               ) : (
                 <>
-                  <div className="text-2xl font-bold text-primary mb-2">
+                  <div className="text-xl sm:text-2xl font-bold text-primary mb-2">
                     {cycleData.nextRecipient}
                   </div>
-                  <div className="text-sm text-muted-foreground">
+                  <div className="text-xs sm:text-sm text-muted-foreground">
                     Awaiting full collection
                   </div>
                 </>
