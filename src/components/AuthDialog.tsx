@@ -21,6 +21,7 @@ import API_BASE from "@/lib/api";
 import { authService } from "@/lib/authService";
 import { Phone, Shield, Users } from "lucide-react";
 import { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 
 interface AuthDialogProps {
   open: boolean;
@@ -33,6 +34,7 @@ const AuthDialog = ({ open, onOpenChange, onLogin }: AuthDialogProps) => {
     phone: "",
     password: "",
   });
+  const [showPassword, setShowPassword] = useState(false);
   const { toast } = useToast();
 
   const handleLogin = (role: "admin" | "member") => {
@@ -142,21 +144,32 @@ const AuthDialog = ({ open, onOpenChange, onLogin }: AuthDialogProps) => {
 
                 <div className="space-y-2">
                   <Label htmlFor="member-password">Password</Label>
-                  <Input
-                    id="member-password"
-                    type="password"
-                    placeholder="Enter your password"
-                    value={loginData.password}
-                    onChange={(e) =>
-                      setLoginData((prev) => ({
-                        ...prev,
-                        password: e.target.value,
-                      }))
-                    }
-                    onKeyDown={(e) =>
-                      e.key === "Enter" && handleLogin("member")
-                    }
-                  />
+                  <div className="relative">
+                    <Input
+                      id="member-password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Enter your password"
+                      value={loginData.password}
+                      onChange={(e) =>
+                        setLoginData((prev) => ({
+                          ...prev,
+                          password: e.target.value,
+                        }))
+                      }
+                      onKeyDown={(e) =>
+                        e.key === "Enter" && handleLogin("member")
+                      }
+                    />
+                    <button
+                      type="button"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground focus:outline-none"
+                      tabIndex={0}
+                      onClick={() => setShowPassword((v) => !v)}
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
                 </div>
 
                 <Button
@@ -200,19 +213,30 @@ const AuthDialog = ({ open, onOpenChange, onLogin }: AuthDialogProps) => {
 
                 <div className="space-y-2">
                   <Label htmlFor="admin-password">Password</Label>
-                  <Input
-                    id="admin-password"
-                    type="password"
-                    placeholder="Enter your password"
-                    value={loginData.password}
-                    onChange={(e) =>
-                      setLoginData((prev) => ({
-                        ...prev,
-                        password: e.target.value,
-                      }))
-                    }
-                    onKeyDown={(e) => e.key === "Enter" && handleLogin("admin")}
-                  />
+                  <div className="relative">
+                    <Input
+                      id="admin-password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Enter your password"
+                      value={loginData.password}
+                      onChange={(e) =>
+                        setLoginData((prev) => ({
+                          ...prev,
+                          password: e.target.value,
+                        }))
+                      }
+                      onKeyDown={(e) => e.key === "Enter" && handleLogin("admin")}
+                    />
+                    <button
+                      type="button"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground focus:outline-none"
+                      tabIndex={0}
+                      onClick={() => setShowPassword((v) => !v)}
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
                 </div>
 
                 <Button
