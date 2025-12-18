@@ -7,6 +7,7 @@ import express from "express";
 import { createServer } from "http";
 import mongoose from "mongoose";
 import { Server } from "socket.io";
+import path from "path";
 
 // Import routes
 import adminRoutes from "./routes/admin.js";
@@ -179,6 +180,9 @@ io.on("connection", (socket) => {
     console.log("👥 Remaining clients:", io.engine.clientsCount);
   });
 });
+
+// Serve static files for receipts
+app.use("/receipts", express.static(path.join(process.cwd(), "receipts")));
 
 // Routes
 app.use("/api/admin", adminRoutes);

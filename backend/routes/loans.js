@@ -82,6 +82,29 @@ router.put("/:id/status", protect, adminOnly, async (req, res) => {
       }
     } else if (status === "disbursed") {
       updateData.disbursement_date = new Date();
+      // Generate PDF receipt for disbursement
+      try {
+        const loan = await Loan.findById(req.params.id).populate("member_id");
+        if (loan) {
+          // Prepare receipt data
+          const receiptData = {
+            transactionId: loan._id.toString(),
+            date: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" }),
+            fromName: req.admin?.name || "Admin",
+            fromAccount: req.admin?._id?.toString() || "-",
+            toName: loan.member_id?.name || "-",
+            toPhone: loan.member_id?.phone || "-",
+            amount: loan.amount,
+            category: "Loan Disbursement",
+            subCategory: loan.purpose || "-",
+          };
+          const { generateLoanReceiptPDF } = await import("../services/receiptService.js");
+          const pdfPath = await generateLoanReceiptPDF(receiptData);
+          updateData.notes = (updateData.notes ? updateData.notes + "\n" : "") + `Receipt: ${pdfPath}`;
+        }
+      } catch (err) {
+        console.error("Failed to generate loan receipt PDF:", err);
+      }
     } else if (status === "repaid") {
       updateData.repayment_date = new Date();
     }
@@ -121,7 +144,13 @@ router.put("/:id/status", protect, adminOnly, async (req, res) => {
       );
     }
 
-    res.json({ success: true, data: loan });
+    // Try to extract receipt path from notes if present
+    let receiptPath = null;
+    if (loan && loan.notes && loan.notes.includes('Receipt:')) {
+      const match = loan.notes.match(/Receipt: (.*\.pdf)/);
+      if (match) receiptPath = match[1];
+    }
+    res.json({ success: true, data: loan, receipt: receiptPath });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
