@@ -80,11 +80,50 @@ const AdminDashboard = ({
   announcements,
   onLogout,
   refreshMembers,
+  cycleData,
 }: AdminDashboardProps) => {
+
+
+
+
+
+  // Move savingsData and loans state above their first usage
+  const [feeSummary, setFeeSummary] = useState<any>(null);
+  const [savingsData, setSavingsData] = useState<any[]>([]);
+  const [loans, setLoans] = useState<any[]>([]);
+
+  // Calculate total repaid (principal + interest) for all fully repaid loans
+  const totalRepaid = loans
+    ? loans.filter((l: any) => l.status === "repaid").reduce((sum: number, l: any) => sum + (l.total_repayable || 0), 0)
+    : 0;
+
+  // Calculate total loaned (all disbursed or repaid loans)
+  const totalLoaned = loans
+    ? loans.filter((l: any) => ["disbursed", "repaid"].includes(l.status)).reduce((sum: number, l: any) => sum + (l.amount || 0), 0)
+    : 0;
+
+
+
+
+  // Pocket = wallet balances + organization profit - total loaned + total repaid (zero error tolerant)
+  // Organization profit = total transaction fees collected + total loan interest earned
+  const totalWalletBalances = isNaN(savingsData.reduce((sum, m) => sum + (m.currentBalance || 0), 0)) ? 0 : savingsData.reduce((sum, m) => sum + (m.currentBalance || 0), 0);
+  const totalOrgProfit = (isNaN(feeSummary?.totalCollected) ? 0 : (feeSummary?.totalCollected || 0)) +
+    (loans.filter((l: any) => l.status === "repaid")
+      .reduce((sum: number, l: any) => sum + ((l.total_repayable || 0) - (l.amount || 0)), 0) || 0);
+
+  const safeTotalLoaned = isNaN(Number(totalLoaned)) ? 0 : Number(totalLoaned);
+  const safeTotalRepaid = isNaN(Number(totalRepaid)) ? 0 : Number(totalRepaid);
+  const pocket = totalWalletBalances + totalOrgProfit - safeTotalLoaned + safeTotalRepaid;
+
+
   console.log("AdminDashboard rendered with:", {
     userData,
     members: members?.length || 0,
     announcements: announcements?.length || 0,
+    totalLoaned,
+    totalRepaid,
+    pocket,
   });
 
   // Safety check for required data
@@ -120,12 +159,12 @@ const AdminDashboard = ({
   const [recentPayments, setRecentPayments] = useState<any[]>([]);
   const [allPayments, setAllPayments] = useState<any[]>([]);
   const [disbursements, setDisbursements] = useState<any[]>([]);
-  const [loans, setLoans] = useState<any[]>([]);
+
   const [currentCycle, setCurrentCycle] = useState<any>(null);
   const [cycleStats, setCycleStats] = useState<any>(null);
-  const [savingsData, setSavingsData] = useState<any[]>([]);
+  // (removed duplicate savingsData declaration)
   const [pendingWithdrawals, setPendingWithdrawals] = useState<any[]>([]);
-  const [feeSummary, setFeeSummary] = useState<any>(null);
+  // (removed duplicate feeSummary declaration)
 
   // Safe fallbacks to avoid runtime errors when data is undefined
   const safeMembers = Array.isArray(members) ? members : [];
@@ -1964,6 +2003,29 @@ Thank you for your cooperation! 🙏`;
                     </p>
                   </div>
                   <TrendingUp className="w-12 h-12 text-emerald-300 dark:text-emerald-700" />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Available Funds (Total Repaid - Total Loaned) */}
+            <Card className="bg-gradient-to-br from-pink-50 to-pink-100 dark:from-pink-950 dark:to-pink-900 border-pink-200">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-pink-600 dark:text-pink-400">
+                      Pocket
+                    </p>
+                    <p className="text-3xl font-bold text-pink-900 dark:text-pink-100">
+                      KES {pocket.toLocaleString()}
+                    </p>
+                    <p className="text-xs text-pink-700 dark:text-pink-300 mt-1">
+                      Wallet Balances: KES {totalWalletBalances.toLocaleString()}<br />
+                      Organization Profit: KES {totalOrgProfit.toLocaleString()}<br />
+                      Total Loaned: KES {safeTotalLoaned.toLocaleString()}<br />
+                      Total Repaid: KES {safeTotalRepaid.toLocaleString()}
+                    </p>
+                  </div>
+                  <Wallet className="w-12 h-12 text-pink-300 dark:text-pink-700" />
                 </div>
               </CardContent>
             </Card>
