@@ -20,7 +20,7 @@ const FestiveAnimations = () => {
       {snowflakes.map((flake) => (
         <div
           key={flake.id}
-          className="absolute text-white opacity-70 animate-fall"
+          className="absolute text-white opacity-70 animate-fall blur-[1.5px]"
           style={{
             left: `${flake.left}%`,
             animationDelay: `${flake.delay}s`,
@@ -38,7 +38,7 @@ const FestiveAnimations = () => {
         {Array.from({ length: 20 }).map((_, i) => (
           <div
             key={i}
-            className="w-3 h-3 rounded-full animate-twinkle"
+            className="w-3 h-3 rounded-full animate-twinkle blur-[2px]"
             style={{
               backgroundColor: ['#ff0000', '#00ff00', '#ffff00', '#0000ff', '#ff00ff'][i % 5],
               animationDelay: `${i * 0.2}s`,
@@ -49,19 +49,19 @@ const FestiveAnimations = () => {
 
       {/* Festive badges/ornaments */}
       <div className="absolute top-10 right-10 animate-swing">
-        <div className="text-6xl">🎄</div>
+        <div className="text-6xl blur-[1.5px]">🎄</div>
       </div>
       
       <div className="absolute top-20 left-10 animate-bounce-slow">
-        <div className="text-5xl">🎅</div>
+        <div className="text-5xl blur-[1.5px]">🎅</div>
       </div>
 
       <div className="absolute bottom-20 right-20 animate-spin-slow">
-        <div className="text-5xl">⭐</div>
+        <div className="text-5xl blur-[2px]">⭐</div>
       </div>
 
       <div className="absolute bottom-32 left-20 animate-pulse-slow">
-        <div className="text-4xl">🎁</div>
+        <div className="text-4xl blur-[1.5px]">🎁</div>
       </div>
 
       {/* Festive message banner */}
