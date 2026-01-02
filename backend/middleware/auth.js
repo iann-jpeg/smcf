@@ -23,6 +23,30 @@ export const protect = async (req, res, next) => {
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
+      // Handle hardcoded viewer account
+      if (decoded.id === "viewer-readonly" && decoded.role === "viewer") {
+        req.admin = {
+          _id: "viewer-readonly",
+          name: "Read-Only Viewer",
+          phone: "0700000000",
+          role: "viewer",
+          is_active: true,
+          permissions: {
+            canAddMembers: false,
+            canEditMembers: false,
+            canDeleteMembers: false,
+            canDisburseFunds: false,
+            canApproveLoans: false,
+            canViewReports: true,
+          },
+        };
+        req.user = req.admin;
+        req.user.role = "viewer";
+        req.userRole = "admin";
+        console.log("✅ Viewer authenticated: Read-Only Viewer");
+        return next();
+      }
+
       if (
         decoded.role === "admin" ||
         decoded.role === "superadmin" ||
