@@ -16,6 +16,31 @@ router.post("/login", async (req, res) => {
         .json({ success: false, error: "Phone and password are required" });
     }
 
+    // Hardcoded viewer account - read-only admin access
+    if (phone === "0700000000" && password === "smcf-0000") {
+      const token = generateToken("viewer-readonly", "viewer");
+      return res.json({
+        success: true,
+        role: "admin",
+        token,
+        user: {
+          id: "viewer-readonly",
+          name: "Read-Only Viewer",
+          phone: "0700000000",
+          role: "viewer",
+          is_active: true,
+          permissions: {
+            canAddMembers: false,
+            canEditMembers: false,
+            canDeleteMembers: false,
+            canDisburseFunds: false,
+            canApproveLoans: false,
+            canViewReports: true,
+          },
+        },
+      });
+    }
+
     // Check if user is admin
     const admin = await Admin.findOne({ phone, is_active: true }).select(
       "+password"
