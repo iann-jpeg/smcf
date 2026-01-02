@@ -82,8 +82,8 @@ const AdminDashboard = ({
   refreshMembers,
   cycleData,
 }: AdminDashboardProps) => {
-
-
+  // Check if user is a read-only viewer
+  const isReadOnly = userData?.role === "viewer";
 
 
 
@@ -2466,11 +2466,12 @@ Thank you for your cooperation! 🙏`;
           <CardTitle className="flex items-center gap-2">
             <Settings className="w-5 h-5" />
             Quick Actions
+            {isReadOnly && <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded ml-2">Read-Only Mode</span>}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-3">
-            <Button onClick={handleSendReminders} variant="outline" size="sm">
+            <Button onClick={handleSendReminders} variant="outline" size="sm" disabled={isReadOnly} title={isReadOnly ? "Read-only access" : undefined}>
               <Send className="w-4 h-4 mr-2" />
               Send Reminders
             </Button>
@@ -2484,8 +2485,9 @@ Thank you for your cooperation! 🙏`;
               }
               size="sm"
               disabled={
-                userData.cycleData.paidMembers < userData.cycleData.totalMembers
-              }>
+                isReadOnly || userData.cycleData.paidMembers < userData.cycleData.totalMembers
+              }
+              title={isReadOnly ? "Read-only access" : undefined}>
               <DollarSign className="w-4 h-4 mr-2" />
               Process Payout
             </Button>
@@ -2496,14 +2498,18 @@ Thank you for your cooperation! 🙏`;
             <Button
               onClick={() => setShowAddMemberDialog(true)}
               variant="outline"
-              size="sm">
+              size="sm"
+              disabled={isReadOnly}
+              title={isReadOnly ? "Read-only access" : undefined}>
               <UserPlus className="w-4 h-4 mr-2" />
               Add Member
             </Button>
             <Button
               onClick={() => setShowAnnouncementDialog(true)}
               variant="secondary"
-              size="sm">
+              size="sm"
+              disabled={isReadOnly}
+              title={isReadOnly ? "Read-only access" : undefined}>
               <Megaphone className="w-4 h-4 mr-2" />
               Send Announcement
             </Button>
@@ -2886,14 +2892,16 @@ Thank you for your cooperation! 🙏`;
                               size="sm"
                               variant="ghost"
                               onClick={() => moveMemberUp(member)}
-                              title="Move up">
+                              title={isReadOnly ? "Read-only access" : "Move up"}
+                              disabled={isReadOnly}>
                               ↑
                             </Button>
                             <Button
                               size="sm"
                               variant="ghost"
                               onClick={() => moveMemberDown(member)}
-                              title="Move down">
+                              title={isReadOnly ? "Read-only access" : "Move down"}
+                              disabled={isReadOnly}>
                               ↓
                             </Button>
                             <Button
@@ -2903,7 +2911,9 @@ Thank you for your cooperation! 🙏`;
                                   ? "outline"
                                   : "default"
                               }
-                              onClick={() => togglePaymentStatusRemote(member)}>
+                              onClick={() => togglePaymentStatusRemote(member)}
+                              disabled={isReadOnly}
+                              title={isReadOnly ? "Read-only access" : undefined}>
                               {member.payment_status === "paid"
                                 ? "Unpay"
                                 : "Mark Paid"}
@@ -2912,7 +2922,9 @@ Thank you for your cooperation! 🙏`;
                               size="sm"
                               variant="ghost"
                               onClick={() => deleteMemberRemote(member)}
-                              className="text-destructive hover:text-destructive">
+                              className="text-destructive hover:text-destructive"
+                              disabled={isReadOnly}
+                              title={isReadOnly ? "Read-only access" : undefined}>
                               <Trash2 className="w-3 h-3" />
                             </Button>
                           </div>
@@ -3144,7 +3156,7 @@ Thank you for your cooperation! 🙏`;
         </TabsContent>
 
         <TabsContent value="savings" className="space-y-6">
-          <SavingsTab />
+          <SavingsTab isReadOnly={isReadOnly} />
         </TabsContent>
 
         <TabsContent value="disbursements" className="space-y-6">
@@ -3169,7 +3181,9 @@ Thank you for your cooperation! 🙏`;
                 <Button
                   onClick={() => setShowDisbursementDialog(true)}
                   variant="mpesa"
-                  size="sm">
+                  size="sm"
+                  disabled={isReadOnly}
+                  title={isReadOnly ? "Read-only access" : undefined}>
                   <Wallet className="w-4 h-4 mr-2" />
                   Send Payment
                 </Button>
@@ -3291,8 +3305,9 @@ Thank you for your cooperation! 🙏`;
                         className="w-full"
                         variant="default"
                         disabled={
-                          currentCycle.paid_members_count !== safeMembers.length
-                        }>
+                          isReadOnly || currentCycle.paid_members_count !== safeMembers.length
+                        }
+                        title={isReadOnly ? "Read-only access" : undefined}>
                         <CheckCircle className="w-4 h-4 mr-2" />
                         Mark as Disbursed
                       </Button>
@@ -3369,7 +3384,9 @@ Thank you for your cooperation! 🙏`;
                               variant: "destructive",
                             });
                           }
-                        }}>
+                        }}
+                        disabled={isReadOnly}
+                        title={isReadOnly ? "Read-only access" : undefined}>
                         <CheckCircle className="w-4 h-4 mr-2" />
                         Mark as Disbursed
                       </Button>
@@ -3463,11 +3480,11 @@ Thank you for your cooperation! 🙏`;
           </Card>
         </TabsContent>
         <TabsContent value="loans" className="space-y-6">
-          <LoansTab />
+          <LoansTab isReadOnly={isReadOnly} />
         </TabsContent>
 
         <TabsContent value="approvals" className="space-y-6">
-          <ApprovalsTab />
+          <ApprovalsTab isReadOnly={isReadOnly} />
         </TabsContent>
 
         <TabsContent value="fees" className="space-y-6">

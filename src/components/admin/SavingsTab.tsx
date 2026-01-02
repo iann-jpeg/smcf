@@ -37,7 +37,11 @@ import { useEffect, useState } from "react";
 import SavingsChart from "@/components/analytics/SavingsChart";
 import TopSaverBadge from "@/components/analytics/TopSaverBadge";
 
-const AdminSavingsTab = () => {
+interface AdminSavingsTabProps {
+  isReadOnly?: boolean;
+}
+
+const AdminSavingsTab = ({ isReadOnly = false }: AdminSavingsTabProps) => {
   const [membersWithSavings, setMembersWithSavings] = useState<any[]>([]);
   const [pendingWithdrawals, setPendingWithdrawals] = useState<any[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -502,8 +506,9 @@ const AdminSavingsTab = () => {
             </div>
             <Button
               onClick={handleApplyInterest}
-              disabled={isApplyingInterest || membersWithBalance === 0}
-              className="bg-blue-600 hover:bg-blue-700">
+              disabled={isReadOnly || isApplyingInterest || membersWithBalance === 0}
+              className="bg-blue-600 hover:bg-blue-700"
+              title={isReadOnly ? "Read-only access" : undefined}>
               {isApplyingInterest ? (
                 <Loader2 className="w-4 h-4 animate-spin mr-2" />
               ) : (
@@ -684,7 +689,8 @@ const AdminSavingsTab = () => {
                                   "completed"
                                 )
                               }
-                              disabled={isProcessing}>
+                              disabled={isReadOnly || isProcessing}
+                              title={isReadOnly ? "Read-only access" : undefined}>
                               <CheckCircle className="w-4 h-4 mr-1" />
                               Approve
                             </Button>
@@ -694,7 +700,8 @@ const AdminSavingsTab = () => {
                               onClick={() =>
                                 handleWithdrawalAction(withdrawal._id, "failed")
                               }
-                              disabled={isProcessing}>
+                              disabled={isReadOnly || isProcessing}
+                              title={isReadOnly ? "Read-only access" : undefined}>
                               <XCircle className="w-4 h-4 mr-1" />
                               Reject
                             </Button>

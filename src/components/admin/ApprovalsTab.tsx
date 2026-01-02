@@ -66,7 +66,11 @@ interface PendingWithdrawal {
   notes?: string;
 }
 
-const ApprovalsTab = () => {
+interface ApprovalsTabProps {
+  isReadOnly?: boolean;
+}
+
+const ApprovalsTab = ({ isReadOnly = false }: ApprovalsTabProps) => {
   const [pendingLoans, setPendingLoans] = useState<PendingLoan[]>([]);
   const [pendingWithdrawals, setPendingWithdrawals] = useState<PendingWithdrawal[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -431,7 +435,8 @@ const ApprovalsTab = () => {
                               <Button
                                 size="sm"
                                 onClick={() => handleApproveLoan(loan)}
-                                disabled={isProcessing}>
+                                disabled={isReadOnly || isProcessing}
+                                title={isReadOnly ? "Read-only access" : undefined}>
                                 {isProcessing ? (
                                   <Loader2 className="w-4 h-4 animate-spin" />
                                 ) : (
@@ -446,7 +451,8 @@ const ApprovalsTab = () => {
                                   setItemType('loan');
                                   setShowRejectDialog(true);
                                 }}
-                                disabled={isProcessing}>
+                                disabled={isReadOnly || isProcessing}
+                                title={isReadOnly ? "Read-only access" : undefined}>
                                 Reject
                               </Button>
                             </div>
@@ -510,7 +516,8 @@ const ApprovalsTab = () => {
                               <Button
                                 size="sm"
                                 onClick={() => handleApproveWithdrawal(withdrawal)}
-                                disabled={isProcessing}>
+                                disabled={isReadOnly || isProcessing}
+                                title={isReadOnly ? "Read-only access" : undefined}>
                                 {isProcessing ? (
                                   <Loader2 className="w-4 h-4 animate-spin" />
                                 ) : (
@@ -525,7 +532,8 @@ const ApprovalsTab = () => {
                                   setItemType('withdrawal');
                                   setShowRejectDialog(true);
                                 }}
-                                disabled={isProcessing}>
+                                disabled={isReadOnly || isProcessing}
+                                title={isReadOnly ? "Read-only access" : undefined}>
                                 Reject
                               </Button>
                             </div>

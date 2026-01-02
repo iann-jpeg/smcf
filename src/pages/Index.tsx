@@ -53,6 +53,7 @@ const Index = () => {
           "secretary",
           "auditor",
           "superadmin",
+          "viewer",
         ]);
         const normalizedRole: "admin" | "member" = adminRoles.has(
           savedUser.role
@@ -213,6 +214,7 @@ const Index = () => {
       "secretary",
       "auditor",
       "superadmin",
+      "viewer",
     ]);
     const normalizedRole: "admin" | "member" = adminRoles.has(role)
       ? "admin"
@@ -692,8 +694,11 @@ const Index = () => {
           <p className="text-sm text-muted-foreground mb-2">
             Secure • Automated • Transparent • Kenyan-Made
           </p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground mb-2">
             Contact: <a href="tel:+254759097157" className="hover:text-primary">+254 759 097 157</a>
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Email: <a href="mailto:administrator@smcf.app" className="hover:text-primary">administrator@smcf.app</a> | <a href="mailto:info@smcf.app" className="hover:text-primary">info@smcf.app</a>
           </p>
         </div>
       </footer>

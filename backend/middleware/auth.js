@@ -26,7 +26,8 @@ export const protect = async (req, res, next) => {
       if (
         decoded.role === "admin" ||
         decoded.role === "superadmin" ||
-        decoded.role === "treasurer"
+        decoded.role === "treasurer" ||
+        decoded.role === "viewer"
       ) {
         req.admin = await Admin.findById(decoded.id);
 

@@ -70,7 +70,11 @@ interface Loan {
   created_at: string;
 }
 
-const LoansTab = () => {
+interface LoansTabProps {
+  isReadOnly?: boolean;
+}
+
+const LoansTab = ({ isReadOnly = false }: LoansTabProps) => {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
@@ -575,7 +579,8 @@ const LoansTab = () => {
                 onClick={() => setShowClearDialog(true)}
                 variant="destructive"
                 size="sm"
-                disabled={loans.length === 0}>
+                disabled={isReadOnly || loans.length === 0}
+                title={isReadOnly ? "Read-only access" : undefined}>
                 <Trash2 className="w-4 h-4 mr-2" />
                 Clear All Loans
               </Button>
@@ -666,7 +671,8 @@ const LoansTab = () => {
                             <Button
                               size="sm"
                               onClick={() => handleApprove(loan)}
-                              disabled={isProcessing}>
+                              disabled={isReadOnly || isProcessing}
+                              title={isReadOnly ? "Read-only access" : undefined}>
                               {isProcessing ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
                               ) : (
@@ -680,7 +686,8 @@ const LoansTab = () => {
                                 setSelectedLoan(loan);
                                 setShowRejectDialog(true);
                               }}
-                              disabled={isProcessing}>
+                              disabled={isReadOnly || isProcessing}
+                              title={isReadOnly ? "Read-only access" : undefined}>
                               Reject
                             </Button>
                           </div>
@@ -748,7 +755,8 @@ const LoansTab = () => {
                               setSelectedLoan(loan);
                               setShowDisbursementDialog(true);
                             }}
-                            disabled={isProcessing}>
+                            disabled={isReadOnly || isProcessing}
+                            title={isReadOnly ? "Read-only access" : undefined}>
                             Disburse Funds
                           </Button>
                         </TableCell>
@@ -813,7 +821,8 @@ const LoansTab = () => {
                             size="sm"
                             variant="outline"
                             onClick={() => handleMarkRepaid(loan)}
-                            disabled={isProcessing}>
+                            disabled={isReadOnly || isProcessing}
+                            title={isReadOnly ? "Read-only access" : undefined}>
                             Mark as Repaid
                           </Button>
                         </TableCell>
