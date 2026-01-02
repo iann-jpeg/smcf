@@ -1,7 +1,7 @@
 import smcfLogo from "@/assets/smcf-logo.png";
 import AddMemberDialog from "@/components/AddMemberDialog";
 import AnnouncementDialog from "@/components/AnnouncementDialog";
-import JingleBells from "@/components/JingleBells";
+// ...existing code...
 import MpesaDisbursementDialog from "@/components/MpesaDisbursementDialog";
 import TransactionFeesReport from "@/components/TransactionFeesReport";
 import SavingsTab from "@/components/admin/SavingsTab";
@@ -1635,8 +1635,7 @@ Thank you for your cooperation! 🙏`;
 
   return (
     <div className="space-y-4 md:space-y-6 p-2 sm:p-4 md:p-0">
-      {/* Festive Jingle Bells */}
-      <JingleBells />
+      // ...existing code...
       
       {/* Header with Profile and Logout */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3">

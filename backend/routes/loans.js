@@ -24,10 +24,15 @@ router.post("/request", protect, async (req, res) => {
   try {
     const { amount, purpose, interest_rate } = req.body;
 
-    const memberId = req.member ? req.member._id : req.body.member_id;
+    if (!req.member || !req.member._id) {
+      return res.status(401).json({
+        success: false,
+        error: "Not authorized: valid member token required. Please log in again.",
+      });
+    }
 
     const loan = await Loan.create({
-      member_id: memberId,
+      member_id: req.member._id,
       amount,
       purpose,
       interest_rate: interest_rate || 0,
