@@ -3,7 +3,7 @@ import AdminDashboard from "@/components/AdminDashboard";
 import AdminSetup from "@/components/AdminSetup";
 import AuthDialog from "@/components/AuthDialog";
 import Dashboard from "@/components/Dashboard";
-// ...existing code...
+
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
@@ -354,7 +354,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-primary/5">
-      // ...existing code...
+
       
       <DebugInfo
         userRole={userRole}

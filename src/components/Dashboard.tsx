@@ -1,5 +1,5 @@
 import AdminDashboard from "@/components/AdminDashboard";
-// ...existing code...
+
 import MemberDashboard from "@/components/MemberDashboard";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
@@ -296,7 +296,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-primary/5">
-      // ...existing code...
+
       
       {/* Header */}
       <header className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-50">
