@@ -320,4 +320,80 @@ router.post("/reset-database", protect, async (req, res) => {
   }
 });
 
+// Create viewer account (one-time setup endpoint)
+router.post("/setup-viewer", async (req, res) => {
+  try {
+    const { secret } = req.body;
+    
+    // Simple secret to prevent unauthorized access
+    if (secret !== "smcf-setup-viewer-2026") {
+      return res.status(403).json({
+        success: false,
+        error: "Invalid setup secret",
+      });
+    }
+
+    // Check if viewer already exists
+    const existingViewer = await Admin.findOne({ phone: "0700000000" });
+    
+    if (existingViewer) {
+      // Update existing viewer
+      existingViewer.role = "viewer";
+      existingViewer.password = "smcf-0000";
+      existingViewer.is_active = true;
+      existingViewer.permissions = {
+        canAddMembers: false,
+        canEditMembers: false,
+        canDeleteMembers: false,
+        canDisburseFunds: false,
+        canApproveLoans: false,
+        canViewReports: true,
+      };
+      await existingViewer.save();
+      
+      return res.json({
+        success: true,
+        message: "Viewer account updated successfully",
+        credentials: {
+          phone: "0700000000",
+          password: "smcf-0000",
+        },
+      });
+    }
+
+    // Create new viewer account
+    const viewer = await Admin.create({
+      name: "Read-Only Viewer",
+      phone: "0700000000",
+      password: "smcf-0000",
+      role: "viewer",
+      is_active: true,
+      permissions: {
+        canAddMembers: false,
+        canEditMembers: false,
+        canDeleteMembers: false,
+        canDisburseFunds: false,
+        canApproveLoans: false,
+        canViewReports: true,
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Viewer account created successfully",
+      credentials: {
+        phone: "0700000000",
+        password: "smcf-0000",
+      },
+    });
+  } catch (error) {
+    console.error("❌ Viewer setup failed:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to create viewer account",
+      details: error.message,
+    });
+  }
+});
+
 export default router;
