@@ -3,18 +3,97 @@ import { adminOnly, protect } from "../middleware/auth.js";
 import Loan from "../models/Loan.js";
 import Payment from "../models/Payment.js";
 import { initiateLipiaPayment } from "../services/lipiaService.js";
+import { calculateLateFeeForLoan, applyLateFees } from "../services/lateFeesService.js";
 
 const router = express.Router();
 
-// Get all loans
+// Get all loans with calculated late fees
 router.get("/", protect, async (req, res) => {
   try {
     const loans = await Loan.find()
       .populate("member_id", "name phone member_id")
       .populate("approved_by", "name role")
       .sort({ created_at: -1 });
-    res.json(loans);
+    
+    // Add calculated late fee info to each loan
+    const loansWithLateFees = loans.map(loan => {
+      const loanObj = loan.toObject();
+      const lateFeeInfo = calculateLateFeeForLoan(loan);
+      return {
+        ...loanObj,
+        pending_late_fee: lateFeeInfo.lateFee,
+        total_late_fees: lateFeeInfo.totalLateFees,
+        days_overdue: lateFeeInfo.daysOverdue,
+        is_overdue: lateFeeInfo.isOverdue,
+        late_fee_daily_rate: lateFeeInfo.dailyRate,
+        // Current total including pending late fees
+        current_total_due: (loanObj.total_repayable || 0) + (lateFeeInfo.lateFee || 0),
+        current_remaining: (loanObj.amount_remaining || 0) + (lateFeeInfo.lateFee || 0),
+      };
+    });
+    
+    res.json(loansWithLateFees);
   } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get single loan with detailed payment info
+router.get("/:id", protect, async (req, res) => {
+  try {
+    const loan = await Loan.findById(req.params.id)
+      .populate("member_id", "name phone member_id")
+      .populate("approved_by", "name role");
+    
+    if (!loan) {
+      return res.status(404).json({ success: false, error: "Loan not found" });
+    }
+    
+    const loanObj = loan.toObject();
+    const lateFeeInfo = calculateLateFeeForLoan(loan);
+    
+    res.json({
+      success: true,
+      data: {
+        ...loanObj,
+        pending_late_fee: lateFeeInfo.lateFee,
+        total_late_fees: lateFeeInfo.totalLateFees,
+        days_overdue: lateFeeInfo.daysOverdue,
+        is_overdue: lateFeeInfo.isOverdue,
+        late_fee_daily_rate: lateFeeInfo.dailyRate,
+        current_total_due: (loanObj.total_repayable || 0) + (lateFeeInfo.lateFee || 0),
+        current_remaining: (loanObj.amount_remaining || 0) + (lateFeeInfo.lateFee || 0),
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Admin: Manually apply late fees to all overdue loans
+router.post("/admin/apply-late-fees", protect, adminOnly, async (req, res) => {
+  try {
+    const result = await applyLateFees();
+    
+    // Emit Socket.IO event
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("lateFeesApplied", {
+        processedCount: result.processedCount,
+        totalFees: result.totalFees,
+        timestamp: new Date(),
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: result.processedCount > 0 
+        ? `Late fees applied to ${result.processedCount} loans. Total: KES ${result.totalFees}`
+        : "No overdue loans requiring late fee application",
+      ...result
+    });
+  } catch (error) {
+    console.error("Error applying late fees:", error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

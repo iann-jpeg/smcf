@@ -76,7 +76,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
   });
   const [memberStats, setMemberStats] = useState({
     hasPaidThisCycle: false,
-    nextPayoutCycle: 0,
+    nextPayoutCycle: userData?.next_payout_cycle || userData?.position || 0,
     totalContributed: userData?.total_contributed || 0,
     totalReceived: userData?.total_received || 0,
     memberPosition: userData?.position || 0,
@@ -273,7 +273,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         paidMembers: uniquePaidMembers, // Always use calculated count from actual payments
         totalMembers: totalMembersCount || 0,
         collectedAmount: totalCollected, // Use calculated from actual payments
-        totalAmount: totalMembersCount * 224, // Expected amount based on member count
+        totalAmount: totalMembersCount * 200, // Expected payout amount (KES 200 per member goes to payout)
         cycleStartDate:
           cycleData.success && cycleData.data && cycleData.data.start_date
             ? new Date(cycleData.data.start_date).toLocaleDateString()
@@ -327,8 +327,9 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
       setMemberStats((prev) => {
         const newStats = {
           hasPaidThisCycle: hasPaid,
+          // nextPayoutCycle = the member's position (they get paid on the cycle matching their position)
           nextPayoutCycle: freshMemberData.success
-            ? freshMemberData.data.next_payout_cycle || 0
+            ? freshMemberData.data.next_payout_cycle || freshMemberData.data.position || 0
             : prev.nextPayoutCycle,
           totalContributed: freshMemberData.success
             ? freshMemberData.data.total_contributed || 0
@@ -917,23 +918,6 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                 prompt to enter your PIN and pay to Till{" "}
                 <strong>6938069</strong>.
               </p>
-              <p>
-                <strong>Multiple Payment Options:</strong>
-              </p>
-              <p>
-                • <strong>M-Pesa Paybill:</strong> 6938069 (Recommended)
-              </p>
-              <p>
-                • <strong>Lipa na M-Pesa:</strong> Buy Goods & Services
-              </p>
-              <p>
-                • <strong>M-Pesa App:</strong> Business &gt; Lipa na M-Pesa &gt;
-                Till 6938069
-              </p>
-              <p>
-                • <strong>USSD:</strong> *334# &gt; Lipa na M-Pesa &gt; Enter
-                Till 6938069
-              </p>
               <p>• You'll receive confirmation SMS and receipt</p>
             </div>
           </div>
@@ -1416,30 +1400,76 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                           {/* Repayment Button for Disbursed Loans */}
                           {loan.status === "disbursed" && (
                             <div className="mt-3 pt-3 border-t">
+                              {/* Overdue Warning */}
+                              {loan.is_overdue && (
+                                <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded-lg">
+                                  <div className="flex items-center gap-2 text-red-600 font-medium text-sm">
+                                    <AlertCircle className="w-4 h-4" />
+                                    Loan is {loan.days_overdue} days overdue!
+                                  </div>
+                                  {(loan.total_late_fees || 0) > 0 && (
+                                    <p className="text-xs text-red-600 mt-1">
+                                      Late fees accrued: KES {loan.total_late_fees?.toLocaleString()}
+                                    </p>
+                                  )}
+                                </div>
+                              )}
                               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                                 <div className="text-sm">
                                   <p className="text-muted-foreground">
-                                    Total Repayable:
+                                    Total Due:
                                   </p>
                                   <p className="text-lg font-bold text-mpesa-green">
-                                    KES {(loan.amount * 1.1).toLocaleString()}
+                                    KES {(loan.current_total_due || loan.total_repayable || loan.amount * 1.1).toLocaleString()}
                                   </p>
-                                  <p className="text-xs text-muted-foreground">
-                                    (Principal: {loan.amount.toLocaleString()} +
-                                    10% Interest:{" "}
-                                    {(loan.amount * 0.1).toLocaleString()})
-                                  </p>
+                                  <div className="text-xs text-muted-foreground space-y-0.5">
+                                    <p>Principal: KES {loan.amount.toLocaleString()}</p>
+                                    <p>Interest ({loan.interest_rate || 10}%): KES {((loan.amount * (loan.interest_rate || 10)) / 100).toLocaleString()}</p>
+                                    {(loan.total_late_fees || 0) > 0 && (
+                                      <p className="text-red-600">Late Fees: KES {loan.total_late_fees?.toLocaleString()}</p>
+                                    )}
+                                  </div>
+                                  {/* Payment Progress */}
+                                  {(loan.amount_paid || 0) > 0 && (
+                                    <div className="mt-2">
+                                      <div className="flex justify-between text-xs">
+                                        <span className="text-green-600">Paid: KES {loan.amount_paid?.toLocaleString()}</span>
+                                        <span className="text-orange-600">
+                                          Remaining: KES {(loan.current_remaining || loan.amount_remaining)?.toLocaleString()}
+                                        </span>
+                                      </div>
+                                      <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
+                                        <div
+                                          className="bg-green-600 h-2 rounded-full transition-all"
+                                          style={{
+                                            width: `${Math.min(
+                                              ((loan.amount_paid || 0) /
+                                                (loan.current_total_due || loan.total_repayable || loan.amount)) *
+                                                100,
+                                              100
+                                            )}%`,
+                                          }}
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
+                                  {/* Due Date */}
+                                  {loan.due_date && (
+                                    <p className={`text-xs mt-1 ${loan.is_overdue ? 'text-red-600 font-medium' : 'text-muted-foreground'}`}>
+                                      Due: {new Date(loan.due_date).toLocaleDateString()}
+                                    </p>
+                                  )}
                                 </div>
                                 <Button
                                   onClick={() => {
                                     setSelectedLoan(loan);
                                     setShowRepayment(true);
                                   }}
-                                  variant="mpesa"
+                                  variant={loan.is_overdue ? "destructive" : "mpesa"}
                                   size="sm"
                                   className="w-full sm:w-auto">
                                   <Phone className="w-4 h-4 mr-2" />
-                                  Repay via M-Pesa
+                                  {loan.is_overdue ? "Pay Now (Overdue)" : "Repay via M-Pesa"}
                                 </Button>
                               </div>
                             </div>
@@ -1627,6 +1657,19 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
 
           {selectedLoan && (
             <div className="space-y-4">
+              {/* Overdue Warning */}
+              {selectedLoan.is_overdue && (
+                <div className="bg-red-50 border border-red-200 p-3 rounded-lg">
+                  <div className="flex items-center gap-2 text-red-600 font-medium">
+                    <AlertCircle className="w-4 h-4" />
+                    Loan is {selectedLoan.days_overdue} days overdue
+                  </div>
+                  <p className="text-sm text-red-600 mt-1">
+                    Late fees of 3% per day are being applied to your remaining balance. Pay as soon as possible to avoid additional charges.
+                  </p>
+                </div>
+              )}
+
               {/* Loan Summary */}
               <div className="bg-muted/50 p-4 rounded-lg space-y-2">
                 <div className="flex justify-between text-sm">
@@ -1648,16 +1691,34 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                     ).toLocaleString()}
                   </span>
                 </div>
+                {/* Late Fees Section */}
+                {(selectedLoan.total_late_fees || 0) > 0 && (
+                  <div className="flex justify-between text-sm text-red-600">
+                    <span>Late Fees ({selectedLoan.days_overdue || 0} days):</span>
+                    <span className="font-medium">
+                      + KES {selectedLoan.total_late_fees?.toLocaleString()}
+                    </span>
+                  </div>
+                )}
                 <Separator />
                 <div className="flex justify-between">
-                  <span className="font-semibold">Total Repayable:</span>
+                  <span className="font-semibold">Total Due:</span>
                   <span className="text-lg font-bold">
                     KES{" "}
                     {(
-                      selectedLoan.total_repayable || selectedLoan.amount * 1.1
+                      selectedLoan.current_total_due || selectedLoan.total_repayable || selectedLoan.amount * 1.1
                     ).toLocaleString()}
                   </span>
                 </div>
+                {/* Due Date */}
+                {selectedLoan.due_date && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Due Date:</span>
+                    <span className={selectedLoan.is_overdue ? "text-red-600 font-medium" : ""}>
+                      {new Date(selectedLoan.due_date).toLocaleDateString()}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Payment Progress */}
@@ -1701,6 +1762,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                     <p className="font-bold text-orange-600">
                       KES{" "}
                       {(
+                        selectedLoan.current_remaining ||
                         selectedLoan.amount_remaining ||
                         selectedLoan.total_repayable ||
                         selectedLoan.amount
@@ -1720,6 +1782,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                   value={partialPaymentAmount}
                   onChange={(e) => setPartialPaymentAmount(e.target.value)}
                   max={
+                    selectedLoan.current_remaining ||
                     selectedLoan.amount_remaining ||
                     selectedLoan.total_repayable
                   }
@@ -1731,7 +1794,8 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                     onClick={() =>
                       setPartialPaymentAmount(
                         (
-                          (selectedLoan.amount_remaining ||
+                          (selectedLoan.current_remaining ||
+                            selectedLoan.amount_remaining ||
                             selectedLoan.total_repayable) / 2
                         ).toFixed(0)
                       )
@@ -1745,6 +1809,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                     onClick={() =>
                       setPartialPaymentAmount(
                         (
+                          selectedLoan.current_remaining ||
                           selectedLoan.amount_remaining ||
                           selectedLoan.total_repayable
                         ).toString()

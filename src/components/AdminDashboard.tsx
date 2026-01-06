@@ -92,29 +92,42 @@ const AdminDashboard = ({
   const [savingsData, setSavingsData] = useState<any[]>([]);
   const [loans, setLoans] = useState<any[]>([]);
 
-  // Calculate total repaid (principal + interest) for all fully repaid loans
-  const totalRepaid = loans
-    ? loans.filter((l: any) => l.status === "repaid").reduce((sum: number, l: any) => sum + (l.total_repayable || 0), 0)
-    : 0;
-
   // Calculate total loaned (all disbursed or repaid loans)
   const totalLoaned = loans
     ? loans.filter((l: any) => ["disbursed", "repaid"].includes(l.status)).reduce((sum: number, l: any) => sum + (l.amount || 0), 0)
     : 0;
 
+  // Calculate total loan repaid (including partial payments from all loans, plus interest)
+  // For repaid loans: use total_repayable (principal + interest)
+  // For disbursed loans (active): use amount_paid (partial payments made so far)
+  const totalLoanRepaid = loans
+    ? loans.reduce((sum: number, l: any) => {
+        if (l.status === "repaid") {
+          return sum + (l.total_repayable || 0);
+        } else if (l.status === "disbursed") {
+          return sum + (l.amount_paid || 0);
+        }
+        return sum;
+      }, 0)
+    : 0;
 
+  // Calculate loan interest earned (from fully repaid loans only, as interest is paid at completion)
+  const totalLoanInterest = loans
+    ? loans.filter((l: any) => l.status === "repaid")
+        .reduce((sum: number, l: any) => sum + ((l.total_repayable || 0) - (l.amount || 0)), 0)
+    : 0;
 
+  // Total transaction fees collected
+  const totalFeesCollected = isNaN(feeSummary?.totalCollected) ? 0 : (feeSummary?.totalCollected || 0);
 
-  // Pocket = wallet balances + organization profit - total loaned + total repaid (zero error tolerant)
-  // Organization profit = total transaction fees collected + total loan interest earned
+  // Total wallet balances (current balances from savings)
   const totalWalletBalances = isNaN(savingsData.reduce((sum, m) => sum + (m.currentBalance || 0), 0)) ? 0 : savingsData.reduce((sum, m) => sum + (m.currentBalance || 0), 0);
-  const totalOrgProfit = (isNaN(feeSummary?.totalCollected) ? 0 : (feeSummary?.totalCollected || 0)) +
-    (loans.filter((l: any) => l.status === "repaid")
-      .reduce((sum: number, l: any) => sum + ((l.total_repayable || 0) - (l.amount || 0)), 0) || 0);
 
   const safeTotalLoaned = isNaN(Number(totalLoaned)) ? 0 : Number(totalLoaned);
-  const safeTotalRepaid = isNaN(Number(totalRepaid)) ? 0 : Number(totalRepaid);
-  const pocket = totalWalletBalances + totalOrgProfit - safeTotalLoaned + safeTotalRepaid;
+  const safeTotalLoanRepaid = isNaN(Number(totalLoanRepaid)) ? 0 : Number(totalLoanRepaid);
+
+  // pocket will be calculated after totalCycleContributions is available
+  // See line ~220 where pocket is calculated
 
 
   console.log("AdminDashboard rendered with:", {
@@ -122,8 +135,7 @@ const AdminDashboard = ({
     members: members?.length || 0,
     announcements: announcements?.length || 0,
     totalLoaned,
-    totalRepaid,
-    pocket,
+    totalLoanRepaid,
   });
 
   // Safety check for required data
@@ -203,6 +215,14 @@ const AdminDashboard = ({
     (sum: number, p: any) => sum + (p.amount || 0),
     0
   );
+
+  // Calculate total cycle contributions from ALL cycles (for pocket calculation)
+  const totalCycleContributions = allPayments
+    .filter((p: any) => p.status === "completed" && p.type === "cycle_payment")
+    .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+
+  // Pocket = Current Balances + Total Fees Deducted + Total Loan Repaid (including partial payments and interest) + Collected Amount from Cycle - Total Amount Loaned
+  const pocket = totalWalletBalances + totalFeesCollected + safeTotalLoanRepaid + totalCycleContributions - safeTotalLoaned;
 
   // Polling for real-time data
   const pollRef = useRef<NodeJS.Timeout | null>(null);
@@ -2019,9 +2039,10 @@ Thank you for your cooperation! 🙏`;
                     </p>
                     <p className="text-xs text-pink-700 dark:text-pink-300 mt-1">
                       Wallet Balances: KES {totalWalletBalances.toLocaleString()}<br />
-                      Organization Profit: KES {totalOrgProfit.toLocaleString()}<br />
-                      Total Loaned: KES {safeTotalLoaned.toLocaleString()}<br />
-                      Total Repaid: KES {safeTotalRepaid.toLocaleString()}
+                      + Fees Collected: KES {totalFeesCollected.toLocaleString()}<br />
+                      + Loan Repaid: KES {safeTotalLoanRepaid.toLocaleString()}<br />
+                      + Cycle Contributions: KES {totalCycleContributions.toLocaleString()}<br />
+                      − Total Loaned: KES {safeTotalLoaned.toLocaleString()}
                     </p>
                   </div>
                   <Wallet className="w-12 h-12 text-pink-300 dark:text-pink-700" />

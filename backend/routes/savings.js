@@ -750,55 +750,30 @@ router.post("/admin/reject-withdrawal/:id", protect, adminOnly, async (req, res)
 });
 
 // Apply monthly interest to all members (admin only - manual trigger or cron job)
+// This applies 3% interest to deposits that are 30+ days old
 router.post("/admin/apply-interest", protect, adminOnly, async (req, res) => {
   try {
-    const members = await Member.find();
-    const interestRate = 0.03; // 3% monthly
-    let processedCount = 0;
-
-    for (const member of members) {
-      // Get current balance
-      const lastTransaction = await Saving.findOne({
-        member_id: member._id,
-      }).sort({ created_at: -1 });
-
-      if (lastTransaction && lastTransaction.balance_after > 0) {
-        const currentBalance = lastTransaction.balance_after;
-        const interestAmount = currentBalance * interestRate;
-        const newBalance = currentBalance + interestAmount;
-
-        // Create interest transaction
-        await Saving.create({
-          member_id: member._id,
-          amount: interestAmount,
-          transaction_type: "interest",
-          balance_before: currentBalance,
-          balance_after: newBalance,
-          interest_rate: interestRate * 100,
-          interest_amount: interestAmount,
-          payment_method: "auto_interest",
-          status: "completed",
-          processed_by: req.admin._id,
-          notes: "Monthly interest applied",
-        });
-
-        processedCount++;
-      }
-    }
+    // Import and use the shared interest calculation function
+    const { applyMonthlyInterest } = await import("../services/interestService.js");
+    const result = await applyMonthlyInterest();
 
     // Emit Socket.IO event
     const io = req.app.get("io");
     if (io) {
       io.emit("interestApplied", {
-        processedCount,
+        processedCount: result.appliedCount,
+        totalAmount: result.totalAmount,
         timestamp: new Date(),
       });
     }
 
     res.json({
       success: true,
-      message: `Interest applied to ${processedCount} members`,
-      processedCount,
+      message: result.appliedCount > 0 
+        ? `Interest applied to ${result.appliedCount} deposits. Total: KES ${result.totalAmount}`
+        : "No interest due at this time",
+      processedCount: result.appliedCount,
+      totalAmount: result.totalAmount,
     });
   } catch (error) {
     console.error("Error applying interest:", error);

@@ -40,10 +40,13 @@ import {
   Loader2,
   Trash2,
   XCircle,
+  AlertTriangle,
+  TrendingUp,
 } from "lucide-react";
 import smcfLogo from '@/assets/smcf-logo.png';
 import { useEffect, useState } from "react";
 import CreditScoreCard from "@/components/CreditScoreCard";
+import { Progress } from "@/components/ui/progress";
 
 interface Loan {
   _id: string;
@@ -58,6 +61,23 @@ interface Loan {
   status: "pending" | "approved" | "rejected" | "disbursed" | "repaid";
   interest_rate: number;
   total_repayable: number;
+  amount_paid?: number;
+  amount_remaining?: number;
+  due_date?: string;
+  late_fees_accrued?: number;
+  pending_late_fee?: number;
+  total_late_fees?: number;
+  days_overdue?: number;
+  is_overdue?: boolean;
+  current_total_due?: number;
+  current_remaining?: number;
+  payment_history?: Array<{
+    amount: number;
+    payment_date: string;
+    payment_method: string;
+    transaction_ref: string;
+    notes: string;
+  }>;
   approved_by?: {
     name: string;
     role: string;
@@ -78,6 +98,7 @@ const LoansTab = ({ isReadOnly = false }: LoansTabProps) => {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [showPaymentHistoryDialog, setShowPaymentHistoryDialog] = useState(false);
   const [showDisbursementDialog, setShowDisbursementDialog] = useState(false);
   const [showClearDialog, setShowClearDialog] = useState(false);
   const [showCreditScoreDialog, setShowCreditScoreDialog] = useState(false);
@@ -780,17 +801,26 @@ const LoansTab = ({ isReadOnly = false }: LoansTabProps) => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Member</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Total Repayable</TableHead>
-                      <TableHead>Interest</TableHead>
-                      <TableHead>Disbursed On</TableHead>
+                      <TableHead>Loan Amount</TableHead>
+                      <TableHead>Payment Progress</TableHead>
+                      <TableHead>Due Date</TableHead>
+                      <TableHead>Late Fees</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {disbursedLoans.map((loan) => (
-                      <TableRow key={loan._id}>
+                    {disbursedLoans.map((loan) => {
+                      const amountPaid = loan.amount_paid || 0;
+                      const totalDue = loan.current_total_due || loan.total_repayable;
+                      const remaining = loan.current_remaining || loan.amount_remaining || totalDue;
+                      const progress = totalDue > 0 ? Math.min(100, Math.round((amountPaid / totalDue) * 100)) : 0;
+                      const isOverdue = loan.is_overdue || false;
+                      const daysOverdue = loan.days_overdue || 0;
+                      const totalLateFees = loan.total_late_fees || 0;
+                      
+                      return (
+                      <TableRow key={loan._id} className={isOverdue ? "bg-red-50" : ""}>
                         <TableCell>
                           <div>
                             <div className="font-medium">
@@ -801,32 +831,90 @@ const LoansTab = ({ isReadOnly = false }: LoansTabProps) => {
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="font-semibold">
-                          KES {loan.amount.toLocaleString()}
-                        </TableCell>
-                        <TableCell className="font-semibold text-amber-600">
-                          KES {loan.total_repayable.toLocaleString()}
-                        </TableCell>
-                        <TableCell>{loan.interest_rate}%</TableCell>
                         <TableCell>
-                          {loan.disbursement_date
-                            ? new Date(
-                                loan.disbursement_date
-                              ).toLocaleDateString()
-                            : "N/A"}
+                          <div>
+                            <div className="font-semibold">
+                              KES {loan.amount.toLocaleString()}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              + {loan.interest_rate}% interest
+                            </div>
+                          </div>
                         </TableCell>
-                        <TableCell>{getStatusBadge(loan.status)}</TableCell>
                         <TableCell>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleMarkRepaid(loan)}
-                            disabled={isReadOnly || isProcessing}
-                            title={isReadOnly ? "Read-only access" : undefined}>
-                            Mark as Repaid
-                          </Button>
+                          <div className="space-y-1 min-w-[180px]">
+                            <div className="flex justify-between text-xs">
+                              <span>Paid: KES {amountPaid.toLocaleString()}</span>
+                              <span className="font-medium">{progress}%</span>
+                            </div>
+                            <Progress value={progress} className="h-2" />
+                            <div className="flex justify-between text-xs text-muted-foreground">
+                              <span>Remaining: KES {remaining.toLocaleString()}</span>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-5 px-1 text-xs"
+                                onClick={() => {
+                                  setSelectedLoan(loan);
+                                  setShowPaymentHistoryDialog(true);
+                                }}>
+                                View History
+                              </Button>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            {loan.due_date ? (
+                              <>
+                                <div className={isOverdue ? "text-red-600 font-medium" : ""}>
+                                  {new Date(loan.due_date).toLocaleDateString()}
+                                </div>
+                                {isOverdue && (
+                                  <div className="text-xs text-red-600 flex items-center gap-1">
+                                    <AlertTriangle className="w-3 h-3" />
+                                    {daysOverdue} days overdue
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <span className="text-muted-foreground">Not set</span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {totalLateFees > 0 ? (
+                            <div className="text-red-600 font-medium">
+                              KES {totalLateFees.toLocaleString()}
+                            </div>
+                          ) : (
+                            <span className="text-green-600">None</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {isOverdue ? (
+                            <Badge variant="destructive" className="flex items-center gap-1 w-fit">
+                              <AlertTriangle className="w-3 h-3" />
+                              Overdue
+                            </Badge>
+                          ) : (
+                            getStatusBadge(loan.status)
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleMarkRepaid(loan)}
+                              disabled={isReadOnly || isProcessing}
+                              title={isReadOnly ? "Read-only access" : undefined}>
+                              Mark as Repaid
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
+                    );})>
                     ))}
                   </TableBody>
                 </Table>
@@ -1095,6 +1183,148 @@ const LoansTab = ({ isReadOnly = false }: LoansTabProps) => {
             <Button
               variant="outline"
               onClick={() => setShowCreditScoreDialog(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Payment History Dialog */}
+      <Dialog open={showPaymentHistoryDialog} onOpenChange={setShowPaymentHistoryDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Payment History</DialogTitle>
+            <DialogDescription>
+              Detailed payment history for this loan
+            </DialogDescription>
+          </DialogHeader>
+          {selectedLoan && (
+            <div className="space-y-4">
+              {/* Loan Summary */}
+              <Card>
+                <CardContent className="pt-4">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Member:</span>
+                      <div className="font-medium">{selectedLoan.member_id?.name || "Unknown"}</div>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Loan Amount:</span>
+                      <div className="font-medium">KES {selectedLoan.amount.toLocaleString()}</div>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Total Due (with interest):</span>
+                      <div className="font-medium">KES {selectedLoan.total_repayable.toLocaleString()}</div>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Amount Paid:</span>
+                      <div className="font-medium text-green-600">
+                        KES {(selectedLoan.amount_paid || 0).toLocaleString()}
+                      </div>
+                    </div>
+                    {(selectedLoan.total_late_fees || 0) > 0 && (
+                      <div>
+                        <span className="text-muted-foreground">Late Fees:</span>
+                        <div className="font-medium text-red-600">
+                          KES {selectedLoan.total_late_fees?.toLocaleString()}
+                        </div>
+                      </div>
+                    )}
+                    <div>
+                      <span className="text-muted-foreground">Remaining Balance:</span>
+                      <div className="font-medium text-amber-600">
+                        KES {(selectedLoan.current_remaining || selectedLoan.amount_remaining || 0).toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Progress Bar */}
+                  <div className="mt-4 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Payment Progress</span>
+                      <span className="font-medium">
+                        {selectedLoan.total_repayable > 0 
+                          ? Math.round(((selectedLoan.amount_paid || 0) / selectedLoan.total_repayable) * 100)
+                          : 0}%
+                      </span>
+                    </div>
+                    <Progress 
+                      value={selectedLoan.total_repayable > 0 
+                        ? Math.min(100, ((selectedLoan.amount_paid || 0) / selectedLoan.total_repayable) * 100)
+                        : 0} 
+                      className="h-3"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Payment History List */}
+              <div>
+                <h4 className="font-medium mb-2 flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4" />
+                  Payment Transactions
+                </h4>
+                {selectedLoan.payment_history && selectedLoan.payment_history.length > 0 ? (
+                  <div className="space-y-2">
+                    {selectedLoan.payment_history.map((payment, index) => (
+                      <Card key={index} className="border">
+                        <CardContent className="p-3">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="font-medium text-green-600">
+                                + KES {payment.amount.toLocaleString()}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {new Date(payment.payment_date).toLocaleString()}
+                              </div>
+                              {payment.payment_method && (
+                                <div className="text-xs text-muted-foreground">
+                                  Method: {payment.payment_method.toUpperCase()}
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-right">
+                              {payment.transaction_ref && (
+                                <div className="text-xs font-mono text-muted-foreground">
+                                  {payment.transaction_ref}
+                                </div>
+                              )}
+                              {payment.notes && (
+                                <div className="text-xs text-muted-foreground max-w-[200px] truncate">
+                                  {payment.notes}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-muted-foreground bg-muted rounded-lg">
+                    No payments recorded yet
+                  </div>
+                )}
+              </div>
+
+              {/* Overdue Warning */}
+              {selectedLoan.is_overdue && (
+                <div className="bg-red-50 border border-red-200 p-3 rounded-lg">
+                  <div className="flex items-center gap-2 text-red-600 font-medium">
+                    <AlertTriangle className="w-4 h-4" />
+                    Loan is {selectedLoan.days_overdue} days overdue
+                  </div>
+                  <div className="text-sm text-red-600 mt-1">
+                    Late fees are being applied at 3% per day on the remaining balance.
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowPaymentHistoryDialog(false)}>
               Close
             </Button>
           </DialogFooter>
