@@ -914,7 +914,8 @@ const LoansTab = ({ isReadOnly = false }: LoansTabProps) => {
                           </div>
                         </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
                 </div>
