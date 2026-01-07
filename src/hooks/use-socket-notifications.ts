@@ -46,6 +46,15 @@ export function useSocketNotifications() {
       return isForCurrentUser(memberId);
     };
 
+    // For admin, always show notification regardless of memberId
+    const adminShow = (cb: () => void) => {
+      if (isAdmin) {
+        cb();
+        return true;
+      }
+      return false;
+    };
+
     // Initialize socket connection
     const socket = io(API_BASE, {
       transports: ['websocket', 'polling'],
@@ -101,7 +110,29 @@ export function useSocketNotifications() {
       const memberId = data.memberId;
       const payerId = data.payerId;
       
-      // Check if this notification should be shown
+
+      // For admin, always show; for members, check memberId/payerId
+      if (adminShow(() => {
+        if (data.type === 'wallet_deposit') {
+          notifySavings(
+            '💰 Wallet Deposit',
+            `${memberName} deposited KES ${data.amount?.toLocaleString() || 'N/A'} to their wallet`,
+            data
+          );
+        } else if (data.type === 'cycle_payment') {
+          notifyPayment(
+            '💰 Cycle Payment',
+            `${memberName} made a cycle payment of KES ${data.amount?.toLocaleString() || 'N/A'}`,
+            data
+          );
+        } else if (data.type === 'loan_repayment') {
+          notifyLoan(
+            '💳 Loan Repayment',
+            `${memberName} made a loan payment of KES ${data.amount?.toLocaleString() || 'N/A'}`,
+            data
+          );
+        }
+      })) return;
       if (!shouldShowNotification(memberId) && !shouldShowNotification(payerId)) {
         return; // Skip - not relevant to this user
       }
@@ -243,7 +274,7 @@ export function useSocketNotifications() {
       const emoji = statusEmojis[data.status] || '📋';
       const statusLabel = data.status.charAt(0).toUpperCase() + data.status.slice(1);
       
-      if (isAdmin) {
+      if (adminShow(() => {
         const adminMessages: Record<string, string> = {
           pending: `${memberName} requested a loan of KES ${data.amount?.toLocaleString()}`,
           approved: `Loan of KES ${data.amount?.toLocaleString()} approved for ${memberName}`,
@@ -256,7 +287,8 @@ export function useSocketNotifications() {
           adminMessages[data.status] || `${memberName}'s loan status: ${data.status}`,
           data
         );
-      } else {
+      })) return;
+      else {
         const memberMessages: Record<string, string> = {
           approved: `Your loan of KES ${data.amount?.toLocaleString()} has been approved!`,
           rejected: data.rejectionReason 
@@ -281,7 +313,7 @@ export function useSocketNotifications() {
       const memberName = data.memberName || 'A member';
       const isFullyPaid = data.isFullyPaid || data.remaining <= 0;
       
-      if (isAdmin) {
+      if (adminShow(() => {
         notifyLoan(
           isFullyPaid ? '🎉 Loan Fully Repaid' : '💳 Loan Payment',
           isFullyPaid
@@ -289,7 +321,8 @@ export function useSocketNotifications() {
             : `${memberName} paid KES ${data.paymentAmount?.toLocaleString()}. Remaining: KES ${data.remaining?.toLocaleString()}`,
           data
         );
-      } else {
+      })) return;
+      else {
         notifyLoan(
           isFullyPaid ? '🎉 Loan Fully Repaid!' : '✅ Loan Payment Received',
           isFullyPaid
@@ -307,13 +340,14 @@ export function useSocketNotifications() {
       
       const memberName = data.memberName || 'A member';
       
-      if (isAdmin) {
+      if (adminShow(() => {
         notifyWarning(
           '⚠️ Late Fee Applied',
           `Late fee of KES ${data.feeAmount?.toLocaleString() || 'N/A'} applied to ${memberName}'s loan`,
           data
         );
-      } else {
+      })) return;
+      else {
         notifyWarning(
           '⚠️ Late Fee Applied',
           `A late fee of KES ${data.feeAmount?.toLocaleString() || 'N/A'} has been added to your loan`,
@@ -344,13 +378,14 @@ export function useSocketNotifications() {
       
       const memberName = data.memberName || 'A member';
       
-      if (isAdmin) {
+      if (adminShow(() => {
         notifySuccess(
           '💸 Disbursement Completed',
           `KES ${data.amount?.toLocaleString() || 'N/A'} disbursed to ${memberName}`,
           data
         );
-      } else {
+      })) return;
+      else {
         notifySuccess(
           '💸 Disbursement Received!',
           `KES ${data.amount?.toLocaleString() || 'N/A'} has been sent to your M-Pesa`,
@@ -452,13 +487,14 @@ export function useSocketNotifications() {
       
       const memberName = data.memberName || 'A member';
       
-      if (isAdmin) {
+      if (adminShow(() => {
         notifySuccess(
           '💸 Withdrawal Processed',
           `Withdrawal of KES ${data.amount?.toLocaleString() || 'N/A'} processed for ${memberName}`,
           data
         );
-      } else {
+      })) return;
+      else {
         notifySuccess(
           '💸 Withdrawal Processed',
           `Your withdrawal of KES ${data.amount?.toLocaleString() || 'N/A'} has been processed`,
