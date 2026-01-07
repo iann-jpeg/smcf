@@ -2630,6 +2630,7 @@ Thank you for your cooperation! 🙏`;
               className="text-xs sm:text-sm whitespace-nowrap">
               Activity Feed
             </TabsTrigger>
+        {/* ...existing code... */}
                     <TabsContent value="activity" className="space-y-6">
                       <Card className="border-2 border-primary/20">
                         <CardHeader>
