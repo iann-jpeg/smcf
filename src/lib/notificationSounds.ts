@@ -1,122 +1,103 @@
-// Notification sound utilities
-// Using Web Audio API for reliable cross-browser and mobile sound playback
+// Simple notification sound using HTML Audio
+// Uses a short, pleasant notification tone
 
 export type NotificationSoundType = 'default' | 'success' | 'warning' | 'error' | 'message';
 
-// Sound configuration
-interface SoundConfig {
-  frequency: number;
-  duration: number;
-  type: OscillatorType;
-  gain: number;
-  pattern?: number[]; // Array of on/off durations for pattern playing
+// Audio element singleton
+let audioElement: HTMLAudioElement | null = null;
+let audioInitialized = false;
+
+// Initialize audio on first user interaction
+function initializeAudio(): HTMLAudioElement {
+  if (!audioElement) {
+    audioElement = new Audio();
+    audioElement.volume = 0.6;
+    
+    // Use Web Audio API to generate a simple notification beep
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const duration = 0.15;
+    const sampleRate = audioContext.sampleRate;
+    const buffer = audioContext.createBuffer(1, sampleRate * duration * 3, sampleRate);
+    const channelData = buffer.getChannelData(0);
+    
+    // Generate two-tone notification sound
+    const frequencies = [880, 1100, 880]; // A5, C#6, A5
+    const toneLength = Math.floor(channelData.length / 3);
+    
+    for (let i = 0; i < channelData.length; i++) {
+      const toneIndex = Math.floor(i / toneLength);
+      const freq = frequencies[Math.min(toneIndex, frequencies.length - 1)];
+      const t = i / sampleRate;
+      const envelope = Math.sin(Math.PI * (i % toneLength) / toneLength); // Smooth fade
+      channelData[i] = Math.sin(2 * Math.PI * freq * t) * envelope * 0.4;
+    }
+    
+    // Convert AudioBuffer to WAV blob
+    const wavBlob = audioBufferToWav(buffer);
+    audioElement.src = URL.createObjectURL(wavBlob);
+  }
+  return audioElement;
 }
 
-const soundConfigs: Record<NotificationSoundType, SoundConfig> = {
-  default: {
-    frequency: 880, // A5 note
-    duration: 150,
-    type: 'sine',
-    gain: 0.3,
-    pattern: [150, 50, 150]
-  },
-  success: {
-    frequency: 523.25, // C5 note
-    duration: 100,
-    type: 'sine',
-    gain: 0.25,
-    pattern: [100, 50, 100, 50, 150]
-  },
-  warning: {
-    frequency: 440, // A4 note
-    duration: 200,
-    type: 'triangle',
-    gain: 0.3,
-    pattern: [200, 100, 200]
-  },
-  error: {
-    frequency: 220, // A3 note
-    duration: 300,
-    type: 'sawtooth',
-    gain: 0.2,
-    pattern: [150, 75, 150, 75, 150]
-  },
-  message: {
-    frequency: 659.25, // E5 note
-    duration: 120,
-    type: 'sine',
-    gain: 0.25,
-    pattern: [120, 60, 120]
-  }
-};
-
-// Audio context singleton
-let audioContext: AudioContext | null = null;
-
-function getAudioContext(): AudioContext {
-  if (!audioContext) {
-    audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-  }
-  return audioContext;
-}
-
-// Play a single tone
-function playTone(
-  context: AudioContext,
-  frequency: number,
-  duration: number,
-  type: OscillatorType,
-  gain: number,
-  startTime: number
-): void {
-  const oscillator = context.createOscillator();
-  const gainNode = context.createGain();
-
-  oscillator.connect(gainNode);
-  gainNode.connect(context.destination);
-
-  oscillator.type = type;
-  oscillator.frequency.setValueAtTime(frequency, startTime);
+// Convert AudioBuffer to WAV format
+function audioBufferToWav(buffer: AudioBuffer): Blob {
+  const numChannels = buffer.numberOfChannels;
+  const sampleRate = buffer.sampleRate;
+  const format = 1; // PCM
+  const bitDepth = 16;
   
-  // Fade in and out for smooth sound
-  gainNode.gain.setValueAtTime(0, startTime);
-  gainNode.gain.linearRampToValueAtTime(gain, startTime + 0.01);
-  gainNode.gain.linearRampToValueAtTime(0, startTime + duration / 1000);
-
-  oscillator.start(startTime);
-  oscillator.stop(startTime + duration / 1000);
+  const bytesPerSample = bitDepth / 8;
+  const blockAlign = numChannels * bytesPerSample;
+  
+  const samples = buffer.getChannelData(0);
+  const dataLength = samples.length * bytesPerSample;
+  const bufferLength = 44 + dataLength;
+  
+  const arrayBuffer = new ArrayBuffer(bufferLength);
+  const view = new DataView(arrayBuffer);
+  
+  // WAV header
+  writeString(view, 0, 'RIFF');
+  view.setUint32(4, 36 + dataLength, true);
+  writeString(view, 8, 'WAVE');
+  writeString(view, 12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, format, true);
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * blockAlign, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitDepth, true);
+  writeString(view, 36, 'data');
+  view.setUint32(40, dataLength, true);
+  
+  // Write samples
+  let offset = 44;
+  for (let i = 0; i < samples.length; i++) {
+    const sample = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+    offset += 2;
+  }
+  
+  return new Blob([arrayBuffer], { type: 'audio/wav' });
 }
 
-// Play notification sound with pattern
-export async function playNotificationSound(type: NotificationSoundType = 'default'): Promise<void> {
+function writeString(view: DataView, offset: number, string: string): void {
+  for (let i = 0; i < string.length; i++) {
+    view.setUint8(offset + i, string.charCodeAt(i));
+  }
+}
+
+// Play the notification sound
+export async function playNotificationSound(_type: NotificationSoundType = 'default'): Promise<void> {
   try {
-    const context = getAudioContext();
+    const audio = initializeAudio();
     
-    // Resume context if suspended (required for autoplay policies)
-    if (context.state === 'suspended') {
-      await context.resume();
-    }
-
-    const config = soundConfigs[type];
-    const pattern = config.pattern || [config.duration];
+    // Reset to beginning if already playing
+    audio.currentTime = 0;
     
-    let currentTime = context.currentTime;
-    let isOn = true;
-
-    for (const duration of pattern) {
-      if (isOn) {
-        playTone(
-          context,
-          config.frequency,
-          duration,
-          config.type,
-          config.gain,
-          currentTime
-        );
-      }
-      currentTime += duration / 1000;
-      isOn = !isOn;
-    }
+    // Play the sound
+    await audio.play();
   } catch (error) {
     console.warn('Failed to play notification sound:', error);
   }
@@ -178,19 +159,11 @@ export async function showBrowserNotification(
     const permission = await requestNotificationPermission();
     
     if (permission === 'granted') {
-      // Build notification options (vibrate is not in TS types but is supported)
-      const notificationOptions: NotificationOptions & { vibrate?: number[] } = {
+      const notification = new Notification(title, {
         icon: '/smcf-logo.png',
         badge: '/smcf-logo.png',
         ...options
-      };
-      
-      // Add vibrate if supported (mobile browsers)
-      if ('vibrate' in navigator) {
-        notificationOptions.vibrate = [200, 100, 200];
-      }
-      
-      const notification = new Notification(title, notificationOptions as NotificationOptions);
+      });
 
       // Auto close after 5 seconds
       setTimeout(() => notification.close(), 5000);
