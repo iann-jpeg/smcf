@@ -373,9 +373,15 @@ router.post("/:id/repay", protect, async (req, res) => {
     const baseRepayable = loan.interest_rate > 0
       ? loan.amount + (loan.amount * loan.interest_rate) / 100
       : loan.amount;
-    const totalDue = baseRepayable + totalLateFees;
-    // Remaining = total due - paid so far
-    const currentRemaining = totalDue - (loan.amount_paid || 0);
+    // Track late fees paid (if not present, default to 0)
+    const lateFeesPaid = loan.late_fees_paid || 0;
+    // Track principal/interest paid (if not present, default to 0)
+    const principalPaid = loan.amount_paid || 0;
+    // Calculate remaining principal/interest and late fees separately
+    const principalRemaining = baseRepayable - principalPaid;
+    const lateFeesRemaining = totalLateFees - lateFeesPaid;
+    // Members can pay any remaining principal/interest or late fees
+    const currentRemaining = principalRemaining + lateFeesRemaining;
     if (amount > currentRemaining) {
       return res.status(400).json({
         success: false,
