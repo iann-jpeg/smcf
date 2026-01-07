@@ -2616,8 +2616,12 @@ Thank you for your cooperation! 🙏`;
         </CardContent>
       </Card>
 
-      const [activeTab, setActiveTab] = useState("members");
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+  // ...existing state declarations...
+  const [activeTab, setActiveTab] = useState("members");
+
+  // ...existing code...
+  return (
+    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0 scrollbar-thin scrollbar-thumb-primary/30 scrollbar-track-transparent">
           <TabsList className="flex w-max min-w-full space-x-2 md:grid md:w-full md:grid-cols-10 min-w-max bg-white/80 dark:bg-background/80 sticky top-0 z-10">
             <TabsTrigger
