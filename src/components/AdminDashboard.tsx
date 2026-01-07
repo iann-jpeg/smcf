@@ -2616,7 +2616,8 @@ Thank you for your cooperation! 🙏`;
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="members" className="w-full">
+      const [activeTab, setActiveTab] = useState("members");
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0 scrollbar-thin scrollbar-thumb-primary/30 scrollbar-track-transparent">
           <TabsList className="flex w-max min-w-full space-x-2 md:grid md:w-full md:grid-cols-10 min-w-max bg-white/80 dark:bg-background/80 sticky top-0 z-10">
             <TabsTrigger
@@ -2631,8 +2632,8 @@ Thank you for your cooperation! 🙏`;
               Activity Feed
             </TabsTrigger>
         {/* ...existing code... */}
-                    <TabsContent value="activity" className="space-y-6">
-                      <Card className="border-2 border-primary/20">
+                    <TabsContent value="activity" className="space-y-6" forceMount>
+                      <Card className="border-2 border-primary/20 border-dashed">
                         <CardHeader>
                           <CardTitle className="flex items-center gap-2 text-base">
                             <Megaphone className="w-5 h-5 text-primary" />
@@ -2643,6 +2644,7 @@ Thank you for your cooperation! 🙏`;
                         <CardContent className="p-0">
                           <ScrollArea className="h-[60vh] md:h-[75vh] p-4">
                             <div className="space-y-4">
+                              <div className="bg-yellow-100 text-yellow-900 p-2 rounded text-center text-xs mb-2">DEBUG: Activity Feed Tab Rendered</div>
                               {Array.isArray(activityFeed) && activityFeed.length === 0 ? (
                                 <div className="text-center text-muted-foreground py-8">
                                   No recent activity
