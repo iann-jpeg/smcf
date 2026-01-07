@@ -942,51 +942,85 @@ const LoansTab = ({ isReadOnly = false }: LoansTabProps) => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {completedLoans.map((loan) => (
-                      <TableRow key={loan._id}>
-                        <TableCell>
-                          <div>
-                            <div className="font-medium">
-                              {loan.member_id?.name || "Unknown Member"}
+                    {completedLoans.map((loan) => {
+                      const hasUnpaidLateFees = loan.status === "repaid" && (loan.total_late_fees || 0) > 0;
+                      return (
+                        <TableRow key={loan._id}>
+                          <TableCell>
+                            <div>
+                              <div className="font-medium">
+                                {loan.member_id?.name || "Unknown Member"}
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                {loan.member_id?.phone || "N/A"}
+                              </div>
                             </div>
-                            <div className="text-sm text-muted-foreground">
-                              {loan.member_id?.phone || "N/A"}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-semibold">
-                          KES {loan.amount.toLocaleString()}
-                        </TableCell>
-                        <TableCell className="font-semibold">
-                          {loan.status === "repaid"
-                            ? `KES ${loan.total_repayable.toLocaleString()}`
-                            : "N/A"}
-                        </TableCell>
-                        <TableCell>{getStatusBadge(loan.status)}</TableCell>
-                        <TableCell>
-                          {loan.repayment_date
-                            ? new Date(loan.repayment_date).toLocaleDateString()
-                            : loan.approval_date
-                            ? new Date(loan.approval_date).toLocaleDateString()
-                            : "N/A"}
-                        </TableCell>
-                        <TableCell>
-                          {loan.status === "rejected" && loan.rejection_reason ? (
-                            <div className="max-w-xs">
-                              <div className="text-xs font-medium text-destructive mb-1">Rejection Reason:</div>
-                              <div className="text-xs text-muted-foreground">{loan.rejection_reason}</div>
-                            </div>
-                          ) : loan.notes ? (
-                            <div className="max-w-xs">
-                              <div className="text-xs font-medium mb-1">Notes:</div>
-                              <div className="text-xs text-muted-foreground">{loan.notes}</div>
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground text-xs">-</span>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                          </TableCell>
+                          <TableCell className="font-semibold">
+                            KES {loan.amount.toLocaleString()}
+                          </TableCell>
+                          <TableCell className="font-semibold">
+                            {loan.status === "repaid"
+                              ? `KES ${loan.total_repayable.toLocaleString()}`
+                              : "N/A"}
+                            {hasUnpaidLateFees && (
+                              <div className="text-xs text-red-600 font-semibold mt-1 flex items-center gap-1">
+                                <AlertTriangle className="w-3 h-3" /> Unpaid Late Fees: KES {loan.total_late_fees?.toLocaleString()}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell>{getStatusBadge(loan.status)}</TableCell>
+                          <TableCell>
+                            {loan.repayment_date
+                              ? new Date(loan.repayment_date).toLocaleDateString()
+                              : loan.approval_date
+                              ? new Date(loan.approval_date).toLocaleDateString()
+                              : "N/A"}
+                          </TableCell>
+                          <TableCell>
+                            {loan.status === "rejected" && loan.rejection_reason ? (
+                              <div className="max-w-xs">
+                                <div className="text-xs font-medium text-destructive mb-1">Rejection Reason:</div>
+                                <div className="text-xs text-muted-foreground">{loan.rejection_reason}</div>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  className="mt-2"
+                                  onClick={async () => {
+                                    if (window.confirm("Are you sure you want to permanently delete this rejected loan?")) {
+                                      try {
+                                        const res = await fetch(`${API_BASE}/api/loans/${loan._id}`, {
+                                          method: "DELETE",
+                                          headers: { ...authService.getAuthHeaders() },
+                                        });
+                                        const result = await res.json();
+                                        if (result.success) {
+                                          toast({ title: "Loan Deleted", description: "Rejected loan deleted successfully" });
+                                          fetchLoans();
+                                        } else {
+                                          toast({ title: "Delete Failed", description: result.error || "Could not delete loan", variant: "destructive" });
+                                        }
+                                      } catch (err) {
+                                        toast({ title: "Delete Failed", description: "Could not delete loan", variant: "destructive" });
+                                      }
+                                    }
+                                  }}
+                                >
+                                  Delete Loan
+                                </Button>
+                              </div>
+                            ) : loan.notes ? (
+                              <div className="max-w-xs">
+                                <div className="text-xs font-medium mb-1">Notes:</div>
+                                <div className="text-xs text-muted-foreground">{loan.notes}</div>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">-</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
                 </div>

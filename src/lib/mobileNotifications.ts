@@ -140,7 +140,7 @@ export async function showMobileNotification(
   }
 }
 
-// Create notification channel (Android)
+// Create notification channel (Android) - HIGH PRIORITY for loud notifications
 export async function createNotificationChannel(): Promise<void> {
   const isNative = await isNativePlatformAsync();
   if (!isNative || !LocalNotifications || !Capacitor) {
@@ -153,14 +153,28 @@ export async function createNotificationChannel(): Promise<void> {
         id: 'smcf_notifications',
         name: 'SMCF Notifications',
         description: 'Smart Money Cash Flow notifications for payments, loans, and updates',
-        importance: 4, // HIGH
+        importance: 5, // MAX - ensures loud sound and heads-up display
         visibility: 1, // PUBLIC
         sound: 'default',
         vibration: true,
         lights: true,
         lightColor: '#3b82f6',
       });
-      console.log('Notification channel created');
+      
+      // Also create a high priority channel for urgent notifications
+      await LocalNotifications.createChannel({
+        id: 'smcf_urgent',
+        name: 'SMCF Urgent Notifications',
+        description: 'Urgent notifications that require immediate attention',
+        importance: 5, // MAX
+        visibility: 1,
+        sound: 'default',
+        vibration: true,
+        lights: true,
+        lightColor: '#ef4444',
+      });
+      
+      console.log('Notification channels created with MAX importance');
     } catch (error) {
       console.error('Failed to create notification channel:', error);
     }

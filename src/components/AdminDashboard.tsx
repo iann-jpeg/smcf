@@ -58,6 +58,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { useEffect, useRef, useState, useCallback } from "react";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAutoRefresh } from "@/hooks/use-auto-refresh";
 import ApprovalsTab from "./admin/ApprovalsTab";
 import LoansTab from "./admin/LoansTab";
@@ -172,6 +173,15 @@ const AdminDashboard = ({
   const [recentPayments, setRecentPayments] = useState<any[]>([]);
   const [allPayments, setAllPayments] = useState<any[]>([]);
   const [disbursements, setDisbursements] = useState<any[]>([]);
+  // Admin activity feed state
+  const [activityFeed, setActivityFeed] = useState<any[]>([]);
+  // Helper to add activity to sidebar feed
+  const addActivity = (activity: any) => {
+    setActivityFeed((prev) => [
+      { ...activity, timestamp: new Date() },
+      ...prev.slice(0, 49), // keep max 50
+    ]);
+  };
 
   const [currentCycle, setCurrentCycle] = useState<any>(null);
   const [cycleStats, setCycleStats] = useState<any>(null);
@@ -1023,14 +1033,77 @@ const AdminDashboard = ({
     if (socket) {
       console.log("👂 Admin Dashboard listening for real-time updates");
 
-      // Listen for payment completion
+      // === FULL SYSTEM ACTIVITY FEED ===
+      // Announcements
+      socket.on("announcementCreated", (data: any) => {
+        addActivity({ type: "announcement", icon: "📢", title: "Announcement", description: data.title || data.message || "New announcement posted", data });
+      });
+      socket.on("announcement:new", (data: any) => {
+        addActivity({ type: "announcement", icon: "📢", title: "Announcement", description: data.title || data.message || "New announcement posted", data });
+      });
+      // Payments
+      socket.on("payment:completed", (data: any) => {
+        addActivity({ type: "payment", icon: "💰", title: "Payment Completed", description: `${data.memberName || "A member"} paid KES ${data.amount?.toLocaleString() || "N/A"} (${data.type || "payment"})`, data });
+      });
       socket.on("paymentCompleted", (data: any) => {
-        console.log("💰 Payment completed:", data);
-        toast({
-          title: "Payment Received!",
-          description: `Payment of KES ${data.amount} received from member`,
-        });
-        fetchAllData(); // Refresh data
+        addActivity({ type: "payment", icon: "💰", title: "Payment Received", description: `Payment of KES ${data.amount} received from member`, data });
+      });
+      socket.on("payment:new", (data: any) => {
+        addActivity({ type: "payment", icon: "💳", title: "New Payment", description: `${data.memberName || "A member"} initiated a payment of KES ${data.amount?.toLocaleString() || "N/A"}`, data });
+      });
+      socket.on("paymentFailed", (data: any) => {
+        addActivity({ type: "payment", icon: "❌", title: "Payment Failed", description: `Payment failed: ${data.reason || "Unknown reason"}`, data });
+      });
+      // Savings
+      socket.on("savingDeposit", (data: any) => {
+        addActivity({ type: "savings", icon: "💾", title: "Savings Deposit", description: `${data.memberName || "A member"} deposited KES ${data.amount?.toLocaleString() || "N/A"}`, data });
+      });
+      socket.on("saving:new", (data: any) => {
+        addActivity({ type: "savings", icon: "💾", title: "New Saving Record", description: `${data.memberName || "A member"} - new saving record`, data });
+      });
+      socket.on("interestApplied", (data: any) => {
+        addActivity({ type: "interest", icon: "📈", title: "Interest Applied", description: `${data.memberName || "A member"} earned KES ${data.interestAmount?.toLocaleString() || "N/A"} in interest`, data });
+      });
+      // Loans
+      socket.on("loanStatusUpdated", (data: any) => {
+        addActivity({ type: "loan", icon: "📄", title: `Loan ${data.status?.charAt(0).toUpperCase() + data.status?.slice(1) || "Status"}`, description: `${data.memberName || "A member"}: ${data.status}`, data });
+      });
+      socket.on("loanPayment", (data: any) => {
+        addActivity({ type: "loan_payment", icon: "💳", title: "Loan Payment", description: `${data.memberName || "A member"} paid KES ${data.paymentAmount?.toLocaleString() || "N/A"}`, data });
+      });
+      socket.on("loanLateFeeApplied", (data: any) => {
+        addActivity({ type: "late_fee", icon: "⚠️", title: "Late Fee Applied", description: `Late fee of KES ${data.feeAmount?.toLocaleString() || "N/A"} applied to ${data.memberName || "A member"}'s loan`, data });
+      });
+      socket.on("loanRequested", (data: any) => {
+        addActivity({ type: "loan_request", icon: "📝", title: "New Loan Request", description: `${data.memberName || "A member"} requested a loan of KES ${data.amount?.toLocaleString() || "N/A"}`, data });
+      });
+      // Disbursements
+      socket.on("disbursementCompleted", (data: any) => {
+        addActivity({ type: "disbursement", icon: "💸", title: "Disbursement Completed", description: `KES ${data.amount?.toLocaleString() || data.amount} sent to ${data.memberName || "A member"}`, data });
+      });
+      // Cycles
+      socket.on("cycle:updated", (data: any) => {
+        addActivity({ type: "cycle", icon: "🔄", title: "Cycle Updated", description: `Cycle ${data.cycleNumber || ""} updated`, data });
+      });
+      socket.on("cycleUpdated", (data: any) => {
+        addActivity({ type: "cycle", icon: "🔄", title: "Cycle Updated", description: `Cycle ${data.cycleNumber || ""} stats updated`, data });
+      });
+      socket.on("nextRecipientUpdated", (data: any) => {
+        addActivity({ type: "cycle", icon: "👤", title: "Next Recipient Set", description: `${data.recipientName || "A member"} is next for cycle disbursement`, data });
+      });
+      // Members
+      socket.on("member:new", (data: any) => {
+        addActivity({ type: "member", icon: "🧑", title: "New Member Joined", description: `${data.name || "A new member"} joined SMCF`, data });
+      });
+      socket.on("memberUpdated", (data: any) => {
+        addActivity({ type: "member", icon: "🧑", title: "Member Updated", description: `${data.memberName || "A member"}'s profile updated`, data });
+      });
+      // Withdrawals
+      socket.on("withdrawalRequested", (data: any) => {
+        addActivity({ type: "withdrawal", icon: "💸", title: "Withdrawal Requested", description: `${data.memberName || "A member"} requested withdrawal of KES ${data.amount?.toLocaleString() || "N/A"}`, data });
+      });
+      socket.on("withdrawalProcessed", (data: any) => {
+        addActivity({ type: "withdrawal", icon: "💸", title: "Withdrawal Processed", description: `Withdrawal of KES ${data.amount?.toLocaleString() || "N/A"} processed for ${data.memberName || "A member"}`, data });
       });
 
       // Listen for member updates
@@ -1661,11 +1734,50 @@ Thank you for your cooperation! 🙏`;
   };
 
   return (
-    <div className="space-y-4 md:space-y-6 p-2 sm:p-4 md:p-0">
+    <div className="space-y-4 md:space-y-6 p-2 sm:p-4 md:p-0 flex flex-col md:flex-row">
 
       
+      {/* Main Content + Sidebar */}
+      <div className="flex-1 min-w-0">
       {/* Header with Profile and Logout */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3">
+          </div>
+          {/* ...existing main dashboard content... */}
+              </div>
+              {/* Activity Sidebar */}
+              <aside className="w-full md:w-80 md:ml-6 mt-6 md:mt-0 flex-shrink-0">
+                <Card className="h-full max-h-[90vh] flex flex-col border-2 border-primary/20">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Megaphone className="w-5 h-5 text-primary" />
+                      Activity Feed
+                    </CardTitle>
+                    <CardDescription>All system activities in real time</CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex-1 min-h-0 p-0">
+                    <ScrollArea className="h-[60vh] md:h-[75vh] p-4">
+                      <div className="space-y-4">
+                        {activityFeed.length === 0 ? (
+                          <div className="text-center text-muted-foreground py-8">
+                            No recent activity
+                          </div>
+                        ) : (
+                          activityFeed.map((item, idx) => (
+                            <div key={idx} className="flex items-start gap-3 border-b pb-3 last:border-b-0 last:pb-0">
+                              <div className="text-2xl leading-none">{item.icon}</div>
+                              <div className="flex-1">
+                                <div className="font-semibold text-sm mb-0.5">{item.title}</div>
+                                <div className="text-xs text-muted-foreground mb-1">{item.description}</div>
+                                <div className="text-[10px] text-muted-foreground">{item.timestamp?.toLocaleString?.() || new Date(item.timestamp).toLocaleString()}</div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+              </aside>
         <div>
           <h1 className="text-lg sm:text-xl md:text-2xl font-bold">
             Admin Dashboard

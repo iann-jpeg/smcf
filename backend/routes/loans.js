@@ -1,3 +1,25 @@
+// Delete a single loan by ID (admin only)
+router.delete('/:id', protect, adminOnly, async (req, res) => {
+  try {
+    const loan = await Loan.findByIdAndDelete(req.params.id);
+    if (!loan) {
+      return res.status(404).json({ success: false, error: 'Loan not found' });
+    }
+    // Emit Socket.IO event for real-time updates
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('loanDeleted', {
+        loanId: req.params.id,
+        memberId: loan.member_id,
+        status: loan.status,
+        timestamp: new Date(),
+      });
+    }
+    res.json({ success: true, message: 'Loan deleted successfully', loanId: req.params.id });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 import express from "express";
 import { adminOnly, protect } from "../middleware/auth.js";
 import Loan from "../models/Loan.js";
