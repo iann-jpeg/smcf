@@ -6,7 +6,9 @@ import {
   NotificationSoundType,
   isSoundEnabled,
   toggleSound
-} from '@/lib/notificationSounds';
+} from '../lib/notificationSounds';
+import { updateFaviconBadge, updateTitleBadge } from '@/lib/faviconBadge';
+import { initializePushNotifications, showPushNotification, isPushSupported } from '@/lib/pushNotifications';
 
 // Notification types
 export type NotificationType = 'info' | 'success' | 'warning' | 'error' | 'payment' | 'loan' | 'savings' | 'announcement';
@@ -158,6 +160,19 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [state, dispatch] = useReducer(notificationReducer, initialState);
   const initialized = useRef(false);
 
+  // Initialize push notifications on mount
+  useEffect(() => {
+    if (isPushSupported()) {
+      initializePushNotifications().catch(console.error);
+    }
+  }, []);
+
+  // Update favicon badge when unread count changes
+  useEffect(() => {
+    updateFaviconBadge(state.unreadCount);
+    updateTitleBadge(state.unreadCount, 'SMCF');
+  }, [state.unreadCount]);
+
   // Load notifications from localStorage on mount
   useEffect(() => {
     if (initialized.current) return;
@@ -202,15 +217,22 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
       dispatch({ type: 'ADD_NOTIFICATION', payload: newNotification });
 
-      // Play sound
+      // Play sound (always play for notifications)
       const soundType = getSoundType(notification.type);
       await playNotificationSoundIfEnabled(soundType);
 
-      // Vibrate on mobile
-      vibrateDevice([200, 100, 200]);
+      // Vibrate on mobile (strong vibration pattern)
+      vibrateDevice([300, 100, 300, 100, 300]);
 
-      // Show browser notification if app is not focused
-      if (document.hidden) {
+      // Show push notification (works even when app is in background or closed)
+      if (isPushSupported()) {
+        await showPushNotification(notification.title, {
+          body: notification.message,
+          tag: newNotification.id,
+          playSound: false, // Already played above
+        });
+      } else if (document.hidden) {
+        // Fallback to browser notification
         await showBrowserNotification(notification.title, {
           body: notification.message,
           tag: newNotification.id,

@@ -11,25 +11,26 @@ let audioInitialized = false;
 function initializeAudio(): HTMLAudioElement {
   if (!audioElement) {
     audioElement = new Audio();
-    audioElement.volume = 0.6;
+    audioElement.volume = 1.0; // Maximum volume
     
-    // Use Web Audio API to generate a simple notification beep
+    // Use Web Audio API to generate a loud notification beep
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const duration = 0.15;
+    const duration = 0.25; // Longer duration for louder effect
     const sampleRate = audioContext.sampleRate;
-    const buffer = audioContext.createBuffer(1, sampleRate * duration * 3, sampleRate);
+    const buffer = audioContext.createBuffer(1, sampleRate * duration * 4, sampleRate);
     const channelData = buffer.getChannelData(0);
     
-    // Generate two-tone notification sound
-    const frequencies = [880, 1100, 880]; // A5, C#6, A5
-    const toneLength = Math.floor(channelData.length / 3);
+    // Generate louder two-tone notification sound (ding-dong)
+    const frequencies = [880, 1100, 880, 660]; // A5, C#6, A5, E5 - ding dong pattern
+    const toneLength = Math.floor(channelData.length / 4);
     
     for (let i = 0; i < channelData.length; i++) {
       const toneIndex = Math.floor(i / toneLength);
       const freq = frequencies[Math.min(toneIndex, frequencies.length - 1)];
       const t = i / sampleRate;
       const envelope = Math.sin(Math.PI * (i % toneLength) / toneLength); // Smooth fade
-      channelData[i] = Math.sin(2 * Math.PI * freq * t) * envelope * 0.4;
+      // Increased amplitude to 0.9 for louder sound
+      channelData[i] = Math.sin(2 * Math.PI * freq * t) * envelope * 0.9;
     }
     
     // Convert AudioBuffer to WAV blob

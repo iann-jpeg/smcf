@@ -1,4 +1,5 @@
 import API_BASE from "./api";
+import { storeMemberIdForPush } from "./pushNotifications";
 
 // Storage keys
 const TOKEN_KEY = "smcf_token";
@@ -10,6 +11,11 @@ export const authService = {
   saveAuth: (token: string, user: any) => {
     localStorage.setItem(TOKEN_KEY, token);
     localStorage.setItem(USER_KEY, JSON.stringify(user));
+    
+    // Store member ID for push notifications (enables notifications even when logged out)
+    if (user?._id || user?.id) {
+      storeMemberIdForPush(user._id || user.id);
+    }
   },
 
   // Get token
@@ -23,10 +29,11 @@ export const authService = {
     return user ? JSON.parse(user) : null;
   },
 
-  // Clear auth data
+  // Clear auth data (but keep push subscription)
   clearAuth: () => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+    // Note: We keep smcf-member-id and smcf-push-subscription for background notifications
   },
 
   // Check if authenticated
