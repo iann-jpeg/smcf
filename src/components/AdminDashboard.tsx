@@ -2617,7 +2617,6 @@ Thank you for your cooperation! 🙏`;
       </Card>
 
   // ...existing state declarations...
-  // All state and logic above, only JSX below
   return (
     <Tabs defaultValue="members" className="w-full">
         <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0 scrollbar-thin scrollbar-thumb-primary/30 scrollbar-track-transparent">
@@ -2628,45 +2627,8 @@ Thank you for your cooperation! 🙏`;
               <span className="hidden sm:inline">Member Management</span>
               <span className="sm:hidden">Members</span>
             </TabsTrigger>
-            <TabsTrigger
-              value="activity"
-              className="text-xs sm:text-sm whitespace-nowrap">
-              Activity Feed
-            </TabsTrigger>
-        {/* ...existing code... */}
-                    <TabsContent value="activity" className="space-y-6">
-                      <Card className="border-2 border-primary/20">
-                        <CardHeader>
-                          <CardTitle className="flex items-center gap-2 text-base">
-                            <Megaphone className="w-5 h-5 text-primary" />
-                            Activity Feed
-                          </CardTitle>
-                          <CardDescription>All system activities in real time</CardDescription>
-                        </CardHeader>
-                        <CardContent className="p-0">
-                          <ScrollArea className="h-[60vh] md:h-[75vh] p-4">
-                            <div className="space-y-4">
-                              {Array.isArray(activityFeed) && activityFeed.length === 0 ? (
-                                <div className="text-center text-muted-foreground py-8">
-                                  No recent activity
-                                </div>
-                              ) : (
-                                (activityFeed || []).map((item, idx) => (
-                                  <div key={idx} className="flex items-start gap-3 border-b pb-3 last:border-b-0 last:pb-0">
-                                    <div className="text-2xl leading-none">{item.icon}</div>
-                                    <div className="flex-1">
-                                      <div className="font-semibold text-sm mb-0.5">{item.title}</div>
-                                      <div className="text-xs text-muted-foreground mb-1">{item.description}</div>
-                                      <div className="text-[10px] text-muted-foreground">{item.timestamp?.toLocaleString?.() || new Date(item.timestamp).toLocaleString()}</div>
-                                    </div>
-                                  </div>
-                                ))
-                              )}
-                            </div>
-                          </ScrollArea>
-                        </CardContent>
-                      </Card>
-                    </TabsContent>
+            {/* Activity Feed tab removed */}
+        {/* Activity Feed tab content removed */}
             <TabsTrigger
               value="payments"
               className="text-xs sm:text-sm whitespace-nowrap">
