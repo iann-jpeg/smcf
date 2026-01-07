@@ -118,6 +118,22 @@ router.post("/request", protect, async (req, res) => {
       status: "pending",
     });
 
+    // Emit Socket.IO event for new loan request
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("loanRequest", {
+        loanId: loan._id,
+        member: {
+          _id: req.member._id,
+          name: req.member.name,
+        },
+        memberName: req.member.name,
+        amount: loan.amount,
+        purpose: loan.purpose,
+        timestamp: new Date(),
+      });
+    }
+
     res.status(201).json({ success: true, data: loan });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

@@ -1,16 +1,19 @@
 import AdminDashboard from "@/components/AdminDashboard";
 
 import MemberDashboard from "@/components/MemberDashboard";
+import { NotificationCenter } from "@/components/notifications";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { useNotification } from "@/hooks/use-notification";
 import { useToast } from "@/hooks/use-toast";
 import API_BASE from "@/lib/api";
 import { authService } from "@/lib/authService";
+import { initializeMobileNotifications, isNativePlatformAsync, showMobileNotification } from "@/lib/mobileNotifications";
 import { Clock, LogOut } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import io from "socket.io-client";
 
 // Initialize socket with proper config
@@ -46,6 +49,20 @@ interface DashboardProps {
 
 const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
   const { toast } = useToast();
+  const { notifyPayment, notifyAnnouncement, notifySavings, notifyLoan, notifySuccess } = useNotification();
+  const isNativeRef = useRef(false);
+
+  // Initialize mobile notifications on mount
+  useEffect(() => {
+    const initMobile = async () => {
+      const isNative = await isNativePlatformAsync();
+      isNativeRef.current = isNative;
+      if (isNative) {
+        await initializeMobileNotifications();
+      }
+    };
+    initMobile();
+  }, []);
 
   // Cycle data from real API - will be fetched and updated (don't use userData prop - it might be stale)
   const [cycleData, setCycleData] = useState({
@@ -264,17 +281,67 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
       );
     }
 
-    socket.on("announcement:new", (announcement) => {
-      console.log("📢 Dashboard received: announcement:new", announcement);
-      setAnnouncements((prev) => [announcement, ...prev]);
-    });
+    // Handler for announcement notifications
+    const handleNewAnnouncement = (announcement: any) => {
+      console.log("📢 Dashboard received: announcement", announcement);
+      setAnnouncements((prev: any) => [announcement, ...prev]);
+      // Show notification with sound
+      notifyAnnouncement(
+        "New Announcement",
+        announcement.title || announcement.message || "New announcement posted",
+        { announcementId: announcement._id }
+      );
+      // Mobile notification
+      if (isNativeRef.current) {
+        showMobileNotification({
+          title: "📢 New Announcement",
+          body: announcement.title || announcement.message || "New announcement posted",
+          extra: { type: "announcement", id: announcement._id }
+        });
+      }
+    };
+
+    // Listen for both event names (different parts of the system may use different names)
+    socket.on("announcement:new", handleNewAnnouncement);
+    socket.on("announcementCreated", handleNewAnnouncement);
+    
     socket.on("member:new", (member) => {
       console.log("👤 Dashboard received: member:new", member);
       setMembers((prev) => [member, ...prev]);
+      // Show notification for new member (admin only)
+      if (userRole === "admin") {
+        notifySuccess(
+          "New Member Joined",
+          `${member.name || "A new member"} has joined SMCF`,
+          { memberId: member._id }
+        );
+        if (isNativeRef.current) {
+          showMobileNotification({
+            title: "👤 New Member",
+            body: `${member.name || "A new member"} has joined SMCF`,
+            extra: { type: "member", id: member._id }
+          });
+        }
+      }
     });
     socket.on("payment:completed", (data) => {
       console.log("💰 Dashboard received: payment:completed", data);
       fetchData(); // Refresh cycle stats
+      // Show notification for payment
+      const memberName = data.member?.name || data.memberName || "A member";
+      const amount = data.amount ? `KES ${data.amount.toLocaleString()}` : "";
+      notifyPayment(
+        "Payment Received",
+        `${memberName} made a contribution${amount ? ` of ${amount}` : ""}`,
+        { paymentId: data._id, memberId: data.member_id }
+      );
+      if (isNativeRef.current) {
+        showMobileNotification({
+          title: "💰 Payment Received",
+          body: `${memberName} made a contribution${amount ? ` of ${amount}` : ""}`,
+          extra: { type: "payment", id: data._id }
+        });
+      }
     });
     socket.on("payment:new", (data) => {
       console.log("💰 Dashboard received: payment:new", data);
@@ -283,16 +350,149 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
     socket.on("cycle:updated", (data) => {
       console.log("🔄 Dashboard received: cycle:updated", data);
       fetchData(); // Refresh cycle stats
+      notifySuccess(
+        "Cycle Updated",
+        `Cycle ${data.cycle_number || ""} has been updated`,
+        { cycleId: data._id }
+      );
     });
+    
+    // Savings events
+    socket.on("savingDeposit", (data) => {
+      console.log("💵 Dashboard received: savingDeposit", data);
+      const memberName = data.member?.name || data.memberName || "A member";
+      const amount = data.amount ? `KES ${data.amount.toLocaleString()}` : "";
+      notifySavings(
+        "Savings Deposit",
+        `${memberName} deposited${amount ? ` ${amount}` : ""} to savings`,
+        data
+      );
+      if (isNativeRef.current) {
+        showMobileNotification({
+          title: "💵 Savings Deposit",
+          body: `${memberName} deposited${amount ? ` ${amount}` : ""} to savings`,
+          extra: { type: "savings", action: "deposit" }
+        });
+      }
+    });
+    
+    socket.on("withdrawalRequest", (data) => {
+      console.log("📤 Dashboard received: withdrawalRequest", data);
+      if (userRole === "admin") {
+        const memberName = data.member?.name || data.memberName || "A member";
+        const amount = data.amount ? `KES ${data.amount.toLocaleString()}` : "";
+        notifySavings(
+          "Withdrawal Request",
+          `${memberName} requested${amount ? ` ${amount}` : ""} withdrawal`,
+          data
+        );
+        if (isNativeRef.current) {
+          showMobileNotification({
+            title: "📤 Withdrawal Request",
+            body: `${memberName} requested${amount ? ` ${amount}` : ""} withdrawal`,
+            extra: { type: "savings", action: "withdrawal" }
+          });
+        }
+      }
+    });
+    
+    socket.on("withdrawalStatusUpdated", (data) => {
+      console.log("✅ Dashboard received: withdrawalStatusUpdated", data);
+      const status = data.status || "updated";
+      notifySavings(
+        "Withdrawal " + (status === "approved" ? "Approved" : status === "rejected" ? "Rejected" : "Updated"),
+        `Your withdrawal request has been ${status}`,
+        data
+      );
+      if (isNativeRef.current) {
+        showMobileNotification({
+          title: status === "approved" ? "✅ Withdrawal Approved" : status === "rejected" ? "❌ Withdrawal Rejected" : "📋 Withdrawal Updated",
+          body: `Your withdrawal request has been ${status}`,
+          extra: { type: "savings", action: "withdrawal", status }
+        });
+      }
+    });
+    
+    // Loan events
+    socket.on("loanRequest", (data) => {
+      console.log("💳 Dashboard received: loanRequest", data);
+      if (userRole === "admin") {
+        const memberName = data.member?.name || data.memberName || "A member";
+        const amount = data.amount ? `KES ${data.amount.toLocaleString()}` : "";
+        notifyLoan(
+          "Loan Request",
+          `${memberName} requested a loan${amount ? ` of ${amount}` : ""}`,
+          data
+        );
+        if (isNativeRef.current) {
+          showMobileNotification({
+            title: "💳 Loan Request",
+            body: `${memberName} requested a loan${amount ? ` of ${amount}` : ""}`,
+            extra: { type: "loan", action: "request" }
+          });
+        }
+      }
+    });
+    
+    socket.on("loanStatusUpdated", (data) => {
+      console.log("📋 Dashboard received: loanStatusUpdated", data);
+      const status = data.status || "updated";
+      notifyLoan(
+        "Loan " + (status === "approved" ? "Approved" : status === "rejected" ? "Rejected" : "Updated"),
+        `Your loan application has been ${status}`,
+        data
+      );
+      if (isNativeRef.current) {
+        showMobileNotification({
+          title: status === "approved" ? "✅ Loan Approved" : status === "rejected" ? "❌ Loan Rejected" : "📋 Loan Updated",
+          body: `Your loan application has been ${status}`,
+          extra: { type: "loan", action: "status", status }
+        });
+      }
+    });
+    
+    socket.on("loanLateFeeApplied", (data) => {
+      console.log("⚠️ Dashboard received: loanLateFeeApplied", data);
+      notifyLoan(
+        "Late Fee Applied",
+        `A late fee has been applied to your loan`,
+        data
+      );
+      if (isNativeRef.current) {
+        showMobileNotification({
+          title: "⚠️ Late Fee Applied",
+          body: "A late fee has been applied to your loan",
+          extra: { type: "loan", action: "lateFee" }
+        });
+      }
+    });
+    
+    socket.on("interestApplied", (data) => {
+      console.log("📈 Dashboard received: interestApplied", data);
+      notifySavings(
+        "Interest Applied",
+        `Interest has been applied to your savings`,
+        data
+      );
+    });
+
     return () => {
       console.log("🧹 Dashboard: Cleaning up Socket.IO listeners");
       socket.off("announcement:new");
+      socket.off("announcementCreated");
       socket.off("member:new");
       socket.off("payment:completed");
       socket.off("payment:new");
       socket.off("cycle:updated");
+      socket.off("savingDeposit");
+      socket.off("withdrawalRequest");
+      socket.off("withdrawalStatusUpdated");
+      socket.off("loanRequest");
+      socket.off("loanStatusUpdated");
+      socket.off("loanLateFeeApplied");
+      socket.off("interestApplied");
     };
-  }, [userData]);
+  }, [userData, userRole, notifyPayment, notifyAnnouncement, notifySavings, notifyLoan, notifySuccess]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-primary/5">
@@ -319,8 +519,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
               {userRole === "admin"
                 ? "Administrator"
                 : `Member ${userData?.memberId || userData?.member_id || ""}`}
-            </Badge>
-            <ThemeToggle />
+            </Badge>            <NotificationCenter />            <ThemeToggle />
             <Button
               onClick={() => {
                 console.log("504 Manual refresh triggered");
