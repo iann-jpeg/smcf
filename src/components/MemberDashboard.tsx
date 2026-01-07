@@ -26,6 +26,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { useAutoRefresh } from "@/hooks/use-auto-refresh";
 import API_BASE from "@/lib/api";
 import { authService } from "@/lib/authService";
 import {
@@ -39,7 +40,7 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 
 interface MemberDashboardProps {
   userData: any;
@@ -82,8 +83,8 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
     memberPosition: userData?.position || 0,
   });
 
-  // Define fetchData function outside useEffect so it can be reused
-  const fetchData = async () => {
+  // Define fetchData function with useCallback so it can be used with auto-refresh
+  const fetchData = useCallback(async () => {
     // Safety check - ensure userData exists
     if (!userData || !userData._id) {
       console.warn("MemberDashboard: userData is undefined or missing _id");
@@ -349,7 +350,16 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
     } catch (error) {
       console.error("Error fetching member data:", error);
     }
-  };
+  }, [userData]);
+
+  // Auto-refresh when user opens the app, switches back to tab, or device comes online
+  useAutoRefresh({
+    onRefresh: fetchData,
+    refreshOnVisible: true,
+    refreshOnFocus: true,
+    refreshOnOnline: true,
+    debounceMs: 3000, // Minimum 3 seconds between auto-refreshes
+  });
 
   // Silent background data fetch without UI flicker
   useEffect(() => {
@@ -359,11 +369,8 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
       return;
     }
 
-    // Initial fetch
-    fetchData();
-
-    // Silent background refresh every 20 seconds
-    const interval = setInterval(fetchData, 10000); // Poll every 10 seconds for faster updates
+    // Silent background refresh every 15 seconds (reduced from 10s for better performance)
+    const interval = setInterval(fetchData, 15000);
 
     // Socket.IO real-time event listeners
     const socket = (window as any).socket;

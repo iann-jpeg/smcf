@@ -57,7 +57,8 @@ import {
   UserPlus,
   Wallet,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { useAutoRefresh } from "@/hooks/use-auto-refresh";
 import ApprovalsTab from "./admin/ApprovalsTab";
 import LoansTab from "./admin/LoansTab";
 import OnlineMembersCard from "./admin/OnlineMembersCard";
@@ -974,7 +975,7 @@ const AdminDashboard = ({
   };
 
   // Fetch all data silently in parallel
-  const fetchAllData = async () => {
+  const fetchAllData = useCallback(async () => {
     // Fetch all in parallel for better performance
     await Promise.all([
       fetchPayments(),
@@ -992,7 +993,16 @@ const AdminDashboard = ({
     if (typeof refreshMembers === "function") {
       await refreshMembers();
     }
-  };
+  }, [refreshMembers]);
+
+  // Auto-refresh when admin opens the app, switches back to tab, or device comes online
+  useAutoRefresh({
+    onRefresh: fetchAllData,
+    refreshOnVisible: true,
+    refreshOnFocus: true,
+    refreshOnOnline: true,
+    debounceMs: 3000,
+  });
 
   // Load contribution amount from members
   useEffect(() => {
@@ -1002,9 +1012,6 @@ const AdminDashboard = ({
   }, [safeMembers]);
 
   useEffect(() => {
-    // Initial silent fetch
-    fetchAllData();
-
     // Silent background polling every 20 seconds
     pollRef.current = setInterval(() => {
       // Silent refresh - no loading indicators

@@ -40,7 +40,8 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { useAutoRefresh } from "@/hooks/use-auto-refresh";
 import smcfLogo from '@/assets/smcf-logo.png';
 import TopSaverBadge from "@/components/analytics/TopSaverBadge";
 import MemberQRCode from "@/components/MemberQRCode";
@@ -74,7 +75,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
   const [isTopSaver, setIsTopSaver] = useState(false);
   const { toast } = useToast();
 
-  const fetchWalletData = async () => {
+  const fetchWalletData = useCallback(async () => {
     try {
       const [summaryRes, transactionsRes, allSavingsRes, feesRes] = await Promise.all([
         fetch(`${API_BASE}/api/savings/summary`, {
@@ -173,10 +174,18 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
     } catch (error) {
       console.error("Error fetching wallet data:", error);
     }
-  };
+  }, [userData]);
+
+  // Auto-refresh when user opens the app, switches back to tab, or device comes online
+  useAutoRefresh({
+    onRefresh: fetchWalletData,
+    refreshOnVisible: true,
+    refreshOnFocus: true,
+    refreshOnOnline: true,
+    debounceMs: 3000,
+  });
 
   useEffect(() => {
-    fetchWalletData();
 
     // Set up Socket.IO listeners for real-time updates
     const setupSocketListeners = async () => {
