@@ -1778,47 +1778,48 @@ Thank you for your cooperation! 🙏`;
                   </CardContent>
                 </Card>
               </aside>
-        <div>
-          <h1 className="text-lg sm:text-xl md:text-2xl font-bold">
-            Admin Dashboard
-          </h1>
-          <p className="text-xs sm:text-sm text-muted-foreground">
-            Welcome back, {userData?.name || "Admin"}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-1 sm:gap-2 w-full sm:w-auto">
-          <ThemeToggle />
-          <Button
-            variant="outline"
-            onClick={() => setShowProfileDialog(true)}
-            className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm"
-            size="sm">
-            <User className="w-3 h-3 sm:w-4 sm:h-4" />
-            <span className="hidden sm:inline">Profile</span>
-            <span className="sm:hidden">Profile</span>
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setNewContributionAmount(contributionAmount.toString());
-              setShowSettingsDialog(true);
-            }}
-            className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm"
-            size="sm">
-            <Settings className="w-3 h-3 sm:w-4 sm:h-4" />
-            <span className="hidden sm:inline">Settings</span>
-            <span className="sm:hidden">Settings</span>
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={onLogout}
-            className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm"
-            size="sm">
-            <LogOut className="w-3 h-3 sm:w-4 sm:h-4" />
-            <span className="hidden sm:inline">Logout</span>
-            <span className="sm:hidden">Logout</span>
-          </Button>
-        </div>
+      {/* Header and controls (moved outside sidebar/main flex) */}
+      <div>
+        <h1 className="text-lg sm:text-xl md:text-2xl font-bold">
+          Admin Dashboard
+        </h1>
+        <p className="text-xs sm:text-sm text-muted-foreground">
+          Welcome back, {userData?.name || "Admin"}
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center gap-1 sm:gap-2 w-full sm:w-auto">
+        <ThemeToggle />
+        <Button
+          variant="outline"
+          onClick={() => setShowProfileDialog(true)}
+          className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm"
+          size="sm">
+          <User className="w-3 h-3 sm:w-4 sm:h-4" />
+          <span className="hidden sm:inline">Profile</span>
+          <span className="sm:hidden">Profile</span>
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => {
+            setNewContributionAmount(contributionAmount.toString());
+            setShowSettingsDialog(true);
+          }}
+          className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm"
+          size="sm">
+          <Settings className="w-3 h-3 sm:w-4 sm:h-4" />
+          <span className="hidden sm:inline">Settings</span>
+          <span className="sm:hidden">Settings</span>
+        </Button>
+        <Button
+          variant="destructive"
+          onClick={onLogout}
+          className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm"
+          size="sm">
+          <LogOut className="w-3 h-3 sm:w-4 sm:h-4" />
+          <span className="hidden sm:inline">Logout</span>
+          <span className="sm:hidden">Logout</span>
+        </Button>
+      </div>
       </div>
 
       {/* System Overview Dashboard */}
