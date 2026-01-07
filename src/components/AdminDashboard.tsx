@@ -2614,8 +2614,6 @@ Thank you for your cooperation! 🙏`;
           </div>
         </CardContent>
       </Card>
-
-  
   return (
     <Tabs defaultValue="members" className="w-full">
         <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0 scrollbar-thin scrollbar-thumb-primary/30 scrollbar-track-transparent">
