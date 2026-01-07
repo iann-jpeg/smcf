@@ -342,8 +342,16 @@ router.post("/:id/repay", protect, async (req, res) => {
       });
     }
 
-    // Check if payment amount exceeds remaining balance
-    const currentRemaining = loan.amount_remaining || loan.total_repayable;
+
+    // Calculate up-to-date late fees (pending + accrued)
+    const { lateFee: pendingLateFee, totalLateFees } = require("../services/lateFeesService.js").calculateLateFeeForLoan(loan);
+    // Total due is principal + interest + all late fees
+    const baseRepayable = loan.interest_rate > 0
+      ? loan.amount + (loan.amount * loan.interest_rate) / 100
+      : loan.amount;
+    const totalDue = baseRepayable + totalLateFees;
+    // Remaining = total due - paid so far
+    const currentRemaining = totalDue - (loan.amount_paid || 0);
     if (amount > currentRemaining) {
       return res.status(400).json({
         success: false,
@@ -379,7 +387,24 @@ router.post("/:id/repay", protect, async (req, res) => {
       });
     }
 
-    // Create pending payment record
+    // Calculate how much of this payment goes to late fees vs principal/interest
+    let lateFeePortion = 0;
+    let principalPortion = 0;
+    let lateFeesOutstanding = totalLateFees - (loan.late_fees_paid || 0);
+    if (lateFeesOutstanding > 0) {
+      if (amount >= lateFeesOutstanding) {
+        lateFeePortion = lateFeesOutstanding;
+        principalPortion = amount - lateFeesOutstanding;
+      } else {
+        lateFeePortion = amount;
+        principalPortion = 0;
+      }
+    } else {
+      lateFeePortion = 0;
+      principalPortion = amount;
+    }
+
+    // Create pending payment record (track late fee portion)
     const payment = await Payment.create({
       member_id: loan.member_id._id,
       paid_by: payerId,
@@ -393,6 +418,7 @@ router.post("/:id/repay", protect, async (req, res) => {
       merchant_request_id: lipiaResult.merchantRequestID,
       notes: `Loan repayment for loan ID: ${loanId}`,
       date: new Date(),
+      late_fee_portion: lateFeePortion,
     });
 
     // Return STK push details for polling
@@ -409,6 +435,10 @@ router.post("/:id/repay", protect, async (req, res) => {
       loanId: loanId,
       amount: amount,
       remaining: currentRemaining - amount,
+      lateFeePortion,
+      principalPortion,
+      totalLateFees,
+      totalDue,
     });
   } catch (error) {
     console.error("Error processing loan repayment:", error);
