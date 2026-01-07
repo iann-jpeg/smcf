@@ -2617,8 +2617,8 @@ Thank you for your cooperation! 🙏`;
       </Card>
 
       <Tabs defaultValue="members" className="w-full">
-        <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">
-          <TabsList className="inline-flex w-auto md:grid md:w-full md:grid-cols-9 min-w-max">
+        <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0 scrollbar-thin scrollbar-thumb-primary/30 scrollbar-track-transparent">
+          <TabsList className="flex w-max min-w-full space-x-2 md:grid md:w-full md:grid-cols-10 min-w-max bg-white/80 dark:bg-background/80 sticky top-0 z-10">
             <TabsTrigger
               value="members"
               className="text-xs sm:text-sm whitespace-nowrap">
@@ -2631,7 +2631,7 @@ Thank you for your cooperation! 🙏`;
               Activity Feed
             </TabsTrigger>
                     <TabsContent value="activity" className="space-y-6">
-                      <Card className="h-full max-h-[90vh] flex flex-col border-2 border-primary/20">
+                      <Card className="border-2 border-primary/20">
                         <CardHeader>
                           <CardTitle className="flex items-center gap-2 text-base">
                             <Megaphone className="w-5 h-5 text-primary" />
@@ -2639,15 +2639,15 @@ Thank you for your cooperation! 🙏`;
                           </CardTitle>
                           <CardDescription>All system activities in real time</CardDescription>
                         </CardHeader>
-                        <CardContent className="flex-1 min-h-0 p-0">
+                        <CardContent className="p-0">
                           <ScrollArea className="h-[60vh] md:h-[75vh] p-4">
                             <div className="space-y-4">
-                              {activityFeed.length === 0 ? (
+                              {Array.isArray(activityFeed) && activityFeed.length === 0 ? (
                                 <div className="text-center text-muted-foreground py-8">
                                   No recent activity
                                 </div>
                               ) : (
-                                activityFeed.map((item, idx) => (
+                                (activityFeed || []).map((item, idx) => (
                                   <div key={idx} className="flex items-start gap-3 border-b pb-3 last:border-b-0 last:pb-0">
                                     <div className="text-2xl leading-none">{item.icon}</div>
                                     <div className="flex-1">
