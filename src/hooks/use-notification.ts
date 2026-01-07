@@ -72,6 +72,13 @@ export function useNotification() {
     [notify]
   );
 
+  const notifyInfo = useCallback(
+    (title: string, message: string, data?: any) => {
+      notify(title, message, 'info', data);
+    },
+    [notify]
+  );
+
   return {
     notify,
     notifySuccess,
@@ -81,6 +88,7 @@ export function useNotification() {
     notifyLoan,
     notifySavings,
     notifyAnnouncement,
+    notifyInfo,
     unreadCount: state.unreadCount,
     soundEnabled: state.soundEnabled,
   };
