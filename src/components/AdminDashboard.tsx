@@ -1734,92 +1734,52 @@ Thank you for your cooperation! 🙏`;
   };
 
   return (
-    <div className="space-y-4 md:space-y-6 p-2 sm:p-4 md:p-0 flex flex-col md:flex-row">
-
-      
-      {/* Main Content + Sidebar */}
-      <div className="flex-1 min-w-0">
-      {/* Header with Profile and Logout */}
+    <div className="space-y-4 md:space-y-6 p-2 sm:p-4 md:p-0">
+      {/* Header and controls */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3">
-          </div>
-          {/* ...existing main dashboard content... */}
-              </div>
-              {/* Activity Sidebar */}
-              <aside className="w-full md:w-80 md:ml-6 mt-6 md:mt-0 flex-shrink-0">
-                <Card className="h-full max-h-[90vh] flex flex-col border-2 border-primary/20">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      <Megaphone className="w-5 h-5 text-primary" />
-                      Activity Feed
-                    </CardTitle>
-                    <CardDescription>All system activities in real time</CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex-1 min-h-0 p-0">
-                    <ScrollArea className="h-[60vh] md:h-[75vh] p-4">
-                      <div className="space-y-4">
-                        {activityFeed.length === 0 ? (
-                          <div className="text-center text-muted-foreground py-8">
-                            No recent activity
-                          </div>
-                        ) : (
-                          activityFeed.map((item, idx) => (
-                            <div key={idx} className="flex items-start gap-3 border-b pb-3 last:border-b-0 last:pb-0">
-                              <div className="text-2xl leading-none">{item.icon}</div>
-                              <div className="flex-1">
-                                <div className="font-semibold text-sm mb-0.5">{item.title}</div>
-                                <div className="text-xs text-muted-foreground mb-1">{item.description}</div>
-                                <div className="text-[10px] text-muted-foreground">{item.timestamp?.toLocaleString?.() || new Date(item.timestamp).toLocaleString()}</div>
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </ScrollArea>
-                  </CardContent>
-                </Card>
-              </aside>
-      {/* Header and controls (moved outside sidebar/main flex) */}
-      <div>
-        <h1 className="text-lg sm:text-xl md:text-2xl font-bold">
-          Admin Dashboard
-        </h1>
-        <p className="text-xs sm:text-sm text-muted-foreground">
-          Welcome back, {userData?.name || "Admin"}
-        </p>
-      </div>
-      <div className="flex flex-wrap items-center gap-1 sm:gap-2 w-full sm:w-auto">
-        <ThemeToggle />
-        <Button
-          variant="outline"
-          onClick={() => setShowProfileDialog(true)}
-          className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm"
-          size="sm">
-          <User className="w-3 h-3 sm:w-4 sm:h-4" />
-          <span className="hidden sm:inline">Profile</span>
-          <span className="sm:hidden">Profile</span>
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => {
-            setNewContributionAmount(contributionAmount.toString());
-            setShowSettingsDialog(true);
-          }}
-          className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm"
-          size="sm">
-          <Settings className="w-3 h-3 sm:w-4 sm:h-4" />
-          <span className="hidden sm:inline">Settings</span>
-          <span className="sm:hidden">Settings</span>
-        </Button>
-        <Button
-          variant="destructive"
-          onClick={onLogout}
-          className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm"
-          size="sm">
-          <LogOut className="w-3 h-3 sm:w-4 sm:h-4" />
-          <span className="hidden sm:inline">Logout</span>
-          <span className="sm:hidden">Logout</span>
+        <div>
+          <h1 className="text-lg sm:text-xl md:text-2xl font-bold">
+            Admin Dashboard
+          </h1>
+          <p className="text-xs sm:text-sm text-muted-foreground">
+            Welcome back, {userData?.name || "Admin"}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-1 sm:gap-2 w-full sm:w-auto">
+          <ThemeToggle />
+          <Button
+            variant="outline"
+            onClick={() => setShowProfileDialog(true)}
+            className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm"
+            size="sm">
+            <User className="w-3 h-3 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Profile</span>
+            <span className="sm:hidden">Profile</span>
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setNewContributionAmount(contributionAmount.toString());
+              setShowSettingsDialog(true);
+            }}
+            className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm"
+            size="sm">
+            <Settings className="w-3 h-3 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Settings</span>
+            <span className="sm:hidden">Settings</span>
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={onLogout}
+            className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm"
+            size="sm">
+            <LogOut className="w-3 h-3 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Logout</span>
+            <span className="sm:hidden">Logout</span>
           </Button>
         </div>
+      </div>
+
       {/* System Overview Dashboard */}
       <Card className="border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10">
         <CardHeader>
@@ -1853,7 +1813,7 @@ Thank you for your cooperation! 🙏`;
                 </div>
               </CardContent>
             </Card>
-
+            {/* ...existing code... */}
             {/* Payment Progress */}
             <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900 border-green-200">
               <CardContent className="pt-6">
@@ -2665,6 +2625,44 @@ Thank you for your cooperation! 🙏`;
               <span className="hidden sm:inline">Member Management</span>
               <span className="sm:hidden">Members</span>
             </TabsTrigger>
+            <TabsTrigger
+              value="activity"
+              className="text-xs sm:text-sm whitespace-nowrap">
+              Activity Feed
+            </TabsTrigger>
+                    <TabsContent value="activity" className="space-y-6">
+                      <Card className="h-full max-h-[90vh] flex flex-col border-2 border-primary/20">
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2 text-base">
+                            <Megaphone className="w-5 h-5 text-primary" />
+                            Activity Feed
+                          </CardTitle>
+                          <CardDescription>All system activities in real time</CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex-1 min-h-0 p-0">
+                          <ScrollArea className="h-[60vh] md:h-[75vh] p-4">
+                            <div className="space-y-4">
+                              {activityFeed.length === 0 ? (
+                                <div className="text-center text-muted-foreground py-8">
+                                  No recent activity
+                                </div>
+                              ) : (
+                                activityFeed.map((item, idx) => (
+                                  <div key={idx} className="flex items-start gap-3 border-b pb-3 last:border-b-0 last:pb-0">
+                                    <div className="text-2xl leading-none">{item.icon}</div>
+                                    <div className="flex-1">
+                                      <div className="font-semibold text-sm mb-0.5">{item.title}</div>
+                                      <div className="text-xs text-muted-foreground mb-1">{item.description}</div>
+                                      <div className="text-[10px] text-muted-foreground">{item.timestamp?.toLocaleString?.() || new Date(item.timestamp).toLocaleString()}</div>
+                                    </div>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </ScrollArea>
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
             <TabsTrigger
               value="payments"
               className="text-xs sm:text-sm whitespace-nowrap">
