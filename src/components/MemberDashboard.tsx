@@ -52,6 +52,26 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
   const [showLoanRequest, setShowLoanRequest] = useState(false);
   const [showRepayment, setShowRepayment] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<any>(null);
+  const [selectedLoanLoading, setSelectedLoanLoading] = useState(false);
+    // Fetch latest loan details from backend when opening repayment dialog
+    const openRepaymentDialog = async (loan: any) => {
+      setSelectedLoanLoading(true);
+      try {
+        const res = await fetch(`${API_BASE}/api/loans/${loan._id}`, {
+          headers: { ...authService.getAuthHeaders() },
+        });
+        const data = await res.json();
+        if (data.success && data.data) {
+          setSelectedLoan(data.data);
+        } else {
+          setSelectedLoan(loan); // fallback
+        }
+      } catch (e) {
+        setSelectedLoan(loan);
+      }
+      setSelectedLoanLoading(false);
+      setShowRepayment(true);
+    };
   const [isProcessingRepayment, setIsProcessingRepayment] = useState(false);
   const [repaymentState, setRepaymentState] = useState<
     "idle" | "confirm" | "processing" | "waiting" | "success" | "failed"
@@ -1468,13 +1488,12 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                                   )}
                                 </div>
                                 <Button
-                                  onClick={() => {
-                                    setSelectedLoan(loan);
-                                    setShowRepayment(true);
-                                  }}
+                                  onClick={() => openRepaymentDialog(loan)}
                                   variant={loan.is_overdue ? "destructive" : "mpesa"}
                                   size="sm"
-                                  className="w-full sm:w-auto">
+                                  className="w-full sm:w-auto"
+                                  disabled={selectedLoanLoading}
+                                >
                                   <Phone className="w-4 h-4 mr-2" />
                                   {loan.is_overdue ? "Pay Now (Overdue)" : "Repay via M-Pesa"}
                                 </Button>
@@ -1788,11 +1807,8 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                   placeholder="Enter amount to pay"
                   value={partialPaymentAmount}
                   onChange={(e) => setPartialPaymentAmount(e.target.value)}
-                  max={
-                    selectedLoan.current_remaining ||
-                    selectedLoan.amount_remaining ||
-                    selectedLoan.total_repayable
-                  }
+                  max={selectedLoan?.current_remaining || selectedLoan?.amount_remaining || selectedLoan?.total_repayable}
+                  disabled={selectedLoanLoading}
                 />
                 <div className="flex gap-2">
                   <Button
@@ -1801,13 +1817,15 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                     onClick={() =>
                       setPartialPaymentAmount(
                         (
-                          (selectedLoan.current_remaining ||
-                            selectedLoan.amount_remaining ||
-                            selectedLoan.total_repayable) / 2
+                          (selectedLoan?.current_remaining ||
+                            selectedLoan?.amount_remaining ||
+                            selectedLoan?.total_repayable) / 2
                         ).toFixed(0)
                       )
                     }
-                    className="flex-1">
+                    className="flex-1"
+                    disabled={selectedLoanLoading}
+                  >
                     Half
                   </Button>
                   <Button
@@ -1816,13 +1834,15 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                     onClick={() =>
                       setPartialPaymentAmount(
                         (
-                          selectedLoan.current_remaining ||
-                          selectedLoan.amount_remaining ||
-                          selectedLoan.total_repayable
+                          selectedLoan?.current_remaining ||
+                          selectedLoan?.amount_remaining ||
+                          selectedLoan?.total_repayable
                         ).toString()
                       )
                     }
-                    className="flex-1">
+                    className="flex-1"
+                    disabled={selectedLoanLoading}
+                  >
                     Full Amount
                   </Button>
                 </div>

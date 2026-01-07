@@ -97,6 +97,7 @@ interface LoansTabProps {
 const LoansTab = ({ isReadOnly = false }: LoansTabProps) => {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
+  const [selectedLoanLoading, setSelectedLoanLoading] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [showPaymentHistoryDialog, setShowPaymentHistoryDialog] = useState(false);
   const [showDisbursementDialog, setShowDisbursementDialog] = useState(false);
@@ -854,10 +855,26 @@ const LoansTab = ({ isReadOnly = false }: LoansTabProps) => {
                                 size="sm"
                                 variant="ghost"
                                 className="h-5 px-1 text-xs"
-                                onClick={() => {
-                                  setSelectedLoan(loan);
+                                onClick={async () => {
+                                  setSelectedLoanLoading(true);
+                                  try {
+                                    const res = await fetch(`${API_BASE}/api/loans/${loan._id}`, {
+                                      headers: { ...authService.getAuthHeaders() },
+                                    });
+                                    const data = await res.json();
+                                    if (data.success && data.data) {
+                                      setSelectedLoan(data.data);
+                                    } else {
+                                      setSelectedLoan(loan);
+                                    }
+                                  } catch (e) {
+                                    setSelectedLoan(loan);
+                                  }
+                                  setSelectedLoanLoading(false);
                                   setShowPaymentHistoryDialog(true);
-                                }}>
+                                }}
+                                disabled={selectedLoanLoading}
+                              >
                                 View History
                               </Button>
                             </div>
