@@ -176,8 +176,13 @@ router.post("/query-status", protect, async (req, res) => {
         checkoutRequestID
       );
 
+      // Use atomic update with condition to prevent race conditions
+      // Only update if deposit_processed is false (hasn't been processed yet)
       const payment = await Payment.findOneAndUpdate(
-        { checkout_request_id: checkoutRequestID },
+        { 
+          checkout_request_id: checkoutRequestID,
+          deposit_processed: { $ne: true } // Only process if not already processed
+        },
         {
           status: "completed",
           mpesa_transaction_id:
@@ -185,11 +190,28 @@ router.post("/query-status", protect, async (req, res) => {
             result.transactionId ||
             checkoutRequestID,
           transaction_date: result.transactionDate || new Date(),
+          deposit_processed: true, // Mark as processed atomically
         },
         { new: true }
       );
 
       if (!payment) {
+        // Check if payment exists but was already processed (race condition prevention)
+        const existingPayment = await Payment.findOne({ checkout_request_id: checkoutRequestID });
+        
+        if (existingPayment && existingPayment.deposit_processed) {
+          console.log("⚠️ Payment already processed by another request (race condition prevented)");
+          console.log("   Payment ID:", existingPayment._id);
+          console.log("   checkout_request_id:", checkoutRequestID);
+          return res.json({
+            success: true,
+            status: "completed",
+            ResultCode: "0",
+            ResultDescription: "Transaction already processed",
+            MpesaReceiptNumber: existingPayment.mpesa_transaction_id,
+          });
+        }
+
         console.error("❌❌❌ PAYMENT NOT FOUND! ❌❌❌");
         console.error(
           "   Searched for checkout_request_id:",
@@ -294,18 +316,35 @@ router.post("/query-status", protect, async (req, res) => {
           console.log("   Deposit amount (parsed):", depositAmount);
           console.log("   Balance after:", balanceAfter);
 
-          const savingRecord = await Saving.create({
-            member_id: payment.member_id,
-            amount: depositAmount,
-            transaction_type: "deposit",
-            balance_before: balanceBefore,
-            balance_after: balanceAfter,
-            status: "completed",
-            payment_method: "mpesa",
-            transaction_ref: result.mpesaReceiptNumber,
-            notes: `Wallet deposit via M-Pesa - ${result.mpesaReceiptNumber}`,
-            created_at: new Date(),
-          });
+          // Use try-catch to handle unique index constraint violation (race condition fallback)
+          let savingRecord;
+          try {
+            savingRecord = await Saving.create({
+              member_id: payment.member_id,
+              amount: depositAmount,
+              transaction_type: "deposit",
+              balance_before: balanceBefore,
+              balance_after: balanceAfter,
+              status: "completed",
+              payment_method: "mpesa",
+              transaction_ref: result.mpesaReceiptNumber,
+              notes: `Wallet deposit via M-Pesa - ${result.mpesaReceiptNumber}`,
+              created_at: new Date(),
+            });
+          } catch (createError) {
+            // Handle duplicate key error (E11000) - this means another request already created the record
+            if (createError.code === 11000) {
+              console.log("⚠️ Duplicate key error - deposit already recorded:", result.mpesaReceiptNumber);
+              return res.json({
+                success: true,
+                status: "completed",
+                ResultCode: "0",
+                ResultDescription: "Transaction already processed (duplicate prevented)",
+                MpesaReceiptNumber: result.mpesaReceiptNumber,
+              });
+            }
+            throw createError; // Re-throw if it's a different error
+          }
 
           console.log("✅ Saving record created:", {
             id: savingRecord._id,
@@ -921,12 +960,36 @@ router.post("/callback", async (req, res) => {
       });
     }
 
-    // Update payment status
-    const payment = await Payment.findOne({
-      checkout_request_id: callbackData.checkoutRequestID,
-    });
+    // Use atomic update to prevent race conditions - only process if not already processed
+    const payment = await Payment.findOneAndUpdate(
+      {
+        checkout_request_id: callbackData.checkoutRequestID,
+        deposit_processed: { $ne: true }, // Only process if not already processed
+      },
+      {
+        status: callbackData.success ? "completed" : "failed",
+        mpesa_transaction_id: callbackData.mpesaReceiptNumber,
+        transaction_date: callbackData.transactionDate,
+        deposit_processed: callbackData.success ? true : false, // Mark as processed atomically
+      },
+      { new: true }
+    );
 
     if (!payment) {
+      // Check if it was already processed
+      const existingPayment = await Payment.findOne({
+        checkout_request_id: callbackData.checkoutRequestID,
+      });
+
+      if (existingPayment && existingPayment.deposit_processed) {
+        console.log("⚠️ Callback: Payment already processed (race condition prevented)");
+        return res.json({
+          success: true,
+          ResultCode: "0",
+          ResultDescription: "Transaction already processed",
+        });
+      }
+
       console.error(
         "Payment not found for callback:",
         callbackData.checkoutRequestID
@@ -938,11 +1001,6 @@ router.post("/callback", async (req, res) => {
     }
 
     if (callbackData.success) {
-      payment.status = "completed";
-      payment.mpesa_transaction_id = callbackData.mpesaReceiptNumber;
-      payment.transaction_date = callbackData.transactionDate;
-      await payment.save();
-
       const member = await Member.findById(payment.member_id);
 
       // Handle based on payment type
@@ -956,7 +1014,7 @@ router.post("/callback", async (req, res) => {
         // Wallet deposit - create Saving record
         const Saving = (await import("../models/Saving.js")).default;
 
-        // Check if this transaction already exists (prevent duplicates)
+        // Double-check if this transaction already exists (belt and suspenders)
         const existingSaving = await Saving.findOne({
           member_id: payment.member_id,
           transaction_ref: callbackData.mpesaReceiptNumber,
@@ -983,18 +1041,33 @@ router.post("/callback", async (req, res) => {
         console.log("   Deposit amount (parsed):", depositAmount);
         console.log("   Balance after:", balanceAfter);
 
-        const savingRecord = await Saving.create({
-          member_id: payment.member_id,
-          amount: depositAmount,
-          transaction_type: "deposit",
-          balance_before: balanceBefore,
-          balance_after: balanceAfter,
-          status: "completed",
-          payment_method: "mpesa",
-          transaction_ref: callbackData.mpesaReceiptNumber,
-          notes: `Wallet deposit via M-Pesa - ${callbackData.mpesaReceiptNumber}`,
-          created_at: new Date(),
-        });
+        // Use try-catch to handle unique index constraint violation (race condition fallback)
+        let savingRecord;
+        try {
+          savingRecord = await Saving.create({
+            member_id: payment.member_id,
+            amount: depositAmount,
+            transaction_type: "deposit",
+            balance_before: balanceBefore,
+            balance_after: balanceAfter,
+            status: "completed",
+            payment_method: "mpesa",
+            transaction_ref: callbackData.mpesaReceiptNumber,
+            notes: `Wallet deposit via M-Pesa - ${callbackData.mpesaReceiptNumber}`,
+            created_at: new Date(),
+          });
+        } catch (createError) {
+          // Handle duplicate key error (E11000) - this means another request already created the record
+          if (createError.code === 11000) {
+            console.log("⚠️ Callback: Duplicate key error - deposit already recorded:", callbackData.mpesaReceiptNumber);
+            return res.json({
+              success: true,
+              ResultCode: "0",
+              ResultDescription: "Transaction already processed (duplicate prevented)",
+            });
+          }
+          throw createError; // Re-throw if it's a different error
+        }
 
         console.log("✅ Saving record created via callback:", {
           id: savingRecord._id,

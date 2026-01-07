@@ -75,4 +75,16 @@ savingSchema.index({ member_id: 1, created_at: -1 });
 savingSchema.index({ transaction_type: 1 });
 savingSchema.index({ status: 1 });
 
+// Unique compound index to prevent duplicate M-Pesa transactions
+// Only applies when transaction_ref is not empty (sparse doesn't work on compound, so we use a partial filter)
+savingSchema.index(
+  { transaction_ref: 1, transaction_type: 1, member_id: 1 },
+  { 
+    unique: true,
+    partialFilterExpression: { 
+      transaction_ref: { $exists: true, $ne: "" } 
+    }
+  }
+);
+
 export default mongoose.model("Saving", savingSchema);

@@ -65,6 +65,11 @@ const paymentSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  // Track if the deposit/saving record was already created to prevent duplicates
+  deposit_processed: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 export default mongoose.model("Payment", paymentSchema);
