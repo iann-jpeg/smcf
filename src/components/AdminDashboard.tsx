@@ -1820,9 +1820,6 @@ Thank you for your cooperation! 🙏`;
           <span className="sm:hidden">Logout</span>
           </Button>
         </div>
-        {/* System Overview Dashboard */}
-      </div>
-
       {/* System Overview Dashboard */}
       <Card className="border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10">
         <CardHeader>
