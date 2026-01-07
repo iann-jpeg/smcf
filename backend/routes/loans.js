@@ -368,7 +368,7 @@ router.post("/:id/repay", protect, async (req, res) => {
 
 
     // Calculate up-to-date late fees (pending + accrued)
-    const { lateFee: pendingLateFee, totalLateFees } = require("../services/lateFeesService.js").calculateLateFeeForLoan(loan);
+    const { lateFee: pendingLateFee, totalLateFees } = calculateLateFeeForLoan(loan);
     // Total due is principal + interest + all late fees
     const baseRepayable = loan.interest_rate > 0
       ? loan.amount + (loan.amount * loan.interest_rate) / 100

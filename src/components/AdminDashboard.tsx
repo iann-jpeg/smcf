@@ -1732,7 +1732,6 @@ Thank you for your cooperation! 🙏`;
       }
     }
   };
-
   return (
     <div className="space-y-4 md:space-y-6 p-2 sm:p-4 md:p-0">
       {/* Header and controls */}
