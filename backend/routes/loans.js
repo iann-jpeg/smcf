@@ -1,3 +1,13 @@
+
+import express from "express";
+import { adminOnly, protect } from "../middleware/auth.js";
+import Loan from "../models/Loan.js";
+import Payment from "../models/Payment.js";
+import { initiateLipiaPayment } from "../services/lipiaService.js";
+import { calculateLateFeeForLoan, applyLateFees } from "../services/lateFeesService.js";
+
+const router = express.Router();
+
 // Delete a single loan by ID (admin only)
 router.delete('/:id', protect, adminOnly, async (req, res) => {
   try {
@@ -20,14 +30,6 @@ router.delete('/:id', protect, adminOnly, async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
-import express from "express";
-import { adminOnly, protect } from "../middleware/auth.js";
-import Loan from "../models/Loan.js";
-import Payment from "../models/Payment.js";
-import { initiateLipiaPayment } from "../services/lipiaService.js";
-import { calculateLateFeeForLoan, applyLateFees } from "../services/lateFeesService.js";
-
-const router = express.Router();
 
 // Get all loans with calculated late fees
 router.get("/", protect, async (req, res) => {
