@@ -451,6 +451,8 @@ router.post("/:id/repay", protect, async (req, res) => {
       late_fee_portion: lateFeePortion,
     });
 
+    // Calculate totalDue for response (principal + interest + all late fees)
+    const totalDue = baseRepayable + totalLateFees;
     // Return STK push details for polling
     res.json({
       success: true,
