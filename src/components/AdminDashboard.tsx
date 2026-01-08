@@ -139,8 +139,7 @@ const AdminDashboard = ({
     totalLoaned,
     totalLoanRepaid,
   });
-
-  // Safety check for required data
+  // End of fallback render block
   if (!userData || !userData.cycleData) {
     console.log("Missing userData or cycleData, rendering fallback");
     return (
@@ -3742,8 +3741,9 @@ Thank you for your cooperation! 🙏`;
           </div>
         </DialogContent>
       </Dialog>
+
     </div>
   );
-};
+}
 
 export default AdminDashboard;

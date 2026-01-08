@@ -813,7 +813,7 @@ const LoansTab = ({ isReadOnly = false }: LoansTabProps) => {
                   <TableBody>
                     {disbursedLoans.map((loan) => {
                       const amountPaid = loan.amount_paid || 0;
-                      const totalDue = loan.current_total_due || loan.total_repayable;
+                      const totalDue = loan.current_total_due || loan.total_repayable || loan.amount;
                       const remaining = loan.current_remaining || loan.amount_remaining || totalDue;
                       const progress = totalDue > 0 ? Math.min(100, Math.round((amountPaid / totalDue) * 100)) : 0;
                       const isOverdue = loan.is_overdue || false;
