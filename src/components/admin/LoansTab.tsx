@@ -104,6 +104,86 @@ const LoansTab = ({ isReadOnly = false }: LoansTabProps) => {
   const [showClearDialog, setShowClearDialog] = useState(false);
   const [showCreditScoreDialog, setShowCreditScoreDialog] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
+  // Repayment dialog state
+  const [showRepayDialog, setShowRepayDialog] = useState(false);
+  const [repayAmount, setRepayAmount] = useState("");
+  const [repayError, setRepayError] = useState("");
+  const [repayLoading, setRepayLoading] = useState(false);
+    // Fetch latest loan data by ID
+    const fetchLoanById = async (loanId: string) => {
+      setSelectedLoanLoading(true);
+      try {
+        const res = await fetch(`${API_BASE}/api/loans/${loanId}`, {
+          headers: { ...authService.getAuthHeaders() },
+        });
+        const data = await res.json();
+        if (data.success && data.data) {
+          setSelectedLoan(data.data);
+          return data.data;
+        }
+      } catch (e) {
+        // fallback
+      }
+      setSelectedLoanLoading(false);
+      return null;
+    };
+
+    // Open repay dialog and fetch latest loan data
+    const handleOpenRepayDialog = async (loan: Loan) => {
+      setRepayAmount("");
+      setRepayError("");
+      setRepayLoading(true);
+      const latestLoan = await fetchLoanById(loan._id);
+      setRepayLoading(false);
+      if (latestLoan) {
+        setSelectedLoan(latestLoan);
+        setShowRepayDialog(true);
+      } else {
+        setSelectedLoan(loan);
+        setShowRepayDialog(true);
+      }
+    };
+
+    // Repay submit handler
+    const handleRepaySubmit = async () => {
+      if (!selectedLoan) return;
+      setRepayError("");
+      const maxPayable = selectedLoan.current_remaining || selectedLoan.amount_remaining || 0;
+      const amountNum = Number(repayAmount);
+      if (!repayAmount || isNaN(amountNum) || amountNum <= 0) {
+        setRepayError("Enter a valid amount");
+        return;
+      }
+      if (amountNum > maxPayable) {
+        setRepayError(`Amount too high. Maximum payable is KES ${maxPayable.toLocaleString()}`);
+        return;
+      }
+      setRepayLoading(true);
+      try {
+        const res = await fetch(`${API_BASE}/api/loans/${selectedLoan._id}/repay`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...authService.getAuthHeaders(),
+          },
+          body: JSON.stringify({ amount: amountNum }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          toast({ title: "Repayment Successful", description: `KES ${amountNum.toLocaleString()} repaid.` });
+          setShowRepayDialog(false);
+          setRepayAmount("");
+          setRepayError("");
+          fetchLoans();
+        } else {
+          setRepayError(data.error || "Repayment failed");
+        }
+      } catch (e) {
+        setRepayError("Repayment failed");
+      } finally {
+        setRepayLoading(false);
+      }
+    };
   const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
 
@@ -923,6 +1003,14 @@ const LoansTab = ({ isReadOnly = false }: LoansTabProps) => {
                             <Button
                               size="sm"
                               variant="outline"
+                              onClick={() => handleOpenRepayDialog(loan)}
+                              disabled={isReadOnly || isProcessing}
+                              title={isReadOnly ? "Read-only access" : undefined}>
+                              Repay
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
                               onClick={() => handleMarkRepaid(loan)}
                               disabled={isReadOnly || isProcessing}
                               title={isReadOnly ? "Read-only access" : undefined}>
@@ -930,6 +1018,63 @@ const LoansTab = ({ isReadOnly = false }: LoansTabProps) => {
                             </Button>
                           </div>
                         </TableCell>
+                            {/* Repayment Dialog */}
+                            <Dialog open={showRepayDialog} onOpenChange={setShowRepayDialog}>
+                              <DialogContent>
+                                <DialogHeader>
+                                  <DialogTitle>Loan Repayment</DialogTitle>
+                                  <DialogDescription>
+                                    Enter repayment amount for this loan. The maximum allowed is always based on the latest backend calculation.
+                                  </DialogDescription>
+                                </DialogHeader>
+                                {selectedLoan && (
+                                  <div className="space-y-4">
+                                    <div className="bg-muted p-3 rounded-lg">
+                                      <div className="flex justify-between text-sm">
+                                        <span>Member:</span>
+                                        <span className="font-medium">{selectedLoan.member_id?.name || "Unknown"}</span>
+                                      </div>
+                                      <div className="flex justify-between text-sm">
+                                        <span>Loan Amount:</span>
+                                        <span>KES {selectedLoan.amount.toLocaleString()}</span>
+                                      </div>
+                                      <div className="flex justify-between text-sm">
+                                        <span>Current Remaining:</span>
+                                        <span className="font-semibold text-amber-600">KES {(selectedLoan.current_remaining || selectedLoan.amount_remaining || 0).toLocaleString()}</span>
+                                      </div>
+                                      {(selectedLoan.total_late_fees || 0) > 0 && (
+                                        <div className="flex justify-between text-sm">
+                                          <span>Late Fees:</span>
+                                          <span className="text-red-600">KES {selectedLoan.total_late_fees?.toLocaleString()}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div>
+                                      <Label htmlFor="repay-amount">Amount to Repay</Label>
+                                      <input
+                                        id="repay-amount"
+                                        type="number"
+                                        min="1"
+                                        max={selectedLoan.current_remaining || selectedLoan.amount_remaining || 0}
+                                        className="input input-bordered w-full mt-1"
+                                        value={repayAmount}
+                                        onChange={e => setRepayAmount(e.target.value)}
+                                        disabled={repayLoading}
+                                        placeholder={`Max: KES ${(selectedLoan.current_remaining || selectedLoan.amount_remaining || 0).toLocaleString()}`}
+                                      />
+                                      {repayError && <div className="text-red-600 text-xs mt-1">{repayError}</div>}
+                                    </div>
+                                  </div>
+                                )}
+                                <DialogFooter>
+                                  <Button variant="outline" onClick={() => setShowRepayDialog(false)} disabled={repayLoading}>Cancel</Button>
+                                  <Button onClick={handleRepaySubmit} disabled={repayLoading || !repayAmount}>
+                                    {repayLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                                    Submit Repayment
+                                  </Button>
+                                </DialogFooter>
+                              </DialogContent>
+                            </Dialog>
                       </TableRow>
                       );
                     })}
