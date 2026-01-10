@@ -231,8 +231,8 @@ const AdminDashboard = ({
     .filter((p: any) => p.status === "completed" && p.type === "cycle_payment")
     .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
 
-  // Pocket = Current Balances + Total Fees Deducted + Total Loan Repaid (including partial payments and interest) + Collected Amount from Cycle - Total Amount Loaned
-  const pocket = totalWalletBalances + totalFeesCollected + safeTotalLoanRepaid + totalCycleContributions - safeTotalLoaned;
+  // Pocket = Current Balances + Total Fees Deducted + Total Loan Repaid (including partial payments and interest) - Total Amount Loaned
+  const pocket = totalWalletBalances + totalFeesCollected + safeTotalLoanRepaid - safeTotalLoaned;
 
   // Polling for real-time data
   const pollRef = useRef<NodeJS.Timeout | null>(null);
@@ -2116,7 +2116,6 @@ Thank you for your cooperation! 🙏`;
                       Wallet Balances: KES {totalWalletBalances.toLocaleString()}<br />
                       + Fees Collected: KES {totalFeesCollected.toLocaleString()}<br />
                       + Loan Repaid: KES {safeTotalLoanRepaid.toLocaleString()}<br />
-                      + Cycle Contributions: KES {totalCycleContributions.toLocaleString()}<br />
                       − Total Loaned: KES {safeTotalLoaned.toLocaleString()}
                     </p>
                   </div>
@@ -2494,7 +2493,7 @@ Thank you for your cooperation! 🙏`;
                     const recipientPhone = currentCycle.next_recipient?.phone;
                     const cycleId = currentCycle._id || currentCycle.id;
                     const disbursementAmount =
-                      safeMembers.length * contributionAmount;
+                      5400;
 
                     if (!recipientId || !cycleId || !recipientPhone) {
                       throw new Error("Missing recipient information");
@@ -3079,6 +3078,15 @@ Thank you for your cooperation! 🙏`;
                                 title={isReadOnly ? "Read-only access" : undefined}>
                                 <Trash2 className="w-3 h-3" />
                               </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleEditMember(member._id || member.id)}
+                                disabled={isReadOnly}
+                                title={isReadOnly ? "Read-only access" : "Edit Member"}
+                              >
+                                Edit
+                              </Button>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -3365,10 +3373,7 @@ Thank you for your cooperation! 🙏`;
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Amount:</span>
                       <span className="font-semibold text-accent">
-                        KES{" "}
-                        {(
-                          safeMembers.length * contributionAmount
-                        ).toLocaleString()}
+                        KES 5,400
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -3407,7 +3412,7 @@ Thank you for your cooperation! 🙏`;
                                   recipient_id:
                                     currentCycle.recipient_id._id ||
                                     currentCycle.recipient_id,
-                                  amount: safeMembers.length * 204,
+                                  amount: safeMembers.length * contributionAmount,
                                   method: "manual",
                                   status: "completed",
                                 }),
@@ -3419,7 +3424,7 @@ Thank you for your cooperation! 🙏`;
                             if (response.ok && data.success) {
                               toast({
                                 title: "Disbursement Recorded",
-                                description: `KES ${disbursementAmount.toLocaleString()} marked as disbursed to ${
+                                description: `KES ${(safeMembers.length * contributionAmount).toLocaleString()} marked as disbursed to ${
                                   currentCycle.next_recipient?.name || "recipient"
                                 }`,
                               });

@@ -1154,11 +1154,10 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                   </div>
                   <div className="text-center p-4 bg-financial-success/5 rounded-lg">
                     <div className="text-2xl font-bold text-financial-success mb-1">
-                      KES{" "}
-                      {currentCycleData?.collectedAmount?.toLocaleString() || 0}
+                      KES {currentCycleData?.collectedAmount?.toLocaleString() || 0}
                     </div>
                     <div className="text-sm text-muted-foreground">
-                      Amount Collected
+                      Amount Collected (KES 200/member)
                     </div>
                   </div>
                   <div className="text-center p-4 bg-financial-warning/5 rounded-lg">
