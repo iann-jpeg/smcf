@@ -1559,33 +1559,42 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                {paymentHistory.map((payment, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between p-3 border rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <CheckCircle className="w-5 h-5 text-financial-success" />
-                      <div>
-                        <div className="font-medium">
-                          Cycle #{payment.cycle}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {payment.date}
+                <div className="space-y-3">
+                  {paymentHistory.map((payment, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between p-3 border rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <CheckCircle className="w-5 h-5 text-financial-success" />
+                        <div>
+                          <div className="font-medium">
+                            Cycle #{payment.cycle}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {payment.date}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-semibold text-financial-success">
-                        KES {payment.amount}
+                      <div className="text-right">
+                        <div className="font-semibold text-financial-success">
+                          KES {payment.amount}
+                        </div>
+                        <Badge variant="secondary" className="text-xs">
+                          {payment.status}
+                        </Badge>
                       </div>
-                      <Badge variant="secondary" className="text-xs">
-                        {payment.status}
-                      </Badge>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                  {/* Total Row */}
+                  {paymentHistory.length > 0 && (
+                    <div className="flex items-center justify-between p-3 border-t-2 border-b-2 border-primary bg-primary/10 rounded-lg mt-4">
+                      <div className="font-semibold text-primary">Total</div>
+                      <div className="font-bold text-primary">
+                        KES {paymentHistory.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0).toLocaleString()}
+                      </div>
+                    </div>
+                  )}
+                </div>
             </CardContent>
           </Card>
         </TabsContent>
