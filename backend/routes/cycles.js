@@ -145,20 +145,26 @@ router.post("/start", protect, adminOnly, async (req, res) => {
     });
 
     // Reset all members payment status
-    // For each member, check if they have already paid for the new cycle (advance payment)
+    // For each member, check if they have completed payments for the new cycle or beyond
     const allMembers = await Member.find({});
     for (const member of allMembers) {
-      // Check if member has a completed payment for the new cycle (advance payment)
-      const advancePayment = await Payment.findOne({
+      // Find all completed payments for cycles >= newCycleNumber
+      const futurePayments = await Payment.find({
         member_id: member._id,
-        cycle_number: newCycleNumber,
+        cycle_number: { $gte: newCycleNumber },
         status: "completed"
-      });
-      if (advancePayment) {
-        // Member paid in advance for this cycle, mark as paid
-        await Member.updateOne({ _id: member._id }, { payment_status: "paid", payment_date: advancePayment.date });
+      }).sort({ cycle_number: 1 });
+
+      if (futurePayments.length > 0) {
+        // Member has paid for this cycle or future cycles
+        // Mark as paid for the current cycle
+        const paymentForCurrentCycle = futurePayments.find(p => p.cycle_number === newCycleNumber);
+        await Member.updateOne({ _id: member._id }, {
+          payment_status: paymentForCurrentCycle ? "paid" : "pending",
+          payment_date: paymentForCurrentCycle ? paymentForCurrentCycle.date : null
+        });
       } else {
-        // Not paid for this cycle (no advance payment)
+        // Not paid for this cycle or any future cycle
         await Member.updateOne({ _id: member._id }, { payment_status: "pending", payment_date: null });
       }
     }
