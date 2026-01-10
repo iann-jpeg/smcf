@@ -316,6 +316,13 @@ const AdminSavingsTab = ({ isReadOnly = false }: AdminSavingsTabProps) => {
             <td>${member.lastTransactionDate ? new Date(member.lastTransactionDate).toLocaleDateString() : '-'}</td>
           </tr>
         `).join('')}
+        <tr style="font-weight:bold;background:#e5e7eb;">
+          <td colspan="2">Grand Total</td>
+          <td>KES ${totalSavings.toLocaleString()}</td>
+          <td>KES ${totalDeposits.toLocaleString()}</td>
+          <td>KES ${totalInterest.toLocaleString()}</td>
+          <td></td>
+        </tr>
       </tbody>
     </table>
   </div>
