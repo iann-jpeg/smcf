@@ -632,6 +632,25 @@ const AdminSavingsTab = ({ isReadOnly = false }: AdminSavingsTabProps) => {
                         </TableCell>
                       </TableRow>
                     ))}
+                    {/* Grand Total Row */}
+                    {membersWithSavings.length > 0 && (
+                      <TableRow className="font-bold bg-primary/10">
+                        <TableCell colSpan={2}>Grand Total</TableCell>
+                        <TableCell className="text-blue-700">
+                          KES {membersWithSavings.reduce((sum, m) => sum + (m.currentBalance || 0), 0).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-green-700">
+                          KES {membersWithSavings.reduce((sum, m) => sum + (m.totalDeposits || 0), 0).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-blue-700">
+                          KES {membersWithSavings.reduce((sum, m) => sum + (m.totalInterestEarned || 0), 0).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-amber-700">
+                          KES {membersWithSavings.reduce((sum, m) => sum + (m.totalTransactionFees || 0), 0).toLocaleString()}
+                        </TableCell>
+                        <TableCell />
+                      </TableRow>
+                    )}
                   </TableBody>
                 </Table>
                 </div>

@@ -2931,6 +2931,7 @@ Thank you for your cooperation! 🙏`;
                     <TableRow>
                       <TableHead>Member</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Advance Paid</TableHead>
                       <TableHead className="text-right">Cycle Contribution</TableHead>
                       <TableHead className="text-right">Member Credit</TableHead>
                       <TableHead className="text-right">Transaction Fees</TableHead>
@@ -2939,97 +2940,117 @@ Thank you for your cooperation! 🙏`;
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {orderedMembers.map((member, index) => (
-                      <TableRow key={member._id || member.id || index}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <div
-                              className={`w-2 h-2 rounded-full ${
-                                member.payment_status === "paid"
-                                  ? "bg-financial-success"
-                                  : "bg-financial-warning"
-                              }`}
-                            />
-                            <div>
-                              <div className="font-medium">
-                                {member.name}{" "}
-                                {member.position ? `(#${member.position})` : ""}
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {member.member_id} • {member.phone}
+                    {orderedMembers.map((member, index) => {
+                      // Calculate cycles in advance paid for this member
+                      // Find all completed payments for this member
+                      const memberPayments = allPayments
+                        .filter((p: any) => (p.member_id?._id || p.member_id) === (member._id || member.id))
+                        .filter((p: any) => p.status === "completed" && typeof p.cycle_number === "number");
+                      // Get unique cycle numbers paid for
+                      const paidCycles = Array.from(new Set(memberPayments.map((p: any) => p.cycle_number)));
+                      // Current cycle number
+                      const currCycle = currentCycle?.cycle_number || 1;
+                      // Count how many cycles in advance (including current) are paid
+                      const cyclesPaid = paidCycles.filter((n) => n >= currCycle).length;
+                      // Find the highest cycle paid for
+                      const maxCyclePaid = paidCycles.length > 0 ? Math.max(...paidCycles) : null;
+                      // Compute advance cycles (maxCyclePaid - currCycle)
+                      const advanceCycles = maxCyclePaid && maxCyclePaid > currCycle ? maxCyclePaid - currCycle : 0;
+                      return (
+                        <TableRow key={member._id || member.id || index}>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div
+                                className={`w-2 h-2 rounded-full ${
+                                  cyclesPaid > 0
+                                    ? "bg-financial-success"
+                                    : "bg-financial-warning"
+                                }`}
+                              />
+                              <div>
+                                <div className="font-medium">
+                                  {member.name} {" "}
+                                  {member.position ? `(#${member.position})` : ""}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {member.member_id} • {member.phone}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              member.payment_status === "paid"
-                                ? "default"
-                                : "secondary"
-                            }>
-                            {member.payment_status === "paid"
-                              ? "Paid"
-                              : "Pending"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right font-medium text-blue-600">
-                          KES {(member.total_cycle_contribution || 0).toLocaleString()}
-                        </TableCell>
-                        <TableCell className="text-right font-medium text-green-600">
-                          KES {(member.total_member_credit || 0).toLocaleString()}
-                        </TableCell>
-                        <TableCell className="text-right font-medium text-orange-600">
-                          KES {(member.total_transaction_fees || 0).toLocaleString()}
-                        </TableCell>
-                        <TableCell className="text-right font-bold">
-                          KES {(member.total_contributed || 0).toLocaleString()}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex justify-center gap-1">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => moveMemberUp(member)}
-                              title={isReadOnly ? "Read-only access" : "Move up"}
-                              disabled={isReadOnly}>
-                              ↑
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => moveMemberDown(member)}
-                              title={isReadOnly ? "Read-only access" : "Move down"}
-                              disabled={isReadOnly}>
-                              ↓
-                            </Button>
-                            <Button
-                              size="sm"
+                          </TableCell>
+                          <TableCell>
+                            <Badge
                               variant={
-                                member.payment_status === "paid"
-                                  ? "outline"
-                                  : "default"
-                              }
-                              onClick={() => togglePaymentStatusRemote(member)}
-                              disabled={isReadOnly}
-                              title={isReadOnly ? "Read-only access" : undefined}>
-                              {member.payment_status === "paid"
-                                ? "Unpay"
-                                : "Mark Paid"}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => deleteMemberRemote(member)}
-                              className="text-destructive hover:text-destructive"
-                              disabled={isReadOnly}
-                              title={isReadOnly ? "Read-only access" : undefined}>
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                                cyclesPaid > 0 ? "default" : "secondary"
+                              }>
+                              {cyclesPaid > 0
+                                ? advanceCycles > 0
+                                  ? `Paid (Advance: +${advanceCycles})`
+                                  : "Paid"
+                                : "Pending"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {cyclesPaid > 0
+                              ? advanceCycles > 0
+                                ? `Paid for current + ${advanceCycles} cycle${advanceCycles > 1 ? "s" : ""}`
+                                : "Paid for current cycle"
+                              : "Not paid"}
+                          </TableCell>
+                          <TableCell className="text-right font-medium text-blue-600">
+                            KES {(member.total_cycle_contribution || 0).toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-right font-medium text-green-600">
+                            KES {(member.total_member_credit || 0).toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-right font-medium text-orange-600">
+                            KES {(member.total_transaction_fees || 0).toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-right font-bold">
+                            KES {(member.total_contributed || 0).toLocaleString()}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex justify-center gap-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => moveMemberUp(member)}
+                                title={isReadOnly ? "Read-only access" : "Move up"}
+                                disabled={isReadOnly}>
+                                ↑
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => moveMemberDown(member)}
+                                title={isReadOnly ? "Read-only access" : "Move down"}
+                                disabled={isReadOnly}>
+                                ↓
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant={
+                                  cyclesPaid > 0 ? "outline" : "default"
+                                }
+                                onClick={() => togglePaymentStatusRemote(member)}
+                                disabled={isReadOnly}
+                                title={isReadOnly ? "Read-only access" : undefined}>
+                                {cyclesPaid > 0 ? "Unpay" : "Mark Paid"}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => deleteMemberRemote(member)}
+                                className="text-destructive hover:text-destructive"
+                                disabled={isReadOnly}
+                                title={isReadOnly ? "Read-only access" : undefined}>
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                     {/* Totals Row */}
                     <TableRow className="bg-muted/50 font-bold border-t-2">
                       <TableCell colSpan={2} className="text-right">
