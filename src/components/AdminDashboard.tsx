@@ -1453,7 +1453,7 @@ Thank you for your cooperation! 🙏`;
           Number(editedMemberData.monthly_contribution) || 0,
       };
 
-      // Only include password if it's been changed (not empty)
+      // Only include password if it has been changed (not empty)
       if (
         editedMemberData.password &&
         editedMemberData.password.trim() !== ""
@@ -1811,7 +1811,6 @@ Thank you for your cooperation! 🙏`;
                 </div>
               </CardContent>
             </Card>
-            {/* ...existing code... */}
             {/* Payment Progress */}
             <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900 border-green-200">
               <CardContent className="pt-6">
@@ -2538,11 +2537,9 @@ Thank you for your cooperation! 🙏`;
                       );
                     }
                   } catch (error: any) {
-                    console.error("Disbursement error:", error);
                     toast({
                       title: "Error",
-                      description:
-                        error.message || "Failed to record disbursement",
+                      description: error.message || "Failed to record disbursement",
                       variant: "destructive",
                     });
                   }
@@ -3039,6 +3036,42 @@ Thank you for your cooperation! 🙏`;
                               </Button>
                               <Button
                                 size="sm"
+                                variant="secondary"
+                                onClick={async () => {
+                                  const id = member._id || member.id;
+                                  // Mark member as paid for current cycle WITHOUT adding payment record
+                                  try {
+                                    const res = await fetch(`${API_BASE}/api/members/${id}/mark-paid`, {
+                                      method: "PUT",
+                                      headers: {
+                                        "Content-Type": "application/json",
+                                        ...authService.getAuthHeaders(),
+                                      },
+                                      body: JSON.stringify({ cycle_number: currCycle }),
+                                    });
+                                    if (!res.ok) throw new Error("Failed to mark as paid");
+                                    toast({
+                                      title: "Member Marked as Paid",
+                                      description: `${member.name} marked as paid for cycle #${currCycle}`,
+                                    });
+                                    if (typeof refreshMembers === "function") {
+                                      await refreshMembers();
+                                    }
+                                  } catch (err) {
+                                    toast({
+                                      title: "Error",
+                                      description: err.message || "Could not mark member as paid",
+                                      variant: "destructive",
+                                    });
+                                  }
+                                }}
+                                disabled={isReadOnly}
+                                title={isReadOnly ? "Read-only access" : "Mark as Paid (No Payment)"}
+                              >
+                                Mark Paid (No Payment)
+                              </Button>
+                              <Button
+                                size="sm"
                                 variant="ghost"
                                 onClick={() => deleteMemberRemote(member)}
                                 className="text-destructive hover:text-destructive"
@@ -3344,9 +3377,6 @@ Thank you for your cooperation! 🙏`;
                         variant={
                           currentCycle.disbursement_status === "completed"
                             ? "default"
-                            : currentCycle.paid_members_count ===
-                              safeMembers.length
-                            ? "default"
                             : "secondary"
                         }>
                         {currentCycle.disbursement_status ||
@@ -3389,24 +3419,13 @@ Thank you for your cooperation! 🙏`;
                             if (response.ok && data.success) {
                               toast({
                                 title: "Disbursement Recorded",
-                                description: `Successfully marked disbursement to ${currentCycle.recipient_id?.name} as completed`,
+                                description: `KES ${disbursementAmount.toLocaleString()} marked as disbursed to ${
+                                  currentCycle.next_recipient?.name || "recipient"
+                                }`,
                               });
                               fetchDisbursements();
                               fetchCurrentCycle();
-
-                              // Auto-generate receipt after marking as disbursed
-                              setTimeout(() => {
-                                const disbursementData = data.disbursement || {
-                                  _id: data.id,
-                                  recipient_id: currentCycle.recipient_id,
-                                  cycle_id: currentCycle,
-                                  amount: safeMembers.length * 204,
-                                  method: "manual",
-                                  status: "completed",
-                                  disbursement_date: new Date().toISOString(),
-                                };
-                                generateDisbursementReceipt(disbursementData);
-                              }, 1000);
+                              fetchAllData();
                             } else {
                               throw new Error(
                                 data.error || "Failed to record disbursement"
@@ -3415,9 +3434,7 @@ Thank you for your cooperation! 🙏`;
                           } catch (error: any) {
                             toast({
                               title: "Error",
-                              description:
-                                error.message ||
-                                "Failed to record disbursement",
+                              description: error.message || "Failed to record disbursement",
                               variant: "destructive",
                             });
                           }

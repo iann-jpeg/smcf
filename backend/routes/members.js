@@ -1,3 +1,27 @@
+// Mark member as paid for current cycle (no payment record)
+router.put("/:id/mark-paid", protect, adminOnly, async (req, res) => {
+  try {
+    const { cycle_number } = req.body;
+    const member = await Member.findById(req.params.id);
+    if (!member) {
+      return res.status(404).json({ success: false, error: "Member not found" });
+    }
+    // Mark as paid for the current cycle
+    member.payment_status = "paid";
+    member.payment_date = new Date();
+    await member.save();
+
+    // Optionally, emit socket event for real-time update
+    if (req.app.get("io")) {
+      req.app.get("io").emit("memberUpdated", member);
+      req.app.get("io").emit("cycle:updated", { memberId: member._id, payment_status: "paid" });
+    }
+
+    res.json({ success: true, data: member });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 import express from "express";
 import { adminOnly, protect } from "../middleware/auth.js";
 import Member from "../models/Member.js";
