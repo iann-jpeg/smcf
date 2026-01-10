@@ -145,10 +145,21 @@ router.post("/start", protect, adminOnly, async (req, res) => {
     });
 
     // Reset all members payment status
-    await Member.updateMany(
-      {},
-      { payment_status: "pending", payment_date: null }
-    );
+    // For each member, check if they have already paid for the new cycle
+    const allMembers = await Member.find({});
+    for (const member of allMembers) {
+      // Count completed payments for the new cycle
+      const paymentCount = await Payment.countDocuments({
+        member_id: member._id,
+        cycle_number: newCycleNumber,
+        status: "completed"
+      });
+      if (paymentCount > 0) {
+        await Member.updateOne({ _id: member._id }, { payment_status: "paid", payment_date: new Date() });
+      } else {
+        await Member.updateOne({ _id: member._id }, { payment_status: "pending", payment_date: null });
+      }
+    }
 
     // Emit socket event
     if (req.app.get("io")) {
