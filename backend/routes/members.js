@@ -11,6 +11,23 @@ router.put("/:id/mark-paid", protect, adminOnly, async (req, res) => {
     member.payment_date = new Date();
     await member.save();
 
+    // Create a manual payment record for the current cycle
+    const Payment = (await import("../models/Payment.js")).default;
+    // Check if a payment already exists for this member and cycle
+    const existing = await Payment.findOne({ member_id: member._id, cycle_number, type: "cycle_payment" });
+    if (!existing) {
+      await Payment.create({
+        member_id: member._id,
+        amount: member.monthly_contribution || 224,
+        phone: member.phone,
+        payment_method: "admin_manual",
+        status: "completed",
+        type: "cycle_payment",
+        cycle_number,
+        notes: "Marked as paid by admin (no payment)",
+      });
+    }
+
     // Optionally, emit socket event for real-time update
     if (req.app.get("io")) {
       req.app.get("io").emit("memberUpdated", member);
