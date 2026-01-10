@@ -54,6 +54,15 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
 
   // Initialize mobile notifications on mount
   useEffect(() => {
+        // Listen for member deletion and cycle update events for real-time refresh
+        socket.on("member:deleted", (data) => {
+          console.log("👤 Dashboard received: member:deleted", data);
+          fetchData();
+        });
+        socket.on("cycle:updated", (data) => {
+          console.log("🔄 Dashboard received: cycle:updated (member:deleted)", data);
+          fetchData();
+        });
     const initMobile = async () => {
       const isNative = await isNativePlatformAsync();
       isNativeRef.current = isNative;
@@ -252,6 +261,8 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
     }, 5000);
 
     return () => {
+        socket.off("member:deleted");
+        socket.off("cycle:updated");
       clearInterval(interval);
       clearTimeout(timeout);
     };

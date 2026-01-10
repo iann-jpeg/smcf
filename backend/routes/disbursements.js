@@ -139,6 +139,36 @@ router.put("/:id/status", protect, adminOnly, async (req, res) => {
       .populate("recipient_id", "name phone member_id")
       .populate("cycle_id", "cycle_number");
 
+          // AUTOMATION: Start next cycle immediately after disbursement
+          try {
+            // Find the next recipient for the new cycle
+            const lastRecipient = await Member.findById(recipient_id);
+            const lastRecipientPosition = lastRecipient?.position || 0;
+            const nextRecipient = await Member.findOne({
+              position: { $gt: lastRecipientPosition },
+              status: "active",
+            }).sort({ position: 1 });
+            const recipientForNextCycle = nextRecipient || (await Member.findOne({ status: "active" }).sort({ position: 1 }));
+            const totalMembers = await Member.countDocuments({ status: "active" });
+            const newCycleNumber = (cycle.cycle_number || 0) + 1;
+            const firstCycleStart = new Date('2026-01-05T00:00:00.000Z');
+            const cycleStartDate = new Date(firstCycleStart.getTime() + ((newCycleNumber - 1) * 5 * 24 * 60 * 60 * 1000));
+            const cycleEndDate = new Date(cycleStartDate.getTime() + 5 * 24 * 60 * 60 * 1000);
+            const newCycle = await Cycle.create({
+              cycle_number: newCycleNumber,
+              start_date: cycleStartDate,
+              end_date: cycleEndDate,
+              status: "active",
+              total_members: totalMembers,
+              next_recipient: recipientForNextCycle?._id,
+            });
+            await Member.updateMany({}, { payment_status: "pending", payment_date: null });
+            if (req.app.get("io")) {
+              req.app.get("io").emit("cycle:new", newCycle);
+            }
+          } catch (err) {
+            console.error("Failed to auto-start next cycle after disbursement:", err);
+          }
     if (!disbursement) {
       return res
         .status(404)

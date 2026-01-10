@@ -456,6 +456,16 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         fetchData(); // Refresh data immediately
       });
 
+        // Listen for new disbursement events
+        socket.on("disbursement:new", (data: any) => {
+          console.log("💸 MemberDashboard received: disbursement:new", data);
+          toast({
+            title: "New Disbursement Processed!",
+            description: `KES ${data.amount} disbursed to ${data.recipientName || 'member'}`,
+          });
+          fetchData(); // Refresh disbursement history and cycle status
+        });
+
       // Listen for member additions/removals
       socket.on("member:new", (data: any) => {
         console.log("👤 MemberDashboard received: member:new", data);
@@ -557,6 +567,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         socket.off("payment:completed");
         socket.off("payment:new");
         socket.off("cycle:updated");
+          socket.off("disbursement:new");
         socket.off("loanStatusUpdated");
         socket.off("loanPayment");
         socket.off("announcementCreated");

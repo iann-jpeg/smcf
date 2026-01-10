@@ -5,7 +5,7 @@ import Member from "../models/Member.js";
 // MongoDB connection
 const MONGODB_URI = "mongodb+srv://valinyala24472:Abungana24472@cluster0.rtgyu8k.mongodb.net/smcf";
 
-async function setLoanDueDates() {
+export default async function setLoanDueDates() {
   try {
     await mongoose.connect(MONGODB_URI);
     console.log("✅ Connected to MongoDB");
@@ -55,4 +55,8 @@ async function setLoanDueDates() {
   }
 }
 
-setLoanDueDates();
+
+// Only run if called directly from CLI
+if (process.argv[1] === new URL(import.meta.url).pathname) {
+  setLoanDueDates();
+}

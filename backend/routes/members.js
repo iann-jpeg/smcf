@@ -180,7 +180,23 @@ router.delete("/:id", protect, adminOnly, async (req, res) => {
         .status(404)
         .json({ success: false, error: "Member not found" });
     }
-    res.json({ success: true, message: "Member deleted" });
+
+    // Update total_members in the active cycle
+    const Cycle = (await import("../models/Cycle.js")).default;
+    const activeCycle = await Cycle.findOne({ status: "active" });
+    if (activeCycle) {
+      const totalMembers = await Member.countDocuments();
+      activeCycle.total_members = totalMembers;
+      await activeCycle.save();
+    }
+
+    // Emit socket event for real-time update
+    if (req.app.get("io")) {
+      req.app.get("io").emit("member:deleted", { memberId: req.params.id });
+      req.app.get("io").emit("cycle:updated", activeCycle);
+    }
+
+    res.json({ success: true, message: "Member deleted and cycle updated" });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

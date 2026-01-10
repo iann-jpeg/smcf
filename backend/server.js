@@ -26,6 +26,8 @@ import savingsRoutes from "./routes/savings.js";
 import { startInterestCronJob } from "./services/interestService.js";
 // Import late fees service
 import { startLateFeesCronJob } from "./services/lateFeesService.js";
+// Import loan due date fix service
+import { startLoanDueDateCronJob } from "./services/loanDueDateService.js";
 
 const app = express();
 const httpServer = createServer(app);
@@ -258,6 +260,9 @@ httpServer.listen(PORT, () => {
   
   // Start late fees calculation cron job
   startLateFeesCronJob();
+
+  // Start loan due date fix cron job
+  startLoanDueDateCronJob();
   
   console.log(`\n📚 API Documentation:`);
   console.log(`   Health: http://localhost:${PORT}/health`);
