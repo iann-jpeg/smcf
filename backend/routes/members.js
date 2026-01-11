@@ -177,6 +177,19 @@ router.post("/", protect, adminOnly, async (req, res) => {
       req.app.get("io").emit("member:new", member);
     }
 
+    // Update total_members in the active cycle
+    const Cycle = (await import("../models/Cycle.js")).default;
+    const activeCycle = await Cycle.findOne({ status: "active" });
+    if (activeCycle) {
+      const totalMembers = await Member.countDocuments();
+      activeCycle.total_members = totalMembers;
+      await activeCycle.save();
+      // Emit socket event for real-time update
+      if (req.app.get("io")) {
+        req.app.get("io").emit("cycle:updated", activeCycle);
+      }
+    }
+
     res.status(201).json({ success: true, data: member });
   } catch (error) {
     console.error("❌ Error creating member:");
