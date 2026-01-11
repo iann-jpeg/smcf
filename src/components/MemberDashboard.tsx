@@ -884,7 +884,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         <CardHeader className="text-center">
           <CardTitle className="flex items-center justify-center gap-2 text-mpesa-green">
             <Phone className="w-6 h-6" />
-            Make Your KES 200 Contribution
+            Make Your KES 224 Contribution
           </CardTitle>
           <CardDescription className="text-lg">
             Pay securely via M-Pesa STK Push directly to the organization Till
@@ -895,7 +895,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">Amount:</span>
               <span className="text-2xl font-bold text-mpesa-green">
-                KES 200
+                KES 224
               </span>
             </div>
             <div className="flex justify-between items-center">
