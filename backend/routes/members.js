@@ -21,23 +21,28 @@ router.put("/:id/mark-paid", protect, adminOnly, async (req, res) => {
     member.payment_date = new Date();
     await member.save();
 
-    if (!no_payment) {
-      // Create a manual payment record for the current cycle
-      const Payment = (await import("../models/Payment.js")).default;
-      // Check if a payment already exists for this member and cycle
-      const existing = await Payment.findOne({ member_id: member._id, cycle_number, type: "cycle_payment" });
-      if (!existing) {
-        await Payment.create({
-          member_id: member._id,
-          amount: member.monthly_contribution || 224,
-          phone: member.phone,
-          payment_method: "admin_manual",
-          status: "completed",
-          type: "cycle_payment",
-          cycle_number,
-          notes: "Marked as paid by admin (no payment)",
-        });
-      }
+    // Always create a payment record (even if no_payment is true)
+    // This ensures the UI shows the member as paid
+    const Payment = (await import("../models/Payment.js")).default;
+    const existing = await Payment.findOne({ 
+      member_id: member._id, 
+      cycle_number, 
+      type: "cycle_payment" 
+    });
+    
+    if (!existing) {
+      await Payment.create({
+        member_id: member._id,
+        amount: no_payment ? 0 : (member.monthly_contribution || 224),
+        phone: member.phone,
+        payment_method: "admin_manual",
+        status: "completed",
+        type: "cycle_payment",
+        cycle_number,
+        notes: no_payment 
+          ? "Marked as paid by admin (no payment - waived)" 
+          : "Marked as paid by admin (no payment)",
+      });
     }
 
     // Update cycle paid members count
@@ -46,7 +51,6 @@ router.put("/:id/mark-paid", protect, adminOnly, async (req, res) => {
     
     if (cycle) {
       // Recalculate paid members count from completed payments
-      const Payment = (await import("../models/Payment.js")).default;
       const payments = await Payment.find({
         cycle_number,
         status: "completed",
@@ -62,7 +66,8 @@ router.put("/:id/mark-paid", protect, adminOnly, async (req, res) => {
       console.log(`✅ Updated cycle #${cycle_number} stats:`, {
         paidCount,
         totalCollected,
-        memberMarked: member.name
+        memberMarked: member.name,
+        noPayment: no_payment
       });
     }
 
