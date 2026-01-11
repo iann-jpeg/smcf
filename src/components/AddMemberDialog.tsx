@@ -65,9 +65,9 @@ const AddMemberDialog = ({
         name: memberData.name,
         phone: memberData.phone,
         id_number: memberData.idNumber,
-        password: memberData.pmemberData.memberType === "wallet_only" ? 0 : Number(memberData.initialContribution || 0),
-        member_type: memberData.memberType
-        monthly_contribution: Number(memberData.initialContribution || 0),
+        password: memberData.password,
+        monthly_contribution: memberData.memberType === "wallet_only" ? 0 : Number(memberData.initialContribution || 0),
+        member_type: memberData.memberType,
         status: "pending",
         amount: 0,
         join_date: new Date().toISOString(),
