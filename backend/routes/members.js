@@ -12,6 +12,10 @@ router.put("/:id/mark-paid", protect, adminOnly, async (req, res) => {
     if (!member) {
       return res.status(404).json({ success: false, error: "Member not found" });
     }
+    
+    // Check if member is already paid
+    const wasPreviouslyPaid = member.payment_status === "paid";
+    
     // Mark as paid for the current cycle
     member.payment_status = "paid";
     member.payment_date = new Date();
@@ -36,10 +40,47 @@ router.put("/:id/mark-paid", protect, adminOnly, async (req, res) => {
       }
     }
 
-    // Optionally, emit socket event for real-time update
+    // Update cycle paid members count
+    const Cycle = (await import("../models/Cycle.js")).default;
+    const cycle = await Cycle.findOne({ cycle_number, status: "active" });
+    
+    if (cycle) {
+      // Recalculate paid members count from completed payments
+      const Payment = (await import("../models/Payment.js")).default;
+      const payments = await Payment.find({
+        cycle_number,
+        status: "completed",
+      });
+      
+      const paidCount = new Set(payments.map((p) => p.member_id.toString())).size;
+      const totalCollected = payments.reduce((sum, p) => sum + p.amount, 0);
+
+      cycle.paid_members_count = paidCount;
+      cycle.total_amount_collected = totalCollected;
+      await cycle.save();
+      
+      console.log(`✅ Updated cycle #${cycle_number} stats:`, {
+        paidCount,
+        totalCollected,
+        memberMarked: member.name
+      });
+    }
+
+    // Emit socket events for real-time update across the system
     if (req.app.get("io")) {
       req.app.get("io").emit("memberUpdated", member);
-      req.app.get("io").emit("cycle:updated", { memberId: member._id, payment_status: "paid" });
+      req.app.get("io").emit("member:paymentStatusChanged", {
+        memberId: member._id,
+        payment_status: "paid",
+        cycle_number
+      });
+      req.app.get("io").emit("cycle:updated", {
+        cycle_number,
+        memberId: member._id,
+        payment_status: "paid",
+        paid_members_count: cycle?.paid_members_count,
+        total_amount_collected: cycle?.total_amount_collected
+      });
     }
 
     res.json({ success: true, data: member });
@@ -211,6 +252,15 @@ router.post("/", protect, adminOnly, async (req, res) => {
 // Update member
 router.put("/:id", protect, adminOnly, async (req, res) => {
   try {
+    const oldMember = await Member.findById(req.params.id);
+    if (!oldMember) {
+      return res.status(404).json({ success: false, error: "Member not found" });
+    }
+    
+    const wasPaymentStatusChanged = 
+      req.body.payment_status && 
+      req.body.payment_status !== oldMember.payment_status;
+    
     const member = await Member.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
       runValidators: true,
@@ -220,6 +270,59 @@ router.put("/:id", protect, adminOnly, async (req, res) => {
       return res
         .status(404)
         .json({ success: false, error: "Member not found" });
+    }
+
+    // If payment status was changed, update cycle stats
+    if (wasPaymentStatusChanged) {
+      const Cycle = (await import("../models/Cycle.js")).default;
+      const Payment = (await import("../models/Payment.js")).default;
+      
+      // Get active cycle
+      const activeCycle = await Cycle.findOne({ status: "active" });
+      
+      if (activeCycle) {
+        // Recalculate paid members count from completed payments
+        const payments = await Payment.find({
+          cycle_number: activeCycle.cycle_number,
+          status: "completed",
+        });
+        
+        const paidCount = new Set(payments.map((p) => p.member_id.toString())).size;
+        const totalCollected = payments.reduce((sum, p) => sum + p.amount, 0);
+
+        activeCycle.paid_members_count = paidCount;
+        activeCycle.total_amount_collected = totalCollected;
+        await activeCycle.save();
+        
+        console.log(`✅ Updated cycle #${activeCycle.cycle_number} stats after member update:`, {
+          paidCount,
+          totalCollected,
+          memberUpdated: member.name,
+          newStatus: member.payment_status
+        });
+        
+        // Emit socket events for real-time update
+        if (req.app.get("io")) {
+          req.app.get("io").emit("cycle:updated", {
+            cycle_number: activeCycle.cycle_number,
+            memberId: member._id,
+            payment_status: member.payment_status,
+            paid_members_count: activeCycle.paid_members_count,
+            total_amount_collected: activeCycle.total_amount_collected
+          });
+        }
+      }
+    }
+
+    // Emit member updated event
+    if (req.app.get("io")) {
+      req.app.get("io").emit("memberUpdated", member);
+      if (wasPaymentStatusChanged) {
+        req.app.get("io").emit("member:paymentStatusChanged", {
+          memberId: member._id,
+          payment_status: member.payment_status
+        });
+      }
     }
 
     res.json({ success: true, data: member });
