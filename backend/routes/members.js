@@ -1,3 +1,9 @@
+import express from "express";
+import { adminOnly, protect } from "../middleware/auth.js";
+import Member from "../models/Member.js";
+
+const router = express.Router();
+
 // Mark member as paid for current cycle (no payment record)
 router.put("/:id/mark-paid", protect, adminOnly, async (req, res) => {
   try {
@@ -41,11 +47,6 @@ router.put("/:id/mark-paid", protect, adminOnly, async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
-import express from "express";
-import { adminOnly, protect } from "../middleware/auth.js";
-import Member from "../models/Member.js";
-
-const router = express.Router();
 
 // Get all members (admin only)
 router.get("/", protect, adminOnly, async (req, res) => {
