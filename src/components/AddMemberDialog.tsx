@@ -224,7 +224,10 @@ const AddMemberDialog = ({
                     password: e.target.value,
                   }))
                 }
-              />3">
+              />
+            </div>
+
+            <div className="space-y-3">
               <Label>Membership Type *</Label>
               <RadioGroup
                 value={memberData.memberType}
@@ -296,10 +299,7 @@ const AddMemberDialog = ({
                     <p>• No disbursement participation</p>
                     <p>• Can deposit and withdraw from wallet</p>
                   </>
-                )}</p>
-                <p>• They will be notified via SMS</p>
-                <p>• Member ID will be auto-generated</p>
-                <p>• Payment status will be set to pending</p>
+                )}
               </div>
             </div>
 
