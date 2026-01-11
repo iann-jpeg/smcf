@@ -226,18 +226,13 @@ const AdminDashboard = ({
     0
   );
 
-  // Calculate total cycle contributions from ALL cycles (for pocket calculation)
-  const totalCycleContributions = allPayments
-    .filter((p: any) => p.status === "completed" && p.type === "cycle_payment")
-    .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
-
   // Calculate total overdue late fees from loans
   const totalLateFees = loans
     ? loans.reduce((sum: number, l: any) => sum + (l.late_fee_amount || 0), 0)
     : 0;
 
-  // Pocket = Cycle Collections + Wallet Balances + Fees Collected + Loan Interest + Late Fees
-  const pocket = totalCycleContributions + totalWalletBalances + totalFeesCollected + totalLoanInterest + totalLateFees;
+  // Pocket = Current Cycle Collections + Wallet Balances + Fees Collected + Loan Interest + Late Fees
+  const pocket = totalCollected + totalWalletBalances + totalFeesCollected + totalLoanInterest + totalLateFees;
 
   // Polling for real-time data
   const pollRef = useRef<NodeJS.Timeout | null>(null);
@@ -2118,7 +2113,7 @@ Thank you for your cooperation! 🙏`;
                       KES {pocket.toLocaleString()}
                     </p>
                     <p className="text-xs text-pink-700 dark:text-pink-300 mt-1">
-                      Cycle Collections: KES {totalCycleContributions.toLocaleString()}<br />
+                      Cycle Collections: KES {totalCollected.toLocaleString()}<br />
                       + Wallet Balances: KES {totalWalletBalances.toLocaleString()}<br />
                       + Fees Collected: KES {totalFeesCollected.toLocaleString()}<br />
                       + Loan Interest: KES {totalLoanInterest.toLocaleString()}<br />
