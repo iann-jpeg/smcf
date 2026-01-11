@@ -276,10 +276,16 @@ router.put("/:id", protect, adminOnly, async (req, res) => {
       req.body.payment_status && 
       req.body.payment_status !== oldMember.payment_status;
     
-    const member = await Member.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true,
+    // Update fields individually to ensure password hashing works
+    const updateData = { ...req.body };
+    
+    // Apply updates to member document
+    Object.keys(updateData).forEach(key => {
+      oldMember[key] = updateData[key];
     });
+    
+    // Save will trigger pre-save hook for password hashing
+    const member = await oldMember.save();
 
     if (!member) {
       return res
