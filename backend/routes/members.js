@@ -1,7 +1,7 @@
 // Mark member as paid for current cycle (no payment record)
 router.put("/:id/mark-paid", protect, adminOnly, async (req, res) => {
   try {
-    const { cycle_number } = req.body;
+    const { cycle_number, no_payment } = req.body;
     const member = await Member.findById(req.params.id);
     if (!member) {
       return res.status(404).json({ success: false, error: "Member not found" });
@@ -11,21 +11,23 @@ router.put("/:id/mark-paid", protect, adminOnly, async (req, res) => {
     member.payment_date = new Date();
     await member.save();
 
-    // Create a manual payment record for the current cycle
-    const Payment = (await import("../models/Payment.js")).default;
-    // Check if a payment already exists for this member and cycle
-    const existing = await Payment.findOne({ member_id: member._id, cycle_number, type: "cycle_payment" });
-    if (!existing) {
-      await Payment.create({
-        member_id: member._id,
-        amount: member.monthly_contribution || 224,
-        phone: member.phone,
-        payment_method: "admin_manual",
-        status: "completed",
-        type: "cycle_payment",
-        cycle_number,
-        notes: "Marked as paid by admin (no payment)",
-      });
+    if (!no_payment) {
+      // Create a manual payment record for the current cycle
+      const Payment = (await import("../models/Payment.js")).default;
+      // Check if a payment already exists for this member and cycle
+      const existing = await Payment.findOne({ member_id: member._id, cycle_number, type: "cycle_payment" });
+      if (!existing) {
+        await Payment.create({
+          member_id: member._id,
+          amount: member.monthly_contribution || 224,
+          phone: member.phone,
+          payment_method: "admin_manual",
+          status: "completed",
+          type: "cycle_payment",
+          cycle_number,
+          notes: "Marked as paid by admin (no payment)",
+        });
+      }
     }
 
     // Optionally, emit socket event for real-time update

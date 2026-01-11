@@ -3046,7 +3046,7 @@ Thank you for your cooperation! 🙏`;
                                         "Content-Type": "application/json",
                                         ...authService.getAuthHeaders(),
                                       },
-                                      body: JSON.stringify({ cycle_number: currCycle }),
+                                      body: JSON.stringify({ cycle_number: currCycle, no_payment: true }),
                                     });
                                     if (!res.ok) throw new Error("Failed to mark as paid");
                                     toast({

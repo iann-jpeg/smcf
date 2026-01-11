@@ -224,10 +224,11 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
       }
 
       // Get total members count from cycle data or calculate from payments
+      // Always use backend value if available, fallback to payments unique member count if not
       const totalMembersCount =
-        cycleData.success && cycleData.data?.total_members
+        (cycleData.success && cycleData.data?.total_members)
           ? cycleData.data.total_members
-          : 27; // Default to 27 members if not available
+          : Array.from(new Set(paymentsArray.map((p: any) => p.member_id?._id || p.member_id))).length;
 
       console.log("👥 Total members count:", totalMembersCount);
       console.log(
@@ -281,7 +282,8 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         totalMembersCount
       );
 
-      // Update cycle data - always use fresh data from system
+      // Use the same logic as AdminDashboard for totalAmount (cycle payment is 200 per member)
+      const cycleContribution = 200;
       const newData = {
         currentCycle:
           cycleData.success && cycleData.data
@@ -294,7 +296,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         paidMembers: uniquePaidMembers, // Always use calculated count from actual payments
         totalMembers: totalMembersCount || 0,
         collectedAmount: totalCollected, // Use calculated from actual payments
-        totalAmount: totalMembersCount * 200, // Expected payout amount (KES 200 per member goes to payout)
+        totalAmount: 5400, // Always show KES 5,400 as expected amount
         cycleStartDate:
           cycleData.success && cycleData.data && cycleData.data.start_date
             ? new Date(cycleData.data.start_date).toLocaleDateString()
@@ -586,7 +588,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
     setMemberStats((prev) => ({ ...prev, hasPaidThisCycle: true }));
     toast({
       title: "Payment Successful",
-      description: "Your KES 224 contribution has been received",
+      description: "Your KES 200 contribution has been received",
     });
     setShowPayment(false);
 
@@ -882,7 +884,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         <CardHeader className="text-center">
           <CardTitle className="flex items-center justify-center gap-2 text-mpesa-green">
             <Phone className="w-6 h-6" />
-            Make Your KES 224 Contribution
+            Make Your KES 200 Contribution
           </CardTitle>
           <CardDescription className="text-lg">
             Pay securely via M-Pesa STK Push directly to the organization Till
@@ -893,7 +895,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">Amount:</span>
               <span className="text-2xl font-bold text-mpesa-green">
-                KES 224
+                KES 200
               </span>
             </div>
             <div className="flex justify-between items-center">
@@ -913,7 +915,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
           <div className="text-center space-y-4">
             <CycleQRPayment
               onPaymentSuccess={fetchData}
-              contributionAmount={224}
+              contributionAmount={200}
             />
 
             <div className="relative">
