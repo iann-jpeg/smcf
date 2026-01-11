@@ -3049,14 +3049,19 @@ Thank you for your cooperation! 🙏`;
                                       body: JSON.stringify({ cycle_number: currCycle, no_payment: true }),
                                     });
                                     if (!res.ok) throw new Error("Failed to mark as paid");
+                                    
+                                    // Refresh all data to show updated status
+                                    if (typeof refreshMembers === "function") {
+                                      await refreshMembers();
+                                    }
+                                    await fetchCurrentCycle();
+                                    await fetchPayments();
+                                    
                                     toast({
                                       title: "Member Marked as Paid",
                                       description: `${member.name} marked as paid for cycle #${currCycle}`,
                                     });
-                                    if (typeof refreshMembers === "function") {
-                                      await refreshMembers();
-                                    }
-                                  } catch (err) {
+                                  } catch (err: any) {
                                     toast({
                                       title: "Error",
                                       description: err.message || "Could not mark member as paid",
@@ -3667,6 +3672,95 @@ Thank you for your cooperation! 🙏`;
         onOpenChange={setShowAddMemberDialog}
         onMemberAdded={handleAddMember}
       />
+
+      {/* Edit Member Dialog */}
+      <Dialog open={editingMember !== null} onOpenChange={(open) => {
+        if (!open) {
+          setEditingMember(null);
+          setEditedMemberData({});
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Member</DialogTitle>
+            <DialogDescription>
+              Update member information
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Name</label>
+              <input
+                type="text"
+                className="w-full px-3 py-2 border rounded-md"
+                value={editedMemberData.name || ""}
+                onChange={(e) =>
+                  setEditedMemberData({ ...editedMemberData, name: e.target.value })
+                }
+                placeholder="Member name"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Phone</label>
+              <input
+                type="text"
+                className="w-full px-3 py-2 border rounded-md"
+                value={editedMemberData.phone || ""}
+                onChange={(e) =>
+                  setEditedMemberData({ ...editedMemberData, phone: e.target.value })
+                }
+                placeholder="Phone number"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Monthly Contribution</label>
+              <input
+                type="number"
+                className="w-full px-3 py-2 border rounded-md"
+                value={editedMemberData.monthly_contribution || ""}
+                onChange={(e) =>
+                  setEditedMemberData({
+                    ...editedMemberData,
+                    monthly_contribution: e.target.value,
+                  })
+                }
+                placeholder="224"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                New Password (leave blank to keep current)
+              </label>
+              <input
+                type="password"
+                className="w-full px-3 py-2 border rounded-md"
+                value={editedMemberData.password || ""}
+                onChange={(e) =>
+                  setEditedMemberData({ ...editedMemberData, password: e.target.value })
+                }
+                placeholder="Enter new password"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => {
+                setEditingMember(null);
+                setEditedMemberData({});
+              }}>
+              Cancel
+            </Button>
+            <Button
+              variant="default"
+              className="flex-1"
+              onClick={() => handleSaveMember(editingMember!)}>
+              Save Changes
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Announcement Dialog */}
       <AnnouncementDialog
