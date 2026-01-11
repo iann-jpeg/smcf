@@ -2,6 +2,15 @@
 import dotenv from "dotenv";
 dotenv.config();
 
+// Log startup information
+console.log('\n🚀 SMCF Backend Starting...');
+console.log('📡 Environment:', process.env.NODE_ENV || 'development');
+console.log('🔌 Port:', process.env.PORT || '4000');
+console.log('🗄️  MongoDB URI:', process.env.MONGODB_URI ? '✅ Set' : '❌ Not Set');
+console.log('🔐 JWT Secret:', process.env.JWT_SECRET ? '✅ Set' : '❌ Not Set');
+console.log('🌐 Client URL:', process.env.CLIENT_URL || 'Not Set');
+console.log('');
+
 import cors from "cors";
 import express from "express";
 import { createServer } from "http";
@@ -83,17 +92,42 @@ app.use((req, res, next) => {
 // Database connection
 const connectDB = async () => {
   try {
+    if (!process.env.MONGODB_URI) {
+      console.error('❌ MONGODB_URI environment variable is not set!');
+      if (process.env.NODE_ENV === 'production') {
+        console.error('⚠️  Cannot start in production without MongoDB connection');
+        process.exit(1);
+      }
+      console.log('ℹ️  Using default local MongoDB connection');
+    }
+    
+    const mongooseOptions = {
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+    };
+    
     const conn = await mongoose.connect(
-      process.env.MONGODB_URI || "mongodb://localhost:27017/smcf"
+      process.env.MONGODB_URI || "mongodb://localhost:27017/smcf",
+      mongooseOptions
     );
-    console.log(`MongoDB Connected: ${conn.connection.host}`);
+    console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
   } catch (error) {
-    console.error(`Error: ${error.message}`);
-    console.error(`\n⚠️  MongoDB is not running. Please start MongoDB with:`);
-    console.error(`   sudo systemctl start mongodb`);
-    console.error(`   or`);
-    console.error(`   mongod --dbpath /path/to/data\n`);
-    process.exit(1);
+    console.error(`❌ MongoDB Connection Error: ${error.message}`);
+    
+    if (process.env.NODE_ENV === 'production') {
+      console.error('⚠️  Cannot start in production without MongoDB. Please check:');
+      console.error('   1. MONGODB_URI environment variable is set correctly');
+      console.error('   2. MongoDB Atlas network access allows connections from anywhere (0.0.0.0/0)');
+      console.error('   3. Database user credentials are correct');
+      console.error('   4. MongoDB cluster is not paused');
+      process.exit(1);
+    } else {
+      console.error(`\n⚠️  MongoDB is not running. Please start MongoDB with:`);
+      console.error(`   sudo systemctl start mongodb`);
+      console.error(`   or`);
+      console.error(`   mongod --dbpath /path/to/data\n`);
+      process.exit(1);
+    }
   }
 };
 
@@ -276,6 +310,47 @@ httpServer.listen(PORT, () => {
   console.log(`   Announcements: http://localhost:${PORT}/api/announcements`);
   console.log(`   Loans: http://localhost:${PORT}/api/loans`);
   console.log(`   Savings: http://localhost:${PORT}/api/savings\n`);
+});
+
+// Graceful shutdown handling
+const gracefulShutdown = async (signal) => {
+  console.log(`\n${signal} signal received: closing HTTP server`);
+  
+  httpServer.close(async () => {
+    console.log('HTTP server closed');
+    
+    // Close database connection
+    try {
+      await mongoose.connection.close();
+      console.log('MongoDB connection closed');
+    } catch (error) {
+      console.error('Error closing MongoDB connection:', error);
+    }
+    
+    process.exit(0);
+  });
+  
+  // Force close after 10 seconds
+  setTimeout(() => {
+    console.error('Could not close connections in time, forcefully shutting down');
+    process.exit(1);
+  }, 10000);
+};
+
+// Handle termination signals
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  gracefulShutdown('UNCAUGHT_EXCEPTION');
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  gracefulShutdown('UNHANDLED_REJECTION');
 });
 
 export default app;

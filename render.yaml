@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: smcf-backend
+    env: node
+    region: oregon
+    plan: free
+    rootDir: backend
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: CLIENT_URL
+        sync: false
+      - key: ADMIN_PHONE
+        sync: false
+      - key: LIPIA_API_KEY
+        sync: false
+      - key: LIPIA_APP_ID
+        sync: false
+      - key: LIPIA_APP_NAME
+        value: smcf
+      - key: LIPIA_APP_TYPE
+        value: TILL
+      - key: LIPIA_API_URL
+        value: https://lipia-api.kreativelabske.com/api/v2

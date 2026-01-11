@@ -5,6 +5,15 @@ import Member from "../models/Member.js";
 
 const router = express.Router();
 
+// Health check endpoint
+router.get("/health", (req, res) => {
+  res.json({
+    status: "ok",
+    service: "auth",
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // Login with phone and password
 router.post("/login", async (req, res) => {
   try {

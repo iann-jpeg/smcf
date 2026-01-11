@@ -4,8 +4,12 @@
   "description": "Custom backend for SMCF platform",
   "main": "server.js",
   "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "start": "node server.js",
+    "build": "echo 'No build step required'",
     "dev": "nodemon server.js"
   },
   "dependencies": {
