@@ -15,8 +15,13 @@ router.get("/current", protect, async (req, res) => {
 
     if (!cycle) {
       // Create first cycle if none exists
-      const totalMembers = await Member.countDocuments();
-      const nextRecipient = await Member.findOne().sort({ position: 1 });
+      // Only count regular members (exclude wallet-only members from cycles)
+      const totalMembers = await Member.countDocuments({ 
+        member_type: { $ne: "wallet_only" } 
+      });
+      const nextRecipient = await Member.findOne({ 
+        member_type: { $ne: "wallet_only" } 
+      }).sort({ position: 1 });
 
       // Official cycle start date: January 5, 2026
       const cycleStartDate = new Date('2026-01-05T00:00:00.000Z');

@@ -13,6 +13,14 @@ router.put("/:id/mark-paid", protect, adminOnly, async (req, res) => {
       return res.status(404).json({ success: false, error: "Member not found" });
     }
     
+    // Prevent marking wallet-only members as paid for cycles
+    if (member.member_type === "wallet_only") {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Wallet-only members do not participate in cycles" 
+      });
+    }
+    
     // Check if member is already paid
     const wasPreviouslyPaid = member.payment_status === "paid";
     
@@ -123,7 +131,7 @@ router.get("/:id", protect, async (req, res) => {
 router.post("/", protect, adminOnly, async (req, res) => {
   try {
     console.log("📝 Creating new member with request body:", req.body);
-    const { name, phone, id_number, position, password } = req.body;
+    const { name, phone, id_number, position, password, member_type } = req.body;
 
     // Validate required fields
     if (!name || !phone) {
@@ -206,6 +214,7 @@ router.post("/", protect, adminOnly, async (req, res) => {
       position: position || (maxNumber + 1 + attempts),
       registered_by_admin: true,
       status: "active",
+      member_type: member_type || "regular", // Default to "regular" if not provided
     };
 
     // Only add id_number if it's provided and not empty
@@ -228,7 +237,8 @@ router.post("/", protect, adminOnly, async (req, res) => {
     const Cycle = (await import("../models/Cycle.js")).default;
     const activeCycle = await Cycle.findOne({ status: "active" });
     if (activeCycle) {
-      const totalMembers = await Member.countDocuments();
+      // Only count regular members, exclude wallet_only members
+      const totalMembers = await Member.countDocuments({ member_type: { $ne: "wallet_only" } });
       activeCycle.total_members = totalMembers;
       await activeCycle.save();
       // Emit socket event for real-time update

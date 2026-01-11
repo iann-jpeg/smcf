@@ -2964,9 +2964,14 @@ Thank you for your cooperation! 🙏`;
                                 }`}
                               />
                               <div>
-                                <div className="font-medium">
+                                <div className="font-medium flex items-center gap-2">
                                   {member.name} {" "}
                                   {member.position ? `(#${member.position})` : ""}
+                                  {member.member_type === "wallet_only" && (
+                                    <Badge variant="outline" className="text-xs">
+                                      Wallet Only
+                                    </Badge>
+                                  )}
                                 </div>
                                 <div className="text-xs text-muted-foreground">
                                   {member.member_id} • {member.phone}
@@ -2975,16 +2980,22 @@ Thank you for your cooperation! 🙏`;
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Badge
-                              variant={
-                                cyclesPaid > 0 ? "default" : "secondary"
-                              }>
-                              {cyclesPaid > 0
-                                ? advanceCycles > 0
-                                  ? `Paid (Advance: +${advanceCycles})`
-                                  : "Paid"
-                                : "Pending"}
-                            </Badge>
+                            {member.member_type === "wallet_only" ? (
+                              <Badge variant="outline">
+                                Wallet Only
+                              </Badge>
+                            ) : (
+                              <Badge
+                                variant={
+                                  cyclesPaid > 0 ? "default" : "secondary"
+                                }>
+                                {cyclesPaid > 0
+                                  ? advanceCycles > 0
+                                    ? `Paid (Advance: +${advanceCycles})`
+                                    : "Paid"
+                                  : "Pending"}
+                              </Badge>
+                            )}
                           </TableCell>
                           <TableCell>
                             {cyclesPaid > 0
@@ -3023,57 +3034,61 @@ Thank you for your cooperation! 🙏`;
                                 disabled={isReadOnly}>
                                 ↓
                               </Button>
-                              <Button
-                                size="sm"
-                                variant={
-                                  cyclesPaid > 0 ? "outline" : "default"
-                                }
-                                onClick={() => togglePaymentStatusRemote(member)}
-                                disabled={isReadOnly}
-                                title={isReadOnly ? "Read-only access" : undefined}>
-                                {cyclesPaid > 0 ? "Unpay" : "Mark Paid"}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                onClick={async () => {
-                                  const id = member._id || member.id;
-                                  // Mark member as paid for current cycle WITHOUT adding payment record
-                                  try {
-                                    const res = await fetch(`${API_BASE}/api/members/${id}/mark-paid`, {
-                                      method: "PUT",
-                                      headers: {
-                                        "Content-Type": "application/json",
-                                        ...authService.getAuthHeaders(),
-                                      },
-                                      body: JSON.stringify({ cycle_number: currCycle, no_payment: true }),
-                                    });
-                                    if (!res.ok) throw new Error("Failed to mark as paid");
-                                    
-                                    // Refresh all data to show updated status
-                                    if (typeof refreshMembers === "function") {
-                                      await refreshMembers();
+                              {member.member_type !== "wallet_only" && (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant={
+                                      cyclesPaid > 0 ? "outline" : "default"
                                     }
-                                    await fetchCurrentCycle();
-                                    await fetchPayments();
-                                    
-                                    toast({
-                                      title: "Member Marked as Paid",
-                                      description: `${member.name} marked as paid for cycle #${currCycle}`,
-                                    });
-                                  } catch (err: any) {
-                                    toast({
-                                      title: "Error",
-                                      description: err.message || "Could not mark member as paid",
-                                      variant: "destructive",
-                                    });
-                                  }
-                                }}
-                                disabled={isReadOnly}
-                                title={isReadOnly ? "Read-only access" : "Mark as Paid (No Payment)"}
-                              >
-                                Mark Paid (No Payment)
-                              </Button>
+                                    onClick={() => togglePaymentStatusRemote(member)}
+                                    disabled={isReadOnly}
+                                    title={isReadOnly ? "Read-only access" : undefined}>
+                                    {cyclesPaid > 0 ? "Unpay" : "Mark Paid"}
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    onClick={async () => {
+                                      const id = member._id || member.id;
+                                      // Mark member as paid for current cycle WITHOUT adding payment record
+                                      try {
+                                        const res = await fetch(`${API_BASE}/api/members/${id}/mark-paid`, {
+                                          method: "PUT",
+                                          headers: {
+                                            "Content-Type": "application/json",
+                                            ...authService.getAuthHeaders(),
+                                          },
+                                          body: JSON.stringify({ cycle_number: currCycle, no_payment: true }),
+                                        });
+                                        if (!res.ok) throw new Error("Failed to mark as paid");
+                                        
+                                        // Refresh all data to show updated status
+                                        if (typeof refreshMembers === "function") {
+                                          await refreshMembers();
+                                        }
+                                        await fetchCurrentCycle();
+                                        await fetchPayments();
+                                        
+                                        toast({
+                                          title: "Member Marked as Paid",
+                                          description: `${member.name} marked as paid for cycle #${currCycle}`,
+                                        });
+                                      } catch (err: any) {
+                                        toast({
+                                          title: "Error",
+                                          description: err.message || "Could not mark member as paid",
+                                          variant: "destructive",
+                                        });
+                                      }
+                                    }}
+                                    disabled={isReadOnly}
+                                    title={isReadOnly ? "Read-only access" : "Mark as Paid (No Payment)"}
+                                  >
+                                    Mark Paid (No Payment)
+                                  </Button>
+                                </>
+                              )}
                               <Button
                                 size="sm"
                                 variant="ghost"

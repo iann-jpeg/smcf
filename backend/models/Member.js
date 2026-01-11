@@ -31,6 +31,11 @@ const memberSchema = new mongoose.Schema({
     enum: ["active", "inactive", "suspended"],
     default: "active",
   },
+  member_type: {
+    type: String,
+    enum: ["regular", "wallet_only"],
+    default: "regular",
+  },
   payment_status: {
     type: String,
     enum: ["paid", "pending"],
