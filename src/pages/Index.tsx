@@ -390,7 +390,7 @@ const Index = () => {
             <img
               src={smcfLogo}
               alt="SMCF - Smart Moves Cash Flow Logo - Digital Table Banking Platform"
-              className="w-8 h-8 sm:w-10 sm:h-10"
+              className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16"
             />
             <div>
               <h1 className="text-base sm:text-xl font-bold text-primary">
@@ -398,6 +398,9 @@ const Index = () => {
               </h1>
               <p className="text-[10px] sm:text-xs text-muted-foreground">
                 Smart Moves Cash Flow
+              </p>
+              <p className="text-[9px] sm:text-[10px] text-primary/70 font-medium italic">
+                Digital Table Banking Made Simple
               </p>
             </div>
           </div>
