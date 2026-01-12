@@ -43,7 +43,7 @@ import {
   AlertTriangle,
   TrendingUp,
 } from "lucide-react";
-import smcfLogo from '@/assets/smcf-logo.png';
+import smcfLogo from '@/assets/newsmcflogo.png';
 import { useEffect, useState } from "react";
 import CreditScoreCard from "@/components/CreditScoreCard";
 import { Progress } from "@/components/ui/progress";

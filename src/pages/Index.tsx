@@ -1,4 +1,4 @@
-import smcfLogo from "@/assets/smcf-logo.png";
+import smcfLogo from "@/assets/newsmcflogo.png";
 import AdminDashboard from "@/components/AdminDashboard";
 import AdminSetup from "@/components/AdminSetup";
 import AuthDialog from "@/components/AuthDialog";

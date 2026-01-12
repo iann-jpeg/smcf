@@ -22,8 +22,8 @@ self.addEventListener('push', (event) => {
   let data = {
     title: 'SMCF Notification',
     body: 'You have a new notification',
-    icon: '/smcf-logo.png',
-    badge: '/smcf-logo.png',
+    icon: '/newsmcflogo.png',
+    badge: '/newsmcflogo.png',
     tag: 'smcf-notification',
     vibrate: [200, 100, 200, 100, 200],
     sound: '/notification.wav'
@@ -39,8 +39,8 @@ self.addEventListener('push', (event) => {
   
   const options = {
     body: data.body,
-    icon: data.icon || '/smcf-logo.png',
-    badge: data.badge || '/smcf-logo.png',
+    icon: data.icon || '/newsmcflogo.png',
+    badge: data.badge || '/newsmcflogo.png',
     tag: data.tag || 'smcf-notification',
     vibrate: data.vibrate || [200, 100, 200, 100, 200],
     requireInteraction: true,

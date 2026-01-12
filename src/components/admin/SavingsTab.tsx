@@ -32,7 +32,7 @@ import {
   TrendingUp,
   XCircle,
 } from "lucide-react";
-import smcfLogo from '@/assets/smcf-logo.png';
+import smcfLogo from '@/assets/newsmcflogo.png';
 import { useEffect, useState } from "react";
 import SavingsChart from "@/components/analytics/SavingsChart";
 import TopSaverBadge from "@/components/analytics/TopSaverBadge";

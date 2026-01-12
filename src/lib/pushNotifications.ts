@@ -164,16 +164,16 @@ export async function showPushNotification(
   if (serviceWorkerRegistration) {
     // Use service worker showNotification which supports vibrate
     await serviceWorkerRegistration.showNotification(title, {
-      icon: '/smcf-logo.png',
-      badge: '/smcf-logo.png',
+      icon: '/newsmcflogo.png',
+      badge: '/newsmcflogo.png',
       requireInteraction: true,
       ...notificationOptions
     } as NotificationOptions);
   } else if ('Notification' in window && Notification.permission === 'granted') {
     // Fallback to regular notification
     new Notification(title, {
-      icon: '/smcf-logo.png',
-      badge: '/smcf-logo.png',
+      icon: '/newsmcflogo.png',
+      badge: '/newsmcflogo.png',
       ...notificationOptions
     });
   }

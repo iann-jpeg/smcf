@@ -1,4 +1,4 @@
-import smcfLogo from "@/assets/smcf-logo.png";
+import smcfLogo from "@/assets/newsmcflogo.png";
 import AddMemberDialog from "@/components/AddMemberDialog";
 import AnnouncementDialog from "@/components/AnnouncementDialog";
 

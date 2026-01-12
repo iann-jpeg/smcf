@@ -161,8 +161,8 @@ export async function showBrowserNotification(
     
     if (permission === 'granted') {
       const notification = new Notification(title, {
-        icon: '/smcf-logo.png',
-        badge: '/smcf-logo.png',
+        icon: '/newsmcflogo.png',
+        badge: '/newsmcflogo.png',
         ...options
       });
 

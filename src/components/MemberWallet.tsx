@@ -42,7 +42,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import { useAutoRefresh } from "@/hooks/use-auto-refresh";
-import smcfLogo from '@/assets/smcf-logo.png';
+import smcfLogo from '@/assets/newsmcflogo.png';
 import TopSaverBadge from "@/components/analytics/TopSaverBadge";
 import MemberQRCode from "@/components/MemberQRCode";
 import QRScanner from "@/components/QRScanner";
