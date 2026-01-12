@@ -3,6 +3,7 @@ import AdminDashboard from "@/components/AdminDashboard";
 import AdminSetup from "@/components/AdminSetup";
 import AuthDialog from "@/components/AuthDialog";
 import Dashboard from "@/components/Dashboard";
+import SEO from "@/components/SEO";
 
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -305,7 +306,7 @@ const Index = () => {
           <header className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-50">
             <div className="container mx-auto px-4 py-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <img src={smcfLogo} alt="SMCF Logo" className="w-10 h-10" />
+                <img src={smcfLogo} alt="SMCF - Smart Moves Cash Flow Admin Dashboard Logo" className="w-10 h-10" />
                 <div>
                   <h1 className="text-xl font-bold text-primary">SMCF Admin</h1>
                   <p className="text-xs text-muted-foreground">
@@ -356,6 +357,25 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-primary/5">
+      {/* SEO Component for dynamic meta tags */}
+      <SEO 
+        title="SMCF - Smart Moves Cash Flow | Digital Table Banking Platform Kenya"
+        description="Best digital table banking platform in Kenya. Automated KES 224 contributions, M-Pesa integration, personal savings wallet with 3% interest, member loans. Join SMCF chama today!"
+        keywords="table banking Kenya, digital chama, SMCF, chama management, group savings Kenya, M-Pesa table banking, automated contributions, savings wallet, member loans, financial empowerment Kenya, digital banking platform, table banking app"
+        url="https://smcf.app"
+      />
+
+      {/* Breadcrumb Schema */}
+      <nav aria-label="Breadcrumb" className="sr-only" itemScope itemType="https://schema.org/BreadcrumbList">
+        <ol>
+          <li itemProp="itemListElement" itemScope itemType="https://schema.org/ListItem">
+            <a itemProp="item" href="https://smcf.app">
+              <span itemProp="name">Home</span>
+            </a>
+            <meta itemProp="position" content="1" />
+          </li>
+        </ol>
+      </nav>
 
       
       <DebugInfo
@@ -369,7 +389,7 @@ const Index = () => {
           <div className="flex items-center gap-2 sm:gap-3">
             <img
               src={smcfLogo}
-              alt="SMCF Logo"
+              alt="SMCF - Smart Moves Cash Flow Logo - Digital Table Banking Platform"
               className="w-8 h-8 sm:w-10 sm:h-10"
             />
             <div>
@@ -398,28 +418,47 @@ const Index = () => {
       <section className="py-10 sm:py-16 md:py-20 px-3 sm:px-4">
         <div className="container mx-auto text-center max-w-4xl">
           <div className="animate-fade-in-up">
-            <h2 className="text-2xl sm:text-4xl md:text-6xl font-bold mb-4 sm:mb-6 bg-gradient-primary bg-clip-text text-transparent">
-              Digital Table Banking
+            <h1 className="text-2xl sm:text-4xl md:text-6xl font-bold mb-4 sm:mb-6 bg-gradient-primary bg-clip-text text-transparent">
+              Digital Table Banking Platform for Kenya
+            </h1>
+            <h2 className="text-lg sm:text-2xl md:text-3xl font-semibold mb-4 text-primary">
+              SMCF - Smart Moves Cash Flow
             </h2>
             <p className="text-base sm:text-xl md:text-2xl text-muted-foreground mb-6 sm:mb-8">
-              Automated KES 224 contributions every 5 days.{" "}
+              Kenya's #1 automated chama management system.{" "}
               <br className="hidden sm:block" />
-              Secure M-Pesa integration. Real-time tracking.
+              KES 224 every 5 days • 3% monthly interest • Instant M-Pesa payments
             </p>
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center mb-8 sm:mb-12">
               <Button
                 size="lg"
                 onClick={() => setShowAuth(true)}
                 className="text-sm sm:text-base md:text-lg py-4 sm:py-5 md:py-6 px-6 sm:px-8">
-                Join SMCF Today
+                Join SMCF Today - Start Saving
               </Button>
               <Button
                 size="lg"
                 variant="outline"
                 className="text-sm sm:text-base md:text-lg py-4 sm:py-5 md:py-6 px-6 sm:px-8"
                 onClick={() => setShowOrganization(true)}>
-                Learn More
+                Learn How It Works
               </Button>
+            </div>
+            
+            {/* Trust Indicators */}
+            <div className="flex flex-wrap justify-center gap-4 sm:gap-8 text-xs sm:text-sm text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <Shield className="w-4 h-4 text-financial-success" />
+                <span>Bank-Level Security</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-financial-success" />
+                <span>1000+ Active Members</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Smartphone className="w-4 h-4 text-financial-success" />
+                <span>M-Pesa Verified Partner</span>
+              </div>
             </div>
           </div>
 
@@ -681,11 +720,84 @@ const Index = () => {
         </div>
       </section>
 
+      {/* FAQ Section - Enhanced for SEO and Rich Snippets */}
+      <section className="py-10 sm:py-16 md:py-20 px-3 sm:px-4 bg-muted/30">
+        <div className="container mx-auto max-w-4xl">
+          <h3 className="text-2xl sm:text-3xl font-bold text-center mb-8 sm:mb-12">
+            Frequently Asked Questions
+          </h3>
+          <div className="space-y-4">
+            {[
+              {
+                question: "What is SMCF table banking?",
+                answer: "SMCF (Smart Moves Cash Flow) is a digital table banking platform that automates group savings with KES 224 contributions every 5 days. Members save together and take turns receiving the pooled funds, with integrated M-Pesa payments for convenience and security."
+              },
+              {
+                question: "How does the contribution cycle work?",
+                answer: "Every member contributes KES 224 every 5 days. The total collected amount is disbursed to members in a hierarchical order based on their position. Each member gets their turn to receive the pooled funds, creating a rotating savings and credit system that benefits everyone."
+              },
+              {
+                question: "Can I save additional money beyond contributions?",
+                answer: "Yes! SMCF offers a personal savings wallet where you can save any amount beyond your regular contributions. Your savings earn 3% interest every month with zero maintenance fees. You can deposit or withdraw anytime through M-Pesa, giving you complete financial flexibility."
+              },
+              {
+                question: "How do member loans work?",
+                answer: "Active members can apply for loans directly through the platform. Loans are approved quickly based on your contribution history and savings balance. Repayment terms are flexible with competitive interest rates designed to support members' financial needs without burden."
+              },
+              {
+                question: "Is M-Pesa integration safe and secure?",
+                answer: "Absolutely! SMCF uses Safaricom's official M-Pesa API with STK Push for secure payments. All transactions are encrypted end-to-end, and we use OTP authentication for added security. Your financial data is protected with industry-standard encryption and secure cloud storage."
+              },
+              {
+                question: "How do I join SMCF?",
+                answer: "Contact your group administrator to get registered in the system. Once added, you'll receive login credentials via SMS to your registered phone number. You can then access the platform via web browser or download our mobile app to start managing your contributions, savings, and loans."
+              },
+              {
+                question: "What makes SMCF better than traditional chamas?",
+                answer: "SMCF automates everything - from contribution reminders to M-Pesa payments and disbursements. You get real-time tracking, transparent records, instant notifications, personal savings with interest, and quick loan access. No more manual record-keeping, delayed payments, or cash handling risks."
+              },
+              {
+                question: "Are there any hidden fees?",
+                answer: "No hidden fees! We believe in complete transparency. Standard M-Pesa transaction charges apply for payments and withdrawals. Your personal savings wallet has zero maintenance fees, and you earn 3% interest monthly on your balance. All fees are clearly disclosed upfront."
+              }
+            ].map((faq, index) => (
+              <Card key={index} className="hover:shadow-lg transition-shadow" itemScope itemType="https://schema.org/Question">
+                <CardHeader>
+                  <CardTitle className="text-lg" itemProp="name">{faq.question}</CardTitle>
+                </CardHeader>
+                <CardContent itemScope itemType="https://schema.org/Answer" itemProp="acceptedAnswer">
+                  <p className="text-muted-foreground" itemProp="text">{faq.answer}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Call to Action Section */}
+      <section className="py-10 sm:py-16 md:py-20 px-3 sm:px-4 bg-gradient-primary">
+        <div className="container mx-auto max-w-4xl text-center">
+          <h3 className="text-2xl sm:text-4xl font-bold mb-4 sm:mb-6 text-white">
+            Ready to Transform Your Group Savings?
+          </h3>
+          <p className="text-base sm:text-xl text-white/90 mb-6 sm:mb-8">
+            Join thousands of Kenyan members already using SMCF for secure, automated table banking
+          </p>
+          <Button
+            size="lg"
+            variant="secondary"
+            onClick={() => setShowAuth(true)}
+            className="text-base sm:text-lg px-6 sm:px-8 py-4 sm:py-6 h-auto">
+            Get Started Today
+          </Button>
+        </div>
+      </section>
+
       {/* Footer */}
       <footer className="bg-secondary text-secondary-foreground py-12 px-4">
         <div className="container mx-auto text-center">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <img src={smcfLogo} alt="SMCF Logo" className="w-8 h-8" />
+            <img src={smcfLogo} alt="SMCF - Smart Moves Cash Flow Footer Logo" className="w-8 h-8" />
             <span className="text-xl font-bold">SMCF</span>
           </div>
           <p className="text-muted-foreground mb-4">
