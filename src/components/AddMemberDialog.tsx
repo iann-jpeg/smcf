@@ -145,7 +145,7 @@ const AddMemberDialog = ({
             Add New Member
           </DialogTitle>
           <DialogDescription>
-            Add a new member to the SMCF group
+            Add a new member to the group
           </DialogDescription>
         </DialogHeader>
 

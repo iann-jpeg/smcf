@@ -1,6 +1,7 @@
 import smcfLogo from "@/assets/newsmcflogo.png";
 import AddMemberDialog from "@/components/AddMemberDialog";
 import AnnouncementDialog from "@/components/AnnouncementDialog";
+import { StyledSMCF } from "@/components/StyledSMCF";
 
 import MpesaDisbursementDialog from "@/components/MpesaDisbursementDialog";
 import TransactionFeesReport from "@/components/TransactionFeesReport";
@@ -256,9 +257,9 @@ const AdminDashboard = ({
         return prev;
       });
 
-      // Store recent 5 for display
+      // Store recent 15 for display
       setRecentPayments((prev) => {
-        const newData = paymentsArray.slice(0, 5);
+        const newData = paymentsArray.slice(0, 15);
         if (JSON.stringify(prev) !== JSON.stringify(newData)) {
           return newData;
         }
@@ -1092,7 +1093,7 @@ const AdminDashboard = ({
       });
       // Members
       socket.on("member:new", (data: any) => {
-        addActivity({ type: "member", icon: "🧑", title: "New Member Joined", description: `${data.name || "A new member"} joined SMCF`, data });
+        addActivity({ type: "member", icon: "🧑", title: "New Member Joined", description: `${data.name || "A new member"} joined the platform`, data });
       });
       socket.on("memberUpdated", (data: any) => {
         addActivity({ type: "member", icon: "🧑", title: "Member Updated", description: `${data.memberName || "A member"}'s profile updated`, data });
@@ -2419,7 +2420,7 @@ Thank you for your cooperation! 🙏`;
             <div className="space-y-2">
               {savingsData
                 .sort((a, b) => (b.totalDeposits || 0) - (a.totalDeposits || 0))
-                .slice(0, 5)
+                .slice(0, 15)
                 .map((member, index) => (
                   <div
                     key={member._id}
@@ -3793,7 +3794,7 @@ Thank you for your cooperation! 🙏`;
               System Settings
             </DialogTitle>
             <DialogDescription>
-              Configure system-wide settings for SMCF
+              Configure system-wide settings
             </DialogDescription>
           </DialogHeader>
 

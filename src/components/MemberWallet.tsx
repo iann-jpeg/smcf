@@ -46,6 +46,7 @@ import smcfLogo from '@/assets/newsmcflogo.png';
 import TopSaverBadge from "@/components/analytics/TopSaverBadge";
 import MemberQRCode from "@/components/MemberQRCode";
 import QRScanner from "@/components/QRScanner";
+import { StyledSMCF } from "@/components/StyledSMCF";
 
 interface MemberWalletProps {
   userData: any;
@@ -1321,7 +1322,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
                         </span>
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        Never share your M-Pesa PIN with anyone. SMCF will never
+                        Never share your M-Pesa PIN with anyone. We will never
                         ask for your PIN directly.
                       </p>
                     </div>

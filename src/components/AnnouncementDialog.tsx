@@ -96,7 +96,7 @@ const AnnouncementDialog = ({
             Send Announcement to All Members
           </DialogTitle>
           <DialogDescription>
-            Send important updates, reminders, or information to all SMCF
+            Send important updates, reminders, or information to all
             members
           </DialogDescription>
         </DialogHeader>

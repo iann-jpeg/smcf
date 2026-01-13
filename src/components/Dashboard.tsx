@@ -271,7 +271,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
   const handleLogout = () => {
     toast({
       title: "Logged out successfully",
-      description: "You have been safely logged out of SMCF",
+      description: "You have been safely logged out",
     });
     onLogout();
   };
@@ -323,13 +323,13 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
       if (userRole === "admin") {
         notifySuccess(
           "New Member Joined",
-          `${member.name || "A new member"} has joined SMCF`,
+          `${member.name || "A new member"} has joined the platform`,
           { memberId: member._id }
         );
         if (isNativeRef.current) {
           showMobileNotification({
             title: "👤 New Member",
-            body: `${member.name || "A new member"} has joined SMCF`,
+            body: `${member.name || "A new member"} has joined the platform`,
             extra: { type: "member", id: member._id }
           });
         }

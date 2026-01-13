@@ -4,6 +4,7 @@ import CycleQRPayment from "@/components/CycleQRPayment";
 import LoanRequestDialog from "@/components/LoanRequestDialog";
 import MemberWallet from "@/components/MemberWallet";
 import PaymentDialog from "@/components/PaymentDialog";
+import { StyledSMCF } from "@/components/StyledSMCF";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -901,7 +902,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">Destination:</span>
               <span className="font-medium">
-                SMCF Group Till: <span className="font-bold">6938069</span>
+                <StyledSMCF className="inline" /> Group Till: <span className="font-bold">6938069</span>
               </span>
             </div>
             <div className="flex justify-between items-center">

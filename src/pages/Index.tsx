@@ -4,6 +4,7 @@ import AdminSetup from "@/components/AdminSetup";
 import AuthDialog from "@/components/AuthDialog";
 import Dashboard from "@/components/Dashboard";
 import SEO from "@/components/SEO";
+import { StyledSMCF } from "@/components/StyledSMCF";
 
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -308,7 +309,7 @@ const Index = () => {
               <div className="flex items-center gap-3">
                 <img src={smcfLogo} alt="SMCF - Smart Moves Cash Flow Admin Dashboard Logo" className="w-10 h-10" />
                 <div>
-                  <h1 className="text-xl font-bold text-primary">SMCF Admin</h1>
+                  <h1 className="text-xl"><StyledSMCF /> Admin</h1>
                   <p className="text-xs text-muted-foreground">
                     Smart Moves Cash Flow
                   </p>
@@ -393,8 +394,8 @@ const Index = () => {
               className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16"
             />
             <div>
-              <h1 className="text-base sm:text-xl font-bold text-primary">
-                SMCF
+              <h1 className="text-base sm:text-xl">
+                <StyledSMCF />
               </h1>
               <p className="text-[10px] sm:text-xs text-muted-foreground">
                 Smart Moves Cash Flow
@@ -424,8 +425,8 @@ const Index = () => {
             <h1 className="text-2xl sm:text-4xl md:text-6xl font-bold mb-4 sm:mb-6 bg-gradient-primary bg-clip-text text-transparent">
               Digital Table Banking Platform for Kenya
             </h1>
-            <h2 className="text-lg sm:text-2xl md:text-3xl font-semibold mb-4 text-primary">
-              SMCF - Smart Moves Cash Flow
+            <h2 className="text-lg sm:text-2xl md:text-3xl font-semibold mb-4">
+              <StyledSMCF /> - Smart Moves Cash Flow
             </h2>
             <p className="text-base sm:text-xl md:text-2xl text-muted-foreground mb-6 sm:mb-8">
               Kenya's #1 automated chama management system.{" "}
@@ -437,7 +438,7 @@ const Index = () => {
                 size="lg"
                 onClick={() => setShowAuth(true)}
                 className="text-sm sm:text-base md:text-lg py-4 sm:py-5 md:py-6 px-6 sm:px-8">
-                Join SMCF Today - Start Saving
+                Join <StyledSMCF className="inline" /> Today - Start Saving
               </Button>
               <Button
                 size="lg"
@@ -504,8 +505,8 @@ const Index = () => {
       {/* Features */}
       <section className="py-10 sm:py-16 md:py-20 px-3 sm:px-4 bg-muted/30">
         <div className="container mx-auto max-w-6xl">
-          <h3 className="text-2xl sm:text-3xl font-bold text-center mb-8 sm:mb-12">
-            Why Choose SMCF?
+          <h3 className="text-2xl sm:text-3xl text-center mb-8 sm:mb-12">
+            Why Choose <StyledSMCF className="inline" />?
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
             {[
@@ -677,8 +678,8 @@ const Index = () => {
       {/* How It Works */}
       <section className="py-20 px-4 bg-muted/30">
         <div className="container mx-auto max-w-4xl">
-          <h3 className="text-3xl font-bold text-center mb-12">
-            How SMCF Works
+          <h3 className="text-3xl text-center mb-12">
+            How <StyledSMCF className="inline" /> Works
           </h3>
           <div className="space-y-8">
             {[
@@ -686,7 +687,7 @@ const Index = () => {
                 step: 1,
                 title: "Register & Join",
                 description:
-                  "Sign up with your M-Pesa number and receive your unique SMCF member ID.",
+                  "Sign up with your M-Pesa number and receive your unique member ID.",
               },
               {
                 step: 2,
@@ -732,8 +733,8 @@ const Index = () => {
           <div className="space-y-4">
             {[
               {
-                question: "What is SMCF table banking?",
-                answer: "SMCF (Smart Moves Cash Flow) is a digital table banking platform that automates group savings with KES 224 contributions every 5 days. Members save together and take turns receiving the pooled funds, with integrated M-Pesa payments for convenience and security."
+                question: "What is table banking?",
+                answer: "Smart Moves Cash Flow is a digital table banking platform that automates group savings with KES 224 contributions every 5 days. Members save together and take turns receiving the pooled funds, with integrated M-Pesa payments for convenience and security."
               },
               {
                 question: "How does the contribution cycle work?",
@@ -741,7 +742,7 @@ const Index = () => {
               },
               {
                 question: "Can I save additional money beyond contributions?",
-                answer: "Yes! SMCF offers a personal savings wallet where you can save any amount beyond your regular contributions. Your savings earn 3% interest every month with zero maintenance fees. You can deposit or withdraw anytime through M-Pesa, giving you complete financial flexibility."
+                answer: "Yes! We offer a personal savings wallet where you can save any amount beyond your regular contributions. Your savings earn 3% interest every month with zero maintenance fees. You can deposit or withdraw anytime through M-Pesa, giving you complete financial flexibility."
               },
               {
                 question: "How do member loans work?",
@@ -801,7 +802,7 @@ const Index = () => {
         <div className="container mx-auto text-center">
           <div className="flex items-center justify-center gap-3 mb-4">
             <img src={smcfLogo} alt="SMCF - Smart Moves Cash Flow Footer Logo" className="w-8 h-8" />
-            <span className="text-xl font-bold">SMCF</span>
+            <span className="text-xl"><StyledSMCF /></span>
           </div>
           <p className="text-muted-foreground mb-4">
             Smart Moves Cash Flow - Digital Table Banking Platform

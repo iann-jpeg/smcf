@@ -128,7 +128,7 @@ const AdminSetup = ({ onSetupComplete }: AdminSetupProps) => {
           </div>
           <CardTitle className="text-2xl">Admin Setup Required</CardTitle>
           <CardDescription>
-            Create your administrator account to get started with SMCF
+            Create your administrator account to get started
           </CardDescription>
         </CardHeader>
         <CardContent>

@@ -100,7 +100,7 @@ const CycleQRPayment = ({
     } catch (error) {
       toast({
         title: "Invalid QR Code",
-        description: "This is not a valid SMCF payment QR code",
+        description: "This is not a valid payment QR code",
         variant: "destructive",
       });
     }

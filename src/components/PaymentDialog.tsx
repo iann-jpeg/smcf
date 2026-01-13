@@ -153,7 +153,7 @@ const PaymentDialog = ({
           amount: amount,
           cycleNumber: targetCycle,
           type: "cycle_payment",
-          description: `SMCF Contribution Payment - Cycle #${targetCycle}`,
+          description: `Contribution Payment - Cycle #${targetCycle}`,
         }),
       });
 
@@ -490,7 +490,7 @@ const PaymentDialog = ({
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Never share your M-Pesa PIN with anyone. SMCF will never
+                      Never share your M-Pesa PIN with anyone. We will never
                       ask for your PIN directly.
                     </p>
                   </div>

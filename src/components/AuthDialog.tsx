@@ -100,7 +100,7 @@ const AuthDialog = ({ open, onOpenChange, onLogin }: AuthDialogProps) => {
       }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Access SMCF Platform</DialogTitle>
+          <DialogTitle>Access Platform</DialogTitle>
           <DialogDescription>
             Choose your role and sign in securely with your M-Pesa number
           </DialogDescription>
@@ -123,7 +123,7 @@ const AuthDialog = ({ open, onOpenChange, onLogin }: AuthDialogProps) => {
               <CardHeader className="pb-4">
                 <CardTitle className="text-lg">Member Login</CardTitle>
                 <CardDescription>
-                  Access your SMCF member account
+                  Access your member account
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -192,7 +192,7 @@ const AuthDialog = ({ open, onOpenChange, onLogin }: AuthDialogProps) => {
               <CardHeader className="pb-4">
                 <CardTitle className="text-lg">Admin/Treasurer Login</CardTitle>
                 <CardDescription>
-                  Access SMCF administrative controls
+                  Access administrative controls
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
