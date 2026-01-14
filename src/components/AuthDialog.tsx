@@ -181,7 +181,7 @@ const AuthDialog = ({ open, onOpenChange, onLogin }: AuthDialogProps) => {
                 </Button>
 
                 <div className="text-xs text-muted-foreground text-center">
-                  Contact admin if you don't have an account
+                  Contact admin if you don't have an account: <span className="font-semibold text-foreground">+254 759 097157</span>
                 </div>
               </CardContent>
             </Card>

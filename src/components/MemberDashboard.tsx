@@ -79,8 +79,18 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
   >("idle");
   const [checkoutRequestID, setCheckoutRequestID] = useState("");
   const [partialPaymentAmount, setPartialPaymentAmount] = useState("");
+  const [repaymentPhone, setRepaymentPhone] = useState("");
   const { toast } = useToast();
   const repaymentPollingActiveRef = useRef(false);
+
+  // Initialize repayment phone when repayment dialog opens
+  useEffect(() => {
+    if (showRepayment) {
+      const defaultPhone = userData?.phone || authService.getUser()?.phone || "";
+      setRepaymentPhone(defaultPhone);
+    }
+  }, [showRepayment, userData?.phone]);
+
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [memberLoans, setMemberLoans] = useState<any[]>([]);
   const [announcements, setAnnouncements] = useState<any[]>([]);
@@ -720,6 +730,15 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
       return;
     }
 
+    if (!repaymentPhone || repaymentPhone.length < 10) {
+      toast({
+        title: "Invalid Phone Number",
+        description: "Please enter a valid phone number",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const maxPayable =
       selectedLoan.amount_remaining ||
       selectedLoan.total_repayable ||
@@ -748,6 +767,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
           },
           body: JSON.stringify({
             amount: paymentAmount,
+            phone: repaymentPhone, // Use the editable phone number
           }),
         }
       );
@@ -1870,6 +1890,22 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                 </div>
               </div>
 
+              {/* Phone Number Input */}
+              <div className="space-y-2">
+                <Label htmlFor="repayment-phone">Payment Phone Number</Label>
+                <Input
+                  id="repayment-phone"
+                  type="tel"
+                  placeholder="254712345678"
+                  value={repaymentPhone}
+                  onChange={(e) => setRepaymentPhone(e.target.value)}
+                  disabled={isProcessingRepayment}
+                />
+                <p className="text-xs text-muted-foreground">
+                  The STK Push will be sent to this number. You can edit it to use a different number.
+                </p>
+              </div>
+
               {/* Payment History */}
               {selectedLoan.payment_history &&
                 selectedLoan.payment_history.length > 0 && (
@@ -1904,12 +1940,6 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                 <div className="text-sm space-y-1">
                   <p>
                     • Till Number: <span className="font-bold">6938069</span>
-                  </p>
-                  <p>
-                    • Your Phone:{" "}
-                    <span className="font-medium">
-                      {userData?.phoneNumber || userData?.phone}
-                    </span>
                   </p>
                   <p>• You will receive an M-Pesa prompt</p>
                   <p>• Enter your M-Pesa PIN to complete payment</p>

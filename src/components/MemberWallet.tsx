@@ -67,6 +67,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
   const [showWithdrawDialog, setShowWithdrawDialog] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [depositAmount, setDepositAmount] = useState("");
+  const [depositPhone, setDepositPhone] = useState("");
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [withdrawNotes, setWithdrawNotes] = useState("");
   const [paymentStep, setPaymentStep] = useState<
@@ -75,6 +76,14 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
   const [pollCount, setPollCount] = useState(0);
   const [isTopSaver, setIsTopSaver] = useState(false);
   const { toast } = useToast();
+
+  // Initialize deposit phone number when deposit dialog opens
+  useEffect(() => {
+    if (showDepositDialog) {
+      const defaultPhone = userData?.phone || authService.getUser()?.phone || "";
+      setDepositPhone(defaultPhone);
+    }
+  }, [showDepositDialog, userData?.phone]);
 
   const fetchWalletData = useCallback(async () => {
     try {
@@ -304,6 +313,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
     setPaymentStep("confirm");
     setIsProcessing(false);
     setDepositAmount("");
+    setDepositPhone("");
     setPollCount(0);
     if ((window as any).walletPollInterval) {
       clearInterval((window as any).walletPollInterval);
@@ -321,13 +331,11 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
       return;
     }
 
-    // Get phone number from userData or authService
-    const phoneNumber = userData?.phone || authService.getUser()?.phone;
-
-    if (!phoneNumber) {
+    // Validate phone number from state
+    if (!depositPhone || depositPhone.length < 10) {
       toast({
-        title: "Phone Number Missing",
-        description: "Please update your profile with a phone number",
+        title: "Invalid Phone Number",
+        description: "Please enter a valid phone number",
         variant: "destructive",
       });
       return;
@@ -345,7 +353,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
         },
         body: JSON.stringify({
           amount,
-          phone: phoneNumber,
+          phone: depositPhone, // Use the editable phone number
           type: "wallet_deposit",
           notes: `Wallet deposit - KES ${amount}`,
         }),
@@ -362,7 +370,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
 
         toast({
           title: "STK Push Sent! 📱",
-          description: `Check your phone (${phoneNumber}) and enter your M-Pesa PIN`,
+          description: `Check your phone (${depositPhone}) and enter your M-Pesa PIN`,
           duration: 5000,
         });
 
@@ -1188,12 +1196,22 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
                 />
               </div>
 
+              <div>
+                <Label htmlFor="depositPhone">Phone Number</Label>
+                <Input
+                  id="depositPhone"
+                  type="tel"
+                  placeholder="254712345678"
+                  value={depositPhone}
+                  onChange={(e) => setDepositPhone(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  The STK Push will be sent to this number. You can edit it to use a different number.
+                </p>
+              </div>
+
               <Card>
                 <CardContent className="pt-4 space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Phone Number:</span>
-                    <span className="font-semibold">{userData?.phone}</span>
-                  </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground text-sm">
                       Deposit Amount:
@@ -1249,7 +1267,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
                   Initiating Payment
                 </h3>
                 <p className="text-muted-foreground mb-4">
-                  Sending STK Push to {userData?.phone}...
+                  Sending STK Push to {depositPhone}...
                 </p>
                 <Progress value={50} className="h-2" />
               </div>
@@ -1274,7 +1292,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
                   Waiting for M-Pesa PIN
                 </h3>
                 <p className="text-muted-foreground mb-4">
-                  Check your phone ({userData?.phone}) and enter your M-Pesa PIN
+                  Check your phone ({depositPhone}) and enter your M-Pesa PIN
                 </p>
                 <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full">
                   <Clock className="w-4 h-4 animate-spin text-primary" />

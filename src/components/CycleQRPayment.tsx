@@ -33,7 +33,17 @@ const CycleQRPayment = ({
   const [scannedMember, setScannedMember] = useState<any>(null);
   const [pollingActive, setPollingActive] = useState(false);
   const pollingActiveRef = useRef(false);
+  const [paymentPhone, setPaymentPhone] = useState("");
   const { toast } = useToast();
+
+  // Initialize payment phone with user's phone number when dialog opens
+  useEffect(() => {
+    if (showDialog) {
+      const currentUser = authService.getUser();
+      const defaultPhone = currentUser?.phoneNumber || currentUser?.phone || "";
+      setPaymentPhone(defaultPhone);
+    }
+  }, [showDialog]);
 
   // Listen for real-time payment confirmations via Socket.IO
   useEffect(() => {
@@ -243,12 +253,20 @@ const CycleQRPayment = ({
       return;
     }
 
+    if (!paymentPhone || paymentPhone.length < 10) {
+      toast({
+        title: "Invalid Phone Number",
+        description: "Please enter a valid phone number",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsProcessing(true);
     setPaymentState("confirm");
 
     try {
-      // Get current user's phone for STK push
-      const currentUser = authService.getUser();
+      // Use the phone number from the input field (user can edit)
       
       // Make cycle payment via Lipia STK Push
       const response = await fetch(
@@ -260,7 +278,7 @@ const CycleQRPayment = ({
             ...authService.getAuthHeaders(),
           },
           body: JSON.stringify({
-            phone: currentUser?.phoneNumber || currentUser?.phone,
+            phone: paymentPhone, // Use the editable phone number
             amount: contributionAmount,
             cycleNumber: null, // Will be determined by backend based on recipient's status
             type: "cycle_payment",
@@ -379,11 +397,24 @@ const CycleQRPayment = ({
                   <p>
                     <strong>Member ID:</strong> {scannedMember.memberId}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    ℹ️ STK Push will be sent to YOUR phone to complete this
-                    payment
-                  </p>
                 </div>
+              </div>
+            )}
+
+            {scannedMember && (
+              <div className="space-y-2">
+                <Label htmlFor="payment-phone">Payment Phone Number</Label>
+                <Input
+                  id="payment-phone"
+                  type="tel"
+                  placeholder="254712345678"
+                  value={paymentPhone}
+                  onChange={(e) => setPaymentPhone(e.target.value)}
+                  disabled={isProcessing}
+                />
+                <p className="text-xs text-muted-foreground">
+                  The STK Push will be sent to this number. You can edit it to use a different number.
+                </p>
               </div>
             )}
 

@@ -342,7 +342,7 @@ router.patch("/:id/status", protect, adminOnly, async (req, res) => {
 // Make partial loan repayment with STK Push (member or admin)
 router.post("/:id/repay", protect, async (req, res) => {
   try {
-    const { amount } = req.body;
+    const { amount, phone } = req.body;
     const loanId = req.params.id;
     const payerId = req.member ? req.member._id : req.admin._id;
 
@@ -392,12 +392,12 @@ router.post("/:id/repay", protect, async (req, res) => {
     // Generate unique reference
     const reference = `LOAN-${Date.now()}-${payerId}`;
 
-    // Get payer's phone number
-    const payerPhone = loan.member_id.phone || loan.member_id.phoneNumber;
+    // Get payer's phone number - use provided phone or fallback to loan member's phone
+    const payerPhone = phone || loan.member_id.phone || loan.member_id.phoneNumber;
     if (!payerPhone) {
       return res.status(400).json({
         success: false,
-        error: "Member phone number not found",
+        error: "Phone number is required for payment",
       });
     }
 
