@@ -152,7 +152,7 @@ const PaymentDialog = ({
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          phone: memberData.phone || memberData.phoneNumber,
+          phone: paymentPhone,
           amount: amount,
           cycleNumber: targetCycle,
           type: "cycle_payment",
