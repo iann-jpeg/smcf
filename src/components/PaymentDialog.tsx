@@ -7,6 +7,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import API_BASE from "@/lib/api";
@@ -49,6 +51,7 @@ const PaymentDialog = ({
   const [hasPaidCurrentCycle, setHasPaidCurrentCycle] = useState(false);
   const [pollingActive, setPollingActive] = useState(false);
   const pollingActiveRef = useRef(false);
+  const [paymentPhone, setPaymentPhone] = useState("");
 
   // Listen for real-time payment confirmations via Socket.IO
   useEffect(() => {
@@ -167,9 +170,7 @@ const PaymentDialog = ({
 
         toast({
           title: "STK Push Sent!",
-          description: `Check your phone (${
-            memberData.phone || memberData.phoneNumber
-          }) and enter your M-Pesa PIN`,
+          description: `Check your phone (${paymentPhone}) and enter your M-Pesa PIN`,
         });
 
         // Start polling for payment status
@@ -349,10 +350,6 @@ const PaymentDialog = ({
                   <span className="font-semibold">{memberData.memberId}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Phone Number:</span>
-                  <span className="font-semibold">{memberData.phone}</span>
-                </div>
-                <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Payment For:</span>
                   <span className="font-semibold text-primary">
                     Cycle #{targetCycle}
@@ -387,6 +384,22 @@ const PaymentDialog = ({
               </CardContent>
             </Card>
 
+            {/* Phone Number Input */}
+            <div className="space-y-2">
+              <Label htmlFor="payment-phone">Payment Phone Number</Label>
+              <Input
+                id="payment-phone"
+                type="tel"
+                placeholder="254712345678"
+                value={paymentPhone}
+                onChange={(e) => setPaymentPhone(e.target.value)}
+                disabled={isProcessing}
+              />
+              <p className="text-xs text-muted-foreground">
+                The STK Push will be sent to this number. You can edit it to use a different number.
+              </p>
+            </div>
+
             {/* Security Notice */}
             <div className="bg-muted/50 p-3 rounded-lg">
               <div className="flex items-center gap-2 mb-1">
@@ -417,7 +430,7 @@ const PaymentDialog = ({
             <div>
               <h3 className="text-lg font-semibold mb-2">Initiating Payment</h3>
               <p className="text-muted-foreground mb-4">
-                Sending STK Push to {memberData.phone}...
+                Sending STK Push to {paymentPhone}...
               </p>
               <Progress value={50} className="h-2" />
             </div>
