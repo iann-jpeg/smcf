@@ -240,4 +240,31 @@ router.delete("/", protect, adminOnly, async (req, res) => {
   }
 });
 
+// Delete a specific disbursement (admin only)
+router.delete("/:id", protect, adminOnly, async (req, res) => {
+  try {
+    const disbursement = await Disbursement.findByIdAndDelete(req.params.id);
+    
+    if (!disbursement) {
+      return res.status(404).json({ 
+        success: false, 
+        error: "Disbursement not found" 
+      });
+    }
+
+    // Emit socket event
+    if (req.app.get("io")) {
+      req.app.get("io").emit("disbursement:deleted", { id: req.params.id });
+    }
+
+    res.json({ 
+      success: true, 
+      message: "Disbursement deleted successfully",
+      data: disbursement
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 export default router;

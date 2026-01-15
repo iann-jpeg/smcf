@@ -3647,6 +3647,49 @@ Thank you for your cooperation! 🙏`;
                           <Download className="w-4 h-4" />
                         </Button>
                       )}
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={async () => {
+                          if (!confirm(`Delete disbursement to ${disbursement.recipient_id?.name || "Unknown"}?`)) {
+                            return;
+                          }
+                          try {
+                            const response = await fetch(
+                              `${API_BASE}/api/disbursements/${disbursement._id}`,
+                              {
+                                method: "DELETE",
+                                headers: {
+                                  ...authService.getAuthHeaders(),
+                                },
+                              }
+                            );
+
+                            const data = await response.json();
+
+                            if (response.ok && data.success) {
+                              toast({
+                                title: "Disbursement Deleted",
+                                description: `Removed disbursement to ${disbursement.recipient_id?.name || "Unknown"}`,
+                              });
+                              fetchDisbursements();
+                            } else {
+                              throw new Error(
+                                data.error || "Failed to delete disbursement"
+                              );
+                            }
+                          } catch (error: any) {
+                            toast({
+                              title: "Error",
+                              description: error.message || "Failed to delete disbursement",
+                              variant: "destructive",
+                            });
+                          }
+                        }}
+                        disabled={isReadOnly}
+                        title={isReadOnly ? "Read-only access" : "Delete this disbursement"}>
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </div>
                   </div>
                 ))}
