@@ -68,17 +68,6 @@ router.post("/", protect, adminOnly, async (req, res) => {
       });
     }
 
-    // Check if all members have paid
-    const totalMembers = await Member.countDocuments();
-    if (cycle.paid_members_count < totalMembers) {
-      return res.status(400).json({
-        success: false,
-        error: "Cannot disburse - not all members have paid",
-        paid: cycle.paid_members_count,
-        total: totalMembers,
-      });
-    }
-
     // Create disbursement record
     const disbursement = await Disbursement.create({
       cycle_id: cycle._id,

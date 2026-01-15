@@ -1347,18 +1347,6 @@ Thank you for your cooperation! 🙏`;
       return;
     }
 
-    const totalMembers = safeMembers.length;
-    const paidCount = paidMembers.length;
-
-    if (paidCount < totalMembers) {
-      toast({
-        title: "Cannot Process Payout",
-        description: `Only ${paidCount}/${totalMembers} members have paid. All members must pay before disbursement.`,
-        variant: "destructive",
-      });
-      return;
-    }
-
     // Find next recipient (first pending member in order)
     const nextRecipient = orderedMembers.find(
       (m: any) =>
@@ -3468,9 +3456,7 @@ Thank you for your cooperation! 🙏`;
                         }}
                         className="w-full"
                         variant="default"
-                        disabled={
-                          isReadOnly || currentCycle.paid_members_count !== safeMembers.length
-                        }
+                        disabled={isReadOnly}
                         title={isReadOnly ? "Read-only access" : undefined}>
                         <CheckCircle className="w-4 h-4 mr-2" />
                         Mark as Disbursed
