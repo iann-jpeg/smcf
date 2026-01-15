@@ -2502,8 +2502,7 @@ Thank you for your cooperation! 🙏`;
                           recipient_id: recipientId,
                           phone: recipientPhone,
                           amount: disbursementAmount,
-                          method: "manual",
-                          status: "completed",
+                          notes: "Manual disbursement marked as completed",
                         }),
                       }
                     );
@@ -3409,6 +3408,18 @@ Thank you for your cooperation! 🙏`;
                       <Button
                         onClick={async () => {
                           try {
+                            const recipientId = currentCycle.recipient_id._id || currentCycle.recipient_id;
+                            const recipientPhone = currentCycle.recipient_id?.phone || currentCycle.next_recipient?.phone;
+                            
+                            if (!recipientPhone) {
+                              toast({
+                                title: "Error",
+                                description: "Recipient phone number not found",
+                                variant: "destructive",
+                              });
+                              return;
+                            }
+
                             const response = await fetch(
                               `${API_BASE}/api/disbursements`,
                               {
@@ -3419,12 +3430,10 @@ Thank you for your cooperation! 🙏`;
                                 },
                                 body: JSON.stringify({
                                   cycle_id: currentCycle._id,
-                                  recipient_id:
-                                    currentCycle.recipient_id._id ||
-                                    currentCycle.recipient_id,
+                                  recipient_id: recipientId,
                                   amount: safeMembers.length * contributionAmount,
-                                  method: "manual",
-                                  status: "completed",
+                                  phone: recipientPhone,
+                                  notes: "Manual disbursement marked as completed",
                                 }),
                               }
                             );
@@ -3435,12 +3444,15 @@ Thank you for your cooperation! 🙏`;
                               toast({
                                 title: "Disbursement Recorded",
                                 description: `KES ${(safeMembers.length * contributionAmount).toLocaleString()} marked as disbursed to ${
-                                  currentCycle.next_recipient?.name || "recipient"
+                                  currentCycle.recipient_id?.name || currentCycle.next_recipient?.name || "recipient"
                                 }`,
                               });
-                              fetchDisbursements();
-                              fetchCurrentCycle();
-                              fetchAllData();
+                              // Refresh all data to show new cycle
+                              setTimeout(() => {
+                                fetchDisbursements();
+                                fetchCurrentCycle();
+                                fetchAllData();
+                              }, 500);
                             } else {
                               throw new Error(
                                 data.error || "Failed to record disbursement"
@@ -3491,6 +3503,18 @@ Thank you for your cooperation! 🙏`;
                         size="sm"
                         onClick={async () => {
                           try {
+                            const recipientId = currentCycle.recipient_id._id || currentCycle.recipient_id;
+                            const recipientPhone = currentCycle.recipient_id?.phone || currentCycle.next_recipient?.phone;
+                            
+                            if (!recipientPhone) {
+                              toast({
+                                title: "Error",
+                                description: "Recipient phone number not found",
+                                variant: "destructive",
+                              });
+                              return;
+                            }
+
                             const response = await fetch(
                               `${API_BASE}/api/disbursements`,
                               {
@@ -3501,12 +3525,10 @@ Thank you for your cooperation! 🙏`;
                                 },
                                 body: JSON.stringify({
                                   cycle_id: currentCycle._id,
-                                  recipient_id:
-                                    currentCycle.recipient_id._id ||
-                                    currentCycle.recipient_id,
-                                  amount: safeMembers.length * 204,
-                                  method: "manual",
-                                  status: "completed",
+                                  recipient_id: recipientId,
+                                  phone: recipientPhone,
+                                  amount: safeMembers.length * contributionAmount,
+                                  notes: "Manual disbursement marked as completed",
                                 }),
                               }
                             );
@@ -3518,8 +3540,11 @@ Thank you for your cooperation! 🙏`;
                                 title: "Disbursement Recorded",
                                 description: `Successfully marked disbursement to ${currentCycle.recipient_id?.name} as completed`,
                               });
-                              fetchDisbursements();
-                              fetchCurrentCycle();
+                              setTimeout(() => {
+                                fetchDisbursements();
+                                fetchCurrentCycle();
+                                fetchAllData();
+                              }, 500);
                             } else {
                               throw new Error(
                                 data.error || "Failed to record disbursement"
