@@ -584,8 +584,11 @@ router.get("/admin/all", protect, adminOnly, async (req, res) => {
           status: "completed",
           maturity_status: "locked",
           unlock_date: { $gt: new Date() }
-        });
+        }).sort({ unlock_date: 1 }); // Sort by unlock date ascending
+        
         const totalLockedSavings = lockedDeposits.reduce((sum, deposit) => sum + deposit.amount, 0);
+        const lockedDepositsCount = lockedDeposits.length;
+        const earliestUnlockDate = lockedDeposits.length > 0 ? lockedDeposits[0].unlock_date : null;
 
         return {
           _id: member._id,
@@ -599,6 +602,8 @@ router.get("/admin/all", protect, adminOnly, async (req, res) => {
           totalInterestEarned,
           totalTransactionFees,
           totalLockedSavings,
+          lockedDepositsCount,
+          earliestUnlockDate,
           lastTransaction:
             transactions.length > 0 ? transactions[0].created_at : null,
         };

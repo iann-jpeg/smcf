@@ -622,9 +622,21 @@ const AdminSavingsTab = ({ isReadOnly = false }: AdminSavingsTabProps) => {
                           KES {(member.currentBalance || 0).toLocaleString()}
                         </TableCell>
                         <TableCell className="text-orange-600">
-                          <div className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            KES {(member.totalLockedSavings || 0).toLocaleString()}
+                          <div className="min-w-[120px]">
+                            <div className="flex items-center gap-1 font-semibold">
+                              <Clock className="w-3 h-3" />
+                              KES {(member.totalLockedSavings || 0).toLocaleString()}
+                            </div>
+                            {member.lockedDepositsCount > 0 && (
+                              <div className="text-xs text-muted-foreground mt-1">
+                                {member.lockedDepositsCount} deposit{member.lockedDepositsCount > 1 ? 's' : ''} locked
+                              </div>
+                            )}
+                            {member.earliestUnlockDate && (
+                              <div className="text-xs text-muted-foreground">
+                                Next unlock: {new Date(member.earliestUnlockDate).toLocaleDateString()}
+                              </div>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell className="font-medium text-green-600">
