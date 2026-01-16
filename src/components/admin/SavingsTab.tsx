@@ -583,6 +583,8 @@ const AdminSavingsTab = ({ isReadOnly = false }: AdminSavingsTabProps) => {
                       <TableHead>Member Details</TableHead>
                       <TableHead>Rank</TableHead>
                       <TableHead>Current Balance</TableHead>
+                      <TableHead>Locked Savings</TableHead>
+                      <TableHead>Available Balance</TableHead>
                       <TableHead>Total Deposits</TableHead>
                       <TableHead>Total Withdrawals</TableHead>
                       <TableHead>Interest Earned</TableHead>
@@ -618,6 +620,15 @@ const AdminSavingsTab = ({ isReadOnly = false }: AdminSavingsTabProps) => {
                         </TableCell>
                         <TableCell className="font-semibold text-blue-600">
                           KES {(member.currentBalance || 0).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-orange-600">
+                          <div className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            KES {(member.totalLockedSavings || 0).toLocaleString()}
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-medium text-green-600">
+                          KES {((member.currentBalance || 0) - (member.totalLockedSavings || 0)).toLocaleString()}
                         </TableCell>
                         <TableCell className="text-green-600">
                           <div className="flex items-center gap-1">
@@ -670,6 +681,12 @@ const AdminSavingsTab = ({ isReadOnly = false }: AdminSavingsTabProps) => {
                         <TableCell colSpan={2}>Grand Total</TableCell>
                         <TableCell className="text-blue-700">
                           KES {membersWithSavings.reduce((sum, m) => sum + (m.currentBalance || 0), 0).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-orange-700">
+                          KES {membersWithSavings.reduce((sum, m) => sum + (m.totalLockedSavings || 0), 0).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-green-700">
+                          KES {membersWithSavings.reduce((sum, m) => sum + ((m.currentBalance || 0) - (m.totalLockedSavings || 0)), 0).toLocaleString()}
                         </TableCell>
                         <TableCell className="text-green-700">
                           KES {membersWithSavings.reduce((sum, m) => sum + (m.totalDeposits || 0), 0).toLocaleString()}

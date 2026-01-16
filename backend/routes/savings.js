@@ -577,6 +577,16 @@ router.get("/admin/all", protect, adminOnly, async (req, res) => {
         // But to show accurate balance matching the actual wallet state, we need to account for them
         const currentBalance = totalDeposits + totalInterestEarned - totalWithdrawals - totalTransactionFees;
 
+        // Calculate locked savings (deposits that haven't matured yet)
+        const lockedDeposits = await Saving.find({
+          member_id: member._id,
+          transaction_type: "deposit",
+          status: "completed",
+          maturity_status: "locked",
+          unlock_date: { $gt: new Date() }
+        });
+        const totalLockedSavings = lockedDeposits.reduce((sum, deposit) => sum + deposit.amount, 0);
+
         return {
           _id: member._id,
           name: member.name,
@@ -588,6 +598,7 @@ router.get("/admin/all", protect, adminOnly, async (req, res) => {
           totalWithdrawals,
           totalInterestEarned,
           totalTransactionFees,
+          totalLockedSavings,
           lastTransaction:
             transactions.length > 0 ? transactions[0].created_at : null,
         };

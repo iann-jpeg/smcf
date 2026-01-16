@@ -75,7 +75,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [depositAmount, setDepositAmount] = useState("");
   const [depositPhone, setDepositPhone] = useState("");
-  const [lockPeriodMonths, setLockPeriodMonths] = useState(0); // Lock period for deposits
+  const [lockPeriodMonths, setLockPeriodMonths] = useState(3); // Lock period for deposits (required, default 3 months)
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [withdrawNotes, setWithdrawNotes] = useState("");
   const [withdrawAccountName, setWithdrawAccountName] = useState("");
@@ -358,7 +358,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
     setIsProcessing(false);
     setDepositAmount("");
     setDepositPhone("");
-    setLockPeriodMonths(0);
+    setLockPeriodMonths(3);
     setPollCount(0);
     if ((window as any).walletPollInterval) {
       clearInterval((window as any).walletPollInterval);
@@ -1331,25 +1331,25 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
               </div>
 
               <div>
-                <Label htmlFor="lockPeriod">Lock Period (Optional)</Label>
+                <Label htmlFor="lockPeriod" className="flex items-center gap-1">
+                  Lock Period <span className="text-red-500">*</span>
+                  <span className="text-xs text-muted-foreground font-normal">(Required)</span>
+                </Label>
                 <Select
                   value={lockPeriodMonths.toString()}
                   onValueChange={(value) => setLockPeriodMonths(parseInt(value))}>
                   <SelectTrigger id="lockPeriod">
-                    <SelectValue placeholder="No lock - withdraw anytime" />
+                    <SelectValue placeholder="Select lock period" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="0">No lock - withdraw anytime</SelectItem>
                     <SelectItem value="1">1 month</SelectItem>
-                    <SelectItem value="3">3 months</SelectItem>
+                    <SelectItem value="3">3 months (Recommended)</SelectItem>
                     <SelectItem value="6">6 months</SelectItem>
                     <SelectItem value="12">12 months</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {lockPeriodMonths > 0 
-                    ? `You won't be able to withdraw this deposit for ${lockPeriodMonths} month${lockPeriodMonths > 1 ? 's' : ''}`
-                    : 'Choose a lock period to commit to saving for a specific duration'}
+                  🔒 You won't be able to withdraw this deposit for {lockPeriodMonths} month{lockPeriodMonths > 1 ? 's' : ''}. Locked deposits build financial discipline and earn interest.
                 </p>
               </div>
 
