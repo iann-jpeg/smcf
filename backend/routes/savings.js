@@ -586,6 +586,21 @@ router.get("/admin/all", protect, adminOnly, async (req, res) => {
           unlock_date: { $gt: new Date() }
         }).sort({ unlock_date: 1 }); // Sort by unlock date ascending
         
+        // Debug logging
+        if (member.name === "Waswa") {
+          console.log(`[LOCKED SAVINGS DEBUG] Member: ${member.name}`);
+          console.log(`Total deposits found:`, await Saving.countDocuments({ member_id: member._id, transaction_type: "deposit" }));
+          console.log(`Locked deposits found:`, lockedDeposits.length);
+          if (lockedDeposits.length > 0) {
+            console.log(`First locked deposit:`, {
+              amount: lockedDeposits[0].amount,
+              lock_period_months: lockedDeposits[0].lock_period_months,
+              maturity_status: lockedDeposits[0].maturity_status,
+              unlock_date: lockedDeposits[0].unlock_date
+            });
+          }
+        }
+        
         const totalLockedSavings = lockedDeposits.reduce((sum, deposit) => sum + deposit.amount, 0);
         const lockedDepositsCount = lockedDeposits.length;
         const earliestUnlockDate = lockedDeposits.length > 0 ? lockedDeposits[0].unlock_date : null;
