@@ -428,7 +428,11 @@ export const updateReserveConfig = async (updates, adminId) => {
 
   await account.save();
 
-  // Log configuration change
+  // Log configuration change (convert arrays to strings for metadata)
+  const metadataEntries = Object.entries(updates).map(([key, value]) => {
+    return [key, Array.isArray(value) ? JSON.stringify(value) : String(value)];
+  });
+
   await ReserveTransaction.create({
     transaction_type: "credit",
     source_type: "other",
@@ -436,7 +440,7 @@ export const updateReserveConfig = async (updates, adminId) => {
     balance_after: account.current_balance,
     description: "Reserve configuration updated",
     created_by: adminId,
-    metadata: new Map(Object.entries(updates)),
+    metadata: new Map(metadataEntries),
     is_automated: false,
     approval_status: "completed",
   });
