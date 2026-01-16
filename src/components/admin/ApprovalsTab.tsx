@@ -67,9 +67,15 @@ interface PendingWithdrawal {
   preferred_account_name?: string;
   preferred_account_number?: string;
   preferred_bank?: string;
+  payment_method?: string;
+  transaction_ref?: string;
   lock_period_months?: number;
   unlock_date?: string;
   maturity_status?: string;
+  is_early_withdrawal?: boolean;
+  penalty_amount?: number;
+  penalty_percentage?: number;
+  penalty_reason?: string;
 }
 
 interface ApprovalsTabProps {
@@ -480,11 +486,13 @@ const ApprovalsTab = ({ isReadOnly = false }: ApprovalsTabProps) => {
                 ) : (                  <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">                  <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Member</TableHead>
+                        <TableHead>Member Details</TableHead>
                         <TableHead>Amount</TableHead>
-                        <TableHead>Balance Before</TableHead>
-                        <TableHead>Balance After</TableHead>
+                        <TableHead>Wallet Balance</TableHead>
                         <TableHead>Account Details</TableHead>
+                        <TableHead>Payment Method</TableHead>
+                        <TableHead>Lock Status</TableHead>
+                        <TableHead>Penalty Info</TableHead>
                         <TableHead>Requested On</TableHead>
                         <TableHead>Notes</TableHead>
                         <TableHead>Actions</TableHead>
@@ -494,33 +502,43 @@ const ApprovalsTab = ({ isReadOnly = false }: ApprovalsTabProps) => {
                       {pendingWithdrawals.map((withdrawal) => (
                         <TableRow key={withdrawal._id}>
                           <TableCell>
-                            <div>
+                            <div className="min-w-[150px]">
                               <div className="font-medium">
                                 {withdrawal.member_id?.name || 'Unknown'}
                               </div>
                               <div className="text-sm text-muted-foreground">
-                                {withdrawal.member_id?.member_id || 'N/A'}
+                                ID: {withdrawal.member_id?.member_id || 'N/A'}
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                Phone: {withdrawal.member_id?.phone || 'N/A'}
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell className="font-semibold text-amber-600">
-                            KES {withdrawal.amount.toLocaleString()}
+                          <TableCell>
+                            <div className="font-semibold text-amber-600">
+                              KES {withdrawal.amount.toLocaleString()}
+                            </div>
+                            {withdrawal.penalty_amount > 0 && (
+                              <div className="text-xs text-red-600">
+                                Penalty: KES {withdrawal.penalty_amount.toLocaleString()}
+                              </div>
+                            )}
                           </TableCell>
                           <TableCell>
-                            KES {withdrawal.balance_before?.toLocaleString() || 0}
-                          </TableCell>
-                          <TableCell>
-                            KES {withdrawal.balance_after?.toLocaleString() || 0}
+                            <div className="text-sm">
+                              <div>Before: KES {withdrawal.balance_before?.toLocaleString() || 0}</div>
+                              <div className="text-muted-foreground">After: KES {withdrawal.balance_after?.toLocaleString() || 0}</div>
+                            </div>
                           </TableCell>
                           <TableCell>
                             {withdrawal.preferred_account_name || withdrawal.preferred_account_number || withdrawal.preferred_bank ? (
-                              <div className="text-sm">
+                              <div className="text-sm min-w-[180px]">
                                 <div className="font-medium">{withdrawal.preferred_account_name || 'N/A'}</div>
                                 <div className="text-muted-foreground">
-                                  {withdrawal.preferred_account_number || 'N/A'}
+                                  Acc: {withdrawal.preferred_account_number || 'N/A'}
                                 </div>
                                 <div className="text-xs text-muted-foreground">
-                                  {withdrawal.preferred_bank || 'N/A'}
+                                  Bank: {withdrawal.preferred_bank || 'N/A'}
                                 </div>
                               </div>
                             ) : (
@@ -528,10 +546,79 @@ const ApprovalsTab = ({ isReadOnly = false }: ApprovalsTabProps) => {
                             )}
                           </TableCell>
                           <TableCell>
-                            {new Date(withdrawal.created_at).toLocaleDateString()}
+                            <div className="text-sm">
+                              <Badge variant="outline">
+                                {withdrawal.payment_method?.toUpperCase() || 'MPESA'}
+                              </Badge>
+                              {withdrawal.transaction_ref && (
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  Ref: {withdrawal.transaction_ref}
+                                </div>
+                              )}
+                            </div>
                           </TableCell>
-                          <TableCell className="max-w-xs truncate">
-                            {withdrawal.notes || '-'}
+                          <TableCell>
+                            <div className="text-sm min-w-[120px]">
+                              {withdrawal.lock_period_months > 0 ? (
+                                <>
+                                  <Badge variant={withdrawal.maturity_status === 'matured' ? 'default' : 'destructive'}>
+                                    {withdrawal.maturity_status === 'matured' ? 'Matured' : 'Locked'}
+                                  </Badge>
+                                  <div className="text-xs text-muted-foreground mt-1">
+                                    {withdrawal.lock_period_months} month{withdrawal.lock_period_months > 1 ? 's' : ''} lock
+                                  </div>
+                                  {withdrawal.unlock_date && (
+                                    <div className="text-xs text-muted-foreground">
+                                      Unlock: {new Date(withdrawal.unlock_date).toLocaleDateString()}
+                                    </div>
+                                  )}
+                                </>
+                              ) : (
+                                <Badge variant="outline">No Lock</Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {withdrawal.is_early_withdrawal ? (
+                              <div className="text-sm min-w-[140px]">
+                                <Badge variant="destructive" className="mb-1">Early Withdrawal</Badge>
+                                {withdrawal.penalty_percentage > 0 && (
+                                  <div className="text-xs text-red-600">
+                                    {withdrawal.penalty_percentage}% penalty
+                                  </div>
+                                )}
+                                {withdrawal.penalty_reason && (
+                                  <div className="text-xs text-muted-foreground">
+                                    {withdrawal.penalty_reason}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-sm">
+                              {new Date(withdrawal.created_at).toLocaleDateString()}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {new Date(withdrawal.created_at).toLocaleTimeString()}
+                            </div>
+                          </TableCell>
+                          <TableCell className="max-w-xs">
+                            {withdrawal.notes ? (
+                              <div className="text-sm">
+                                {withdrawal.notes.length > 50 ? (
+                                  <span title={withdrawal.notes}>
+                                    {withdrawal.notes.substring(0, 50)}...
+                                  </span>
+                                ) : (
+                                  withdrawal.notes
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">-</span>
+                            )}
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-2">
