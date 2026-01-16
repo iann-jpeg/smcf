@@ -38,6 +38,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import API_BASE from "@/lib/api";
 import { authService } from "@/lib/authService";
+import jsPDF from "jspdf";
 import {
   AlertCircle,
   ArrowDownCircle,
@@ -267,18 +268,128 @@ const ReserveAccountTab = () => {
       const data = await res.json();
 
       if (data.success) {
-        // Create downloadable JSON report
-        const reportStr = JSON.stringify(data.data, null, 2);
-        const blob = new Blob([reportStr], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `reserve-report-${new Date().toISOString().split("T")[0]}.json`;
-        a.click();
+        const report = data.data;
+        
+        // Create PDF
+        const pdf = new jsPDF();
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        let yPos = 20;
+
+        // Title
+        pdf.setFontSize(20);
+        pdf.setFont("helvetica", "bold");
+        pdf.text("Group Reserve Account - Monthly Report", pageWidth / 2, yPos, { align: "center" });
+        
+        yPos += 15;
+        pdf.setFontSize(12);
+        pdf.setFont("helvetica", "normal");
+        pdf.text(`Period: ${report.period?.month_name || "Current"} ${report.period?.year || new Date().getFullYear()}`, pageWidth / 2, yPos, { align: "center" });
+        
+        yPos += 15;
+        pdf.text(`Generated: ${new Date().toLocaleDateString("en-US", { dateStyle: "full" })}`, pageWidth / 2, yPos, { align: "center" });
+
+        // Summary Section
+        yPos += 20;
+        pdf.setFontSize(14);
+        pdf.setFont("helvetica", "bold");
+        pdf.text("Financial Summary", 20, yPos);
+        
+        yPos += 10;
+        pdf.setFontSize(11);
+        pdf.setFont("helvetica", "normal");
+        pdf.text(`Opening Balance: KES ${(report.opening_balance || 0).toLocaleString()}`, 20, yPos);
+        
+        yPos += 7;
+        pdf.text(`Closing Balance: KES ${(report.closing_balance || 0).toLocaleString()}`, 20, yPos);
+        
+        yPos += 7;
+        pdf.setTextColor(0, 128, 0);
+        pdf.text(`Total Credits: KES ${(report.total_credits || 0).toLocaleString()}`, 20, yPos);
+        
+        yPos += 7;
+        pdf.setTextColor(255, 0, 0);
+        pdf.text(`Total Debits: KES ${(report.total_debits || 0).toLocaleString()}`, 20, yPos);
+        
+        yPos += 7;
+        pdf.setTextColor(0, 0, 0);
+        const netChange = (report.closing_balance || 0) - (report.opening_balance || 0);
+        pdf.text(`Net Change: KES ${netChange.toLocaleString()}`, 20, yPos);
+
+        // Credits Breakdown
+        if (report.credits_by_source && Object.keys(report.credits_by_source).length > 0) {
+          yPos += 15;
+          pdf.setFontSize(14);
+          pdf.setFont("helvetica", "bold");
+          pdf.text("Credits by Source", 20, yPos);
+          
+          yPos += 10;
+          pdf.setFontSize(10);
+          pdf.setFont("helvetica", "normal");
+          
+          Object.entries(report.credits_by_source).forEach(([source, amount]: [string, any]) => {
+            const formattedSource = source.split("_").map(word => 
+              word.charAt(0).toUpperCase() + word.slice(1)
+            ).join(" ");
+            
+            pdf.text(`• ${formattedSource}: KES ${Number(amount).toLocaleString()}`, 25, yPos);
+            yPos += 6;
+            
+            // Add new page if needed
+            if (yPos > 270) {
+              pdf.addPage();
+              yPos = 20;
+            }
+          });
+        }
+
+        // Transaction Statistics
+        yPos += 10;
+        pdf.setFontSize(14);
+        pdf.setFont("helvetica", "bold");
+        pdf.text("Transaction Statistics", 20, yPos);
+        
+        yPos += 10;
+        pdf.setFontSize(11);
+        pdf.setFont("helvetica", "normal");
+        pdf.text(`Total Transactions: ${report.transaction_count || 0}`, 20, yPos);
+        
+        yPos += 7;
+        pdf.text(`Credit Transactions: ${report.credit_count || 0}`, 20, yPos);
+        
+        yPos += 7;
+        pdf.text(`Debit Transactions: ${report.debit_count || 0}`, 20, yPos);
+
+        // Health Metrics
+        if (report.health_score_start !== undefined || report.health_score_end !== undefined) {
+          yPos += 15;
+          pdf.setFontSize(14);
+          pdf.setFont("helvetica", "bold");
+          pdf.text("Health Metrics", 20, yPos);
+          
+          yPos += 10;
+          pdf.setFontSize(11);
+          pdf.setFont("helvetica", "normal");
+          pdf.text(`Health Score (Start): ${(report.health_score_start || 0).toFixed(1)}/100`, 20, yPos);
+          
+          yPos += 7;
+          pdf.text(`Health Score (End): ${(report.health_score_end || 0).toFixed(1)}/100`, 20, yPos);
+          
+          const healthChange = (report.health_score_end || 0) - (report.health_score_start || 0);
+          yPos += 7;
+          pdf.text(`Health Change: ${healthChange >= 0 ? '+' : ''}${healthChange.toFixed(1)} points`, 20, yPos);
+        }
+
+        // Footer
+        pdf.setFontSize(8);
+        pdf.setTextColor(128, 128, 128);
+        pdf.text("SMART MONEY CASH FLOW - Reserve Account Management System", pageWidth / 2, 285, { align: "center" });
+
+        // Download PDF
+        pdf.save(`reserve-report-${new Date().toISOString().split("T")[0]}.pdf`);
 
         toast({
           title: "Report Downloaded",
-          description: "Monthly reserve report downloaded successfully",
+          description: "Monthly reserve report downloaded as PDF",
         });
       } else {
         throw new Error(data.error || "Report generation failed");
