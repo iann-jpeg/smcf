@@ -580,12 +580,14 @@ const AdminSavingsTab = ({ isReadOnly = false }: AdminSavingsTabProps) => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Member</TableHead>
-                      <TableHead>Position</TableHead>
+                      <TableHead>Member Details</TableHead>
+                      <TableHead>Rank</TableHead>
                       <TableHead>Current Balance</TableHead>
                       <TableHead>Total Deposits</TableHead>
+                      <TableHead>Total Withdrawals</TableHead>
                       <TableHead>Interest Earned</TableHead>
                       <TableHead>Transaction Fees</TableHead>
+                      <TableHead>Net Savings</TableHead>
                       <TableHead>Last Transaction</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -593,7 +595,7 @@ const AdminSavingsTab = ({ isReadOnly = false }: AdminSavingsTabProps) => {
                     {membersWithSavings.map((member) => (
                       <TableRow key={member._id}>
                         <TableCell>
-                          <div>
+                          <div className="min-w-[150px]">
                             <div className="flex items-center gap-2">
                               <span className="font-medium">{member.name}</span>
                               {topSaver && member._id === topSaver._id && (
@@ -604,7 +606,10 @@ const AdminSavingsTab = ({ isReadOnly = false }: AdminSavingsTabProps) => {
                               )}
                             </div>
                             <div className="text-sm text-muted-foreground">
-                              {member.member_id} • {member.phone}
+                              ID: {member.member_id}
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              Phone: {member.phone}
                             </div>
                           </div>
                         </TableCell>
@@ -615,20 +620,47 @@ const AdminSavingsTab = ({ isReadOnly = false }: AdminSavingsTabProps) => {
                           KES {(member.currentBalance || 0).toLocaleString()}
                         </TableCell>
                         <TableCell className="text-green-600">
-                          KES {(member.totalDeposits || 0).toLocaleString()}
+                          <div className="flex items-center gap-1">
+                            <ArrowUpRight className="w-3 h-3" />
+                            KES {(member.totalDeposits || 0).toLocaleString()}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-red-600">
+                          <div className="flex items-center gap-1">
+                            <ArrowDownLeft className="w-3 h-3" />
+                            KES {(member.totalWithdrawals || 0).toLocaleString()}
+                          </div>
                         </TableCell>
                         <TableCell className="text-blue-600">
-                          KES {(member.totalInterestEarned || 0).toLocaleString()}
+                          <div className="flex items-center gap-1">
+                            <TrendingUp className="w-3 h-3" />
+                            KES {(member.totalInterestEarned || 0).toLocaleString()}
+                          </div>
                         </TableCell>
                         <TableCell className="text-amber-600">
                           KES {(member.totalTransactionFees || 0).toLocaleString()}
                         </TableCell>
+                        <TableCell className="font-medium">
+                          <div className="text-sm">
+                            <div>
+                              KES {((member.totalDeposits || 0) - (member.totalWithdrawals || 0)).toLocaleString()}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              (Deposits - Withdrawals)
+                            </div>
+                          </div>
+                        </TableCell>
                         <TableCell>
-                          {member.lastTransaction
-                            ? new Date(
-                                member.lastTransaction
-                              ).toLocaleDateString()
-                            : "N/A"}
+                          <div className="text-sm">
+                            {member.lastTransaction
+                              ? new Date(member.lastTransaction).toLocaleDateString()
+                              : "N/A"}
+                          </div>
+                          {member.lastTransaction && (
+                            <div className="text-xs text-muted-foreground">
+                              {new Date(member.lastTransaction).toLocaleTimeString()}
+                            </div>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -642,11 +674,17 @@ const AdminSavingsTab = ({ isReadOnly = false }: AdminSavingsTabProps) => {
                         <TableCell className="text-green-700">
                           KES {membersWithSavings.reduce((sum, m) => sum + (m.totalDeposits || 0), 0).toLocaleString()}
                         </TableCell>
+                        <TableCell className="text-red-700">
+                          KES {membersWithSavings.reduce((sum, m) => sum + (m.totalWithdrawals || 0), 0).toLocaleString()}
+                        </TableCell>
                         <TableCell className="text-blue-700">
                           KES {membersWithSavings.reduce((sum, m) => sum + (m.totalInterestEarned || 0), 0).toLocaleString()}
                         </TableCell>
                         <TableCell className="text-amber-700">
                           KES {membersWithSavings.reduce((sum, m) => sum + (m.totalTransactionFees || 0), 0).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="font-bold">
+                          KES {membersWithSavings.reduce((sum, m) => sum + ((m.totalDeposits || 0) - (m.totalWithdrawals || 0)), 0).toLocaleString()}
                         </TableCell>
                         <TableCell />
                       </TableRow>
