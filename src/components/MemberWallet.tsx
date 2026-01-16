@@ -1352,8 +1352,6 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
                     : 'Choose a lock period to commit to saving for a specific duration'}
                 </p>
               </div>
-                </p>
-              </div>
 
               <Card>
                 <CardContent className="pt-4 space-y-2">
