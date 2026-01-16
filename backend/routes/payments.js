@@ -98,7 +98,7 @@ router.post("/", protect, async (req, res) => {
 // Initiate STK Push for wallet deposit
 router.post("/stk-push", protect, async (req, res) => {
   try {
-    const { amount, phone, type, notes, loan_id } = req.body;
+    const { amount, phone, type, notes, loan_id, lock_period_months } = req.body;
     const memberId = req.user._id;
 
     if (!phone) {
@@ -138,6 +138,7 @@ router.post("/stk-push", protect, async (req, res) => {
       type: type || "wallet_deposit",
       notes: notes || (type === 'loan_repayment' ? `Loan repayment by ${member.name}` : `Wallet deposit by ${member.name}`),
       transaction_reference: reference,
+      lock_period_months: lock_period_months || 0, // Store lock period for wallet deposits
     };
 
     // Add loan_id if this is a loan repayment
@@ -375,6 +376,14 @@ async function pollLipiaPaymentStatus(
           after: balanceAfter,
         });
 
+        // Calculate unlock date if lock period is specified
+        let unlockDate = null;
+        const lockPeriod = payment.lock_period_months || 0;
+        if (lockPeriod > 0) {
+          unlockDate = new Date();
+          unlockDate.setMonth(unlockDate.getMonth() + lockPeriod);
+        }
+
         // Create saving record - FULL AMOUNT, NO FEES!
         const savingRecord = await Saving.create({
           member_id: memberId,
@@ -385,7 +394,10 @@ async function pollLipiaPaymentStatus(
           status: "completed",
           payment_method: "mpesa",
           transaction_ref: status.transactionId || reference,
-          notes: `Wallet deposit via M-Pesa - ${reference}`,
+          notes: `Wallet deposit via M-Pesa - ${reference}${lockPeriod > 0 ? ` | Locked for ${lockPeriod} months` : ''}`,
+          lock_period_months: lockPeriod,
+          unlock_date: unlockDate,
+          maturity_status: lockPeriod > 0 ? "locked" : "none",
         });
 
         // Update member's total_savings AND wallet_balance with FULL amount
@@ -808,6 +820,14 @@ router.post("/lipia-callback", async (req, res) => {
         const balanceBefore = lastSaving ? lastSaving.balance_after : 0;
         const balanceAfter = balanceBefore + payment.amount;
 
+        // Calculate unlock date if lock period is specified
+        let unlockDate = null;
+        const lockPeriod = payment.lock_period_months || 0;
+        if (lockPeriod > 0) {
+          unlockDate = new Date();
+          unlockDate.setMonth(unlockDate.getMonth() + lockPeriod);
+        }
+
         const savingRecord = await Saving.create({
           member_id: payment.member_id,
           amount: payment.amount,
@@ -817,7 +837,10 @@ router.post("/lipia-callback", async (req, res) => {
           status: "completed",
           payment_method: "mpesa",
           transaction_ref: mpesa_ref || reference,
-          notes: `Wallet deposit via M-Pesa - ${reference}`,
+          notes: `Wallet deposit via M-Pesa - ${reference}${lockPeriod > 0 ? ` | Locked for ${lockPeriod} months` : ''}`,
+          lock_period_months: lockPeriod,
+          unlock_date: unlockDate,
+          maturity_status: lockPeriod > 0 ? "locked" : "none",
         });
 
         // Update member's total_savings AND wallet_balance
@@ -988,6 +1011,14 @@ router.post("/manual-complete/:paymentId", protect, async (req, res) => {
       const balanceBefore = lastSaving ? lastSaving.balance_after : 0;
       const balanceAfter = balanceBefore + payment.amount;
 
+      // Calculate unlock date if lock period is specified
+      let unlockDate = null;
+      const lockPeriod = payment.lock_period_months || 0;
+      if (lockPeriod > 0) {
+        unlockDate = new Date();
+        unlockDate.setMonth(unlockDate.getMonth() + lockPeriod);
+      }
+
       const savingRecord = await Saving.create({
         member_id: payment.member_id,
         amount: payment.amount,
@@ -997,6 +1028,10 @@ router.post("/manual-complete/:paymentId", protect, async (req, res) => {
         status: "completed",
         payment_method: "mpesa",
         transaction_ref: payment.mpesa_transaction_id,
+        notes: `Manual wallet deposit${lockPeriod > 0 ? ` | Locked for ${lockPeriod} months` : ''}`,
+        lock_period_months: lockPeriod,
+        unlock_date: unlockDate,
+        maturity_status: lockPeriod > 0 ? "locked" : "none",
         notes: `Manual wallet deposit completion - ${payment.transaction_reference}`,
       });
 

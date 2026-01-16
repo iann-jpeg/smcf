@@ -64,6 +64,12 @@ interface PendingWithdrawal {
   balance_after: number;
   created_at: string;
   notes?: string;
+  preferred_account_name?: string;
+  preferred_account_number?: string;
+  preferred_bank?: string;
+  lock_period_months?: number;
+  unlock_date?: string;
+  maturity_status?: string;
 }
 
 interface ApprovalsTabProps {
@@ -478,6 +484,7 @@ const ApprovalsTab = ({ isReadOnly = false }: ApprovalsTabProps) => {
                         <TableHead>Amount</TableHead>
                         <TableHead>Balance Before</TableHead>
                         <TableHead>Balance After</TableHead>
+                        <TableHead>Account Details</TableHead>
                         <TableHead>Requested On</TableHead>
                         <TableHead>Notes</TableHead>
                         <TableHead>Actions</TableHead>
@@ -504,6 +511,21 @@ const ApprovalsTab = ({ isReadOnly = false }: ApprovalsTabProps) => {
                           </TableCell>
                           <TableCell>
                             KES {withdrawal.balance_after?.toLocaleString() || 0}
+                          </TableCell>
+                          <TableCell>
+                            {withdrawal.preferred_account_name || withdrawal.preferred_account_number || withdrawal.preferred_bank ? (
+                              <div className="text-sm">
+                                <div className="font-medium">{withdrawal.preferred_account_name || 'N/A'}</div>
+                                <div className="text-muted-foreground">
+                                  {withdrawal.preferred_account_number || 'N/A'}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {withdrawal.preferred_bank || 'N/A'}
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">No account provided</span>
+                            )}
                           </TableCell>
                           <TableCell>
                             {new Date(withdrawal.created_at).toLocaleDateString()}

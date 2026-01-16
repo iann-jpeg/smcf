@@ -6,6 +6,8 @@ import { StyledSMCF } from "@/components/StyledSMCF";
 import MpesaDisbursementDialog from "@/components/MpesaDisbursementDialog";
 import TransactionFeesReport from "@/components/TransactionFeesReport";
 import SavingsTab from "@/components/admin/SavingsTab";
+import EarlyWithdrawalSettings from "@/components/admin/EarlyWithdrawalSettings";
+import ReserveAccountTab from "@/components/admin/ReserveAccountTab";
 import ContributionCycleChart from "@/components/analytics/ContributionCycleChart";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
@@ -2601,7 +2603,7 @@ Thank you for your cooperation! 🙏`;
   return (
     <Tabs defaultValue="members" className="w-full">
         <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0 scrollbar-thin scrollbar-thumb-primary/30 scrollbar-track-transparent">
-          <TabsList className="flex w-max min-w-full space-x-2 md:grid md:w-full md:grid-cols-10 min-w-max bg-white/80 dark:bg-background/80 sticky top-0 z-10">
+          <TabsList className="flex w-max min-w-full space-x-2 md:grid md:w-full md:grid-cols-12 min-w-max bg-white/80 dark:bg-background/80 sticky top-0 z-10">
             <TabsTrigger
               value="members"
               className="text-xs sm:text-sm whitespace-nowrap">
@@ -2632,6 +2634,11 @@ Thank you for your cooperation! 🙏`;
                   {pendingWithdrawals.length}
                 </Badge>
               )}
+            </TabsTrigger>
+            <TabsTrigger
+              value="reserve"
+              className="text-xs sm:text-sm whitespace-nowrap">
+              Reserve
             </TabsTrigger>
             <TabsTrigger
               value="disbursements"
@@ -2674,6 +2681,11 @@ Thank you for your cooperation! 🙏`;
               value="reports"
               className="text-xs sm:text-sm whitespace-nowrap">
               Reports
+            </TabsTrigger>
+            <TabsTrigger
+              value="settings"
+              className="text-xs sm:text-sm whitespace-nowrap">
+              Settings
             </TabsTrigger>
           </TabsList>
         </div>
@@ -3708,9 +3720,17 @@ Thank you for your cooperation! 🙏`;
         <TabsContent value="fees" className="space-y-6">
           <TransactionFeesReport />
         </TabsContent>
+reserve" className="space-y-6">
+          <ReserveAccountTab />
+        </TabsContent>
 
+        <TabsContent value="
         <TabsContent value="reports" className="space-y-6">
           <ReportsTab />
+        </TabsContent>
+
+        <TabsContent value="settings" className="space-y-6">
+          <EarlyWithdrawalSettings />
         </TabsContent>
       </Tabs>
 

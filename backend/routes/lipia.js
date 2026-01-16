@@ -316,6 +316,14 @@ router.post("/query-status", protect, async (req, res) => {
           console.log("   Deposit amount (parsed):", depositAmount);
           console.log("   Balance after:", balanceAfter);
 
+          // Calculate unlock date if lock period is specified
+          let unlockDate = null;
+          const lockPeriod = payment.lock_period_months || 0;
+          if (lockPeriod > 0) {
+            unlockDate = new Date();
+            unlockDate.setMonth(unlockDate.getMonth() + lockPeriod);
+          }
+
           // Use try-catch to handle unique index constraint violation (race condition fallback)
           let savingRecord;
           try {
@@ -328,7 +336,10 @@ router.post("/query-status", protect, async (req, res) => {
               status: "completed",
               payment_method: "mpesa",
               transaction_ref: result.mpesaReceiptNumber,
-              notes: `Wallet deposit via M-Pesa - ${result.mpesaReceiptNumber}`,
+              notes: `Wallet deposit via M-Pesa - ${result.mpesaReceiptNumber}${lockPeriod > 0 ? ` | Locked for ${lockPeriod} months` : ''}`,
+              lock_period_months: lockPeriod,
+              unlock_date: unlockDate,
+              maturity_status: lockPeriod > 0 ? "locked" : "none",
               created_at: new Date(),
             });
           } catch (createError) {
@@ -410,6 +421,29 @@ router.post("/query-status", protect, async (req, res) => {
               total_transaction_fees: feeAmount,
             },
           });
+
+          // Add member credit portion to reserve account (if enabled)
+          try {
+            const { addToReserve } = await import("../services/reserveAccountService.js");
+            
+            await addToReserve({
+              amount: creditAmount,
+              source_type: "cycle_contribution",
+              description: `Member credit contribution from ${member?.name}: KES ${creditAmount}`,
+              reference_type: "Payment",
+              reference_id: payment._id.toString(),
+              metadata: { 
+                member_id: payment.member_id.toString(), 
+                cycle_number: payment.cycle_number,
+                total_payment: payment.amount,
+              },
+              is_automated: true,
+            });
+
+            console.log(`💰 Added KES ${creditAmount} to reserve from cycle member credit`);
+          } catch (error) {
+            console.error("Error adding cycle contribution to reserve:", error);
+          }
 
           // Recalculate cycle stats from all completed payments
           const cycle = await Cycle.findOne({
@@ -497,6 +531,49 @@ router.post("/query-status", protect, async (req, res) => {
 
               // Update paid amount
               loan.amount_paid = (loan.amount_paid || 0) + payment.amount;
+
+              // Add interest portion to reserve account (97% of interest, excluding 3%)
+              if (loan.interest_rate > 0) {
+                const totalInterest = (loan.amount * loan.interest_rate) / 100;
+                const totalRepayable = loan.amount + totalInterest;
+                const previouslyPaid = loan.amount_paid - payment.amount;
+                
+                // Calculate interest portion of this payment
+                let interestInThisPayment = 0;
+                if (previouslyPaid < loan.amount) {
+                  // Still paying principal, no interest yet
+                  interestInThisPayment = Math.max(0, (previouslyPaid + payment.amount) - loan.amount);
+                } else {
+                  // All interest
+                  interestInThisPayment = payment.amount;
+                }
+                
+                if (interestInThisPayment > 0) {
+                  try {
+                    const { addToReserve } = await import("../services/reserveAccountService.js");
+                    const { getReserveAccount } = await import("../services/reserveAccountService.js");
+                    
+                    // Get reserve config for interest percentage
+                    const reserveAccount = await getReserveAccount();
+                    const reservePercentage = reserveAccount.config.loan_interest_percentage || 97;
+                    const reserveAmount = (interestInThisPayment * reservePercentage) / 100;
+                    
+                    await addToReserve({
+                      amount: reserveAmount,
+                      source_type: "loan_interest",
+                      description: `Loan interest contribution (${reservePercentage}% of KES ${interestInThisPayment.toFixed(2)}) from ${loan.member_id.name}`,
+                      reference_type: "Loan",
+                      reference_id: loan._id.toString(),
+                      metadata: { member_id: loan.member_id._id.toString(), interest_paid: interestInThisPayment },
+                      is_automated: true,
+                    });
+
+                    console.log(`💰 Added KES ${reserveAmount.toFixed(2)} to reserve from loan interest`);
+                  } catch (error) {
+                    console.error("Error adding interest to reserve:", error);
+                  }
+                }
+              }
 
               // Save will trigger pre-save hook to calculate remaining and update status
               await loan.save();
@@ -1041,6 +1118,14 @@ router.post("/callback", async (req, res) => {
         console.log("   Deposit amount (parsed):", depositAmount);
         console.log("   Balance after:", balanceAfter);
 
+        // Calculate unlock date if lock period is specified
+        let unlockDate = null;
+        const lockPeriod = payment.lock_period_months || 0;
+        if (lockPeriod > 0) {
+          unlockDate = new Date();
+          unlockDate.setMonth(unlockDate.getMonth() + lockPeriod);
+        }
+
         // Use try-catch to handle unique index constraint violation (race condition fallback)
         let savingRecord;
         try {
@@ -1053,7 +1138,10 @@ router.post("/callback", async (req, res) => {
             status: "completed",
             payment_method: "mpesa",
             transaction_ref: callbackData.mpesaReceiptNumber,
-            notes: `Wallet deposit via M-Pesa - ${callbackData.mpesaReceiptNumber}`,
+            notes: `Wallet deposit via M-Pesa - ${callbackData.mpesaReceiptNumber}${lockPeriod > 0 ? ` | Locked for ${lockPeriod} months` : ''}`,
+            lock_period_months: lockPeriod,
+            unlock_date: unlockDate,
+            maturity_status: lockPeriod > 0 ? "locked" : "none",
             created_at: new Date(),
           });
         } catch (createError) {

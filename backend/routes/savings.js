@@ -9,6 +9,15 @@ import {
   calculateWithdrawalFee,
   getFeeBreakdown 
 } from "../services/feeService.js";
+import { 
+  checkMaturedDeposits, 
+  getMaturityStats 
+} from "../services/maturityCheckService.js";
+import {
+  calculateEarlyWithdrawalPenalty,
+  getEarlyWithdrawalSettings,
+  updateEarlyWithdrawalSettings,
+} from "../services/earlyWithdrawalService.js";
 
 const router = express.Router();
 
@@ -142,7 +151,7 @@ router.get("/fees", protect, async (req, res) => {
 // Make a deposit (member)
 router.post("/deposit", protect, async (req, res) => {
   try {
-    const { amount, payment_method, transaction_ref, notes } = req.body;
+    const { amount, payment_method, transaction_ref, notes, lock_period_months } = req.body;
     const memberId = req.member ? req.member._id : req.body.member_id;
 
     if (!amount || amount <= 0) {
@@ -169,6 +178,14 @@ router.post("/deposit", protect, async (req, res) => {
     });
     const currentBalance = lastTransaction ? lastTransaction.balance_after : 0;
 
+    // Calculate unlock date if lock period is specified
+    let unlockDate = null;
+    const lockPeriod = lock_period_months || 0;
+    if (lockPeriod > 0) {
+      unlockDate = new Date();
+      unlockDate.setMonth(unlockDate.getMonth() + lockPeriod);
+    }
+
     // Create deposit transaction (only net amount after fee)
     const saving = await Saving.create({
       member_id: memberId,
@@ -180,6 +197,9 @@ router.post("/deposit", protect, async (req, res) => {
       transaction_ref: transaction_ref || "",
       notes: notes ? `${notes}${topUpFee > 0 ? ` | Fee: KES ${topUpFee}` : ''}` : (topUpFee > 0 ? `Top-up fee: KES ${topUpFee}` : ''),
       status: "completed",
+      lock_period_months: lockPeriod,
+      unlock_date: unlockDate,
+      maturity_status: lockPeriod > 0 ? "locked" : "none",
     });
 
     // Update member's total savings AND wallet_balance (net amount only)
@@ -235,7 +255,7 @@ router.post("/deposit", protect, async (req, res) => {
 // Request withdrawal (member)
 router.post("/withdraw", protect, async (req, res) => {
   try {
-    const { amount, notes } = req.body;
+    const { amount, notes, account_name, account_number, bank_name } = req.body;
     const memberId = req.member ? req.member._id : req.body.member_id;
 
     if (!amount || amount <= 0) {
@@ -243,6 +263,26 @@ router.post("/withdraw", protect, async (req, res) => {
         success: false,
         error: "Invalid amount",
       });
+    }
+
+    // Check for locked deposits that would prevent withdrawal
+    const lockedDeposits = await Saving.find({
+      member_id: memberId,
+      transaction_type: "deposit",
+      status: "completed",
+      unlock_date: { $gt: new Date() }, // Still locked
+    }).sort({ unlock_date: 1 });
+
+    // Calculate total locked amount
+    let totalLockedAmount = 0;
+    let earliestUnlockDate = null;
+    
+    if (lockedDeposits.length > 0) {
+      // Calculate locked amount by finding balance at each locked deposit
+      for (const deposit of lockedDeposits) {
+        totalLockedAmount += deposit.amount;
+      }
+      earliestUnlockDate = lockedDeposits[0].unlock_date;
     }
 
     // Calculate withdrawal fee to check if member can afford it
@@ -256,7 +296,27 @@ router.post("/withdraw", protect, async (req, res) => {
     }).sort({ created_at: -1 });
     const currentBalance = lastTransaction ? lastTransaction.balance_after : 0;
 
-    // Check if member has enough balance for withdrawal amount + fee
+    // Calculate available (unlocked) balance
+    const availableBalance = currentBalance - totalLockedAmount;
+
+    // Check if member has enough unlocked balance for withdrawal amount + fee
+    if (availableBalance < totalDeduction) {
+      let errorMessage = `Insufficient unlocked balance. Withdrawal: KES ${amount}, Fee: KES ${withdrawalFee}, Total needed: KES ${totalDeduction}, Available balance: KES ${availableBalance}`;
+      
+      if (totalLockedAmount > 0 && earliestUnlockDate) {
+        errorMessage += ` | Locked funds: KES ${totalLockedAmount} (earliest unlock: ${earliestUnlockDate.toLocaleDateString()})`;
+      }
+      
+      return res.status(400).json({
+        success: false,
+        error: errorMessage,
+        lockedAmount: totalLockedAmount,
+        availableBalance: availableBalance,
+        earliestUnlockDate: earliestUnlockDate,
+      });
+    }
+
+    // Check if member has enough total balance for withdrawal amount + fee
     if (currentBalance < totalDeduction) {
       return res.status(400).json({
         success: false,
@@ -273,6 +333,9 @@ router.post("/withdraw", protect, async (req, res) => {
       balance_after: currentBalance, // Will be updated on approval to reflect actual deduction
       status: "pending", // Requires admin approval
       notes: notes ? `${notes} | Est. fee: KES ${withdrawalFee}` : `Estimated withdrawal fee: KES ${withdrawalFee}`,
+      preferred_account_name: account_name || "",
+      preferred_account_number: account_number || "",
+      preferred_bank: bank_name || "",
     });
 
     // Emit Socket.IO event
@@ -591,10 +654,6 @@ router.post("/admin/approve-withdrawal/:id", protect, adminOnly, async (req, res
       });
     }
 
-    // Calculate withdrawal fee
-    const withdrawalFee = calculateWithdrawalFee(saving.amount);
-    const totalDeduction = saving.amount + withdrawalFee;
-
     // Get member to check balance
     const member = await Member.findById(saving.member_id._id);
     if (!member) {
@@ -610,6 +669,65 @@ router.post("/admin/approve-withdrawal/:id", protect, adminOnly, async (req, res
       status: "completed"
     }).sort({ created_at: -1 });
     const actualCurrentBalance = latestTransaction ? latestTransaction.balance_after : 0;
+
+    // Check if this is an early withdrawal from locked deposits
+    const lockedDeposits = await Saving.find({
+      member_id: saving.member_id._id,
+      transaction_type: "deposit",
+      status: "completed",
+      maturity_status: "locked",
+      unlock_date: { $gt: new Date() },
+    }).sort({ created_at: 1 }); // FIFO
+
+    let earlyWithdrawalPenalty = 0;
+    let penaltyPercentage = 0;
+    let penaltyReason = "";
+    let isEarlyWithdrawal = false;
+    const affectedDeposits = [];
+
+    // Calculate early withdrawal penalty if applicable
+    if (lockedDeposits.length > 0) {
+      const { calculateEarlyWithdrawalPenalty, addToReserveAccount } = await import("../services/earlyWithdrawalService.js");
+      
+      let remainingAmount = saving.amount;
+
+      for (const deposit of lockedDeposits) {
+        if (remainingAmount <= 0) break;
+
+        const amountFromThisDeposit = Math.min(remainingAmount, deposit.amount);
+        const penaltyCalc = await calculateEarlyWithdrawalPenalty(deposit, amountFromThisDeposit);
+
+        if (penaltyCalc.allowed && penaltyCalc.penalty_amount > 0) {
+          isEarlyWithdrawal = true;
+          earlyWithdrawalPenalty += penaltyCalc.penalty_amount;
+          penaltyPercentage = Math.max(penaltyPercentage, penaltyCalc.penalty_percentage); // Use highest penalty rate
+          penaltyReason = penaltyCalc.reason;
+
+          // Track affected deposits
+          affectedDeposits.push({
+            deposit_id: deposit._id,
+            amount: amountFromThisDeposit,
+            penalty: penaltyCalc.penalty_amount,
+          });
+
+          remainingAmount -= amountFromThisDeposit;
+        }
+      }
+
+      // Add penalty to group reserve if there was a penalty
+      if (earlyWithdrawalPenalty > 0) {
+        await addToReserveAccount(earlyWithdrawalPenalty, req.admin._id);
+      }
+    }
+
+    // Calculate net amount after early withdrawal penalty
+    const netAmountAfterPenalty = saving.amount - earlyWithdrawalPenalty;
+
+    // Calculate withdrawal fee on net amount (after penalty)
+    const withdrawalFee = calculateWithdrawalFee(netAmountAfterPenalty);
+    
+    // Total deduction from balance = requested amount + withdrawal fee
+    const totalDeduction = saving.amount + withdrawalFee;
 
     // Check if member has enough balance for amount + fee using ACTUAL balance
     if (actualCurrentBalance < totalDeduction) {
@@ -628,12 +746,24 @@ router.post("/admin/approve-withdrawal/:id", protect, adminOnly, async (req, res
       },
     });
 
-    // Update saving record with proper balance tracking
+    // Update saving record with proper balance tracking and penalty info
     saving.balance_before = actualCurrentBalance;
     saving.balance_after = actualCurrentBalance - totalDeduction;
-    saving.notes = saving.notes 
-      ? `${saving.notes}${withdrawalFee > 0 ? ` | Fee: KES ${withdrawalFee}` : ''}`
-      : (withdrawalFee > 0 ? `Withdrawal fee: KES ${withdrawalFee}` : '');
+    saving.is_early_withdrawal = isEarlyWithdrawal;
+    saving.penalty_amount = earlyWithdrawalPenalty;
+    saving.penalty_percentage = penaltyPercentage;
+    saving.penalty_reason = penaltyReason;
+    
+    // Build comprehensive notes
+    let notes = saving.notes || "";
+    if (withdrawalFee > 0) {
+      notes += ` | Withdrawal fee: KES ${withdrawalFee}`;
+    }
+    if (earlyWithdrawalPenalty > 0) {
+      notes += ` | Early withdrawal penalty: KES ${earlyWithdrawalPenalty} (${penaltyPercentage}%) - ${penaltyReason}`;
+    }
+    saving.notes = notes;
+    
     saving.status = "completed";
     saving.processed_by = req.admin._id;
     saving.processed_at = new Date();
@@ -650,9 +780,52 @@ router.post("/admin/approve-withdrawal/:id", protect, adminOnly, async (req, res
         reference_id: saving._id.toString(),
         status: "collected",
       });
+
+      // Add withdrawal fee to reserve account
+      try {
+        const { addToReserve } = await import("../services/reserveAccountService.js");
+        await addToReserve({
+          amount: withdrawalFee,
+          source_type: "withdrawal_fee",
+          description: `Withdrawal fee from member ${member.name}: KES ${withdrawalFee}`,
+          reference_type: "Saving",
+          reference_id: saving._id.toString(),
+          created_by: req.admin._id,
+          metadata: { member_id: saving.member_id._id.toString() },
+          is_automated: true,
+        });
+      } catch (error) {
+        console.error("Error adding withdrawal fee to reserve:", error);
+      }
     }
 
-    console.log(`✅ Withdrawal approved: KES ${totalDeduction} (Amount: ${saving.amount} + Fee: ${withdrawalFee}) deducted from ${member.name}'s wallet`);
+    // Apply credit score penalty if early withdrawal
+    if (isEarlyWithdrawal) {
+      const { getEarlyWithdrawalSettings } = await import("../services/earlyWithdrawalService.js");
+      const settings = await getEarlyWithdrawalSettings();
+      
+      if (settings.credit_penalty > 0) {
+        // Import credit score service and apply penalty
+        try {
+          const { default: Member } = await import("../models/Member.js");
+          const creditScorePenalty = settings.credit_penalty;
+          
+          // Reduce savings_credibility_score (ensure it doesn't go below 0)
+          const currentScore = member.savings_credibility_score || 0;
+          const newScore = Math.max(0, currentScore - creditScorePenalty);
+          
+          await Member.findByIdAndUpdate(saving.member_id._id, {
+            savings_credibility_score: newScore,
+          });
+
+          console.log(`⚠️ Early withdrawal penalty applied: Credit score reduced by ${creditScorePenalty} points (${currentScore} → ${newScore})`);
+        } catch (error) {
+          console.error("Error applying credit score penalty:", error);
+        }
+      }
+    }
+
+    console.log(`✅ Withdrawal approved: KES ${saving.amount} requested. Penalty: KES ${earlyWithdrawalPenalty}, Fee: KES ${withdrawalFee}, Net to member: KES ${netAmountAfterPenalty - withdrawalFee}, Total deducted from wallet: KES ${totalDeduction}`);
 
     // Emit Socket.IO event
     const io = req.app.get("io");
@@ -662,17 +835,23 @@ router.post("/admin/approve-withdrawal/:id", protect, adminOnly, async (req, res
         memberId: saving.member_id._id,
         status: "completed",
         amount: saving.amount,
+        penalty: earlyWithdrawalPenalty,
         fee: withdrawalFee,
+        netAmount: netAmountAfterPenalty - withdrawalFee,
         totalDeducted: totalDeduction,
         newBalance: saving.balance_after,
+        isEarlyWithdrawal,
         timestamp: new Date(),
       });
     }
 
     res.json({
       success: true,
-      message: `Withdrawal approved. KES ${saving.amount} will be sent to member. Fee: KES ${withdrawalFee}`,
+      message: `Withdrawal approved. Net amount to member: KES ${(netAmountAfterPenalty - withdrawalFee).toFixed(2)}${earlyWithdrawalPenalty > 0 ? ` (Penalty: KES ${earlyWithdrawalPenalty}, Fee: KES ${withdrawalFee})` : ` (Fee: KES ${withdrawalFee})`}`,
       data: saving,
+      penalty: earlyWithdrawalPenalty,
+      fee: withdrawalFee,
+      netAmount: netAmountAfterPenalty - withdrawalFee,
     });
   } catch (error) {
     console.error("Error approving withdrawal:", error);
@@ -1108,6 +1287,194 @@ router.get("/admin/fees/summary", protect, adminOnly, async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching fee summary:", error);
+// Admin: Check matured deposits (can be run manually or via cron)
+router.post("/check-maturity", adminOnly, async (req, res) => {
+  try {
+    const result = await checkMaturedDeposits();
+    res.json(result);
+  } catch (error) {
+    console.error("Error checking maturity:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Admin: Get maturity statistics
+router.get("/maturity-stats", adminOnly, async (req, res) => {
+  try {
+    const stats = await getMaturityStats();
+    res.json(stats);
+  } catch (error) {
+    console.error("Error fetching maturity stats:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Admin: Get all member savings with maturity info
+router.get("/admin/all-with-maturity", adminOnly, async (req, res) => {
+  try {
+    const { maturity_status, member_id } = req.query;
+
+    const filter = { transaction_type: "deposit", status: "completed" };
+    if (maturity_status && maturity_status !== "all") {
+      filter.maturity_status = maturity_status;
+    }
+    if (member_id) {
+      filter.member_id = member_id;
+    }
+
+    const deposits = await Saving.find(filter)
+      .populate("member_id", "name member_id phone")
+      .sort({ created_at: -1 })
+      .limit(500);
+
+    const now = new Date();
+    const depositsWithInfo = deposits.map(deposit => ({
+      ...deposit.toObject(),
+      is_matured: deposit.unlock_date ? deposit.unlock_date <= now : true,
+      days_until_maturity: deposit.unlock_date 
+        ? Math.ceil((deposit.unlock_date - now) / (1000 * 60 * 60 * 24))
+        : 0,
+    }));
+
+    res.json({
+      success: true,
+      data: depositsWithInfo,
+      count: depositsWithInfo.length,
+    });
+  } catch (error) {
+    console.error("Error fetching deposits with maturity:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Check early withdrawal penalty (preview before submission)
+router.post("/check-early-withdrawal", protect, async (req, res) => {
+  try {
+    const { amount } = req.body;
+    const memberId = req.member ? req.member._id : req.body.member_id;
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid amount",
+      });
+    }
+
+    // Get early withdrawal settings first
+    const settings = await getEarlyWithdrawalSettings();
+
+    if (!settings.enabled) {
+      return res.json({
+        success: false,
+        early_withdrawal_allowed: false,
+        message: "Early withdrawal is currently disabled by admin. Please wait until maturity or contact admin.",
+      });
+    }
+
+    // Get all locked deposits for this member
+    const lockedDeposits = await Saving.find({
+      member_id: memberId,
+      transaction_type: "deposit",
+      status: "completed",
+      maturity_status: "locked",
+      unlock_date: { $gt: new Date() },
+    }).sort({ created_at: 1 }); // Oldest first (FIFO)
+
+    if (lockedDeposits.length === 0) {
+      return res.json({
+        success: true,
+        early_withdrawal_allowed: true,
+        penalty_amount: 0,
+        penalty_percentage: 0,
+        net_amount: amount,
+        message: "No locked deposits. Regular withdrawal with no penalty.",
+        locked_deposits: [],
+      });
+    }
+
+    // Calculate which deposits would be affected
+    let remainingAmount = amount;
+    const affectedDeposits = [];
+    let totalPenalty = 0;
+
+    for (const deposit of lockedDeposits) {
+      if (remainingAmount <= 0) break;
+
+      const amountFromThisDeposit = Math.min(remainingAmount, deposit.amount);
+      
+      // Calculate penalty for this portion
+      const penaltyCalc = await calculateEarlyWithdrawalPenalty(deposit, amountFromThisDeposit);
+
+      if (penaltyCalc.allowed) {
+        affectedDeposits.push({
+          deposit_id: deposit._id,
+          deposit_amount: deposit.amount,
+          amount_withdrawn: amountFromThisDeposit,
+          unlock_date: deposit.unlock_date,
+          days_remaining: penaltyCalc.days_remaining,
+          percent_remaining: penaltyCalc.percent_remaining,
+          penalty_percentage: penaltyCalc.penalty_percentage,
+          penalty_amount: penaltyCalc.penalty_amount,
+          net_amount: penaltyCalc.net_amount,
+        });
+
+        totalPenalty += penaltyCalc.penalty_amount;
+        remainingAmount -= amountFromThisDeposit;
+      }
+    }
+
+    const netAmount = amount - totalPenalty;
+    const withdrawalFee = calculateWithdrawalFee(netAmount); // Fee on net amount after penalty
+    const finalAmount = netAmount - withdrawalFee;
+
+    res.json({
+      success: true,
+      early_withdrawal_allowed: true,
+      requested_amount: amount,
+      penalty_amount: totalPenalty,
+      withdrawal_fee: withdrawalFee,
+      net_amount: netAmount,
+      final_amount: finalAmount, // Amount member receives after penalty + fee
+      affected_deposits: affectedDeposits,
+      credit_score_penalty: settings.credit_penalty,
+      warning: `Early withdrawal will incur a penalty of KES ${totalPenalty.toFixed(2)} and reduce your credit score by ${settings.credit_penalty} points.`,
+    });
+  } catch (error) {
+    console.error("Error checking early withdrawal penalty:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get early withdrawal settings (admin)
+router.get("/admin/early-withdrawal-settings", adminOnly, async (req, res) => {
+  try {
+    const settings = await getEarlyWithdrawalSettings();
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    console.error("Error getting early withdrawal settings:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Update early withdrawal settings (admin)
+router.put("/admin/early-withdrawal-settings", adminOnly, async (req, res) => {
+  try {
+    const adminId = req.admin._id;
+    const updates = req.body;
+
+    const settings = await updateEarlyWithdrawalSettings(updates, adminId);
+
+    res.json({
+      success: true,
+      data: settings,
+      message: "Early withdrawal settings updated successfully",
+    });
+  } catch (error) {
+    console.error("Error updating early withdrawal settings:", error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

@@ -18,6 +18,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import API_BASE from "@/lib/api";
@@ -68,8 +75,19 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [depositAmount, setDepositAmount] = useState("");
   const [depositPhone, setDepositPhone] = useState("");
+  const [lockPeriodMonths, setLockPeriodMonths] = useState(0); // Lock period for deposits
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [withdrawNotes, setWithdrawNotes] = useState("");
+  const [withdrawAccountName, setWithdrawAccountName] = useState("");
+  const [withdrawAccountNumber, setWithdrawAccountNumber] = useState("");
+  const [withdrawBankName, setWithdrawBankName] = useState("");
+  const [earlyWithdrawalPenalty, setEarlyWithdrawalPenalty] = useState<any>(null);
+  const [showPenaltyWarning, setShowPenaltyWarning] = useState(false);
+  const [isCheckingPenalty, setIsCheckingPenalty] = useState(false);
+  const [lockedFunds, setLockedFunds] = useState({
+    amount: 0,
+    earliestUnlockDate: null as Date | null,
+  });
   const [paymentStep, setPaymentStep] = useState<
     "confirm" | "processing" | "waiting"
   >("confirm");
@@ -117,6 +135,32 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
 
       if (transactionsData.success) {
         setTransactions(transactionsData.data);
+        
+        // Calculate locked funds from transactions
+        const now = new Date();
+        const lockedTransactions = (transactionsData.data || []).filter(
+          (txn: any) => 
+            txn.transaction_type === "deposit" && 
+            txn.unlock_date && 
+            new Date(txn.unlock_date) > now
+        );
+        
+        if (lockedTransactions.length > 0) {
+          const totalLocked = lockedTransactions.reduce(
+            (sum: number, txn: any) => sum + (txn.amount || 0), 
+            0
+          );
+          const earliestUnlock = lockedTransactions
+            .map((txn: any) => new Date(txn.unlock_date))
+            .sort((a: Date, b: Date) => a.getTime() - b.getTime())[0];
+          
+          setLockedFunds({
+            amount: totalLocked,
+            earliestUnlockDate: earliestUnlock,
+          });
+        } else {
+          setLockedFunds({ amount: 0, earliestUnlockDate: null });
+        }
       }
 
       // Get member's own fees from the dedicated endpoint
@@ -314,6 +358,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
     setIsProcessing(false);
     setDepositAmount("");
     setDepositPhone("");
+    setLockPeriodMonths(0);
     setPollCount(0);
     if ((window as any).walletPollInterval) {
       clearInterval((window as any).walletPollInterval);
@@ -355,6 +400,8 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
           amount,
           phone: depositPhone, // Use the editable phone number
           type: "wallet_deposit",
+          notes: `Wallet deposit - KES ${amount}${lockPeriodMonths > 0 ? ` (Locked for ${lockPeriodMonths} months)` : ''}`,
+          lock_period_months: lockPeriodMonths,
           notes: `Wallet deposit - KES ${amount}`,
         }),
       });
@@ -461,6 +508,52 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
     }
   };
 
+  // Check early withdrawal penalty when amount changes
+  useEffect(() => {
+    const checkPenalty = async () => {
+      const amount = parseFloat(withdrawAmount);
+      if (!amount || amount <= 0 || !showWithdrawDialog) {
+        setEarlyWithdrawalPenalty(null);
+        setShowPenaltyWarning(false);
+        return;
+      }
+
+      setIsCheckingPenalty(true);
+      try {
+        const res = await fetch(`${API_BASE}/api/savings/check-early-withdrawal`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...authService.getAuthHeaders(),
+          },
+          body: JSON.stringify({ amount }),
+        });
+
+        const data = await res.json();
+
+        if (data.success && data.early_withdrawal_allowed) {
+          if (data.penalty_amount > 0) {
+            setEarlyWithdrawalPenalty(data);
+            setShowPenaltyWarning(true);
+          } else {
+            setEarlyWithdrawalPenalty(null);
+            setShowPenaltyWarning(false);
+          }
+        } else {
+          setEarlyWithdrawalPenalty(null);
+          setShowPenaltyWarning(false);
+        }
+      } catch (error) {
+        console.error("Error checking early withdrawal penalty:", error);
+      } finally {
+        setIsCheckingPenalty(false);
+      }
+    };
+
+    const timeoutId = setTimeout(checkPenalty, 500); // Debounce
+    return () => clearTimeout(timeoutId);
+  }, [withdrawAmount, showWithdrawDialog]);
+
   const handleWithdrawal = async () => {
     const amount = parseFloat(withdrawAmount);
     if (!amount || amount <= 0) {
@@ -481,6 +574,16 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
       return;
     }
 
+    // Validate account details
+    if (!withdrawAccountName || !withdrawAccountNumber || !withdrawBankName) {
+      toast({
+        title: "Account Details Required",
+        description: "Please provide your account details to receive the funds",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsProcessing(true);
     try {
       const res = await fetch(`${API_BASE}/api/savings/withdraw`, {
@@ -492,6 +595,9 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
         body: JSON.stringify({
           amount,
           notes: withdrawNotes,
+          account_name: withdrawAccountName,
+          account_number: withdrawAccountNumber,
+          bank_name: withdrawBankName,
         }),
       });
 
@@ -505,6 +611,9 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
         setShowWithdrawDialog(false);
         setWithdrawAmount("");
         setWithdrawNotes("");
+        setWithdrawAccountName("");
+        setWithdrawAccountNumber("");
+        setWithdrawBankName("");
         fetchWalletData();
       } else {
         throw new Error(data.error || "Withdrawal failed");
@@ -1103,10 +1212,21 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
                     <div>
                       <div className="font-medium capitalize">
                         {transaction.transaction_type}
+                        {transaction.lock_period_months > 0 && transaction.transaction_type === "deposit" && (
+                          <span className="ml-2 text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
+                            🔒 {transaction.lock_period_months}mo
+                          </span>
+                        )}
                       </div>
                       <div className="text-sm text-muted-foreground">
                         {new Date(transaction.created_at).toLocaleString()}
                       </div>
+                      {transaction.unlock_date && new Date(transaction.unlock_date) > new Date() && (
+                        <div className="text-xs text-amber-700 mt-1 flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          Unlocks: {new Date(transaction.unlock_date).toLocaleDateString()}
+                        </div>
+                      )}
                       {transaction.notes && (
                         <div className="text-xs text-muted-foreground mt-1">
                           {transaction.notes}
@@ -1207,6 +1327,31 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
                 />
                 <p className="text-xs text-muted-foreground mt-1">
                   The STK Push will be sent to this number. You can edit it to use a different number.
+                </p>
+              </div>
+
+              <div>
+                <Label htmlFor="lockPeriod">Lock Period (Optional)</Label>
+                <Select
+                  value={lockPeriodMonths.toString()}
+                  onValueChange={(value) => setLockPeriodMonths(parseInt(value))}>
+                  <SelectTrigger id="lockPeriod">
+                    <SelectValue placeholder="No lock - withdraw anytime" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">No lock - withdraw anytime</SelectItem>
+                    <SelectItem value="1">1 month</SelectItem>
+                    <SelectItem value="3">3 months</SelectItem>
+                    <SelectItem value="6">6 months</SelectItem>
+                    <SelectItem value="12">12 months</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {lockPeriodMonths > 0 
+                    ? `You won't be able to withdraw this deposit for ${lockPeriodMonths} month${lockPeriodMonths > 1 ? 's' : ''}`
+                    : 'Choose a lock period to commit to saving for a specific duration'}
+                </p>
+              </div>
                 </p>
               </div>
 
@@ -1371,10 +1516,32 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
                 value={withdrawAmount}
                 onChange={(e) => setWithdrawAmount(e.target.value)}
                 min="1"
-                max={summary.currentBalance || 0}
+                max={(summary.currentBalance || 0) - lockedFunds.amount}
               />
-              <div className="text-sm text-muted-foreground mt-1">
-                Available: KES {(summary.currentBalance || 0).toLocaleString()}
+              <div className="space-y-1 mt-2">
+                <div className="text-sm text-muted-foreground">
+                  Total Balance: KES {(summary.currentBalance || 0).toLocaleString()}
+                </div>
+                {lockedFunds.amount > 0 && (
+                  <>
+                    <div className="text-sm text-amber-700 font-medium">
+                      Locked Funds: KES {lockedFunds.amount.toLocaleString()}
+                      {lockedFunds.earliestUnlockDate && (
+                        <span className="text-xs ml-1">
+                          (unlocks: {lockedFunds.earliestUnlockDate.toLocaleDateString()})
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-sm text-green-700 font-medium">
+                      Available to Withdraw: KES {Math.max(0, (summary.currentBalance || 0) - lockedFunds.amount).toLocaleString()}
+                    </div>
+                  </>
+                )}
+                {lockedFunds.amount === 0 && (
+                  <div className="text-sm text-green-700 font-medium">
+                    Available to Withdraw: KES {(summary.currentBalance || 0).toLocaleString()}
+                  </div>
+                )}
               </div>
             </div>
             <div>
@@ -1387,6 +1554,115 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
                 rows={3}
               />
             </div>
+            
+            <div className="space-y-3 pt-2 border-t">
+              <Label className="text-base font-semibold">Account Details for Payment</Label>
+              <p className="text-sm text-muted-foreground -mt-2">
+                Where should we send your withdrawal?
+              </p>
+              
+              <div>
+                <Label htmlFor="withdrawAccountName">Account Name *</Label>
+                <Input
+                  id="withdrawAccountName"
+                  type="text"
+                  placeholder="Full name as per bank account"
+                  value={withdrawAccountName}
+                  onChange={(e) => setWithdrawAccountName(e.target.value)}
+                  required
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="withdrawAccountNumber">Account Number *</Label>
+                <Input
+                  id="withdrawAccountNumber"
+                  type="text"
+                  placeholder="Bank account number"
+                  value={withdrawAccountNumber}
+                  onChange={(e) => setWithdrawAccountNumber(e.target.value)}
+                  required
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="withdrawBankName">Bank Name *</Label>
+                <Input
+                  id="withdrawBankName"
+                  type="text"
+                  placeholder="e.g., Equity Bank, KCB, Co-operative Bank"
+                  value={withdrawBankName}
+                  onChange={(e) => setWithdrawBankName(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+            
+            {/* Early Withdrawal Penalty Warning */}
+            {showPenaltyWarning && earlyWithdrawalPenalty && (
+              <div className="bg-red-50 border-2 border-red-300 p-4 rounded-lg space-y-3">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                  <div className="space-y-2 flex-1">
+                    <h4 className="font-semibold text-red-900">
+                      ⚠️ Early Withdrawal Penalty
+                    </h4>
+                    <p className="text-sm text-red-800">
+                      {earlyWithdrawalPenalty.warning}
+                    </p>
+                    
+                    <div className="bg-white/60 rounded-md p-3 space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-red-700">Requested Amount:</span>
+                        <span className="font-semibold">KES {earlyWithdrawalPenalty.requested_amount.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between text-red-600">
+                        <span>Early Withdrawal Penalty:</span>
+                        <span className="font-semibold">- KES {earlyWithdrawalPenalty.penalty_amount.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-amber-600">
+                        <span>Withdrawal Fee:</span>
+                        <span className="font-semibold">- KES {earlyWithdrawalPenalty.withdrawal_fee.toFixed(2)}</span>
+                      </div>
+                      <div className="border-t pt-2 flex justify-between text-green-700 font-bold">
+                        <span>You Will Receive:</span>
+                        <span>KES {earlyWithdrawalPenalty.final_amount.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-red-600 text-xs mt-2 pt-2 border-t">
+                        <span>Credit Score Penalty:</span>
+                        <span className="font-semibold">-{earlyWithdrawalPenalty.credit_score_penalty} points</span>
+                      </div>
+                    </div>
+
+                    {earlyWithdrawalPenalty.affected_deposits && earlyWithdrawalPenalty.affected_deposits.length > 0 && (
+                      <div className="text-xs text-red-700 bg-white/40 rounded p-2">
+                        <p className="font-medium mb-1">Affected Deposits:</p>
+                        {earlyWithdrawalPenalty.affected_deposits.map((dep: any, idx: number) => (
+                          <div key={idx} className="ml-2">
+                            • {dep.days_remaining} days until unlock ({dep.penalty_percentage}% penalty)
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {isCheckingPenalty && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Checking for early withdrawal penalties...</span>
+              </div>
+            )}
+            
+            {lockedFunds.amount > 0 && !showPenaltyWarning && (
+              <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg text-sm">
+                <p className="text-blue-800">
+                  💡 You have locked deposits. Early withdrawal may incur penalties if enabled by admin.
+                </p>
+              </div>
+            )}
             <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg text-sm">
               <p className="text-amber-800">
                 ⚠️ Withdrawal requests require admin approval
@@ -1403,7 +1679,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
               {isProcessing ? (
                 <Loader2 className="w-4 h-4 animate-spin mr-2" />
               ) : null}
-              Submit Request
+              {showPenaltyWarning ? "I Understand - Submit Request" : "Submit Request"}
             </Button>
           </DialogFooter>
         </DialogContent>

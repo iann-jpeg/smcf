@@ -30,6 +30,7 @@ import loanRoutes from "./routes/loans.js";
 import memberRoutes from "./routes/members.js";
 import paymentRoutes from "./routes/payments.js";
 import savingsRoutes from "./routes/savings.js";
+import reserveRoutes from "./routes/reserve.js";
 
 // Import interest service
 import { startInterestCronJob } from "./services/interestService.js";
@@ -37,6 +38,8 @@ import { startInterestCronJob } from "./services/interestService.js";
 import { startLateFeesCronJob } from "./services/lateFeesService.js";
 // Import loan due date fix service
 import { startLoanDueDateCronJob } from "./services/loanDueDateService.js";
+// Import maturity check service
+import { checkMaturedDeposits } from "./services/maturityCheckService.js";
 
 const app = express();
 const httpServer = createServer(app);
@@ -235,6 +238,7 @@ app.use("/api/announcements", announcementRoutes);
 app.use("/announcements", announcementRoutes); // Backward compatibility
 app.use("/api/loans", loanRoutes);
 app.use("/api/savings", savingsRoutes);
+app.use("/api/reserve", reserveRoutes);
 app.use("/api/credit-score", creditScoreRoutes);
 
 // Health check endpoint
@@ -297,6 +301,22 @@ httpServer.listen(PORT, () => {
 
   // Start loan due date fix cron job
   startLoanDueDateCronJob();
+  
+  // Start daily maturity check (runs at midnight every day)
+  setInterval(async () => {
+    const now = new Date();
+    // Run at midnight (00:00)
+    if (now.getHours() === 0 && now.getMinutes() === 0) {
+      console.log("⏰ Running daily maturity check...");
+      await checkMaturedDeposits();
+    }
+  }, 60000); // Check every minute
+  
+  // Run maturity check on startup
+  setTimeout(async () => {
+    console.log("🔍 Running initial maturity check...");
+    await checkMaturedDeposits();
+  }, 5000); // Run 5 seconds after startup
   
   console.log(`\n📚 API Documentation:`);
   console.log(`   Health: http://localhost:${PORT}/health`);

@@ -62,6 +62,53 @@ const savingSchema = new mongoose.Schema(
     processed_at: {
       type: Date,
     },
+    lock_period_months: {
+      type: Number,
+      default: 0, // 0 means no lock, available immediately
+    },
+    unlock_date: {
+      type: Date,
+      default: null, // null means no lock, can withdraw anytime
+    },
+    maturity_status: {
+      type: String,
+      enum: ["locked", "matured", "withdrawn", "none"],
+      default: "none", // none = no lock, locked = before unlock_date, matured = after unlock_date, withdrawn = already withdrawn
+    },
+    maturity_reached_date: {
+      type: Date,
+      default: null, // Date when the deposit matured (unlock_date reached)
+    },
+    // Withdrawal account details (for withdrawal requests)
+    preferred_account_name: {
+      type: String,
+      default: "",
+    },
+    preferred_account_number: {
+      type: String,
+      default: "",
+    },
+    preferred_bank: {
+      type: String,
+      default: "",
+    },
+    // Early withdrawal fields
+    is_early_withdrawal: {
+      type: Boolean,
+      default: false, // True if withdrawn before maturity_date
+    },
+    penalty_amount: {
+      type: Number,
+      default: 0, // Amount penalized for early withdrawal
+    },
+    penalty_percentage: {
+      type: Number,
+      default: 0, // Percentage of penalty applied
+    },
+    penalty_reason: {
+      type: String,
+      default: "", // Reason for penalty (e.g., "Early withdrawal - 75% lock period remaining")
+    },
     created_at: {
       type: Date,
       default: Date.now,

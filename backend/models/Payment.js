@@ -70,6 +70,16 @@ const paymentSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  // Lock period for wallet deposits (in months)
+  lock_period_months: {
+    type: Number,
+    default: 0, // 0 means no lock
+  },
+  loan_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Loan",
+    // Optional - only populated for loan repayment payments
+  },
 });
 
 export default mongoose.model("Payment", paymentSchema);
