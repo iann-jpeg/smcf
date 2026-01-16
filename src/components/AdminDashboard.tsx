@@ -3720,11 +3720,11 @@ Thank you for your cooperation! 🙏`;
         <TabsContent value="fees" className="space-y-6">
           <TransactionFeesReport />
         </TabsContent>
-reserve" className="space-y-6">
+
+        <TabsContent value="reserve" className="space-y-6">
           <ReserveAccountTab />
         </TabsContent>
 
-        <TabsContent value="
         <TabsContent value="reports" className="space-y-6">
           <ReportsTab />
         </TabsContent>
