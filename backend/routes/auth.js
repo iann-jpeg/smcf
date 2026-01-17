@@ -2,6 +2,7 @@ import express from "express";
 import { generateToken } from "../middleware/auth.js";
 import Admin from "../models/Admin.js";
 import Member from "../models/Member.js";
+import { trackLoginAttempt, createUserSession } from "../middleware/activityTracker.js";
 
 const router = express.Router();
 
@@ -57,17 +58,27 @@ router.post("/login", async (req, res) => {
     if (admin) {
       const isPasswordValid = await admin.comparePassword(password);
       if (!isPasswordValid) {
+        // Track failed login attempt
+        await trackLoginAttempt(phone, false, admin._id, 'Admin', req, 'invalid_credentials');
+        
         return res.status(401).json({
           success: false,
           error: "Invalid credentials",
         });
       }
 
+      // Track successful login
+      await trackLoginAttempt(phone, true, admin._id, 'Admin', req);
+      
+      // Create session
+      const session = await createUserSession(admin._id, 'Admin', admin.role, req);
+
       const token = generateToken(admin._id, admin.role);
       return res.json({
         success: true,
         role: "admin",
         token,
+        sessionId: session?._id,
         user: {
           id: admin._id,
           name: admin.name,
@@ -85,6 +96,10 @@ router.post("/login", async (req, res) => {
     
     if (!member) {
       console.log("❌ Member not found with phone:", phone);
+      
+      // Track failed login attempt
+      await trackLoginAttempt(phone, false, null, null, req, 'account_not_found');
+      
       return res.status(403).json({
         success: false,
         error: "Member not found. Please contact admin to register you first.",
@@ -102,6 +117,10 @@ router.post("/login", async (req, res) => {
 
     if (!member.registered_by_admin) {
       console.log("❌ Member not registered by admin");
+      
+      // Track failed login attempt
+      await trackLoginAttempt(phone, false, member._id, 'Member', req, 'account_inactive');
+      
       return res.status(403).json({
         success: false,
         error: "Your account needs to be activated by an admin.",
@@ -110,6 +129,10 @@ router.post("/login", async (req, res) => {
 
     if (member.status !== "active") {
       console.log("❌ Member status is not active:", member.status);
+      
+      // Track failed login attempt
+      await trackLoginAttempt(phone, false, member._id, 'Member', req, 'account_inactive');
+      
       return res.status(403).json({
         success: false,
         error: "Your account is not active. Please contact admin.",
@@ -122,6 +145,10 @@ router.post("/login", async (req, res) => {
     
     if (!isPasswordValid) {
       console.log("❌ Invalid password for member:", member.member_id);
+      
+      // Track failed login attempt
+      await trackLoginAttempt(phone, false, member._id, 'Member', req, 'invalid_credentials');
+      
       return res.status(401).json({
         success: false,
         error: "Invalid credentials",
@@ -129,6 +156,13 @@ router.post("/login", async (req, res) => {
     }
 
     console.log("✅ Member login successful, generating token...");
+    
+    // Track successful login
+    await trackLoginAttempt(phone, true, member._id, 'Member', req);
+    
+    // Create session
+    const session = await createUserSession(member._id, 'Member', 'member', req);
+    
     const token = generateToken(member._id, "member");
     
     const userData = {
@@ -154,6 +188,7 @@ router.post("/login", async (req, res) => {
       success: true,
       role: "member",
       token,
+      sessionId: session?._id,
       user: userData,
     });
   } catch (error) {

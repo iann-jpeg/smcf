@@ -44,6 +44,7 @@ import { authService } from "@/lib/authService";
 import {
   AlertCircle,
   AlertTriangle,
+  BarChart3,
   CheckCircle,
   DollarSign,
   Download,
@@ -68,6 +69,7 @@ import LoansTab from "./admin/LoansTab";
 import OnlineMembersCard from "./admin/OnlineMembersCard";
 import ProfileSettings from "./admin/ProfileSettings";
 import ReportsTab from "./admin/ReportsTab";
+import TrafficDashboard from "./admin/TrafficDashboard";
 
 
 interface AdminDashboardProps {
@@ -165,6 +167,7 @@ const AdminDashboard = ({
   const [showAnnouncementDialog, setShowAnnouncementDialog] = useState(false);
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
+  const [showAnalyticsDashboard, setShowAnalyticsDashboard] = useState(false);
   const [editingMember, setEditingMember] = useState<string | null>(null);
   const [editedMemberData, setEditedMemberData] = useState<any>({});
   const [contributionAmount, setContributionAmount] = useState<number>(224);
@@ -1722,6 +1725,34 @@ Thank you for your cooperation! 🙏`;
       }
     }
   };
+  
+  // Show analytics dashboard if requested
+  if (showAnalyticsDashboard) {
+    return (
+      <div className="min-h-screen">
+        <div className="sticky top-0 z-10 bg-background border-b mb-6">
+          <div className="flex items-center justify-between p-4">
+            <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAnalyticsDashboard(false)}
+              >
+                ← Back to Dashboard
+              </Button>
+              <div>
+                <h2 className="text-xl font-bold">Analytics & Traffic</h2>
+                <p className="text-sm text-muted-foreground">System monitoring and audit dashboard</p>
+              </div>
+            </div>
+            <ThemeToggle />
+          </div>
+        </div>
+        <TrafficDashboard />
+      </div>
+    );
+  }
+  
   return (
     <div className="space-y-4 md:space-y-6 p-2 sm:p-4 md:p-0">
       {/* Header and controls */}
@@ -1736,6 +1767,15 @@ Thank you for your cooperation! 🙏`;
         </div>
         <div className="flex flex-wrap items-center gap-1 sm:gap-2 w-full sm:w-auto">
           <ThemeToggle />
+          <Button
+            variant="outline"
+            onClick={() => setShowAnalyticsDashboard(true)}
+            className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm"
+            size="sm">
+            <BarChart3 className="w-3 h-3 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Analytics</span>
+            <span className="sm:hidden">Stats</span>
+          </Button>
           <Button
             variant="outline"
             onClick={() => setShowProfileDialog(true)}

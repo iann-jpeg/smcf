@@ -31,6 +31,7 @@ import memberRoutes from "./routes/members.js";
 import paymentRoutes from "./routes/payments.js";
 import savingsRoutes from "./routes/savings.js";
 import reserveRoutes from "./routes/reserve.js";
+import analyticsRoutes from "./routes/analytics.js";
 
 // Import interest service
 import { startInterestCronJob } from "./services/interestService.js";
@@ -240,6 +241,7 @@ app.use("/api/loans", loanRoutes);
 app.use("/api/savings", savingsRoutes);
 app.use("/api/reserve", reserveRoutes);
 app.use("/api/credit-score", creditScoreRoutes);
+app.use("/api/analytics", analyticsRoutes);
 
 // Health check endpoint
 app.get("/health", (req, res) => {
