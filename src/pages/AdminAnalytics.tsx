@@ -12,7 +12,7 @@ export default function AdminAnalytics({ onBack }: AdminAnalyticsProps) {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="border-b bg-card">
+      <div className="sticky top-0 z-20 border-b bg-card">
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
