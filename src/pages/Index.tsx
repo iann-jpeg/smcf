@@ -858,9 +858,6 @@ const Index = () => {
           </div>
         </div>
       </section>
-          </Button>
-        </div>
-      </section>
 
       {/* Footer */}
       <footer className="bg-secondary text-secondary-foreground py-12 px-4 border-t border-white/10">
