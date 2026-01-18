@@ -27,7 +27,7 @@ export default function TrafficDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const token = localStorage.getItem('adminToken');
+      const token = localStorage.getItem('smcf_token');
       if (!token) {
         throw new Error('No admin token found. Please login again.');
       }
@@ -80,7 +80,7 @@ export default function TrafficDashboard() {
 
   const handleExport = async (format: 'pdf' | 'csv' | 'excel') => {
     try {
-      const token = localStorage.getItem('adminToken');
+      const token = localStorage.getItem('smcf_token');
       const response = await fetch(`${API_BASE}/api/analytics/export?period=${period}&format=${format}`, {
         headers: {
           'Authorization': `Bearer ${token}`
