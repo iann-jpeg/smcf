@@ -427,25 +427,25 @@ const Index = () => {
             className="absolute inset-0 bg-cover bg-center bg-no-repeat"
             style={{
               backgroundImage: `url(${landingBackground})`,
-              filter: 'brightness(0.3)',
+              opacity: 0.4,
             }}
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/60 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-black/70" />
         </div>
 
         {/* Content */}
         <div className="container mx-auto max-w-7xl relative z-10">
           <div className="max-w-2xl animate-fade-in-up">
-            <h1 className="text-3xl sm:text-5xl md:text-7xl font-bold mb-6 sm:mb-8 text-white leading-tight animate-slide-in-left" style={{ animationDelay: '0.1s' }}>
+            <h1 className="text-3xl sm:text-5xl md:text-7xl font-bold mb-6 sm:mb-8 text-white leading-tight animate-slide-in-left drop-shadow-lg" style={{ animationDelay: '0.1s' }}>
               Digital Table Banking
-              <span className="block mt-2 bg-gradient-to-r from-green-400 to-emerald-300 bg-clip-text text-transparent animate-glow">
+              <span className="block mt-2 bg-gradient-to-r from-green-400 to-emerald-300 bg-clip-text text-transparent animate-glow drop-shadow-2xl">
                 Platform for Kenya
               </span>
             </h1>
-            <h2 className="text-xl sm:text-3xl md:text-4xl font-semibold mb-6 text-white/90 animate-slide-in-left" style={{ animationDelay: '0.2s' }}>
+            <h2 className="text-xl sm:text-3xl md:text-4xl font-semibold mb-6 text-white animate-slide-in-left drop-shadow-lg" style={{ animationDelay: '0.2s' }}>
               <StyledSMCF /> - <span className="text-yellow-400">Smart Moves Cash Flow</span>
             </h2>
-            <p className="text-lg sm:text-xl md:text-2xl text-gray-200 mb-8 sm:mb-10 leading-relaxed animate-slide-in-left" style={{ animationDelay: '0.3s' }}>
+            <p className="text-lg sm:text-xl md:text-2xl text-white mb-8 sm:mb-10 leading-relaxed animate-slide-in-left drop-shadow-md" style={{ animationDelay: '0.3s' }}>
               Kenya's #1 automated chama management system.
               <br />
               <span className="text-green-400 font-semibold">KES 224 every 5 days</span> • 
@@ -493,9 +493,11 @@ const Index = () => {
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8 mt-16 sm:mt-20 relative z-10">
+        {/* Stats Cards - Inside hero section */}
+        <div className="container mx-auto max-w-7xl relative z-10 mt-16 sm:mt-20">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8">
             <Card className="text-center hover:shadow-2xl hover:shadow-green-500/20 transition-all duration-500 hover:-translate-y-2 bg-gradient-to-br from-card to-card/80 backdrop-blur-lg border-2 border-transparent hover:border-green-500/50 group animate-fade-in-up" style={{ animationDelay: '0.6s' }}>
               <CardContent className="pt-6 sm:pt-8">
                 <div className="text-3xl sm:text-4xl md:text-5xl font-bold text-green-600 dark:text-green-400 mb-3 group-hover:scale-110 transition-transform duration-300">
