@@ -28,8 +28,6 @@ import { useEffect, useState } from "react";
 // Test components removed; render the real AdminDashboard
 import DebugInfo from "@/components/DebugInfo";
 import OrganizationDialog from "@/components/OrganizationDialog";
-import { useInactivityLogoutWithWarning } from "@/hooks/useInactivityLogoutWithWarning";
-import { sessionConfig, getTimeoutForRole } from "@/config/session";
 import API_BASE from "@/lib/api";
 import { authService } from "@/lib/authService";
 
@@ -37,6 +35,7 @@ const Index = () => {
   const [setupComplete, setSetupComplete] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [showOrganization, setShowOrganization] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   // userRole is simplified for UI: 'admin' means any administrative role (treasurer, secretary, etc.)
   const [userRole, setUserRole] = useState<"admin" | "member" | null>(null);
   const [currentUser, setCurrentUser] = useState(null);
@@ -94,6 +93,7 @@ const Index = () => {
           setCurrentUser(memberUserData);
         }
       }
+      setIsLoading(false);
     };
 
     restoreAuth();
@@ -190,26 +190,17 @@ const Index = () => {
     }
   }, [userRole, currentUser?.phone]); // Use phone as dependency to avoid infinite loops
 
-  // Define handleLogout before using it in hooks
-  const handleLogout = () => {
-    // Clear authentication from localStorage
-    authService.clearAuth();
-    setUserRole(null);
-    setCurrentUser(null);
-    setMembers([]);
-    setAnnouncements([]);
-  };
-
-  // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
-  // Auto-logout after configured timeout of inactivity (only when user is logged in)
-  // Shows warning notification before logout
-  useInactivityLogoutWithWarning({
-    timeout: sessionConfig.inactivityTimeout,
-    warningTime: sessionConfig.warningBeforeLogout,
-    onLogout: handleLogout,
-    enabled: sessionConfig.enabled && userRole !== null,
-    events: sessionConfig.activityEvents,
-  });
+  // Show loading state while checking authentication
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Show admin setup if needed - MUST be after all hooks
   if (!setupComplete) {
@@ -276,6 +267,15 @@ const Index = () => {
 
     setShowAuth(false);
     console.log("Login process completed");
+  };
+
+  const handleLogout = () => {
+    // Clear authentication from localStorage
+    authService.clearAuth();
+    setUserRole(null);
+    setCurrentUser(null);
+    setMembers([]);
+    setAnnouncements([]);
   };
 
   // Silent refresh members without UI flicker
@@ -386,22 +386,22 @@ const Index = () => {
         showAuth={showAuth}
       />
       {/* Header */}
-      <header className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-50 transition-all duration-300 hover:shadow-lg">
+      <header className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-50 animate-fade-in">
         <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2 sm:gap-3 group cursor-pointer">
+          <div className="flex items-center gap-2 sm:gap-3 hover:scale-105 transition-transform duration-300 cursor-pointer">
             <img
               src={smcfLogo}
               alt="SMCF - Smart Moves Cash Flow Logo - Digital Table Banking Platform"
-              className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6"
+              className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 hover:rotate-12 transition-transform duration-300"
             />
             <div>
-              <h1 className="text-base sm:text-xl group-hover:text-primary transition-colors duration-300">
+              <h1 className="text-base sm:text-xl">
                 <StyledSMCF />
               </h1>
-              <p className="text-[10px] sm:text-xs text-muted-foreground group-hover:text-foreground transition-colors duration-300">
+              <p className="text-[10px] sm:text-xs text-muted-foreground">
                 Smart Moves Cash Flow
               </p>
-              <p className="text-[9px] sm:text-[10px] text-primary/70 font-medium italic group-hover:text-primary transition-colors duration-300">
+              <p className="text-[9px] sm:text-[10px] text-primary/70 font-medium italic">
                 Digital Table Banking Made Simple
               </p>
             </div>
@@ -412,7 +412,7 @@ const Index = () => {
               onClick={() => setShowAuth(true)}
               variant="default"
               size="sm"
-              className="text-xs sm:text-sm px-3 sm:px-4 transition-all duration-300 hover:scale-105 hover:shadow-lg">
+              className="text-xs sm:text-sm px-3 sm:px-4 hover-glow hover-shine">
               Login / Register
             </Button>
           </div>
@@ -420,114 +420,108 @@ const Index = () => {
       </header>
 
       {/* Hero Section */}
-      <section className="relative py-20 sm:py-28 md:py-36 px-3 sm:px-4 overflow-hidden">
-        {/* Background Image with Overlay */}
-        <div className="absolute inset-0 z-0">
-          <div 
-            className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-            style={{
-              backgroundImage: `url(${landingBackground})`,
-              opacity: 0.4,
-            }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-black/70" />
-        </div>
-
-        {/* Content */}
+      <section className="py-10 sm:py-16 md:py-20 px-3 sm:px-4 overflow-hidden relative">
+        {/* Background Image */}
+        <div 
+          className="absolute inset-0 z-0"
+          style={{
+            backgroundImage: `url(${landingBackground})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+            opacity: 0.15,
+          }}
+        />
         <div className="container mx-auto max-w-7xl relative z-10">
-          <div className="max-w-2xl animate-fade-in-up">
-            <h1 className="text-3xl sm:text-5xl md:text-7xl font-bold mb-6 sm:mb-8 text-white leading-tight animate-slide-in-left drop-shadow-lg" style={{ animationDelay: '0.1s' }}>
-              Digital Table Banking
-              <span className="block mt-2 bg-gradient-to-r from-green-400 to-emerald-300 bg-clip-text text-transparent animate-glow drop-shadow-2xl">
-                Platform for Kenya
-              </span>
-            </h1>
-            <h2 className="text-xl sm:text-3xl md:text-4xl font-semibold mb-6 text-white animate-slide-in-left drop-shadow-lg" style={{ animationDelay: '0.2s' }}>
-              <StyledSMCF /> - <span className="text-yellow-400">Smart Moves Cash Flow</span>
-            </h2>
-            <p className="text-lg sm:text-xl md:text-2xl text-white mb-8 sm:mb-10 leading-relaxed animate-slide-in-left drop-shadow-md" style={{ animationDelay: '0.3s' }}>
-              Kenya's #1 automated chama management system.
-              <br />
-              <span className="text-green-400 font-semibold">KES 224 every 5 days</span> • 
-              <span className="text-yellow-400 font-semibold"> 3% monthly interest</span> • 
-              <span className="text-blue-400 font-semibold"> Instant M-Pesa payments</span>
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 mb-10 sm:mb-14 animate-slide-in-left" style={{ animationDelay: '0.4s' }}>
-              <Button
-                size="lg"
-                onClick={() => setShowAuth(true)}
-                className="group text-base sm:text-lg md:text-xl py-6 sm:py-7 md:py-8 px-8 sm:px-10 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 transition-all duration-300 hover:scale-105 hover:shadow-2xl shadow-green-500/50 animate-pulse-subtle">
-                <span className="flex items-center gap-2">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
+            {/* Left side - Text content */}
+            <div className="animate-slide-in-left">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-4 sm:mb-6 bg-gradient-primary bg-clip-text text-transparent">
+                Digital Table Banking Platform for Kenya
+              </h1>
+              <h2 className="text-xl sm:text-2xl md:text-3xl font-semibold mb-4 animate-fade-in-left animation-delay-200">
+                <StyledSMCF /> - Smart Moves Cash Flow
+              </h2>
+              <p className="text-base sm:text-lg md:text-xl text-muted-foreground mb-6 sm:mb-8 animate-fade-in-left animation-delay-300">
+                Kenya's #1 automated chama management system.{" "}
+                <br className="hidden sm:block" />
+                KES 224 every 5 days • 3% monthly interest • Instant M-Pesa payments
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-8 sm:mb-10 animate-fade-in-left animation-delay-400">
+                <Button
+                  size="lg"
+                  onClick={() => setShowAuth(true)}
+                  className="text-sm sm:text-base md:text-lg py-4 sm:py-5 md:py-6 px-6 sm:px-8 hover-glow hover-shine">
                   Join <StyledSMCF className="inline" /> Today - Start Saving
-                  <span className="group-hover:translate-x-1 transition-transform duration-300">→</span>
-                </span>
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="text-base sm:text-lg md:text-xl py-6 sm:py-7 md:py-8 px-8 sm:px-10 border-2 border-white/80 text-white hover:bg-white hover:text-black transition-all duration-300 hover:scale-105 hover:shadow-2xl backdrop-blur-sm"
-                onClick={() => setShowOrganization(true)}>
-                Learn How It Works
-              </Button>
-            </div>
-            
-            {/* Trust Indicators */}
-            <div className="flex flex-wrap gap-6 sm:gap-10 text-sm sm:text-base animate-slide-in-left" style={{ animationDelay: '0.5s' }}>
-              <div className="flex items-center gap-3 text-white/90 hover:text-white transition-colors duration-300 group">
-                <div className="p-2 bg-green-500/20 rounded-full group-hover:bg-green-500/30 transition-all duration-300">
-                  <Shield className="w-5 h-5 text-green-400" />
-                </div>
-                <span className="font-medium">Bank-Level Security</span>
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="text-sm sm:text-base md:text-lg py-4 sm:py-5 md:py-6 px-6 sm:px-8 hover-lift"
+                  onClick={() => setShowOrganization(true)}>
+                  Learn How It Works
+                </Button>
               </div>
-              <div className="flex items-center gap-3 text-white/90 hover:text-white transition-colors duration-300 group">
-                <div className="p-2 bg-blue-500/20 rounded-full group-hover:bg-blue-500/30 transition-all duration-300">
-                  <Users className="w-5 h-5 text-blue-400" />
+              
+              {/* Trust Indicators */}
+              <div className="flex flex-wrap gap-4 sm:gap-6 text-xs sm:text-sm text-muted-foreground animate-fade-in-left animation-delay-500">
+                <div className="flex items-center gap-2 hover:text-financial-success transition-colors">
+                  <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-financial-success" />
+                  <span>Bank-Level Security</span>
                 </div>
-                <span className="font-medium">1000+ Active Members</span>
-              </div>
-              <div className="flex items-center gap-3 text-white/90 hover:text-white transition-colors duration-300 group">
-                <div className="p-2 bg-yellow-500/20 rounded-full group-hover:bg-yellow-500/30 transition-all duration-300">
-                  <Smartphone className="w-5 h-5 text-yellow-400" />
+                <div className="flex items-center gap-2 hover:text-financial-success transition-colors">
+                  <Users className="w-4 h-4 sm:w-5 sm:h-5 text-financial-success" />
+                  <span>1000+ Active Members</span>
                 </div>
-                <span className="font-medium">M-Pesa Verified Partner</span>
+                <div className="flex items-center gap-2 hover:text-financial-success transition-colors">
+                  <Smartphone className="w-4 h-4 sm:w-5 sm:h-5 text-financial-success" />
+                  <span>M-Pesa Verified Partner</span>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* Stats Cards - Inside hero section */}
-        <div className="container mx-auto max-w-7xl relative z-10 mt-16 sm:mt-20">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8">
-            <Card className="text-center hover:shadow-2xl hover:shadow-green-500/20 transition-all duration-500 hover:-translate-y-2 bg-gradient-to-br from-card to-card/80 backdrop-blur-lg border-2 border-transparent hover:border-green-500/50 group animate-fade-in-up" style={{ animationDelay: '0.6s' }}>
-              <CardContent className="pt-6 sm:pt-8">
-                <div className="text-3xl sm:text-4xl md:text-5xl font-bold text-green-600 dark:text-green-400 mb-3 group-hover:scale-110 transition-transform duration-300">
-                  KES 224
-                </div>
-                <div className="text-sm sm:text-base text-muted-foreground font-medium">
-                  Every 5 Days
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="text-center hover:shadow-2xl hover:shadow-blue-500/20 transition-all duration-500 hover:-translate-y-2 bg-gradient-to-br from-card to-card/80 backdrop-blur-lg border-2 border-transparent hover:border-blue-500/50 group animate-fade-in-up" style={{ animationDelay: '0.7s' }}>
-              <CardContent className="pt-6 sm:pt-8">
-                <div className="text-3xl sm:text-4xl md:text-5xl font-bold text-blue-600 dark:text-blue-400 mb-3 group-hover:scale-110 transition-transform duration-300">
-                  100%
-                </div>
-                <div className="text-sm sm:text-base text-muted-foreground font-medium">
-                  Automated
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="text-center hover:shadow-2xl hover:shadow-yellow-500/20 transition-all duration-500 hover:-translate-y-2 bg-gradient-to-br from-card to-card/80 backdrop-blur-lg border-2 border-transparent hover:border-yellow-500/50 group animate-fade-in-up" style={{ animationDelay: '0.8s' }}>
-              <CardContent className="pt-6 sm:pt-8">
-                <div className="text-3xl sm:text-4xl md:text-5xl font-bold text-yellow-600 dark:text-yellow-400 mb-3 group-hover:scale-110 transition-transform duration-300">
-                  Secure
-                </div>
-                <div className="text-sm sm:text-base text-muted-foreground font-medium">
-                  M-Pesa Integration
-                </div>
-              </CardContent>
-            </Card>
+            {/* Right side - Stats Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4 sm:gap-6 animate-slide-in-right">
+              <Card className="text-center hover-lift hover-glow animate-scale-in animation-delay-200">
+                <CardContent className="pt-6 pb-6">
+                  <div className="text-3xl sm:text-4xl md:text-5xl font-bold text-financial-success mb-3 animate-float">
+                    KES 224
+                  </div>
+                  <div className="text-sm sm:text-base text-muted-foreground">
+                    Every 5 Days
+                  </div>
+                  <div className="mt-3 text-xs text-muted-foreground">
+                    Consistent & Affordable Contributions
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="text-center hover-lift hover-glow animate-scale-in animation-delay-300">
+                <CardContent className="pt-6 pb-6">
+                  <div className="text-3xl sm:text-4xl md:text-5xl font-bold text-primary mb-3">
+                    100%
+                  </div>
+                  <div className="text-sm sm:text-base text-muted-foreground">
+                    Automated
+                  </div>
+                  <div className="mt-3 text-xs text-muted-foreground">
+                    No Manual Tracking Required
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="text-center hover-lift hover-glow animate-scale-in animation-delay-400 sm:col-span-2 lg:col-span-1">
+                <CardContent className="pt-6 pb-6">
+                  <div className="text-3xl sm:text-4xl md:text-5xl font-bold text-accent mb-3">
+                    Secure
+                  </div>
+                  <div className="text-sm sm:text-base text-muted-foreground">
+                    M-Pesa Integration
+                  </div>
+                  <div className="mt-3 text-xs text-muted-foreground">
+                    Protected & Verified Payments
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </div>
       </section>
@@ -545,50 +539,53 @@ const Index = () => {
                 title: "Personal Savings Wallet",
                 description:
                   "Save any amount in your personal wallet and earn 3% interest every month with zero maintenance fees.",
+                delay: "100",
               },
               {
                 icon: TrendingUp,
                 title: "Member Loans",
                 description:
                   "Access loans when you need them. Quick approval process with flexible repayment terms for active members.",
+                delay: "200",
               },
               {
                 icon: Smartphone,
                 title: "M-Pesa Integration",
                 description:
                   "Seamless payments via M-Pesa STK Push. Direct payouts to your mobile money account.",
+                delay: "300",
               },
               {
                 icon: Users,
                 title: "Group Management",
                 description:
                   "Hierarchical member system with automated disbursements based on contribution order.",
+                delay: "400",
               },
               {
                 icon: Shield,
                 title: "Secure & Transparent",
                 description:
                   "OTP authentication, encrypted transactions, and complete audit trails for all activities.",
+                delay: "500",
               },
               {
                 icon: Clock,
                 title: "Automated Reminders",
                 description:
                   "SMS and web notifications for payment deadlines and payout confirmations.",
+                delay: "600",
               },
             ].map((feature, index) => (
               <Card
                 key={index}
-                className="hover:shadow-2xl hover:shadow-primary/20 transition-all duration-500 hover:-translate-y-3 hover:scale-105 group cursor-pointer bg-gradient-to-br from-card to-card/50 border-2 border-transparent hover:border-primary/30 animate-fade-in-up"
-                style={{ animationDelay: `${0.1 * index}s` }}>
+                className={`hover-lift hover-glow group cursor-pointer animate-scale-in animation-delay-${feature.delay}`}>
                 <CardHeader>
-                  <div className="p-3 bg-primary/10 rounded-full w-fit mb-4 group-hover:bg-primary/20 transition-all duration-300 group-hover:rotate-6 group-hover:scale-110">
-                    <feature.icon className="w-12 h-12 text-primary" />
-                  </div>
+                  <feature.icon className="w-12 h-12 sm:w-14 sm:h-14 text-primary mb-4 group-hover:scale-110 transition-transform duration-300" />
                   <CardTitle className="group-hover:text-primary transition-colors duration-300">{feature.title}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <CardDescription className="group-hover:text-foreground/80 transition-colors duration-300">{feature.description}</CardDescription>
+                  <CardDescription className="group-hover:text-foreground transition-colors duration-300">{feature.description}</CardDescription>
                 </CardContent>
               </Card>
             ))}
@@ -604,20 +601,18 @@ const Index = () => {
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
             {/* Savings Wallet Card */}
-            <Card className="overflow-hidden hover:shadow-2xl hover:shadow-green-500/30 transition-all duration-500 hover:-translate-y-2 hover:scale-105 group border-2 border-transparent hover:border-green-500/30">
-              <div className="bg-gradient-to-br from-financial-success/10 to-financial-success/5 p-6 group-hover:from-financial-success/20 group-hover:to-financial-success/10 transition-all duration-500">
-                <div className="p-3 bg-financial-success/20 rounded-full w-fit mb-4 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
-                  <Wallet className="w-12 h-12 sm:w-16 sm:h-16 text-financial-success" />
-                </div>
-                <CardTitle className="text-xl sm:text-2xl mb-3">Personal Savings Wallet</CardTitle>
+            <Card className="overflow-hidden hover-lift hover-glow group animate-fade-in-left">
+              <div className="bg-gradient-to-br from-financial-success/10 to-financial-success/5 p-6 group-hover:from-financial-success/20 group-hover:to-financial-success/10 transition-all duration-300">
+                <Wallet className="w-12 h-12 sm:w-16 sm:h-16 text-financial-success mb-4 group-hover:scale-110 transition-transform duration-300" />
+                <CardTitle className="text-xl sm:text-2xl mb-3 group-hover:text-financial-success transition-colors duration-300">Personal Savings Wallet</CardTitle>
                 <CardDescription className="text-base sm:text-lg mb-6">
                   Save for your future with our personal wallet feature
                 </CardDescription>
               </div>
               <CardContent className="pt-6">
                 <ul className="space-y-3 sm:space-y-4">
-                  <li className="flex items-start gap-3">
-                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-financial-success/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <li className="flex items-start gap-3 group/item hover:translate-x-2 transition-transform duration-300">
+                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-financial-success/20 flex items-center justify-center flex-shrink-0 mt-0.5 group-hover/item:bg-financial-success/40 transition-colors">
                       <span className="text-financial-success text-sm sm:text-base">✓</span>
                     </div>
                     <div>
@@ -625,14 +620,90 @@ const Index = () => {
                       <p className="text-xs sm:text-sm text-muted-foreground">No minimum deposit required</p>
                     </div>
                   </li>
-                  <li className="flex items-start gap-3">
-                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-financial-success/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <li className="flex items-start gap-3 group/item hover:translate-x-2 transition-transform duration-300">
+                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-financial-success/20 flex items-center justify-center flex-shrink-0 mt-0.5 group-hover/item:bg-financial-success/40 transition-colors">
                       <span className="text-financial-success text-sm sm:text-base">✓</span>
                     </div>
                     <div>
                       <p className="font-semibold text-sm sm:text-base">Earn 3% Interest Monthly</p>
                       <p className="text-xs sm:text-sm text-muted-foreground">Interest calculated and paid every month</p>
                     </div>
+                  </li>
+                  <li className="flex items-start gap-3 group/item hover:translate-x-2 transition-transform duration-300">
+                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-financial-success/20 flex items-center justify-center flex-shrink-0 mt-0.5 group-hover/item:bg-financial-success/40 transition-colors">
+                      <span className="text-financial-success text-sm sm:text-base">✓</span>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm sm:text-base">Zero Maintenance Fees</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Keep 100% of your interest earnings</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3 group/item hover:translate-x-2 transition-transform duration-300">
+                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-financial-success/20 flex items-center justify-center flex-shrink-0 mt-0.5 group-hover/item:bg-financial-success/40 transition-colors">
+                      <span className="text-financial-success text-sm sm:text-base">✓</span>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm sm:text-base">Withdraw Anytime</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Direct to M-Pesa, no restrictions</p>
+                    </div>
+                  </li>
+                </ul>
+              </CardContent>
+            </Card>
+
+            {/* Loans Card */}
+            <Card className="overflow-hidden hover-lift hover-glow group animate-fade-in-right animation-delay-200">
+              <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-6 group-hover:from-primary/20 group-hover:to-primary/10 transition-all duration-300">
+                <TrendingUp className="w-12 h-12 sm:w-16 sm:h-16 text-primary mb-4 group-hover:scale-110 transition-transform duration-300" />
+                <CardTitle className="text-xl sm:text-2xl mb-3 group-hover:text-primary transition-colors duration-300">Member Loans</CardTitle>
+                <CardDescription className="text-base sm:text-lg mb-6">
+                  Access financial support when you need it most
+                </CardDescription>
+              </div>
+              <CardContent className="pt-6">
+                <ul className="space-y-3 sm:space-y-4">
+                  <li className="flex items-start gap-3 group/item hover:translate-x-2 transition-transform duration-300">
+                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5 group-hover/item:bg-primary/40 transition-colors">
+                      <span className="text-primary text-sm sm:text-base">✓</span>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm sm:text-base">Quick Approval</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Get approved within 24 hours</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3 group/item hover:translate-x-2 transition-transform duration-300">
+                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5 group-hover/item:bg-primary/40 transition-colors">
+                      <span className="text-primary text-sm sm:text-base">✓</span>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm sm:text-base">Flexible Repayment</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Choose terms that work for you</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3 group/item hover:translate-x-2 transition-transform duration-300">
+                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5 group-hover/item:bg-primary/40 transition-colors">
+                      <span className="text-primary text-sm sm:text-base">✓</span>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm sm:text-base">Competitive Rates</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Fair interest rates for members</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3 group/item hover:translate-x-2 transition-transform duration-300">
+                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5 group-hover/item:bg-primary/40 transition-colors">
+                      <span className="text-primary text-sm sm:text-base">✓</span>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm sm:text-base">Build Credit History</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Increase your loan limit over time</p>
+                    </div>
+                  </li>
+                </ul>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
                   </li>
                   <li className="flex items-start gap-3">
                     <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-financial-success/20 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -657,11 +728,9 @@ const Index = () => {
             </Card>
 
             {/* Loans Card */}
-            <Card className="overflow-hidden hover:shadow-2xl hover:shadow-primary/30 transition-all duration-500 hover:-translate-y-2 hover:scale-105 group border-2 border-transparent hover:border-primary/30">
-              <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-6 group-hover:from-primary/20 group-hover:to-primary/10 transition-all duration-500">
-                <div className="p-3 bg-primary/20 rounded-full w-fit mb-4 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
-                  <TrendingUp className="w-12 h-12 sm:w-16 sm:h-16 text-primary" />
-                </div>
+            <Card className="overflow-hidden hover:shadow-financial transition-all duration-300">
+              <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-6">
+                <TrendingUp className="w-12 h-12 sm:w-16 sm:h-16 text-primary mb-4" />
                 <CardTitle className="text-xl sm:text-2xl mb-3">Member Loans</CardTitle>
                 <CardDescription className="text-base sm:text-lg mb-6">
                   Access financial support when you need it most
@@ -713,46 +782,50 @@ const Index = () => {
       </section>
 
       {/* How It Works */}
-      <section className="py-20 px-4 bg-muted/30">
+      <section className="py-10 sm:py-16 md:py-20 px-3 sm:px-4 bg-muted/30">
         <div className="container mx-auto max-w-4xl">
-          <h3 className="text-3xl text-center mb-12">
+          <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-8 sm:mb-12 animate-fade-in-up">
             How <StyledSMCF className="inline" /> Works
           </h3>
-          <div className="space-y-8">
+          <div className="space-y-6 sm:space-y-8">
             {[
               {
                 step: 1,
                 title: "Register & Join",
                 description:
                   "Sign up with your M-Pesa number and receive your unique member ID.",
+                delay: "100",
               },
               {
                 step: 2,
                 title: "Contribute KES 224",
                 description:
                   "Every 5 days, contribute KES 224 via secure M-Pesa paybill 6938069 or STK Push payment.",
+                delay: "200",
               },
               {
                 step: 3,
                 title: "Automated Payout",
                 description:
                   "When all members contribute, the total amount is sent to the next member in line.",
+                delay: "300",
               },
               {
                 step: 4,
                 title: "Track Progress",
                 description:
                   "Monitor your payment history, upcoming payouts, and group status in real-time.",
+                delay: "400",
               },
             ].map((step, index) => (
-              <Card key={index} className="overflow-hidden">
-                <CardContent className="flex items-center gap-6 p-6">
-                  <div className="w-16 h-16 bg-gradient-primary rounded-full flex items-center justify-center text-2xl font-bold text-primary-foreground flex-shrink-0">
+              <Card key={index} className={`overflow-hidden hover-lift group cursor-pointer animate-fade-in-left animation-delay-${step.delay}`}>
+                <CardContent className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 p-4 sm:p-6">
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-primary rounded-full flex items-center justify-center text-xl sm:text-2xl font-bold text-primary-foreground flex-shrink-0 group-hover:scale-110 transition-transform duration-300 animate-pulse-glow">
                     {step.step}
                   </div>
-                  <div>
-                    <h4 className="text-xl font-semibold mb-2">{step.title}</h4>
-                    <p className="text-muted-foreground">{step.description}</p>
+                  <div className="flex-1">
+                    <h4 className="text-lg sm:text-xl font-semibold mb-2 group-hover:text-primary transition-colors duration-300">{step.title}</h4>
+                    <p className="text-sm sm:text-base text-muted-foreground group-hover:text-foreground transition-colors duration-300">{step.description}</p>
                   </div>
                 </CardContent>
               </Card>
@@ -762,7 +835,7 @@ const Index = () => {
       </section>
 
       {/* FAQ Section - Enhanced for SEO and Rich Snippets */}
-      <section className="py-10 sm:py-16 md:py-20 px-3 sm:px-4 bg-muted/30">
+      <section className="py-10 sm:py-16 md:py-20 px-3 sm:px-4">
         <div className="container mx-auto max-w-4xl">
           <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-8 sm:mb-12 animate-fade-in-up">
             Frequently Asked Questions
@@ -802,18 +875,12 @@ const Index = () => {
                 answer: "No hidden fees! We believe in complete transparency. Standard M-Pesa transaction charges apply for payments and withdrawals. Your personal savings wallet has zero maintenance fees, and you earn 3% interest monthly on your balance. All fees are clearly disclosed upfront."
               }
             ].map((faq, index) => (
-              <Card 
-                key={index} 
-                className="hover:shadow-2xl hover:shadow-primary/10 transition-all duration-500 hover:-translate-y-1 hover:border-primary/30 border-2 border-transparent group cursor-pointer animate-fade-in-up"
-                style={{ animationDelay: `${0.05 * index}s` }}
-                itemScope 
-                itemType="https://schema.org/Question"
-              >
+              <Card key={index} className="hover-lift hover-glow group cursor-pointer animate-scale-in" style={{animationDelay: `${index * 50}ms`}} itemScope itemType="https://schema.org/Question">
                 <CardHeader>
-                  <CardTitle className="text-lg group-hover:text-primary transition-colors duration-300" itemProp="name">{faq.question}</CardTitle>
+                  <CardTitle className="text-base sm:text-lg group-hover:text-primary transition-colors duration-300" itemProp="name">{faq.question}</CardTitle>
                 </CardHeader>
                 <CardContent itemScope itemType="https://schema.org/Answer" itemProp="acceptedAnswer">
-                  <p className="text-muted-foreground group-hover:text-foreground/80 transition-colors duration-300" itemProp="text">{faq.answer}</p>
+                  <p className="text-sm sm:text-base text-muted-foreground group-hover:text-foreground transition-colors duration-300" itemProp="text">{faq.answer}</p>
                 </CardContent>
               </Card>
             ))}
@@ -822,55 +889,46 @@ const Index = () => {
       </section>
 
       {/* Call to Action Section */}
-      <section className="relative py-16 sm:py-24 md:py-32 px-3 sm:px-4 overflow-hidden">
-        {/* Animated Background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary-glow to-financial-success opacity-90" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.1),transparent_50%)]" />
-        
-        <div className="container mx-auto max-w-4xl text-center relative z-10">
-          <div className="animate-fade-in-up">
-            <h3 className="text-3xl sm:text-5xl font-bold mb-6 sm:mb-8 text-white drop-shadow-lg">
-              Ready to Transform Your Group Savings?
-            </h3>
-            <p className="text-lg sm:text-2xl text-white/95 mb-8 sm:mb-12 leading-relaxed">
-              Join thousands of Kenyan members already using SMCF for secure, automated table banking
-            </p>
-            <Button
-              size="lg"
-              variant="secondary"
-              onClick={() => setShowAuth(true)}
-              className="group text-lg sm:text-xl px-8 sm:px-12 py-6 sm:py-8 h-auto bg-white text-primary hover:bg-white/90 transition-all duration-300 hover:scale-110 hover:shadow-2xl shadow-xl">
-              <span className="flex items-center gap-3">
-                Get Started Today
-                <span className="group-hover:translate-x-2 transition-transform duration-300">→</span>
-              </span>
-            </Button>
-          </div>
+      <section className="py-10 sm:py-16 md:py-20 px-3 sm:px-4 bg-gradient-primary overflow-hidden">
+        <div className="container mx-auto max-w-4xl text-center">
+          <h3 className="text-2xl sm:text-4xl md:text-5xl font-bold mb-4 sm:mb-6 text-white animate-fade-in-up">
+            Ready to Transform Your Group Savings?
+          </h3>
+          <p className="text-base sm:text-xl md:text-2xl text-white/90 mb-6 sm:mb-8 animate-fade-in-up animation-delay-100">
+            Join thousands of Kenyan members already using SMCF for secure, automated table banking
+          </p>
+          <Button
+            size="lg"
+            variant="secondary"
+            onClick={() => setShowAuth(true)}
+            className="text-base sm:text-lg px-6 sm:px-8 py-4 sm:py-6 h-auto hover-lift hover-shine animate-scale-in animation-delay-200">
+            Get Started Today
+          </Button>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="bg-secondary text-secondary-foreground py-12 px-4 border-t border-white/10">
+      <footer className="bg-secondary text-secondary-foreground py-10 sm:py-12 px-3 sm:px-4">
         <div className="container mx-auto text-center">
-          <div className="flex items-center justify-center gap-3 mb-4 group cursor-pointer">
+          <div className="flex items-center justify-center gap-3 mb-4 animate-fade-in-up">
             <img 
               src={smcfLogo} 
               alt="SMCF - Smart Moves Cash Flow Footer Logo" 
-              className="w-8 h-8 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-12" 
+              className="w-8 h-8 hover:rotate-12 transition-transform duration-300" 
             />
-            <span className="text-xl group-hover:text-primary transition-colors duration-300"><StyledSMCF /></span>
+            <span className="text-xl"><StyledSMCF /></span>
           </div>
-          <p className="text-muted-foreground mb-4 hover:text-foreground transition-colors duration-300">
+          <p className="text-sm sm:text-base text-muted-foreground mb-4 animate-fade-in-up animation-delay-100">
             Smart Moves Cash Flow - Digital Table Banking Platform
           </p>
-          <p className="text-sm text-muted-foreground mb-2">
+          <p className="text-xs sm:text-sm text-muted-foreground mb-2 animate-fade-in-up animation-delay-200">
             Secure • Automated • Transparent • Kenyan-Made
           </p>
-          <p className="text-sm text-muted-foreground mb-2">
-            Contact: <a href="tel:+254759097157" className="hover:text-primary transition-all duration-300 hover:underline">+254 759 097 157</a>
+          <p className="text-xs sm:text-sm text-muted-foreground mb-2 animate-fade-in-up animation-delay-300">
+            Contact: <a href="tel:+254759097157" className="hover:text-primary transition-colors duration-300 hover:underline">+254 759 097 157</a>
           </p>
-          <p className="text-sm text-muted-foreground">
-            Email: <a href="mailto:administrator@smcf.app" className="hover:text-primary transition-all duration-300 hover:underline">administrator@smcf.app</a> | <a href="mailto:info@smcf.app" className="hover:text-primary transition-all duration-300 hover:underline">info@smcf.app</a>
+          <p className="text-xs sm:text-sm text-muted-foreground animate-fade-in-up animation-delay-400">
+            Email: <a href="mailto:administrator@smcf.app" className="hover:text-primary transition-colors duration-300 hover:underline">administrator@smcf.app</a> | <a href="mailto:info@smcf.app" className="hover:text-primary transition-colors duration-300 hover:underline">info@smcf.app</a>
           </p>
         </div>
       </footer>

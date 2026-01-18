@@ -146,11 +146,6 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 
-  /* Smooth scrolling */
-  html {
-    scroll-behavior: smooth;
-  }
-
   /* Prevent layout shifts and flicker during data updates */
   * {
     -webkit-font-smoothing: antialiased;
@@ -179,9 +174,21 @@ All colors MUST be HSL.
   a {
     -webkit-tap-highlight-color: transparent;
   }
+}
 
-  /* Custom Animations */
-  @keyframes fade-in-up {
+/* Custom animations for SMCF landing page */
+@layer utilities {
+  /* Fade in animations */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes fadeInUp {
     from {
       opacity: 0;
       transform: translateY(30px);
@@ -192,7 +199,40 @@ All colors MUST be HSL.
     }
   }
 
-  @keyframes slide-in-left {
+  @keyframes fadeInLeft {
+    from {
+      opacity: 0;
+      transform: translateX(-30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes fadeInRight {
+    from {
+      opacity: 0;
+      transform: translateX(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.9);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes slideInLeft {
     from {
       opacity: 0;
       transform: translateX(-50px);
@@ -203,50 +243,110 @@ All colors MUST be HSL.
     }
   }
 
-  @keyframes glow {
-    0%, 100% {
-      filter: brightness(1);
+  @keyframes slideInRight {
+    from {
+      opacity: 0;
+      transform: translateX(50px);
     }
-    50% {
-      filter: brightness(1.2);
+    to {
+      opacity: 1;
+      transform: translateX(0);
     }
   }
 
-  @keyframes pulse-subtle {
+  @keyframes float {
     0%, 100% {
-      transform: scale(1);
+      transform: translateY(0);
     }
     50% {
-      transform: scale(1.02);
+      transform: translateY(-10px);
     }
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% {
+      box-shadow: 0 0 20px rgba(146, 176, 78, 0.3);
+    }
+    50% {
+      box-shadow: 0 0 40px rgba(146, 176, 78, 0.6);
+    }
+  }
+
+  /* Animation classes */
+  .animate-fade-in {
+    animation: fadeIn 0.6s ease-out forwards;
   }
 
   .animate-fade-in-up {
-    animation: fade-in-up 0.8s ease-out forwards;
-    opacity: 0;
+    animation: fadeInUp 0.6s ease-out forwards;
+  }
+
+  .animate-fade-in-left {
+    animation: fadeInLeft 0.8s ease-out forwards;
+  }
+
+  .animate-fade-in-right {
+    animation: fadeInRight 0.8s ease-out forwards;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.5s ease-out forwards;
   }
 
   .animate-slide-in-left {
-    animation: slide-in-left 0.8s ease-out forwards;
+    animation: slideInLeft 0.8s ease-out forwards;
+  }
+
+  .animate-slide-in-right {
+    animation: slideInRight 0.8s ease-out forwards;
+  }
+
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  /* Staggered animation delays */
+  .animation-delay-100 {
+    animation-delay: 100ms;
+  }
+
+  .animation-delay-200 {
+    animation-delay: 200ms;
+  }
+
+  .animation-delay-300 {
+    animation-delay: 300ms;
+  }
+
+  .animation-delay-400 {
+    animation-delay: 400ms;
+  }
+
+  .animation-delay-500 {
+    animation-delay: 500ms;
+  }
+
+  .animation-delay-600 {
+    animation-delay: 600ms;
+  }
+
+  /* Initial state for animated elements */
+  .animate-on-scroll {
     opacity: 0;
   }
 
-  .animate-glow {
-    animation: glow 3s ease-in-out infinite;
-  }
-
-  .animate-pulse-subtle {
-    animation: pulse-subtle 2s ease-in-out infinite;
-  }
-
-  /* Utility Classes for Enhanced Interactivity */
+  /* Hover effects */
   .hover-lift {
     transition: transform 0.3s ease, box-shadow 0.3s ease;
   }
 
   .hover-lift:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.3);
+    transform: translateY(-8px);
+    box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.2);
   }
 
   .hover-scale {
@@ -257,32 +357,37 @@ All colors MUST be HSL.
     transform: scale(1.05);
   }
 
-  /* Gradient text animation */
-  @keyframes gradient-shift {
-    0%, 100% {
-      background-position: 0% 50%;
-    }
-    50% {
-      background-position: 100% 50%;
-    }
+  .hover-glow {
+    transition: box-shadow 0.3s ease, transform 0.3s ease;
   }
 
-  .animate-gradient {
-    background-size: 200% 200%;
-    animation: gradient-shift 4s ease infinite;
+  .hover-glow:hover {
+    box-shadow: 0 0 30px rgba(146, 176, 78, 0.5);
+    transform: translateY(-2px);
   }
 
-  /* Floating animation for subtle movement */
-  @keyframes float {
-    0%, 100% {
-      transform: translateY(0px);
-    }
-    50% {
-      transform: translateY(-10px);
-    }
+  .hover-shine {
+    position: relative;
+    overflow: hidden;
   }
 
-  .animate-float {
-    animation: float 3s ease-in-out infinite;
+  .hover-shine::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.3),
+      transparent
+    );
+    transition: left 0.5s ease;
+  }
+
+  .hover-shine:hover::before {
+    left: 100%;
   }
 }
