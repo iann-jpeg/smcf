@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { useNotification } from "@/hooks/use-notification";
 import { useToast } from "@/hooks/use-toast";
+import { useInactivityLogout } from "@/hooks/useInactivityLogout";
 import API_BASE from "@/lib/api";
 import { authService } from "@/lib/authService";
 import { initializeMobileNotifications, isNativePlatformAsync, showMobileNotification } from "@/lib/mobileNotifications";
@@ -51,6 +52,20 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
   const { toast } = useToast();
   const { notifyPayment, notifyAnnouncement, notifySavings, notifyLoan, notifySuccess } = useNotification();
   const isNativeRef = useRef(false);
+
+  // Auto-logout after 3 minutes of inactivity
+  useInactivityLogout({
+    timeout: 3 * 60 * 1000, // 3 minutes
+    onLogout: () => {
+      toast({
+        title: "Session Expired",
+        description: "You have been logged out due to inactivity.",
+        variant: "destructive",
+      });
+      onLogout();
+    },
+    enabled: true,
+  });
 
   // Initialize mobile notifications on mount
   useEffect(() => {

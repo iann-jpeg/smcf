@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { useInactivityLogout } from "@/hooks/useInactivityLogout";
 import API_BASE from "@/lib/api";
 import { authService } from "@/lib/authService";
 import {
@@ -89,8 +90,24 @@ const AdminDashboard = ({
   refreshMembers,
   cycleData,
 }: AdminDashboardProps) => {
+  const { toast } = useToast();
+  
   // Check if user is a read-only viewer
   const isReadOnly = userData?.role === "viewer";
+
+  // Auto-logout after 3 minutes of inactivity
+  useInactivityLogout({
+    timeout: 3 * 60 * 1000, // 3 minutes
+    onLogout: () => {
+      toast({
+        title: "Session Expired",
+        description: "You have been logged out due to inactivity.",
+        variant: "destructive",
+      });
+      onLogout();
+    },
+    enabled: true,
+  });
 
 
 
@@ -161,7 +178,6 @@ const AdminDashboard = ({
     );
   }
 
-  const { toast } = useToast();
   const [showDisbursementDialog, setShowDisbursementDialog] = useState(false);
   const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
   const [showAnnouncementDialog, setShowAnnouncementDialog] = useState(false);
