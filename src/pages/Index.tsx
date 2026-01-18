@@ -190,6 +190,27 @@ const Index = () => {
     }
   }, [userRole, currentUser?.phone]); // Use phone as dependency to avoid infinite loops
 
+  // Define handleLogout before using it in hooks
+  const handleLogout = () => {
+    // Clear authentication from localStorage
+    authService.clearAuth();
+    setUserRole(null);
+    setCurrentUser(null);
+    setMembers([]);
+    setAnnouncements([]);
+  };
+
+  // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
+  // Auto-logout after configured timeout of inactivity (only when user is logged in)
+  // Shows warning notification before logout
+  useInactivityLogoutWithWarning({
+    timeout: sessionConfig.inactivityTimeout,
+    warningTime: sessionConfig.warningBeforeLogout,
+    onLogout: handleLogout,
+    enabled: sessionConfig.enabled && userRole !== null,
+    events: sessionConfig.activityEvents,
+  });
+
   // Show admin setup if needed - MUST be after all hooks
   if (!setupComplete) {
     return <AdminSetup onSetupComplete={() => setSetupComplete(true)} />;
@@ -256,25 +277,6 @@ const Index = () => {
     setShowAuth(false);
     console.log("Login process completed");
   };
-
-  const handleLogout = () => {
-    // Clear authentication from localStorage
-    authService.clearAuth();
-    setUserRole(null);
-    setCurrentUser(null);
-    setMembers([]);
-    setAnnouncements([]);
-  };
-
-  // Auto-logout after configured timeout of inactivity (only when user is logged in)
-  // Shows warning notification before logout
-  useInactivityLogoutWithWarning({
-    timeout: sessionConfig.inactivityTimeout,
-    warningTime: sessionConfig.warningBeforeLogout,
-    onLogout: handleLogout,
-    enabled: sessionConfig.enabled && userRole !== null,
-    events: sessionConfig.activityEvents,
-  });
 
   // Silent refresh members without UI flicker
   const refreshMembers = async () => {
