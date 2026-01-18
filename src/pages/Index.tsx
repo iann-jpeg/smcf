@@ -1,4 +1,5 @@
 import smcfLogo from "@/assets/newsmcflogo.png";
+import landingBackground from "@/assets/landingbackground.jpg";
 import AdminDashboard from "@/components/AdminDashboard";
 import AdminSetup from "@/components/AdminSetup";
 import AuthDialog from "@/components/AuthDialog";
@@ -27,6 +28,8 @@ import { useEffect, useState } from "react";
 // Test components removed; render the real AdminDashboard
 import DebugInfo from "@/components/DebugInfo";
 import OrganizationDialog from "@/components/OrganizationDialog";
+import { useInactivityLogoutWithWarning } from "@/hooks/useInactivityLogoutWithWarning";
+import { sessionConfig, getTimeoutForRole } from "@/config/session";
 import API_BASE from "@/lib/api";
 import { authService } from "@/lib/authService";
 
@@ -277,6 +280,16 @@ const Index = () => {
     setAnnouncements([]);
   };
 
+  // Auto-logout after configured timeout of inactivity (only when user is logged in)
+  // Shows warning notification before logout
+  useInactivityLogoutWithWarning({
+    timeout: getTimeoutForRole(userRole),
+    warningTime: sessionConfig.warningBeforeLogout,
+    onLogout: handleLogout,
+    enabled: sessionConfig.enabled && userRole !== null,
+    events: sessionConfig.activityEvents,
+  });
+
   // Silent refresh members without UI flicker
   const refreshMembers = async () => {
     try {
@@ -385,22 +398,22 @@ const Index = () => {
         showAuth={showAuth}
       />
       {/* Header */}
-      <header className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-50">
+      <header className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-50 transition-all duration-300 hover:shadow-lg">
         <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 group cursor-pointer">
             <img
               src={smcfLogo}
               alt="SMCF - Smart Moves Cash Flow Logo - Digital Table Banking Platform"
-              className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16"
+              className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6"
             />
             <div>
-              <h1 className="text-base sm:text-xl">
+              <h1 className="text-base sm:text-xl group-hover:text-primary transition-colors duration-300">
                 <StyledSMCF />
               </h1>
-              <p className="text-[10px] sm:text-xs text-muted-foreground">
+              <p className="text-[10px] sm:text-xs text-muted-foreground group-hover:text-foreground transition-colors duration-300">
                 Smart Moves Cash Flow
               </p>
-              <p className="text-[9px] sm:text-[10px] text-primary/70 font-medium italic">
+              <p className="text-[9px] sm:text-[10px] text-primary/70 font-medium italic group-hover:text-primary transition-colors duration-300">
                 Digital Table Banking Made Simple
               </p>
             </div>
@@ -411,7 +424,7 @@ const Index = () => {
               onClick={() => setShowAuth(true)}
               variant="default"
               size="sm"
-              className="text-xs sm:text-sm px-3 sm:px-4">
+              className="text-xs sm:text-sm px-3 sm:px-4 transition-all duration-300 hover:scale-105 hover:shadow-lg">
               Login / Register
             </Button>
           </div>
@@ -419,81 +432,108 @@ const Index = () => {
       </header>
 
       {/* Hero Section */}
-      <section className="py-10 sm:py-16 md:py-20 px-3 sm:px-4">
-        <div className="container mx-auto text-center max-w-4xl">
-          <div className="animate-fade-in-up">
-            <h1 className="text-2xl sm:text-4xl md:text-6xl font-bold mb-4 sm:mb-6 bg-gradient-primary bg-clip-text text-transparent">
-              Digital Table Banking Platform for Kenya
+      <section className="relative py-20 sm:py-28 md:py-36 px-3 sm:px-4 overflow-hidden">
+        {/* Background Image with Overlay */}
+        <div className="absolute inset-0 z-0">
+          <div 
+            className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+            style={{
+              backgroundImage: `url(${landingBackground})`,
+              filter: 'brightness(0.3)',
+            }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/60 to-transparent" />
+        </div>
+
+        {/* Content */}
+        <div className="container mx-auto max-w-7xl relative z-10">
+          <div className="max-w-2xl animate-fade-in-up">
+            <h1 className="text-3xl sm:text-5xl md:text-7xl font-bold mb-6 sm:mb-8 text-white leading-tight animate-slide-in-left" style={{ animationDelay: '0.1s' }}>
+              Digital Table Banking
+              <span className="block mt-2 bg-gradient-to-r from-green-400 to-emerald-300 bg-clip-text text-transparent animate-glow">
+                Platform for Kenya
+              </span>
             </h1>
-            <h2 className="text-lg sm:text-2xl md:text-3xl font-semibold mb-4">
-              <StyledSMCF /> - Smart Moves Cash Flow
+            <h2 className="text-xl sm:text-3xl md:text-4xl font-semibold mb-6 text-white/90 animate-slide-in-left" style={{ animationDelay: '0.2s' }}>
+              <StyledSMCF /> - <span className="text-yellow-400">Smart Moves Cash Flow</span>
             </h2>
-            <p className="text-base sm:text-xl md:text-2xl text-muted-foreground mb-6 sm:mb-8">
-              Kenya's #1 automated chama management system.{" "}
-              <br className="hidden sm:block" />
-              KES 224 every 5 days • 3% monthly interest • Instant M-Pesa payments
+            <p className="text-lg sm:text-xl md:text-2xl text-gray-200 mb-8 sm:mb-10 leading-relaxed animate-slide-in-left" style={{ animationDelay: '0.3s' }}>
+              Kenya's #1 automated chama management system.
+              <br />
+              <span className="text-green-400 font-semibold">KES 224 every 5 days</span> • 
+              <span className="text-yellow-400 font-semibold"> 3% monthly interest</span> • 
+              <span className="text-blue-400 font-semibold"> Instant M-Pesa payments</span>
             </p>
-            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center mb-8 sm:mb-12">
+            <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 mb-10 sm:mb-14 animate-slide-in-left" style={{ animationDelay: '0.4s' }}>
               <Button
                 size="lg"
                 onClick={() => setShowAuth(true)}
-                className="text-sm sm:text-base md:text-lg py-4 sm:py-5 md:py-6 px-6 sm:px-8">
-                Join <StyledSMCF className="inline" /> Today - Start Saving
+                className="group text-base sm:text-lg md:text-xl py-6 sm:py-7 md:py-8 px-8 sm:px-10 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 transition-all duration-300 hover:scale-105 hover:shadow-2xl shadow-green-500/50 animate-pulse-subtle">
+                <span className="flex items-center gap-2">
+                  Join <StyledSMCF className="inline" /> Today - Start Saving
+                  <span className="group-hover:translate-x-1 transition-transform duration-300">→</span>
+                </span>
               </Button>
               <Button
                 size="lg"
                 variant="outline"
-                className="text-sm sm:text-base md:text-lg py-4 sm:py-5 md:py-6 px-6 sm:px-8"
+                className="text-base sm:text-lg md:text-xl py-6 sm:py-7 md:py-8 px-8 sm:px-10 border-2 border-white/80 text-white hover:bg-white hover:text-black transition-all duration-300 hover:scale-105 hover:shadow-2xl backdrop-blur-sm"
                 onClick={() => setShowOrganization(true)}>
                 Learn How It Works
               </Button>
             </div>
             
             {/* Trust Indicators */}
-            <div className="flex flex-wrap justify-center gap-4 sm:gap-8 text-xs sm:text-sm text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <Shield className="w-4 h-4 text-financial-success" />
-                <span>Bank-Level Security</span>
+            <div className="flex flex-wrap gap-6 sm:gap-10 text-sm sm:text-base animate-slide-in-left" style={{ animationDelay: '0.5s' }}>
+              <div className="flex items-center gap-3 text-white/90 hover:text-white transition-colors duration-300 group">
+                <div className="p-2 bg-green-500/20 rounded-full group-hover:bg-green-500/30 transition-all duration-300">
+                  <Shield className="w-5 h-5 text-green-400" />
+                </div>
+                <span className="font-medium">Bank-Level Security</span>
               </div>
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-financial-success" />
-                <span>1000+ Active Members</span>
+              <div className="flex items-center gap-3 text-white/90 hover:text-white transition-colors duration-300 group">
+                <div className="p-2 bg-blue-500/20 rounded-full group-hover:bg-blue-500/30 transition-all duration-300">
+                  <Users className="w-5 h-5 text-blue-400" />
+                </div>
+                <span className="font-medium">1000+ Active Members</span>
               </div>
-              <div className="flex items-center gap-2">
-                <Smartphone className="w-4 h-4 text-financial-success" />
-                <span>M-Pesa Verified Partner</span>
+              <div className="flex items-center gap-3 text-white/90 hover:text-white transition-colors duration-300 group">
+                <div className="p-2 bg-yellow-500/20 rounded-full group-hover:bg-yellow-500/30 transition-all duration-300">
+                  <Smartphone className="w-5 h-5 text-yellow-400" />
+                </div>
+                <span className="font-medium">M-Pesa Verified Partner</span>
               </div>
             </div>
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mt-8 sm:mt-16">
-            <Card className="text-center hover:shadow-financial transition-all duration-300">
-              <CardContent className="pt-4 sm:pt-6">
-                <div className="text-2xl sm:text-3xl font-bold text-financial-success mb-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8 mt-16 sm:mt-20 relative z-10">
+            <Card className="text-center hover:shadow-2xl hover:shadow-green-500/20 transition-all duration-500 hover:-translate-y-2 bg-gradient-to-br from-card to-card/80 backdrop-blur-lg border-2 border-transparent hover:border-green-500/50 group animate-fade-in-up" style={{ animationDelay: '0.6s' }}>
+              <CardContent className="pt-6 sm:pt-8">
+                <div className="text-3xl sm:text-4xl md:text-5xl font-bold text-green-600 dark:text-green-400 mb-3 group-hover:scale-110 transition-transform duration-300">
                   KES 224
                 </div>
-                <div className="text-xs sm:text-sm text-muted-foreground">
+                <div className="text-sm sm:text-base text-muted-foreground font-medium">
                   Every 5 Days
                 </div>
               </CardContent>
             </Card>
-            <Card className="text-center hover:shadow-financial transition-all duration-300">
-              <CardContent className="pt-4 sm:pt-6">
-                <div className="text-2xl sm:text-3xl font-bold text-primary mb-2">
+            <Card className="text-center hover:shadow-2xl hover:shadow-blue-500/20 transition-all duration-500 hover:-translate-y-2 bg-gradient-to-br from-card to-card/80 backdrop-blur-lg border-2 border-transparent hover:border-blue-500/50 group animate-fade-in-up" style={{ animationDelay: '0.7s' }}>
+              <CardContent className="pt-6 sm:pt-8">
+                <div className="text-3xl sm:text-4xl md:text-5xl font-bold text-blue-600 dark:text-blue-400 mb-3 group-hover:scale-110 transition-transform duration-300">
                   100%
                 </div>
-                <div className="text-xs sm:text-sm text-muted-foreground">
+                <div className="text-sm sm:text-base text-muted-foreground font-medium">
                   Automated
                 </div>
               </CardContent>
             </Card>
-            <Card className="text-center hover:shadow-financial transition-all duration-300">
-              <CardContent className="pt-4 sm:pt-6">
-                <div className="text-2xl sm:text-3xl font-bold text-accent mb-2">
+            <Card className="text-center hover:shadow-2xl hover:shadow-yellow-500/20 transition-all duration-500 hover:-translate-y-2 bg-gradient-to-br from-card to-card/80 backdrop-blur-lg border-2 border-transparent hover:border-yellow-500/50 group animate-fade-in-up" style={{ animationDelay: '0.8s' }}>
+              <CardContent className="pt-6 sm:pt-8">
+                <div className="text-3xl sm:text-4xl md:text-5xl font-bold text-yellow-600 dark:text-yellow-400 mb-3 group-hover:scale-110 transition-transform duration-300">
                   Secure
                 </div>
-                <div className="text-xs sm:text-sm text-muted-foreground">
+                <div className="text-sm sm:text-base text-muted-foreground font-medium">
                   M-Pesa Integration
                 </div>
               </CardContent>
@@ -505,7 +545,7 @@ const Index = () => {
       {/* Features */}
       <section className="py-10 sm:py-16 md:py-20 px-3 sm:px-4 bg-muted/30">
         <div className="container mx-auto max-w-6xl">
-          <h3 className="text-2xl sm:text-3xl text-center mb-8 sm:mb-12">
+          <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-8 sm:mb-12 animate-fade-in-up">
             Why Choose <StyledSMCF className="inline" />?
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
@@ -549,13 +589,16 @@ const Index = () => {
             ].map((feature, index) => (
               <Card
                 key={index}
-                className="hover:shadow-financial transition-all duration-300 hover:-translate-y-1">
+                className="hover:shadow-2xl hover:shadow-primary/20 transition-all duration-500 hover:-translate-y-3 hover:scale-105 group cursor-pointer bg-gradient-to-br from-card to-card/50 border-2 border-transparent hover:border-primary/30 animate-fade-in-up"
+                style={{ animationDelay: `${0.1 * index}s` }}>
                 <CardHeader>
-                  <feature.icon className="w-12 h-12 text-primary mb-4" />
-                  <CardTitle>{feature.title}</CardTitle>
+                  <div className="p-3 bg-primary/10 rounded-full w-fit mb-4 group-hover:bg-primary/20 transition-all duration-300 group-hover:rotate-6 group-hover:scale-110">
+                    <feature.icon className="w-12 h-12 text-primary" />
+                  </div>
+                  <CardTitle className="group-hover:text-primary transition-colors duration-300">{feature.title}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <CardDescription>{feature.description}</CardDescription>
+                  <CardDescription className="group-hover:text-foreground/80 transition-colors duration-300">{feature.description}</CardDescription>
                 </CardContent>
               </Card>
             ))}
@@ -566,14 +609,16 @@ const Index = () => {
       {/* Loans & Savings Section */}
       <section className="py-10 sm:py-16 md:py-20 px-3 sm:px-4">
         <div className="container mx-auto max-w-6xl">
-          <h3 className="text-2xl sm:text-3xl font-bold text-center mb-8 sm:mb-12">
+          <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-8 sm:mb-12 animate-fade-in-up">
             More Benefits for Members
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
             {/* Savings Wallet Card */}
-            <Card className="overflow-hidden hover:shadow-financial transition-all duration-300">
-              <div className="bg-gradient-to-br from-financial-success/10 to-financial-success/5 p-6">
-                <Wallet className="w-12 h-12 sm:w-16 sm:h-16 text-financial-success mb-4" />
+            <Card className="overflow-hidden hover:shadow-2xl hover:shadow-green-500/30 transition-all duration-500 hover:-translate-y-2 hover:scale-105 group border-2 border-transparent hover:border-green-500/30">
+              <div className="bg-gradient-to-br from-financial-success/10 to-financial-success/5 p-6 group-hover:from-financial-success/20 group-hover:to-financial-success/10 transition-all duration-500">
+                <div className="p-3 bg-financial-success/20 rounded-full w-fit mb-4 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
+                  <Wallet className="w-12 h-12 sm:w-16 sm:h-16 text-financial-success" />
+                </div>
                 <CardTitle className="text-xl sm:text-2xl mb-3">Personal Savings Wallet</CardTitle>
                 <CardDescription className="text-base sm:text-lg mb-6">
                   Save for your future with our personal wallet feature
@@ -622,9 +667,11 @@ const Index = () => {
             </Card>
 
             {/* Loans Card */}
-            <Card className="overflow-hidden hover:shadow-financial transition-all duration-300">
-              <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-6">
-                <TrendingUp className="w-12 h-12 sm:w-16 sm:h-16 text-primary mb-4" />
+            <Card className="overflow-hidden hover:shadow-2xl hover:shadow-primary/30 transition-all duration-500 hover:-translate-y-2 hover:scale-105 group border-2 border-transparent hover:border-primary/30">
+              <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-6 group-hover:from-primary/20 group-hover:to-primary/10 transition-all duration-500">
+                <div className="p-3 bg-primary/20 rounded-full w-fit mb-4 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
+                  <TrendingUp className="w-12 h-12 sm:w-16 sm:h-16 text-primary" />
+                </div>
                 <CardTitle className="text-xl sm:text-2xl mb-3">Member Loans</CardTitle>
                 <CardDescription className="text-base sm:text-lg mb-6">
                   Access financial support when you need it most
@@ -727,7 +774,7 @@ const Index = () => {
       {/* FAQ Section - Enhanced for SEO and Rich Snippets */}
       <section className="py-10 sm:py-16 md:py-20 px-3 sm:px-4 bg-muted/30">
         <div className="container mx-auto max-w-4xl">
-          <h3 className="text-2xl sm:text-3xl font-bold text-center mb-8 sm:mb-12">
+          <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-8 sm:mb-12 animate-fade-in-up">
             Frequently Asked Questions
           </h3>
           <div className="space-y-4">
@@ -765,12 +812,18 @@ const Index = () => {
                 answer: "No hidden fees! We believe in complete transparency. Standard M-Pesa transaction charges apply for payments and withdrawals. Your personal savings wallet has zero maintenance fees, and you earn 3% interest monthly on your balance. All fees are clearly disclosed upfront."
               }
             ].map((faq, index) => (
-              <Card key={index} className="hover:shadow-lg transition-shadow" itemScope itemType="https://schema.org/Question">
+              <Card 
+                key={index} 
+                className="hover:shadow-2xl hover:shadow-primary/10 transition-all duration-500 hover:-translate-y-1 hover:border-primary/30 border-2 border-transparent group cursor-pointer animate-fade-in-up"
+                style={{ animationDelay: `${0.05 * index}s` }}
+                itemScope 
+                itemType="https://schema.org/Question"
+              >
                 <CardHeader>
-                  <CardTitle className="text-lg" itemProp="name">{faq.question}</CardTitle>
+                  <CardTitle className="text-lg group-hover:text-primary transition-colors duration-300" itemProp="name">{faq.question}</CardTitle>
                 </CardHeader>
                 <CardContent itemScope itemType="https://schema.org/Answer" itemProp="acceptedAnswer">
-                  <p className="text-muted-foreground" itemProp="text">{faq.answer}</p>
+                  <p className="text-muted-foreground group-hover:text-foreground/80 transition-colors duration-300" itemProp="text">{faq.answer}</p>
                 </CardContent>
               </Card>
             ))}
@@ -779,42 +832,58 @@ const Index = () => {
       </section>
 
       {/* Call to Action Section */}
-      <section className="py-10 sm:py-16 md:py-20 px-3 sm:px-4 bg-gradient-primary">
-        <div className="container mx-auto max-w-4xl text-center">
-          <h3 className="text-2xl sm:text-4xl font-bold mb-4 sm:mb-6 text-white">
-            Ready to Transform Your Group Savings?
-          </h3>
-          <p className="text-base sm:text-xl text-white/90 mb-6 sm:mb-8">
-            Join thousands of Kenyan members already using SMCF for secure, automated table banking
-          </p>
-          <Button
-            size="lg"
-            variant="secondary"
-            onClick={() => setShowAuth(true)}
-            className="text-base sm:text-lg px-6 sm:px-8 py-4 sm:py-6 h-auto">
-            Get Started Today
+      <section className="relative py-16 sm:py-24 md:py-32 px-3 sm:px-4 overflow-hidden">
+        {/* Animated Background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary-glow to-financial-success opacity-90" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.1),transparent_50%)]" />
+        
+        <div className="container mx-auto max-w-4xl text-center relative z-10">
+          <div className="animate-fade-in-up">
+            <h3 className="text-3xl sm:text-5xl font-bold mb-6 sm:mb-8 text-white drop-shadow-lg">
+              Ready to Transform Your Group Savings?
+            </h3>
+            <p className="text-lg sm:text-2xl text-white/95 mb-8 sm:mb-12 leading-relaxed">
+              Join thousands of Kenyan members already using SMCF for secure, automated table banking
+            </p>
+            <Button
+              size="lg"
+              variant="secondary"
+              onClick={() => setShowAuth(true)}
+              className="group text-lg sm:text-xl px-8 sm:px-12 py-6 sm:py-8 h-auto bg-white text-primary hover:bg-white/90 transition-all duration-300 hover:scale-110 hover:shadow-2xl shadow-xl">
+              <span className="flex items-center gap-3">
+                Get Started Today
+                <span className="group-hover:translate-x-2 transition-transform duration-300">→</span>
+              </span>
+            </Button>
+          </div>
+        </div>
+      </section>
           </Button>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="bg-secondary text-secondary-foreground py-12 px-4">
+      <footer className="bg-secondary text-secondary-foreground py-12 px-4 border-t border-white/10">
         <div className="container mx-auto text-center">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <img src={smcfLogo} alt="SMCF - Smart Moves Cash Flow Footer Logo" className="w-8 h-8" />
-            <span className="text-xl"><StyledSMCF /></span>
+          <div className="flex items-center justify-center gap-3 mb-4 group cursor-pointer">
+            <img 
+              src={smcfLogo} 
+              alt="SMCF - Smart Moves Cash Flow Footer Logo" 
+              className="w-8 h-8 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-12" 
+            />
+            <span className="text-xl group-hover:text-primary transition-colors duration-300"><StyledSMCF /></span>
           </div>
-          <p className="text-muted-foreground mb-4">
+          <p className="text-muted-foreground mb-4 hover:text-foreground transition-colors duration-300">
             Smart Moves Cash Flow - Digital Table Banking Platform
           </p>
           <p className="text-sm text-muted-foreground mb-2">
             Secure • Automated • Transparent • Kenyan-Made
           </p>
           <p className="text-sm text-muted-foreground mb-2">
-            Contact: <a href="tel:+254759097157" className="hover:text-primary">+254 759 097 157</a>
+            Contact: <a href="tel:+254759097157" className="hover:text-primary transition-all duration-300 hover:underline">+254 759 097 157</a>
           </p>
           <p className="text-sm text-muted-foreground">
-            Email: <a href="mailto:administrator@smcf.app" className="hover:text-primary">administrator@smcf.app</a> | <a href="mailto:info@smcf.app" className="hover:text-primary">info@smcf.app</a>
+            Email: <a href="mailto:administrator@smcf.app" className="hover:text-primary transition-all duration-300 hover:underline">administrator@smcf.app</a> | <a href="mailto:info@smcf.app" className="hover:text-primary transition-all duration-300 hover:underline">info@smcf.app</a>
           </p>
         </div>
       </footer>
