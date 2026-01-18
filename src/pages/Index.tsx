@@ -37,7 +37,6 @@ const Index = () => {
   const [setupComplete, setSetupComplete] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [showOrganization, setShowOrganization] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   // userRole is simplified for UI: 'admin' means any administrative role (treasurer, secretary, etc.)
   const [userRole, setUserRole] = useState<"admin" | "member" | null>(null);
   const [currentUser, setCurrentUser] = useState(null);
@@ -95,7 +94,6 @@ const Index = () => {
           setCurrentUser(memberUserData);
         }
       }
-      setIsLoading(false);
     };
 
     restoreAuth();
@@ -192,18 +190,6 @@ const Index = () => {
     }
   }, [userRole, currentUser?.phone]); // Use phone as dependency to avoid infinite loops
 
-  // Show loading state while checking authentication
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
   // Show admin setup if needed - MUST be after all hooks
   if (!setupComplete) {
     return <AdminSetup onSetupComplete={() => setSetupComplete(true)} />;
@@ -283,7 +269,7 @@ const Index = () => {
   // Auto-logout after configured timeout of inactivity (only when user is logged in)
   // Shows warning notification before logout
   useInactivityLogoutWithWarning({
-    timeout: getTimeoutForRole(userRole),
+    timeout: sessionConfig.inactivityTimeout,
     warningTime: sessionConfig.warningBeforeLogout,
     onLogout: handleLogout,
     enabled: sessionConfig.enabled && userRole !== null,
