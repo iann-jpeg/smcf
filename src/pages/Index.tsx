@@ -4,6 +4,7 @@ import AdminDashboard from "@/components/AdminDashboard";
 import AdminSetup from "@/components/AdminSetup";
 import AuthDialog from "@/components/AuthDialog";
 import Dashboard from "@/components/Dashboard";
+import { LoadingScreen } from "@/components/LoadingScreen";
 import SEO from "@/components/SEO";
 import { StyledSMCF } from "@/components/StyledSMCF";
 
@@ -192,14 +193,7 @@ const Index = () => {
 
   // Show loading state while checking authentication
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   // Show admin setup if needed - MUST be after all hooks

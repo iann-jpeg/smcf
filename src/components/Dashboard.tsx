@@ -1,6 +1,7 @@
 import AdminDashboard from "@/components/AdminDashboard";
 
 import MemberDashboard from "@/components/MemberDashboard";
+import { LoadingScreen } from "@/components/LoadingScreen";
 import { NotificationCenter } from "@/components/notifications";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
@@ -576,7 +577,10 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
             </CardHeader>
             <CardContent>
               {isLoadingData ? (
-                <div className="text-sm text-muted-foreground">Loading...</div>
+                <div className="space-y-2">
+                  <div className="h-8 w-16 bg-muted animate-pulse rounded" />
+                  <div className="h-4 w-24 bg-muted animate-pulse rounded" />
+                </div>
               ) : (
                 <>
                   <div className="text-xl sm:text-2xl font-bold text-primary mb-2">
@@ -599,7 +603,11 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
             </CardHeader>
             <CardContent>
               {isLoadingData ? (
-                <div className="text-sm text-muted-foreground">Loading...</div>
+                <div className="space-y-3">
+                  <div className="h-8 w-20 bg-muted animate-pulse rounded" />
+                  <div className="h-3 bg-muted animate-pulse rounded" />
+                  <div className="h-4 w-32 bg-muted animate-pulse rounded" />
+                </div>
               ) : (
                 <>
                   <div className="text-xl sm:text-2xl font-bold text-financial-success mb-2">
@@ -635,7 +643,10 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
             </CardHeader>
             <CardContent>
               {isLoadingData ? (
-                <div className="text-sm text-muted-foreground">Loading...</div>
+                <div className="space-y-2">
+                  <div className="h-8 w-20 bg-muted animate-pulse rounded" />
+                  <div className="h-4 w-28 bg-muted animate-pulse rounded" />
+                </div>
               ) : (
                 <>
                   <div className="text-xl sm:text-2xl font-bold text-accent mb-2">
@@ -657,7 +668,10 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
             </CardHeader>
             <CardContent>
               {isLoadingData ? (
-                <div className="text-sm text-muted-foreground">Loading...</div>
+                <div className="space-y-2">
+                  <div className="h-8 w-24 bg-muted animate-pulse rounded" />
+                  <div className="h-4 w-32 bg-muted animate-pulse rounded" />
+                </div>
               ) : (
                 <>
                   <div className="text-xl sm:text-2xl font-bold text-primary mb-2">
