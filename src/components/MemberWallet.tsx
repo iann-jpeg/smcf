@@ -402,7 +402,6 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
           type: "wallet_deposit",
           notes: `Wallet deposit - KES ${amount}${lockPeriodMonths > 0 ? ` (Locked for ${lockPeriodMonths} months)` : ''}`,
           lock_period_months: lockPeriodMonths,
-          notes: `Wallet deposit - KES ${amount}`,
         }),
       });
 

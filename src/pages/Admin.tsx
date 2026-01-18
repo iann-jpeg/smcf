@@ -3,8 +3,6 @@ import AdminDashboard from '@/components/AdminDashboard';
 import AuthDialog from '@/components/AuthDialog';
 import io from 'socket.io-client';
 import API_BASE from '@/lib/api';
-import { useInactivityLogoutWithWarning } from '@/hooks/useInactivityLogoutWithWarning';
-import { sessionConfig, getTimeoutForRole } from '@/config/session';
 
 const socket = io(API_BASE);
 
@@ -44,16 +42,6 @@ const Admin = ({ userData, onLogout }) => {
     setShowAuth(true);
     if (onLogout) onLogout();
   };
-
-  // Auto-logout after configured timeout of inactivity for admins
-  // Shows warning notification before logout
-  useInactivityLogoutWithWarning({
-    timeout: getTimeoutForRole('admin'),
-    warningTime: sessionConfig.warningBeforeLogout,
-    onLogout: handleLogout,
-    enabled: sessionConfig.enabled && currentUser !== null,
-    events: sessionConfig.activityEvents,
-  });
 
   if (!currentUser) {
     return (
