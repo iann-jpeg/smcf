@@ -41,22 +41,22 @@ export default function TrafficDashboard() {
       console.log('API_BASE:', API_BASE);
 
       const promises = [
-        fetch(`${API_BASE}/api/analytics/dashboard?period=${period}`, { headers })
+        fetch(`${API_BASE}/api/reports/dashboard?period=${period}`, { headers })
           .then(r => {
             if (!r.ok) throw new Error(`Dashboard API failed: ${r.status}`);
             return r.json();
           }),
-        fetch(`${API_BASE}/api/analytics/searches?period=${period}`, { headers })
+        fetch(`${API_BASE}/api/reports/searches?period=${period}`, { headers })
           .then(r => {
             if (!r.ok) throw new Error(`Searches API failed: ${r.status}`);
             return r.json();
           }),
-        fetch(`${API_BASE}/api/analytics/logins?period=${period}`, { headers })
+        fetch(`${API_BASE}/api/reports/logins?period=${period}`, { headers })
           .then(r => {
             if (!r.ok) throw new Error(`Logins API failed: ${r.status}`);
             return r.json();
           }),
-        fetch(`${API_BASE}/api/analytics/activities?period=${period}`, { headers })
+        fetch(`${API_BASE}/api/reports/activities?period=${period}`, { headers })
           .then(r => {
             if (!r.ok) throw new Error(`Activities API failed: ${r.status}`);
             return r.json();
@@ -72,7 +72,14 @@ export default function TrafficDashboard() {
       setActivityData(activities);
     } catch (error) {
       console.error('Error fetching analytics:', error);
-      setError(error instanceof Error ? error.message : 'Failed to load analytics data');
+      
+      // Detect if blocked by ad blocker
+      const errorMessage = error instanceof Error ? error.message : '';
+      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+        setError('⚠️ Analytics blocked by ad blocker. Please disable your ad blocker for this site or add www.smcf.app to your allowlist to view analytics.');
+      } else {
+        setError(error instanceof Error ? error.message : 'Failed to load analytics data');
+      }
     } finally {
       setLoading(false);
     }
@@ -81,7 +88,7 @@ export default function TrafficDashboard() {
   const handleExport = async (format: 'pdf' | 'csv' | 'excel') => {
     try {
       const token = localStorage.getItem('smcf_token');
-      const response = await fetch(`${API_BASE}/api/analytics/export?period=${period}&format=${format}`, {
+      const response = await fetch(`${API_BASE}/api/reports/export?period=${period}&format=${format}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

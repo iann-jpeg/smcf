@@ -38,7 +38,7 @@ export default function MemberActivityTimeline() {
     setSearched(true);
     try {
       const token = localStorage.getItem('smcf_token');
-      const response = await fetch(`${API_BASE}/api/analytics/members/${memberId}/timeline`, {
+      const response = await fetch(`${API_BASE}/api/reports/members/${memberId}/timeline`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

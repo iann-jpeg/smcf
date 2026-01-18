@@ -242,6 +242,7 @@ app.use("/api/savings", savingsRoutes);
 app.use("/api/reserve", reserveRoutes);
 app.use("/api/credit-score", creditScoreRoutes);
 app.use("/api/analytics", analyticsRoutes);
+app.use("/api/reports", analyticsRoutes); // Alias to avoid ad blocker issues
 
 // Health check endpoint
 app.get("/health", (req, res) => {
