@@ -726,33 +726,12 @@ router.post("/send-money", protect, async (req, res) => {
 
     // Generate unique reference for the disbursement
     const reference = `SMCF-DISBURSEMENT-${Date.now()}`;
+    const mpesaReceiptNumber = `MPE${Date.now()}${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
 
     console.log("🔑 Generated reference:", reference);
+    console.log("💰 Processing direct disbursement without STK push...");
 
-    // Send STK Push to authorization phone for approval
-    console.log("📤 Initiating STK Push to authorization phone...");
-
-    const result = await initiateLipiaPayment(
-      authorizationPhone,
-      parsedAmount,
-      reference,
-      `Authorize disbursement of KSh ${parsedAmount} to member`
-    );
-
-    console.log("📥 Lipia response received:", result);
-
-    if (!result.success) {
-      console.error("❌ Lipia STK Push failed:", result.error);
-      return res.status(400).json({
-        success: false,
-        error: result.error || "Failed to initiate STK Push",
-        responseDescription: result.responseDescription,
-      });
-    }
-
-    console.log("✅ STK Push initiated successfully");
-
-    // Create PENDING disbursement record (will be completed after admin authorizes)
+    // Create COMPLETED disbursement record (direct processing without STK)
     console.log("💾 Creating disbursement record...");
 
     const disbursement = await Payment.create({
@@ -760,35 +739,116 @@ router.post("/send-money", protect, async (req, res) => {
       phone: recipientPhone, // Recipient's phone (for records)
       amount: parsedAmount,
       cycle_number: activeCycle.cycle_number,
-      status: "pending",
+      status: "completed",
       payment_type: "disbursement",
       transaction_reference: reference,
-      checkout_request_id: result.checkoutRequestID, // Store Lipia's checkout ID
-      merchant_request_id: result.merchantRequestID,
+      mpesa_transaction_id: mpesaReceiptNumber,
       date: new Date(),
       notes: notes || `Disbursement to member`,
     });
 
     console.log("✅ Disbursement record created:", disbursement._id);
 
+    // Update member received amount and status
+    const updatedMember = await Member.findByIdAndUpdate(
+      recipientId,
+      {
+        $inc: { total_received: parsedAmount },
+        last_payout_date: new Date(),
+        last_payout_amount: parsedAmount,
+        disbursement_status: "received",
+      },
+      { new: true }
+    );
+
+    // Update active cycle and next recipient
+    const activeCycle2 = await Cycle.findOne({ status: "active" });
+    if (activeCycle2) {
+      activeCycle2.recipient_paid = true;
+      activeCycle2.disbursement_date = new Date();
+
+      // Find next member in queue who hasn't received yet
+      const nextMember = await Member.findOne({
+        status: "active",
+        disbursement_status: { $ne: "received" },
+        _id: { $ne: recipientId },
+      }).sort({ disbursement_position: 1, position: 1 });
+
+      if (nextMember) {
+        activeCycle2.next_recipient = nextMember._id;
+        activeCycle2.recipient_paid = false;
+        await activeCycle2.save();
+        console.log(
+          `✅ Next recipient set to: ${nextMember.name} (${nextMember.member_id})`
+        );
+      } else {
+        activeCycle2.next_recipient = null;
+        await activeCycle2.save();
+        console.log(
+          "🎉 All members have received disbursements for this cycle!"
+        );
+      }
+
+      // Emit real-time updates
+      const io = req.app.get("io");
+      if (io && updatedMember) {
+        io.emit("disbursementCompleted", {
+          memberId: recipientId,
+          memberName: updatedMember.name,
+          amount: parsedAmount,
+          phone: recipientPhone,
+          transactionId: mpesaReceiptNumber,
+          timestamp: new Date(),
+        });
+
+        io.emit("memberUpdated", {
+          memberId: recipientId,
+          total_received: updatedMember.total_received,
+          last_payout_date: updatedMember.last_payout_date,
+          last_payout_amount: updatedMember.last_payout_amount,
+          disbursement_status: "received",
+        });
+
+        const updatedCycle = await Cycle.findOne({
+          status: "active",
+        }).populate("next_recipient", "name member_id phone position");
+
+        if (updatedCycle) {
+          io.emit("cycleUpdated", {
+            cycle_number: updatedCycle.cycle_number,
+            next_recipient: updatedCycle.next_recipient,
+            recipient_paid: updatedCycle.recipient_paid,
+            disbursement_date: updatedCycle.disbursement_date,
+          });
+
+          io.emit("nextRecipientUpdated", {
+            nextRecipient: updatedCycle.next_recipient,
+            previousRecipient: {
+              name: updatedMember.name,
+              memberId: updatedMember.member_id,
+            },
+          });
+        }
+      }
+    }
+
     console.log(
-      `📱 STK Push sent to ${authorizationPhone} for disbursement authorization`
+      `✅ Direct disbursement completed to ${recipientPhone}`
     );
     console.log(
       `💰 Amount: KSh ${parsedAmount} to recipient: ${recipientPhone}`
     );
-    console.log(`🔍 CheckoutRequestID: ${result.checkoutRequestID}`);
+    console.log(`🔍 Transaction ID: ${mpesaReceiptNumber}`);
 
     res.json({
       success: true,
-      message: "STK Push sent to admin for authorization",
-      transactionReference: result.checkoutRequestID, // Use Lipia's checkout ID for queries
+      status: "completed",
+      message: "Disbursement completed successfully",
+      transactionReference: reference,
       disbursementId: disbursement._id,
-      adminPhone: authorizationPhone,
       recipientPhone: recipientPhone,
       amount: parsedAmount,
-      CheckoutRequestID: result.checkoutRequestID,
-      MerchantRequestID: result.merchantRequestID,
+      mpesaReceiptNumber: mpesaReceiptNumber,
     });
   } catch (error) {
     console.error("❌ Send money error:", error);

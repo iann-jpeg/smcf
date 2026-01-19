@@ -113,20 +113,32 @@ const MpesaDisbursementDialog = ({
       });
 
       if (response.ok && data.success) {
-        // STK sent to admin successfully
-        setTransactionReference(data.transactionReference);
-        setDisbursementId(data.disbursementId);
-        setAdminPhone(data.adminPhone);
-        setIsProcessing(false);
-        setStep("waiting");
+        // Check if disbursement is already completed (direct processing)
+        if (data.status === "completed") {
+          setTransactionId(data.mpesaReceiptNumber || data.transactionReference);
+          setIsProcessing(false);
+          setStep("success");
 
-        toast({
-          title: "Authorization Required",
-          description: `STK Push sent to admin ${data.adminPhone}. Please enter PIN to authorize.`,
-        });
+          toast({
+            title: "Disbursement Successful!",
+            description: `KES ${amount} sent to ${selectedMemberData?.name}`,
+          });
+        } else {
+          // Old flow: STK sent to admin (fallback)
+          setTransactionReference(data.transactionReference);
+          setDisbursementId(data.disbursementId);
+          setAdminPhone(data.adminPhone);
+          setIsProcessing(false);
+          setStep("waiting");
 
-        // Start polling for status
-        pollDisbursementStatus(data.transactionReference, data.disbursementId);
+          toast({
+            title: "Authorization Required",
+            description: `STK Push sent to admin ${data.adminPhone}. Please enter PIN to authorize.`,
+          });
+
+          // Start polling for status
+          pollDisbursementStatus(data.transactionReference, data.disbursementId);
+        }
       } else {
         console.error("❌ Disbursement failed:", data);
         setIsProcessing(false);
