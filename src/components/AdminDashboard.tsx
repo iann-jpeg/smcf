@@ -50,6 +50,7 @@ import {
   DollarSign,
   Download,
   Edit,
+  FastForward,
   FileSpreadsheet,
   LogOut,
   Megaphone,
@@ -241,6 +242,45 @@ const AdminDashboard = ({
   const pendingMembers = orderedMembers.filter(
     (m: any) => m && !paidMemberIds.has(m._id || m.id)
   );
+
+  // Calculate advance payments - members who have paid for future cycles
+  const advancePaymentsData = (() => {
+    if (!currentCycleNumber) return { members: [], totalAdvanceCycles: 0 };
+    
+    // Get all completed payments for cycles AFTER the current one
+    const futurePayments = allPayments.filter(
+      (p: any) => p.status === "completed" && p.cycle_number > currentCycleNumber
+    );
+    
+    // Group by member and find max cycle paid
+    const memberAdvanceMap = new Map<string, { name: string; memberId: string; maxCycle: number; cyclesAhead: number }>();
+    
+    futurePayments.forEach((p: any) => {
+      const memberId = p.member_id?._id || p.member_id;
+      const memberName = p.member_id?.name || "Unknown";
+      const memberCode = p.member_id?.member_id || "";
+      
+      if (!memberAdvanceMap.has(memberId)) {
+        memberAdvanceMap.set(memberId, {
+          name: memberName,
+          memberId: memberCode,
+          maxCycle: p.cycle_number,
+          cyclesAhead: p.cycle_number - currentCycleNumber
+        });
+      } else {
+        const existing = memberAdvanceMap.get(memberId)!;
+        if (p.cycle_number > existing.maxCycle) {
+          existing.maxCycle = p.cycle_number;
+          existing.cyclesAhead = p.cycle_number - currentCycleNumber;
+        }
+      }
+    });
+    
+    const membersWithAdvance = Array.from(memberAdvanceMap.values());
+    const totalAdvanceCycles = membersWithAdvance.reduce((sum, m) => sum + m.cyclesAhead, 0);
+    
+    return { members: membersWithAdvance, totalAdvanceCycles };
+  })();
 
   // Calculate total collected from current cycle payments only
   const totalCollected = completedPayments.reduce(
@@ -1937,6 +1977,28 @@ Thank you for your cooperation! 🙏`;
               </CardContent>
             </Card>
 
+            {/* Paid in Advance */}
+            <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-950 dark:to-cyan-900 border-cyan-200">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-cyan-600 dark:text-cyan-400">
+                      Paid in Advance
+                    </p>
+                    <p className="text-3xl font-bold text-cyan-900 dark:text-cyan-100">
+                      {advancePaymentsData.members.length}
+                    </p>
+                    <p className="text-xs text-cyan-700 dark:text-cyan-300 mt-1">
+                      {advancePaymentsData.totalAdvanceCycles > 0
+                        ? `+${advancePaymentsData.totalAdvanceCycles} future cycle${advancePaymentsData.totalAdvanceCycles > 1 ? "s" : ""}`
+                        : "No advance payments"}
+                    </p>
+                  </div>
+                  <FastForward className="w-12 h-12 text-cyan-300 dark:text-cyan-700" />
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Active Loans */}
             <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900 border-purple-200">
               <CardContent className="pt-6">
@@ -2216,6 +2278,37 @@ Thank you for your cooperation! 🙏`;
               </div>
             </div>
           </div>
+
+          {/* Advance Payments Details */}
+          {advancePaymentsData.members.length > 0 && (
+            <div className="mt-6 p-4 bg-cyan-50 dark:bg-cyan-950/30 rounded-lg border border-cyan-200 dark:border-cyan-800">
+              <div className="flex items-center gap-2 mb-3">
+                <FastForward className="w-5 h-5 text-cyan-600" />
+                <h3 className="font-semibold text-cyan-900 dark:text-cyan-100">
+                  Members Paid in Advance ({advancePaymentsData.members.length})
+                </h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                {advancePaymentsData.members.map((member, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded border border-cyan-100 dark:border-cyan-900"
+                  >
+                    <div>
+                      <p className="font-medium text-sm">{member.name}</p>
+                      <p className="text-xs text-muted-foreground">{member.memberId}</p>
+                    </div>
+                    <Badge className="bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300">
+                      +{member.cyclesAhead} cycle{member.cyclesAhead > 1 ? "s" : ""}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-cyan-700 dark:text-cyan-300 mt-3">
+                Total advance cycles paid: {advancePaymentsData.totalAdvanceCycles}
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
