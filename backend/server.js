@@ -305,6 +305,13 @@ httpServer.listen(PORT, () => {
   // Start loan due date fix cron job
   startLoanDueDateCronJob();
   
+  // Run interest calculation on startup (catch up on any missed runs)
+  setTimeout(async () => {
+    console.log("💰 Running initial interest calculation...");
+    const { applyMonthlyInterest } = await import("./services/interestService.js");
+    await applyMonthlyInterest();
+  }, 5000); // Run 5 seconds after startup
+  
   // Start daily maturity check (runs at midnight every day)
   setInterval(async () => {
     const now = new Date();
