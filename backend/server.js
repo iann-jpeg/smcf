@@ -307,32 +307,48 @@ httpServer.listen(PORT, () => {
   
   // Run loan due date fix on startup (catch up on any missing due dates)
   setTimeout(async () => {
-    console.log("📅 Running initial loan due date fix...");
-    const setLoanDueDates = (await import("./scripts/set-loan-due-dates.js")).default;
-    await setLoanDueDates();
+    try {
+      console.log("📅 Running initial loan due date fix...");
+      const setLoanDueDates = (await import("./scripts/set-loan-due-dates.js")).default;
+      await setLoanDueDates();
+    } catch (err) {
+      console.error("❌ Error running initial loan due date fix:", err.message);
+    }
   }, 6000); // Run 6 seconds after startup
   
   // Run interest calculation on startup (catch up on any missed runs)
   setTimeout(async () => {
-    console.log("💰 Running initial interest calculation...");
-    const { applyMonthlyInterest } = await import("./services/interestService.js");
-    await applyMonthlyInterest();
+    try {
+      console.log("💰 Running initial interest calculation...");
+      const { applyMonthlyInterest } = await import("./services/interestService.js");
+      await applyMonthlyInterest();
+    } catch (err) {
+      console.error("❌ Error running initial interest calculation:", err.message);
+    }
   }, 5000); // Run 5 seconds after startup
   
   // Start daily maturity check (runs at midnight every day)
   setInterval(async () => {
-    const now = new Date();
-    // Run at midnight (00:00)
-    if (now.getHours() === 0 && now.getMinutes() === 0) {
-      console.log("⏰ Running daily maturity check...");
-      await checkMaturedDeposits();
+    try {
+      const now = new Date();
+      // Run at midnight (00:00)
+      if (now.getHours() === 0 && now.getMinutes() === 0) {
+        console.log("⏰ Running daily maturity check...");
+        await checkMaturedDeposits();
+      }
+    } catch (err) {
+      console.error("❌ Error in daily maturity check:", err.message);
     }
   }, 60000); // Check every minute
   
   // Run maturity check on startup
   setTimeout(async () => {
-    console.log("🔍 Running initial maturity check...");
-    await checkMaturedDeposits();
+    try {
+      console.log("🔍 Running initial maturity check...");
+      await checkMaturedDeposits();
+    } catch (err) {
+      console.error("❌ Error running initial maturity check:", err.message);
+    }
   }, 5000); // Run 5 seconds after startup
   
   console.log(`\n📚 API Documentation:`);
