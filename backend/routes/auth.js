@@ -176,6 +176,7 @@ router.post("/login", async (req, res) => {
       status: member.status,
       position: member.position,
       payment_status: member.payment_status || "pending",
+      member_type: member.member_type || "regular",
       total_contributed: member.total_contributed || 0,
       total_received: member.total_received || 0,
       monthly_contribution: member.monthly_contribution || 224,
