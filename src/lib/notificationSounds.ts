@@ -13,24 +13,30 @@ function initializeAudio(): HTMLAudioElement {
     audioElement = new Audio();
     audioElement.volume = 1.0; // Maximum volume
     
-    // Use Web Audio API to generate a loud notification beep
+    // Use Web Audio API to generate a payment confirmation beep (like card terminals)
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const duration = 0.25; // Longer duration for louder effect
+    const duration = 0.15; // Short, crisp beep
     const sampleRate = audioContext.sampleRate;
-    const buffer = audioContext.createBuffer(1, sampleRate * duration * 4, sampleRate);
+    const buffer = audioContext.createBuffer(1, sampleRate * duration * 2, sampleRate);
     const channelData = buffer.getChannelData(0);
     
-    // Generate louder two-tone notification sound (ding-dong)
-    const frequencies = [880, 1100, 880, 660]; // A5, C#6, A5, E5 - ding dong pattern
-    const toneLength = Math.floor(channelData.length / 4);
+    // Generate payment confirmation beep (two quick ascending beeps like POS terminals)
+    // First beep: 1400Hz, Second beep: 1800Hz
+    const beep1Duration = Math.floor(channelData.length / 2);
+    const beep2Duration = channelData.length - beep1Duration;
     
-    for (let i = 0; i < channelData.length; i++) {
-      const toneIndex = Math.floor(i / toneLength);
-      const freq = frequencies[Math.min(toneIndex, frequencies.length - 1)];
+    // First beep (1400Hz)
+    for (let i = 0; i < beep1Duration; i++) {
       const t = i / sampleRate;
-      const envelope = Math.sin(Math.PI * (i % toneLength) / toneLength); // Smooth fade
-      // Increased amplitude to 0.9 for louder sound
-      channelData[i] = Math.sin(2 * Math.PI * freq * t) * envelope * 0.9;
+      const envelope = Math.exp(-5 * t) * Math.sin(Math.PI * i / beep1Duration);
+      channelData[i] = Math.sin(2 * Math.PI * 1400 * t) * envelope * 0.95;
+    }
+    
+    // Second beep (1800Hz) - higher pitch for confirmation
+    for (let i = 0; i < beep2Duration; i++) {
+      const t = i / sampleRate;
+      const envelope = Math.exp(-5 * t) * Math.sin(Math.PI * i / beep2Duration);
+      channelData[beep1Duration + i] = Math.sin(2 * Math.PI * 1800 * t) * envelope * 0.95;
     }
     
     // Convert AudioBuffer to WAV blob

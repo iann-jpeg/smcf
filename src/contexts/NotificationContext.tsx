@@ -217,12 +217,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
       dispatch({ type: 'ADD_NOTIFICATION', payload: newNotification });
 
-      // Play sound (always play for notifications)
+      // Always play sound for all notifications (including offline mode)
       const soundType = getSoundType(notification.type);
       await playNotificationSoundIfEnabled(soundType);
 
       // Vibrate on mobile (strong vibration pattern)
-      vibrateDevice([300, 100, 300, 100, 300]);
+      vibrateDevice([200, 50, 200]);
 
       // Show push notification (works even when app is in background or closed)
       if (isPushSupported()) {
@@ -230,12 +230,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           body: notification.message,
           tag: newNotification.id,
           playSound: false, // Already played above
+          requireInteraction: true, // Keep notification visible until user interacts
         });
-      } else if (document.hidden) {
-        // Fallback to browser notification
+      } else {
+        // Always show browser notification for better visibility
         await showBrowserNotification(notification.title, {
           body: notification.message,
           tag: newNotification.id,
+          requireInteraction: notification.type === 'error' || notification.type === 'warning',
         });
       }
     },
