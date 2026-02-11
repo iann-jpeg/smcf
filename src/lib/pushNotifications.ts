@@ -170,12 +170,16 @@ export async function showPushNotification(
       ...notificationOptions
     } as NotificationOptions);
   } else if ('Notification' in window && Notification.permission === 'granted') {
-    // Fallback to regular notification
-    new Notification(title, {
-      icon: '/newsmcflogo.png',
-      badge: '/newsmcflogo.png',
-      ...notificationOptions
-    });
+    // Fallback to regular notification - wrapped in try-catch for strict mode compatibility
+    try {
+      new Notification(title, {
+        icon: '/newsmcflogo.png',
+        badge: '/newsmcflogo.png',
+        ...notificationOptions
+      });
+    } catch (error) {
+      console.warn('Failed to create browser notification:', error);
+    }
   }
 }
 
