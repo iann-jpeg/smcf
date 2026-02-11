@@ -62,9 +62,8 @@ const loanTermsAcceptanceSchema = new mongoose.Schema({
   timestamps: true, // Adds createdAt and updatedAt
 });
 
-// Index for fast lookups
+// Index for fast lookups (member_id and loan_id already have index: true in schema)
 loanTermsAcceptanceSchema.index({ member_id: 1, policy_version: 1 });
-loanTermsAcceptanceSchema.index({ loan_id: 1 });
 loanTermsAcceptanceSchema.index({ accepted_at: -1 });
 
 // Static method to check if member has accepted current policy version
