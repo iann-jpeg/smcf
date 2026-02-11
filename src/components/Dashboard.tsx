@@ -4,6 +4,7 @@ import MemberDashboard from "@/components/MemberDashboard";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { NotificationCenter } from "@/components/notifications";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -529,9 +530,12 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
       <header className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-2 sm:px-4 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-2 sm:gap-4">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-primary rounded-full flex items-center justify-center text-primary-foreground font-bold">
-              {userRole === "admin" ? "A" : "M"}
-            </div>
+            <Avatar className="w-8 h-8 sm:w-10 sm:h-10">
+              <AvatarImage src={userData?.profile_picture} alt={userData?.name} />
+              <AvatarFallback className="bg-gradient-primary text-primary-foreground font-bold">
+                {userRole === "admin" ? "A" : (userData?.name || "M").split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)}
+              </AvatarFallback>
+            </Avatar>
             <div>
               <h1 className="text-lg sm:text-xl font-bold text-primary">
                 {userRole === "admin" ? "Admin Dashboard" : "Member Dashboard"}

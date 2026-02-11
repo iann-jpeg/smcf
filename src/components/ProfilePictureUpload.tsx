@@ -119,13 +119,18 @@ export default function ProfilePictureUpload({ userData, onUpdate }: ProfilePict
         const user = JSON.parse(storedUser);
         user.profile_picture = data.profile_picture;
         localStorage.setItem("user", JSON.stringify(user));
+        
+        // Update userData prop directly
+        userData.profile_picture = data.profile_picture;
       }
 
       setShowUploadDialog(false);
       setSelectedImage(null);
 
-      // Reload page to update all instances
-      window.location.reload();
+      // Trigger a soft refresh by reloading after a short delay
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
     } catch (error) {
       toast({
         title: "Upload Failed",
@@ -172,10 +177,15 @@ export default function ProfilePictureUpload({ userData, onUpdate }: ProfilePict
         const user = JSON.parse(storedUser);
         user.profile_picture = "";
         localStorage.setItem("user", JSON.stringify(user));
+        
+        // Update userData prop directly
+        userData.profile_picture = "";
       }
 
-      // Reload page to update all instances
-      window.location.reload();
+      // Trigger a soft refresh
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
     } catch (error) {
       toast({
         title: "Failed",
