@@ -2,6 +2,7 @@
 import express from "express";
 import { adminOnly, protect } from "../middleware/auth.js";
 import Loan from "../models/Loan.js";
+import LoanTermsAcceptance from "../models/LoanTermsAcceptance.js";
 import Payment from "../models/Payment.js";
 import { initiateLipiaPayment } from "../services/lipiaService.js";
 import { calculateLateFeeForLoan, applyLateFees } from "../services/lateFeesService.js";
@@ -122,15 +123,77 @@ router.post("/admin/apply-late-fees", protect, adminOnly, async (req, res) => {
   }
 });
 
-// Request loan (member)
-router.post("/request", protect, async (req, res) => {
+// Accept loan terms and conditions (member)
+router.post("/accept-terms", protect, async (req, res) => {
   try {
-    const { amount, purpose, interest_rate } = req.body;
+    const { policyVersion, userAgent } = req.body;
+
+    if (!req.member || !req.member._id) {
+      return res.status(401).json({
+        success: false,
+        error: "Not authorized: valid member token required.",
+      });
+    }
+
+    // Get IP address from request
+    const ipAddress = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.ip || 'unknown';
+    const cleanIp = Array.isArray(ipAddress) ? ipAddress[0] : ipAddress.split(',')[0].trim();
+
+    // Create acceptance record
+    const acceptance = await LoanTermsAcceptance.createAcceptance({
+      memberId: req.member._id,
+      policyVersion: policyVersion || "SMCF-LOAN-POLICY-2026-01",
+      ipAddress: cleanIp,
+      userAgent: userAgent || req.headers['user-agent'] || 'unknown',
+      memberName: req.member.name,
+      memberPhone: req.member.phone,
+    });
+
+    res.status(201).json({ 
+      success: true, 
+      message: "Terms accepted successfully",
+      data: {
+        acceptanceId: acceptance._id,
+        acceptedAt: acceptance.accepted_at,
+      }
+    });
+  } catch (error) {
+    console.error("Error accepting terms:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Request loan (member) - now requires terms acceptance
+router.post("/request", protect, async (req, res) {
+  try {
+    const { amount, purpose, interest_rate, termsAcceptanceId } = req.body;
 
     if (!req.member || !req.member._id) {
       return res.status(401).json({
         success: false,
         error: "Not authorized: valid member token required. Please log in again.",
+      });
+    }
+
+    // Verify terms have been accepted
+    if (!termsAcceptanceId) {
+      return res.status(400).json({
+        success: false,
+        error: "Terms and conditions must be accepted before submitting loan application.",
+      });
+    }
+
+    // Verify the acceptance record exists and belongs to this member
+    const acceptance = await LoanTermsAcceptance.findOne({
+      _id: termsAcceptanceId,
+      member_id: req.member._id,
+      is_valid: true,
+    });
+
+    if (!acceptance) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid or expired terms acceptance. Please accept terms again.",
       });
     }
 
@@ -141,6 +204,10 @@ router.post("/request", protect, async (req, res) => {
       interest_rate: interest_rate || 0,
       status: "pending",
     });
+
+    // Link the acceptance to this loan
+    acceptance.loan_id = loan._id;
+    await acceptance.save();
 
     // Emit Socket.IO event for new loan request
     const io = req.app.get("io");

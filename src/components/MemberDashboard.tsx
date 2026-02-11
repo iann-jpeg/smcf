@@ -4,6 +4,7 @@ import CycleQRPayment from "@/components/CycleQRPayment";
 import LoanRequestDialog from "@/components/LoanRequestDialog";
 import MemberWallet from "@/components/MemberWallet";
 import PaymentDialog from "@/components/PaymentDialog";
+import ProfilePictureUpload from "@/components/ProfilePictureUpload";
 import { StyledSMCF } from "@/components/StyledSMCF";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,10 +31,13 @@ import { useToast } from "@/hooks/use-toast";
 import { useAutoRefresh } from "@/hooks/use-auto-refresh";
 import API_BASE from "@/lib/api";
 import { authService } from "@/lib/authService";
+import { generateLoanTermsPDF } from "@/lib/loanTermsPDF";
 import {
   AlertCircle,
   Calendar,
   CheckCircle,
+  Download,
+  FileText,
   Megaphone,
   Phone,
   Receipt,
@@ -856,14 +860,15 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         </Card>
       )}
 
-      {/* Payment Status Alert */}
-      <Card
-        className={`border-l-4 ${
-          memberStats.hasPaidThisCycle
-            ? "border-l-financial-success bg-financial-success/5"
-            : "border-l-financial-warning bg-financial-warning/5"
-        }`}>
-        <CardContent className="pt-4 sm:pt-6">
+      {/* Payment Status Alert - Hidden for wallet-only members */}
+      {userData?.member_type !== "wallet_only" && (
+        <Card
+          className={`border-l-4 ${
+            memberStats.hasPaidThisCycle
+              ? "border-l-financial-success bg-financial-success/5"
+              : "border-l-financial-warning bg-financial-warning/5"
+          }`}>
+          <CardContent className="pt-4 sm:pt-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3">
             <div className="flex items-center gap-1 sm:gap-2 md:gap-3">
               {memberStats.hasPaidThisCycle ? (
@@ -899,9 +904,11 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
           </div>
         </CardContent>
       </Card>
+      )}
 
-      {/* M-Pesa Payment Section - Always visible */}
-      <Card className="border-mpesa-green bg-gradient-to-br from-mpesa-green/5 to-mpesa-green/10">
+      {/* M-Pesa Payment Section - Hidden for wallet-only members */}
+      {userData?.member_type !== "wallet_only" && (
+        <Card className="border-mpesa-green bg-gradient-to-br from-mpesa-green/5 to-mpesa-green/10">
         <CardHeader className="text-center">
           <CardTitle className="flex items-center justify-center gap-2 text-mpesa-green">
             <Phone className="w-6 h-6" />
@@ -984,23 +991,28 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
           </div>
         </CardContent>
       </Card>
+      )}
 
-      {/* Cycle Trend Chart */}
-      <MemberCycleChart />
+      {/* Cycle Trend Chart - Hidden for wallet-only members */}
+      {userData?.member_type !== "wallet_only" && <MemberCycleChart />}
 
-      <Tabs defaultValue="overview" className="w-full">
+      <Tabs defaultValue={userData?.member_type === "wallet_only" ? "wallet" : "overview"} className="w-full">
         <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">
-          <TabsList className="inline-flex w-auto md:grid md:w-full md:grid-cols-6 min-w-max">
-            <TabsTrigger
-              value="overview"
-              className="text-xs sm:text-sm whitespace-nowrap">
-              Overview
-            </TabsTrigger>
-            <TabsTrigger
-              value="announcements"
-              className="text-xs sm:text-sm whitespace-nowrap">
-              Announcements
-            </TabsTrigger>
+          <TabsList className={`inline-flex w-auto min-w-max ${userData?.member_type === "wallet_only" ? "md:grid md:w-full md:grid-cols-2" : "md:grid md:w-full md:grid-cols-6"}`}>
+            {userData?.member_type !== "wallet_only" && (
+              <TabsTrigger
+                value="overview"
+                className="text-xs sm:text-sm whitespace-nowrap">
+                Overview
+              </TabsTrigger>
+            )}
+            {userData?.member_type !== "wallet_only" && (
+              <TabsTrigger
+                value="announcements"
+                className="text-xs sm:text-sm whitespace-nowrap">
+                Announcements
+              </TabsTrigger>
+            )}
             <TabsTrigger
               value="wallet"
               className="text-xs sm:text-sm whitespace-nowrap">
@@ -1011,17 +1023,21 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
               className="text-xs sm:text-sm whitespace-nowrap">
               My Loans
             </TabsTrigger>
-            <TabsTrigger
-              value="history"
-              className="text-xs sm:text-sm whitespace-nowrap">
-              <span className="hidden sm:inline">Payment History</span>
-              <span className="sm:hidden">History</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="payouts"
-              className="text-xs sm:text-sm whitespace-nowrap">
-              Payouts
-            </TabsTrigger>
+            {userData?.member_type !== "wallet_only" && (
+              <TabsTrigger
+                value="history"
+                className="text-xs sm:text-sm whitespace-nowrap">
+                <span className="hidden sm:inline">Payment History</span>
+                <span className="sm:hidden">History</span>
+              </TabsTrigger>
+            )}
+            {userData?.member_type !== "wallet_only" && (
+              <TabsTrigger
+                value="payouts"
+                className="text-xs sm:text-sm whitespace-nowrap">
+                Payouts
+              </TabsTrigger>
+            )}
           </TabsList>
         </div>
 
@@ -1325,10 +1341,36 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         </TabsContent>
 
         <TabsContent value="wallet" className="space-y-4">
+          <ProfilePictureUpload userData={userData} />
           <MemberWallet userData={userData} />
         </TabsContent>
 
         <TabsContent value="loans" className="space-y-4">
+          {/* Loan Policy Download */}
+          <Card className="bg-primary/5 border-primary/20">
+            <CardContent className="pt-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <FileText className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="font-semibold text-sm mb-1">Loan Terms & Conditions</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Download the official SMCF loan policy document (Kenyan-Compliant)
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  onClick={generateLoanTermsPDF}
+                  variant="default"
+                  size="sm"
+                  className="whitespace-nowrap">
+                  <Download className="w-4 h-4 mr-2" />
+                  Download Policy PDF
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">

@@ -30,12 +30,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import API_BASE from "@/lib/api";
 import { authService } from "@/lib/authService";
+import { generateLoanTermsPDF } from "@/lib/loanTermsPDF";
 import {
   CheckCircle,
   Clock,
   DollarSign,
   Download,
   FileSpreadsheet,
+  FileText,
   HandCoins,
   Loader2,
   Trash2,
@@ -646,6 +648,31 @@ const LoansTab = ({ isReadOnly = false }: LoansTabProps) => {
       {loans.length > 0 && (
         <LoansChart loans={loans} />
       )}
+
+      {/* Loan Policy Download */}
+      <Card className="bg-primary/5 border-primary/20">
+        <CardContent className="pt-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <FileText className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+              <div>
+                <h4 className="font-semibold text-sm mb-1">Official Loan Terms & Conditions</h4>
+                <p className="text-xs text-muted-foreground">
+                  Download the Kenyan-compliant loan policy document for members
+                </p>
+              </div>
+            </div>
+            <Button
+              onClick={generateLoanTermsPDF}
+              variant="default"
+              size="sm"
+              className="whitespace-nowrap">
+              <Download className="w-4 h-4 mr-2" />
+              Download Policy PDF
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Loans Management Tabs */}
       <Card>

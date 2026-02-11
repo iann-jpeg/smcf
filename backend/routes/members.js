@@ -400,4 +400,59 @@ router.post("/reorder", protect, adminOnly, async (req, res) => {
   }
 });
 
+// Upload profile picture
+router.post("/upload-profile-picture", protect, async (req, res) => {
+  try {
+    const { profile_picture } = req.body; // Base64 image string
+    
+    if (!profile_picture) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "No profile picture provided" 
+      });
+    }
+
+    // Validate base64 format
+    if (!profile_picture.startsWith('data:image/')) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Invalid image format" 
+      });
+    }
+
+    // Get member ID from token (member can only update their own picture)
+    const memberId = req.member ? req.member._id : req.body.member_id;
+    
+    const member = await Member.findByIdAndUpdate(
+      memberId,
+      { profile_picture },
+      { new: true }
+    );
+
+    if (!member) {
+      return res.status(404).json({ 
+        success: false, 
+        error: "Member not found" 
+      });
+    }
+
+    // Emit socket event for real-time update
+    if (req.app.get("io")) {
+      req.app.get("io").emit("member:updated", { 
+        memberId: member._id,
+        profile_picture: member.profile_picture 
+      });
+    }
+
+    res.json({ 
+      success: true, 
+      profile_picture: member.profile_picture,
+      message: "Profile picture updated successfully" 
+    });
+  } catch (error) {
+    console.error("Error uploading profile picture:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 export default router;

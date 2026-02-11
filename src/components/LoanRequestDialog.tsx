@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import CreditScoreCard from "@/components/CreditScoreCard";
+import LoanTermsAgreement from "@/components/LoanTermsAgreement";
 import {
   Dialog,
   DialogContent,
@@ -14,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import API_BASE from "@/lib/api";
 import { authService } from "@/lib/authService";
+import { CheckCircle, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 interface LoanRequestDialogProps {
@@ -37,6 +39,10 @@ const LoanRequestDialog = ({
   const [interest] = useState("10"); // Fixed: 10%
   const [phone, setPhone] = useState(memberPhone || "");
   const [errors, setErrors] = useState<{ [k: string]: string }>({});
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [termsAcceptanceId, setTermsAcceptanceId] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [currentTab, setCurrentTab] = useState("credit-score");
   const { toast } = useToast();
 
   // validation assumptions
@@ -48,13 +54,71 @@ const LoanRequestDialog = ({
 
   useEffect(() => {
     setPhone(memberPhone || "");
-  }, [memberPhone]);
+    // Reset state when dialog opens
+    if (open) {
+      setTermsAccepted(false);
+      setTermsAcceptanceId(null);
+      setCurrentTab("credit-score");
+    }
+  }, [memberPhone, open]);
+
+  // Handle terms acceptance
+  const handleTermsAcceptance = async (accepted: boolean) => {
+    setTermsAccepted(accepted);
+    
+    if (accepted && !termsAcceptanceId) {
+      try {
+        // Log acceptance to backend
+        const res = await fetch(`${API_BASE}/api/loans/accept-terms`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...authService.getAuthHeaders(),
+          },
+          body: JSON.stringify({
+            policyVersion: "SMCF-LOAN-POLICY-2026-01",
+            userAgent: navigator.userAgent,
+          }),
+        });
+
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          setTermsAcceptanceId(data.data.acceptanceId);
+          toast({
+            title: "Terms Accepted",
+            description: "Your acceptance has been recorded. You may now proceed with your application.",
+          });
+        } else {
+          throw new Error(data.error || "Failed to record acceptance");
+        }
+      } catch (e: any) {
+        console.error("Error recording terms acceptance:", e);
+        setTermsAccepted(false);
+        toast({
+          title: "Error",
+          description: "Failed to record terms acceptance. Please try again.",
+          variant: "destructive",
+        });
+      }
+    }
+  };
 
   const handleSubmit = async () => {
     const errs: any = {};
     const amt = Number(amount);
     const trm = Number(term);
     const ir = Number(interest);
+    
+    if (!termsAccepted || !termsAcceptanceId) {
+      toast({
+        title: "Terms Not Accepted",
+        description: "You must accept the loan terms and conditions before submitting your application.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     if (!phone) errs.phone = "Phone is required";
     if (!purpose || purpose.trim().length === 0)
       errs.purpose = "Purpose is required";
@@ -77,11 +141,14 @@ const LoanRequestDialog = ({
       });
       return;
     }
+    
+    setIsSubmitting(true);
     try {
       const body = {
         amount: amt,
         purpose: purpose.trim(),
         interest_rate: ir,
+        termsAcceptanceId: termsAcceptanceId,
       };
       const res = await fetch(`${API_BASE}/api/loans/request`, {
         method: "POST",
@@ -105,6 +172,8 @@ const LoanRequestDialog = ({
       onOpenChange(false);
       setAmount("");
       setPurpose("");
+      setTermsAccepted(false);
+      setTermsAcceptanceId(null);
       if (onSubmitted) onSubmitted();
     } catch (e: any) {
       console.error(e);
@@ -113,6 +182,8 @@ const LoanRequestDialog = ({
         description: e.message || "Could not submit loan request",
         variant: "destructive",
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -128,10 +199,16 @@ const LoanRequestDialog = ({
           </DialogDescription>
         </DialogHeader>
         
-        <Tabs defaultValue="credit-score" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+        <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="credit-score">Credit Score</TabsTrigger>
-            <TabsTrigger value="loan-form">Loan Application</TabsTrigger>
+            <TabsTrigger value="terms">
+              Terms & Conditions
+              {termsAccepted && <CheckCircle className="ml-1 w-3 h-3 text-financial-success" />}
+            </TabsTrigger>
+            <TabsTrigger value="loan-form" disabled={!termsAccepted}>
+              Application
+            </TabsTrigger>
           </TabsList>
 
           {/* Credit Score Tab */}
@@ -144,18 +221,44 @@ const LoanRequestDialog = ({
             </div>
             <CreditScoreCard showTitle={true} />
             <div className="flex justify-end">
-              <Button onClick={() => {
-                // Switch to loan form tab
-                const tabsTrigger = document.querySelector('[value="loan-form"]') as HTMLElement;
-                if (tabsTrigger) tabsTrigger.click();
-              }}>
-                Continue to Application →
+              <Button onClick={() => setCurrentTab("terms")}>
+                Continue to Terms & Conditions →
+              </Button>
+            </div>
+          </TabsContent>
+
+          {/* Terms & Conditions Tab */}
+          <TabsContent value="terms" className="space-y-4">
+            <LoanTermsAgreement 
+              onAcceptanceChange={handleTermsAcceptance}
+              isAccepted={termsAccepted}
+            />
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={() => setCurrentTab("credit-score")}>
+                ← Back to Credit Score
+              </Button>
+              <Button 
+                onClick={() => setCurrentTab("loan-form")}
+                disabled={!termsAccepted}
+              >
+                {termsAccepted ? (
+                  <>Continue to Application →</>
+                ) : (
+                  <>Accept Terms to Continue</>
+                )}
               </Button>
             </div>
           </TabsContent>
 
           {/* Loan Form Tab */}
           <TabsContent value="loan-form">
+            {!termsAccepted && (
+              <div className="bg-destructive/10 border border-destructive/20 p-4 rounded-lg mb-4">
+                <p className="text-sm text-destructive font-medium">
+                  ⚠️ You must accept the Terms & Conditions before filling out this form.
+                </p>
+              </div>
+            )}
             <Card>
               <CardContent className="space-y-3 pt-3 sm:pt-4">
                 <div>
@@ -213,9 +316,32 @@ const LoanRequestDialog = ({
                   </strong>
                 </div>
 
+                {termsAccepted && (
+                  <div className="bg-financial-success/10 border border-financial-success/20 p-3 rounded-lg flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-financial-success flex-shrink-0" />
+                    <span className="text-xs text-financial-success font-medium">
+                      Terms accepted - Application ready for submission
+                    </span>
+                  </div>
+                )}
+
                 <div className="flex gap-2">
-                  <Button onClick={handleSubmit} variant="default">
-                    Submit Request
+                  <Button 
+                    onClick={handleSubmit} 
+                    variant="default"
+                    disabled={!termsAccepted || isSubmitting}
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Submitting...
+                      </>
+                    ) : (
+                      "Submit Request"
+                    )}
+                  </Button>
+                  <Button variant="outline" onClick={() => setCurrentTab("terms")}>
+                    ← Back to Terms
                   </Button>
                   <Button variant="outline" onClick={() => onOpenChange(false)}>
                     Cancel

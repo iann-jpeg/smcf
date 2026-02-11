@@ -1158,6 +1158,84 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
         </Card>
       )}
 
+      {/* Lock Period Info Card */}
+      {lockedFunds.amount > 0 && (
+        <Card className="border-l-4 border-l-amber-500 bg-amber-50/50">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Lock className="w-5 h-5 text-amber-600" />
+              Deposit Lock Period Terms
+            </CardTitle>
+            <CardDescription>
+              Your locked deposits must remain until maturity to avoid penalties
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium">Total Locked Funds:</span>
+                <span className="text-lg font-bold text-amber-700">KES {lockedFunds.amount.toLocaleString()}</span>
+              </div>
+              {lockedFunds.earliestUnlockDate && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Earliest Unlock Date:</span>
+                  <span className="text-sm font-semibold">{new Date(lockedFunds.earliestUnlockDate).toLocaleDateString()}</span>
+                </div>
+              )}
+              <div className="bg-amber-100 border border-amber-300 rounded-lg p-3 text-sm">
+                <p className="font-medium text-amber-900 mb-2">⚠️ Early Withdrawal Terms:</p>
+                <ul className="list-disc list-inside space-y-1 text-amber-800 text-xs">
+                  <li>Early withdrawal before maturity may incur penalties (5%-20%)</li>
+                  <li>Penalty percentages depend on time remaining until unlock date</li>
+                  <li>All penalties are added to the group reserve account</li>
+                  <li>Credit score may be reduced for early withdrawals</li>
+                  <li>Contact admin if you need emergency access to locked funds</li>
+                </ul>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Lock Period Info Card */}
+      {lockedFunds.amount > 0 && (
+        <Card className="border-l-4 border-l-amber-500 bg-amber-50/50">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Lock className="w-5 h-5 text-amber-600" />
+              Deposit Lock Period Terms
+            </CardTitle>
+            <CardDescription>
+              Your locked deposits must remain until maturity to avoid penalties
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium">Total Locked Funds:</span>
+                <span className="text-lg font-bold text-amber-700">KES {lockedFunds.amount.toLocaleString()}</span>
+              </div>
+              {lockedFunds.earliestUnlockDate && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Earliest Unlock Date:</span>
+                  <span className="text-sm font-semibold">{new Date(lockedFunds.earliestUnlockDate).toLocaleDateString()}</span>
+                </div>
+              )}
+              <div className="bg-amber-100 border border-amber-300 rounded-lg p-3 text-sm">
+                <p className="font-medium text-amber-900 mb-2">⚠️ Early Withdrawal Terms:</p>
+                <ul className="list-disc list-inside space-y-1 text-amber-800 text-xs">
+                  <li>Early withdrawal before maturity may incur penalties (5%-20%)</li>
+                  <li>Penalty percentages depend on time remaining until unlock date</li>
+                  <li>All penalties are added to the group reserve account</li>
+                  <li>Credit score may be reduced for early withdrawals</li>
+                  <li>Contact admin if you need emergency access to locked funds</li>
+                </ul>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Transaction History */}
       <Card>
         <CardHeader>
@@ -1224,6 +1302,24 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
                         <div className="text-xs text-amber-700 mt-1 flex items-center gap-1">
                           <Clock className="w-3 h-3" />
                           Unlocks: {new Date(transaction.unlock_date).toLocaleDateString()}
+                        </div>
+                      )}
+                      {transaction.maturity_status && transaction.transaction_type === "deposit" && (
+                        <div className="text-xs mt-1">
+                          {transaction.maturity_status === "locked" && (
+                            <Badge variant="destructive" className="text-xs">🔒 Locked</Badge>
+                          )}
+                          {transaction.maturity_status === "matured" && (
+                            <Badge variant="default" className="text-xs bg-green-600">✓ Matured</Badge>
+                          )}
+                          {transaction.maturity_status === "withdrawn" && (
+                            <Badge variant="outline" className="text-xs">Withdrawn</Badge>
+                          )}
+                        </div>
+                      )}
+                      {transaction.is_early_withdrawal && transaction.penalty_amount > 0 && (
+                        <div className="text-xs text-red-700 mt-1 flex items-center gap-1 bg-red-50 px-2 py-1 rounded">
+                          ⚠️ Early Withdrawal Penalty: KES {transaction.penalty_amount.toFixed(2)} ({transaction.penalty_percentage}%)
                         </div>
                       )}
                       {transaction.notes && (
@@ -1369,6 +1465,23 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
                 <p className="text-blue-800">
                   💡 <strong>Earn 3% monthly interest</strong> on your savings!
                 </p>
+              </div>
+
+              {/* Lock Period Terms Warning */}
+              <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 text-sm">
+                <div className="flex items-center gap-2 mb-2">
+                  <Lock className="w-4 h-4 text-amber-600" />
+                  <span className="font-semibold text-amber-900">Lock Period Terms</span>
+                </div>
+                <p className="text-amber-800 text-xs mb-2">
+                  By depositing with a {lockPeriodMonths} month lock period, you agree:
+                </p>
+                <ul className="list-disc list-inside space-y-1 text-amber-800 text-xs ml-2">
+                  <li>Funds are locked until maturity date</li>
+                  <li>Early withdrawal may incur 5%-20% penalty</li>
+                  <li>Penalty percentages depend on time remaining</li>
+                  <li>All penalties go to the group reserve account</li>
+                </ul>
               </div>
 
               <div className="bg-muted/50 p-3 rounded-lg">

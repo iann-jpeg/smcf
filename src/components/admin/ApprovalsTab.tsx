@@ -478,6 +478,30 @@ const ApprovalsTab = ({ isReadOnly = false }: ApprovalsTabProps) => {
 
               {/* Pending Withdrawals */}
               <TabsContent value="withdrawals" className="space-y-4">
+                {/* Early Withdrawal Alert */}
+                {pendingWithdrawals.some((w: any) => w.lock_period_months > 0 && w.maturity_status === 'locked') && (
+                  <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-amber-900 mb-2">⚠️ Early Withdrawal Requests Pending</h4>
+                        <p className="text-sm text-amber-800 mb-3">
+                          Some withdrawal requests involve locked deposits before maturity. Review lock period terms and penalties carefully before approval.
+                        </p>
+                        <div className="bg-white/60 rounded-md p-3 text-xs text-amber-900 space-y-1">
+                          <p className="font-medium">Early Withdrawal Policy:</p>
+                          <ul className="list-disc list-inside space-y-1 ml-2">
+                            <li>Penalties range from 5% to 20% based on time remaining</li>
+                            <li>All penalties are automatically added to group reserve account</li>
+                            <li>Credit scores are reduced by configured penalty points</li>
+                            <li>System calculates and applies penalties automatically upon approval</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
                 {pendingWithdrawals.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <CheckCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />

@@ -10,6 +10,7 @@ import EarlyWithdrawalSettings from "@/components/admin/EarlyWithdrawalSettings"
 import ReserveAccountTab from "@/components/admin/ReserveAccountTab";
 import ContributionCycleChart from "@/components/analytics/ContributionCycleChart";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -2294,9 +2295,22 @@ Thank you for your cooperation! 🙏`;
                     key={index}
                     className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded border border-cyan-100 dark:border-cyan-900"
                   >
-                    <div>
-                      <p className="font-medium text-sm">{member.name}</p>
-                      <p className="text-xs text-muted-foreground">{member.memberId}</p>
+                    <div className="flex items-center gap-2">
+                      <Avatar className="w-8 h-8">
+                        <AvatarImage src={member.profile_picture} alt={member.name} />
+                        <AvatarFallback className="text-xs">
+                          {member.name
+                            .split(" ")
+                            .map((n: string) => n[0])
+                            .join("")
+                            .toUpperCase()
+                            .slice(0, 2)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="font-medium text-sm">{member.name}</p>
+                        <p className="text-xs text-muted-foreground">{member.memberId}</p>
+                      </div>
                     </div>
                     <Badge className="bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300">
                       +{member.cyclesAhead} cycle{member.cyclesAhead > 1 ? "s" : ""}
@@ -2577,6 +2591,17 @@ Thank you for your cooperation! 🙏`;
                         }`}>
                         {index + 1}
                       </div>
+                      <Avatar className="w-10 h-10">
+                        <AvatarImage src={member.profile_picture} alt={member.name} />
+                        <AvatarFallback>
+                          {member.name
+                            .split(" ")
+                            .map((n: string) => n[0])
+                            .join("")
+                            .toUpperCase()
+                            .slice(0, 2)}
+                        </AvatarFallback>
+                      </Avatar>
                       <div>
                         <p className="font-medium text-sm">{member.name}</p>
                         <p className="text-xs text-muted-foreground">
@@ -3113,6 +3138,17 @@ Thank you for your cooperation! 🙏`;
                                     : "bg-financial-warning"
                                 }`}
                               />
+                              <Avatar className="w-10 h-10">
+                                <AvatarImage src={member.profile_picture} alt={member.name} />
+                                <AvatarFallback>
+                                  {member.name
+                                    .split(" ")
+                                    .map((n: string) => n[0])
+                                    .join("")
+                                    .toUpperCase()
+                                    .slice(0, 2)}
+                                </AvatarFallback>
+                              </Avatar>
                               <div>
                                 <div className="font-medium flex items-center gap-2">
                                   {member.name} {" "}
