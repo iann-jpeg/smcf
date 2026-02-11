@@ -164,7 +164,7 @@ router.post("/accept-terms", protect, async (req, res) => {
 });
 
 // Request loan (member) - now requires terms acceptance
-router.post("/request", protect, async (req, res) {
+router.post("/request", protect, async (req, res) => {
   try {
     const { amount, purpose, interest_rate, termsAcceptanceId } = req.body;
 
