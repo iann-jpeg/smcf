@@ -31,7 +31,7 @@ export function updateFaviconBadge(count: number): void {
   if (!faviconCtx || !faviconCanvas) return;
   
   const favicon = getOriginalFavicon();
-  const img = new Image();
+  const img = document.createElement('img') as HTMLImageElement;
   img.crossOrigin = 'anonymous';
   
   img.onload = () => {
