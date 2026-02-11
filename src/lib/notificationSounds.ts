@@ -3,108 +3,73 @@
 
 export type NotificationSoundType = 'default' | 'success' | 'warning' | 'error' | 'message';
 
-// Audio element singleton
-let audioElement: HTMLAudioElement | null = null;
-let audioInitialized = false;
+// Audio context for Web Audio API
+let audioContext: AudioContext | null = null;
 
-// Initialize audio on first user interaction
-function initializeAudio(): HTMLAudioElement {
-  if (!audioElement) {
-    audioElement = new Audio();
-    audioElement.volume = 1.0; // Maximum volume
+// Initialize audio context (must be called after user interaction)
+function getAudioContext(): AudioContext {
+  if (!audioContext) {
+    audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+  }
+  return audioContext;
+}
+
+// Generate payment confirmation beep using Web Audio API
+async function playBeep(): Promise<void> {
+  try {
+    const ctx = getAudioContext();
     
-    // Use Web Audio API to generate a payment confirmation beep (like card terminals)
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    // Resume context if suspended (browser autoplay policy)
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
+    
+    const now = ctx.currentTime;
     const duration = 0.15; // Short, crisp beep
-    const sampleRate = audioContext.sampleRate;
-    const buffer = audioContext.createBuffer(1, sampleRate * duration * 2, sampleRate);
-    const channelData = buffer.getChannelData(0);
-    
-    // Generate payment confirmation beep (two quick ascending beeps like POS terminals)
-    // First beep: 1400Hz, Second beep: 1800Hz
-    const beep1Duration = Math.floor(channelData.length / 2);
-    const beep2Duration = channelData.length - beep1Duration;
     
     // First beep (1400Hz)
-    for (let i = 0; i < beep1Duration; i++) {
-      const t = i / sampleRate;
-      const envelope = Math.exp(-5 * t) * Math.sin(Math.PI * i / beep1Duration);
-      channelData[i] = Math.sin(2 * Math.PI * 1400 * t) * envelope * 0.95;
-    }
+    const oscillator1 = ctx.createOscillator();
+    const gainNode1 = ctx.createGain();
+    
+    oscillator1.type = 'sine';
+    oscillator1.frequency.value = 1400;
+    
+    gainNode1.gain.setValueAtTime(0, now);
+    gainNode1.gain.linearRampToValueAtTime(0.3, now + 0.01);
+    gainNode1.gain.exponentialRampToValueAtTime(0.01, now + duration);
+    
+    oscillator1.connect(gainNode1);
+    gainNode1.connect(ctx.destination);
+    
+    oscillator1.start(now);
+    oscillator1.stop(now + duration);
     
     // Second beep (1800Hz) - higher pitch for confirmation
-    for (let i = 0; i < beep2Duration; i++) {
-      const t = i / sampleRate;
-      const envelope = Math.exp(-5 * t) * Math.sin(Math.PI * i / beep2Duration);
-      channelData[beep1Duration + i] = Math.sin(2 * Math.PI * 1800 * t) * envelope * 0.95;
-    }
+    const oscillator2 = ctx.createOscillator();
+    const gainNode2 = ctx.createGain();
     
-    // Convert AudioBuffer to WAV blob
-    const wavBlob = audioBufferToWav(buffer);
-    audioElement.src = URL.createObjectURL(wavBlob);
-  }
-  return audioElement;
-}
-
-// Convert AudioBuffer to WAV format
-function audioBufferToWav(buffer: AudioBuffer): Blob {
-  const numChannels = buffer.numberOfChannels;
-  const sampleRate = buffer.sampleRate;
-  const format = 1; // PCM
-  const bitDepth = 16;
-  
-  const bytesPerSample = bitDepth / 8;
-  const blockAlign = numChannels * bytesPerSample;
-  
-  const samples = buffer.getChannelData(0);
-  const dataLength = samples.length * bytesPerSample;
-  const bufferLength = 44 + dataLength;
-  
-  const arrayBuffer = new ArrayBuffer(bufferLength);
-  const view = new DataView(arrayBuffer);
-  
-  // WAV header
-  writeString(view, 0, 'RIFF');
-  view.setUint32(4, 36 + dataLength, true);
-  writeString(view, 8, 'WAVE');
-  writeString(view, 12, 'fmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, format, true);
-  view.setUint16(22, numChannels, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * blockAlign, true);
-  view.setUint16(32, blockAlign, true);
-  view.setUint16(34, bitDepth, true);
-  writeString(view, 36, 'data');
-  view.setUint32(40, dataLength, true);
-  
-  // Write samples
-  let offset = 44;
-  for (let i = 0; i < samples.length; i++) {
-    const sample = Math.max(-1, Math.min(1, samples[i]));
-    view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
-    offset += 2;
-  }
-  
-  return new Blob([arrayBuffer], { type: 'audio/wav' });
-}
-
-function writeString(view: DataView, offset: number, string: string): void {
-  for (let i = 0; i < string.length; i++) {
-    view.setUint8(offset + i, string.charCodeAt(i));
+    oscillator2.type = 'sine';
+    oscillator2.frequency.value = 1800;
+    
+    const beep2Start = now + duration + 0.05;
+    gainNode2.gain.setValueAtTime(0, beep2Start);
+    gainNode2.gain.linearRampToValueAtTime(0.3, beep2Start + 0.01);
+    gainNode2.gain.exponentialRampToValueAtTime(0.01, beep2Start + duration);
+    
+    oscillator2.connect(gainNode2);
+    gainNode2.connect(ctx.destination);
+    
+    oscillator2.start(beep2Start);
+    oscillator2.stop(beep2Start + duration);
+  } catch (error) {
+    console.warn('Failed to play beep:', error);
   }
 }
 
 // Play the notification sound
 export async function playNotificationSound(_type: NotificationSoundType = 'default'): Promise<void> {
   try {
-    const audio = initializeAudio();
-    
-    // Reset to beginning if already playing
-    audio.currentTime = 0;
-    
-    // Play the sound
-    await audio.play();
+    await playBeep();
   } catch (error) {
     console.warn('Failed to play notification sound:', error);
   }
