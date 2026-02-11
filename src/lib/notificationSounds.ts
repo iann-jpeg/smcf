@@ -7,9 +7,17 @@ export type NotificationSoundType = 'default' | 'success' | 'warning' | 'error' 
 let audioContext: AudioContext | null = null;
 
 // Initialize audio context (must be called after user interaction)
-function getAudioContext(): AudioContext {
+function getAudioContext(): AudioContext | null {
   if (!audioContext) {
-    audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextClass) {
+        audioContext = new AudioContextClass();
+      }
+    } catch (error) {
+      console.warn('Failed to create AudioContext:', error);
+      return null;
+    }
   }
   return audioContext;
 }
@@ -18,6 +26,11 @@ function getAudioContext(): AudioContext {
 async function playBeep(): Promise<void> {
   try {
     const ctx = getAudioContext();
+    
+    if (!ctx) {
+      console.warn('AudioContext not available');
+      return;
+    }
     
     // Resume context if suspended (browser autoplay policy)
     if (ctx.state === 'suspended') {
