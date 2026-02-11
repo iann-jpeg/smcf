@@ -1,6 +1,5 @@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Shield } from "lucide-react";
 import { useState } from "react";
 
@@ -16,7 +15,8 @@ const LoanTermsAgreement = ({ onAcceptanceChange, isAccepted }: LoanTermsAgreeme
 
   const handleScroll = (event: React.UIEvent<HTMLDivElement>) => {
     const target = event.currentTarget;
-    const scrolledToBottom = target.scrollHeight - target.scrollTop <= target.clientHeight + 50;
+    // More lenient threshold - within 10px of bottom
+    const scrolledToBottom = target.scrollHeight - target.scrollTop <= target.clientHeight + 10;
     if (scrolledToBottom && !hasScrolledToBottom) {
       setHasScrolledToBottom(true);
     }
@@ -55,7 +55,10 @@ const LoanTermsAgreement = ({ onAcceptanceChange, isAccepted }: LoanTermsAgreeme
           </p>
         </div>
 
-        <ScrollArea className="h-[400px] p-4" onScroll={handleScroll}>
+        <div 
+          className="h-[400px] overflow-y-auto p-4" 
+          onScroll={handleScroll}
+        >
           <div className="space-y-4 text-sm pr-4">
             {/* Section 1 */}
             <div>
@@ -185,7 +188,7 @@ const LoanTermsAgreement = ({ onAcceptanceChange, isAccepted }: LoanTermsAgreeme
               </div>
             )}
           </div>
-        </ScrollArea>
+        </div>
       </div>
 
       {/* Acceptance Checkbox */}
