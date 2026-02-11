@@ -106,8 +106,9 @@ const connectDB = async () => {
     }
     
     const mongooseOptions = {
-      serverSelectionTimeoutMS: 5000,
+      serverSelectionTimeoutMS: 10000, // Increased from 5000 to 10000ms
       socketTimeoutMS: 45000,
+      connectTimeoutMS: 10000, // Added connection timeout
     };
     
     const conn = await mongoose.connect(
@@ -115,6 +116,7 @@ const connectDB = async () => {
       mongooseOptions
     );
     console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
+    return true;
   } catch (error) {
     console.error(`❌ MongoDB Connection Error: ${error.message}`);
     
@@ -135,7 +137,93 @@ const connectDB = async () => {
   }
 };
 
-connectDB();
+// Start the server only after database connection
+const startServer = async () => {
+  // Connect to database first
+  await connectDB();
+  
+  // Start server
+  const PORT = process.env.PORT || 4000;
+  httpServer.listen(PORT, '0.0.0.0', () => {
+    console.log(`\n🚀 SMCF Backend Server running on port ${PORT}`);
+    console.log(`📡 Environment: ${process.env.NODE_ENV || "development"}`);
+    console.log(`🔌 Socket.IO enabled for real-time updates`);
+
+    // Start interest calculation cron job
+    startInterestCronJob();
+    
+    // Start late fees calculation cron job
+    startLateFeesCronJob();
+
+    // Start loan due date fix cron job
+    startLoanDueDateCronJob();
+    
+    // Run loan due date fix on startup (catch up on any missing due dates)
+    setTimeout(async () => {
+      try {
+        console.log("📅 Running initial loan due date fix...");
+        const setLoanDueDates = (await import("./scripts/set-loan-due-dates.js")).default;
+        await setLoanDueDates();
+      } catch (err) {
+        console.error("❌ Error running initial loan due date fix:", err.message);
+      }
+    }, 6000); // Run 6 seconds after startup
+    
+    // Run interest calculation on startup (catch up on any missed runs)
+    setTimeout(async () => {
+      try {
+        console.log("💰 Running initial interest calculation...");
+        const { applyMonthlyInterest } = await import("./services/interestService.js");
+        await applyMonthlyInterest();
+      } catch (err) {
+        console.error("❌ Error running initial interest calculation:", err.message);
+      }
+    }, 5000); // Run 5 seconds after startup
+    
+    // Start daily maturity check (runs at midnight every day)
+    setInterval(async () => {
+      try {
+        const now = new Date();
+        // Run at midnight (00:00)
+        if (now.getHours() === 0 && now.getMinutes() === 0) {
+          console.log("⏰ Running daily maturity check...");
+          await checkMaturedDeposits();
+        }
+      } catch (err) {
+        console.error("❌ Error in daily maturity check:", err.message);
+      }
+    }, 60000); // Check every minute
+    
+    // Run maturity check on startup
+    setTimeout(async () => {
+      try {
+        console.log("🔍 Running initial maturity check...");
+        await checkMaturedDeposits();
+      } catch (err) {
+        console.error("❌ Error running initial maturity check:", err.message);
+      }
+    }, 5000); // Run 5 seconds after startup
+    
+    console.log(`\n📚 API Documentation:`);
+    console.log(`   Health: http://localhost:${PORT}/health`);
+    console.log(`   Admin Setup: http://localhost:${PORT}/api/admin/setup`);
+    console.log(`   Auth: http://localhost:${PORT}/api/auth`);
+    console.log(`   Members: http://localhost:${PORT}/api/members`);
+    console.log(`   Payments: http://localhost:${PORT}/api/payments`);
+    console.log(`   Lipia: http://localhost:${PORT}/api/lipia`);
+    console.log(`   Cycles: http://localhost:${PORT}/api/cycles`);
+    console.log(`   Disbursements: http://localhost:${PORT}/api/disbursements`);
+    console.log(`   Announcements: http://localhost:${PORT}/api/announcements`);
+    console.log(`   Loans: http://localhost:${PORT}/api/loans`);
+    console.log(`   Savings: http://localhost:${PORT}/api/savings\n`);
+  });
+};
+
+// Start the server
+startServer().catch((err) => {
+  console.error('❌ Failed to start server:', err);
+  process.exit(1);
+});
 
 // Track online users
 const onlineUsers = new Map(); // Map of userId -> { socketId, username, role, timestamp }
@@ -287,82 +375,6 @@ app.use((err, req, res, next) => {
     success: false,
     error: err.message || "Internal server error",
   });
-});
-
-// Start server
-const PORT = process.env.PORT || 4000;
-httpServer.listen(PORT, () => {
-  console.log(`\n🚀 SMCF Backend Server running on port ${PORT}`);
-  console.log(`📡 Environment: ${process.env.NODE_ENV || "development"}`);
-  console.log(`🔌 Socket.IO enabled for real-time updates`);
-
-  // Start interest calculation cron job
-  startInterestCronJob();
-  
-  // Start late fees calculation cron job
-  startLateFeesCronJob();
-
-  // Start loan due date fix cron job
-  startLoanDueDateCronJob();
-  
-  // Run loan due date fix on startup (catch up on any missing due dates)
-  setTimeout(async () => {
-    try {
-      console.log("📅 Running initial loan due date fix...");
-      const setLoanDueDates = (await import("./scripts/set-loan-due-dates.js")).default;
-      await setLoanDueDates();
-    } catch (err) {
-      console.error("❌ Error running initial loan due date fix:", err.message);
-    }
-  }, 6000); // Run 6 seconds after startup
-  
-  // Run interest calculation on startup (catch up on any missed runs)
-  setTimeout(async () => {
-    try {
-      console.log("💰 Running initial interest calculation...");
-      const { applyMonthlyInterest } = await import("./services/interestService.js");
-      await applyMonthlyInterest();
-    } catch (err) {
-      console.error("❌ Error running initial interest calculation:", err.message);
-    }
-  }, 5000); // Run 5 seconds after startup
-  
-  // Start daily maturity check (runs at midnight every day)
-  setInterval(async () => {
-    try {
-      const now = new Date();
-      // Run at midnight (00:00)
-      if (now.getHours() === 0 && now.getMinutes() === 0) {
-        console.log("⏰ Running daily maturity check...");
-        await checkMaturedDeposits();
-      }
-    } catch (err) {
-      console.error("❌ Error in daily maturity check:", err.message);
-    }
-  }, 60000); // Check every minute
-  
-  // Run maturity check on startup
-  setTimeout(async () => {
-    try {
-      console.log("🔍 Running initial maturity check...");
-      await checkMaturedDeposits();
-    } catch (err) {
-      console.error("❌ Error running initial maturity check:", err.message);
-    }
-  }, 5000); // Run 5 seconds after startup
-  
-  console.log(`\n📚 API Documentation:`);
-  console.log(`   Health: http://localhost:${PORT}/health`);
-  console.log(`   Admin Setup: http://localhost:${PORT}/api/admin/setup`);
-  console.log(`   Auth: http://localhost:${PORT}/api/auth`);
-  console.log(`   Members: http://localhost:${PORT}/api/members`);
-  console.log(`   Payments: http://localhost:${PORT}/api/payments`);
-  console.log(`   Lipia: http://localhost:${PORT}/api/lipia`);
-  console.log(`   Cycles: http://localhost:${PORT}/api/cycles`);
-  console.log(`   Disbursements: http://localhost:${PORT}/api/disbursements`);
-  console.log(`   Announcements: http://localhost:${PORT}/api/announcements`);
-  console.log(`   Loans: http://localhost:${PORT}/api/loans`);
-  console.log(`   Savings: http://localhost:${PORT}/api/savings\n`);
 });
 
 // Graceful shutdown handling
