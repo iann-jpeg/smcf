@@ -35,36 +35,74 @@ const MemberQRCode = ({ userData }: MemberQRCodeProps) => {
   };
 
   const handleDownloadQR = () => {
-    const svg = document.getElementById('member-qr-code');
-    if (!svg) return;
+    try {
+      const svg = document.getElementById('member-qr-code');
+      if (!svg) {
+        toast({
+          title: "Error",
+          description: "QR code not found",
+          variant: "destructive",
+        });
+        return;
+      }
 
-    const svgData = new XMLSerializer().serializeToString(svg);
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-    const img = new Image();
+      // Use outerHTML instead of XMLSerializer for better compatibility
+      const svgData = svg.outerHTML;
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      
+      if (!ctx) {
+        toast({
+          title: "Error",
+          description: "Canvas not supported",
+          variant: "destructive",
+        });
+        return;
+      }
 
-    canvas.width = 300;
-    canvas.height = 300;
+      // Create Image element safely
+      const img = document.createElement('img') as HTMLImageElement;
 
-    img.onload = () => {
-      ctx?.drawImage(img, 0, 0);
-      canvas.toBlob((blob) => {
-        if (blob) {
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement("a");
-          link.href = url;
-          link.download = `SMCF-QR-${userData?.member_id || 'member'}.png`;
-          link.click();
-          URL.revokeObjectURL(url);
-          toast({
-            title: "QR Code Downloaded",
-            description: "Your payment QR code has been saved",
-          });
-        }
+      canvas.width = 300;
+      canvas.height = 300;
+
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `SMCF-QR-${userData?.member_id || 'member'}.png`;
+            link.click();
+            URL.revokeObjectURL(url);
+            toast({
+              title: "QR Code Downloaded",
+              description: "Your payment QR code has been saved",
+            });
+          }
+        });
+      };
+
+      img.onerror = () => {
+        toast({
+          title: "Error",
+          description: "Failed to process QR code image",
+          variant: "destructive",
+        });
+      };
+
+      // Encode SVG data for use in image source
+      const encodedData = btoa(unescape(encodeURIComponent(svgData)));
+      img.src = 'data:image/svg+xml;base64,' + encodedData;
+    } catch (error) {
+      console.error('QR download error:', error);
+      toast({
+        title: "Download Failed",
+        description: "Unable to download QR code. Please try again.",
+        variant: "destructive",
       });
-    };
-
-    img.src = 'data:image/svg+xml;base64,' + btoa(svgData);
+    }
   };
 
   return (
