@@ -476,7 +476,7 @@ const AdminGuarantorManagement = () => {
               )}
 
               {/* Guarantees List */}
-              <CardGuarantees List
+              <Card>
                 <CardHeader>
                   <CardTitle className="text-base">
                     Guaranteed Loans ({guarantorProfile.guarantees.length})

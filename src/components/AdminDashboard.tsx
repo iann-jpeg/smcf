@@ -9,6 +9,7 @@ import SavingsTab from "@/components/admin/SavingsTab";
 import EarlyWithdrawalSettings from "@/components/admin/EarlyWithdrawalSettings";
 import ReserveAccountTab from "@/components/admin/ReserveAccountTab";
 import ContributionCycleChart from "@/components/analytics/ContributionCycleChart";
+import FinancialTrendsChart from "@/components/analytics/FinancialTrendsChart";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -3325,6 +3326,9 @@ Thank you for your cooperation! 🙏`;
         </TabsContent>
 
         <TabsContent value="analytics" className="space-y-6">
+          {/* Financial Trends Chart */}
+          <FinancialTrendsChart />
+
           {/* Contribution Cycle Analytics */}
           <ContributionCycleChart
             payments={allPayments}
