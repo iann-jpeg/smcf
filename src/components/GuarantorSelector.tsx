@@ -150,6 +150,11 @@ const GuarantorSelector = ({
           <strong>Guarantor Requirement:</strong> You need to select at least{" "}
           <strong>{config?.min_required || minRequired} guarantors</strong> who will jointly 
           guarantee your loan. They will be liable if you default on repayment.
+          {config?.min_savings_balance && (
+            <p className="text-xs mt-2 text-muted-foreground">
+              Note: Guarantors must have a minimum savings balance of KES {config.min_savings_balance.toLocaleString()} to be eligible.
+            </p>
+          )}
         </AlertDescription>
       </Alert>
 

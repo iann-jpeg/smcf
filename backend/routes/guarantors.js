@@ -12,7 +12,7 @@ const router = express.Router();
 const MIN_GUARANTORS_REQUIRED = 2;
 const MAX_LOANS_TO_GUARANTEE = 5;
 const GUARANTEE_CAPACITY_MULTIPLIER = 3; // 3x savings balance
-const MIN_SAVINGS_BALANCE = 1000; // Minimum savings to be a guarantor
+const MIN_SAVINGS_BALANCE = 500; // Minimum savings to be a guarantor (KES 500)
 
 // Legal declaration text (Kenyan Law compliant)
 const LEGAL_DECLARATION = `I understand and accept that I am jointly and severally liable for the repayment of this loan under the Laws of Kenya. In the event of borrower default, I may be subject to recovery action including deduction from my savings account. This agreement is governed by the Law of Contract Act (Cap 23) and constitutes a legally binding electronic signature.`;

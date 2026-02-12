@@ -276,6 +276,30 @@ router.post("/request", protect, async (req, res) => {
         });
       }
 
+      // Validate guarantor savings requirements (minimum KES 500)
+      const MIN_GUARANTOR_SAVINGS = 500;
+      const Member = (await import("../models/Member.js")).default;
+      
+      for (const guarantor_id of guarantor_ids) {
+        const guarantorMember = await Member.findById(guarantor_id);
+        if (!guarantorMember) {
+          await Loan.findByIdAndDelete(loan._id);
+          return res.status(400).json({
+            success: false,
+            error: `Guarantor not found: ${guarantor_id}`,
+          });
+        }
+        
+        const guarantorSavings = guarantorMember.total_savings || 0;
+        if (guarantorSavings < MIN_GUARANTOR_SAVINGS) {
+          await Loan.findByIdAndDelete(loan._id);
+          return res.status(400).json({
+            success: false,
+            error: `Guarantor ${guarantorMember.name} has insufficient savings. Minimum required: KES ${MIN_GUARANTOR_SAVINGS}, Current: KES ${guarantorSavings}`,
+          });
+        }
+      }
+
       // Calculate liability amount per guarantor (equal split)
       const liabilityPerGuarantor = loan.amount / guarantor_ids.length;
       const LEGAL_DECLARATION = `I understand and accept that I am jointly and severally liable for the repayment of this loan under the Laws of Kenya. In the event of borrower default, I may be subject to recovery action including deduction from my savings account. This agreement is governed by the Law of Contract Act (Cap 23) and constitutes a legally binding electronic signature.`;
