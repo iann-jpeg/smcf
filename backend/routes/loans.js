@@ -218,7 +218,7 @@ router.post("/accept-terms", protect, async (req, res) => {
 // Request loan (member) - now requires terms acceptance
 router.post("/request", protect, async (req, res) => {
   try {
-    const { amount, purpose, interest_rate, termsAcceptanceId } = req.body;
+    const { amount, purpose, interest_rate, termsAcceptanceId, guarantor_ids } = req.body;
 
     if (!req.member || !req.member._id) {
       return res.status(401).json({
@@ -261,6 +261,59 @@ router.post("/request", protect, async (req, res) => {
     acceptance.loan_id = loan._id;
     await acceptance.save();
 
+    console.log(`📋 Loan created: ${loan._id}, Amount: ${amount}, Guarantors provided: ${guarantor_ids ? guarantor_ids.length : 0}`);
+
+    // Handle guarantors if provided
+    if (guarantor_ids && Array.isArray(guarantor_ids) && guarantor_ids.length > 0) {
+      console.log(`✍️ Adding ${guarantor_ids.length} guarantors to loan ${loan._id}`);
+      
+      // Check for self-selection
+      if (guarantor_ids.includes(req.member._id.toString())) {
+        await Loan.findByIdAndDelete(loan._id);
+        return res.status(400).json({
+          success: false,
+          error: "Cannot select yourself as guarantor",
+        });
+      }
+
+      // Calculate liability amount per guarantor (equal split)
+      const liabilityPerGuarantor = loan.amount / guarantor_ids.length;
+      const LEGAL_DECLARATION = `I understand and accept that I am jointly and severally liable for the repayment of this loan under the Laws of Kenya. In the event of borrower default, I may be subject to recovery action including deduction from my savings account. This agreement is governed by the Law of Contract Act (Cap 23) and constitutes a legally binding electronic signature.`;
+
+      let createdGuarantorsCount = 0;
+      
+      for (const guarantor_id of guarantor_ids) {
+        try {
+          // Create guarantor record
+          const guarantor = await LoanGuarantor.create({
+            loan_id: loan._id,
+            borrower_id: req.member._id,
+            guarantor_id,
+            liability_amount: liabilityPerGuarantor,
+            policy_version: "1.0",
+            legal_acceptance_text: LEGAL_DECLARATION,
+          });
+
+          console.log(`✅ Created guarantor record for ${guarantor_id} on loan ${loan._id}`);
+          createdGuarantorsCount++;
+
+          // Update exposure pending count
+          const GuarantorExposure = (await import("../models/GuarantorExposure.js")).default;
+          await GuarantorExposure.updateExposure(guarantor_id);
+        } catch (error) {
+          console.error(`❌ Error creating guarantor record for ${guarantor_id}:`, error);
+        }
+      }
+
+      if (createdGuarantorsCount > 0) {
+        // Update loan to require guarantor approval
+        loan.requires_guarantor_approval = true;
+        loan.guarantor_approval_pending = true;
+        await loan.save();
+        console.log(`🔒 Loan ${loan._id} now requires guarantor approval (${createdGuarantorsCount} guarantors added)`);
+      }
+    }
+
     // Emit Socket.IO event for new loan request
     const io = req.app.get("io");
     if (io) {
@@ -279,6 +332,7 @@ router.post("/request", protect, async (req, res) => {
 
     res.status(201).json({ success: true, data: loan });
   } catch (error) {
+    console.error("Loan request error:", error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
