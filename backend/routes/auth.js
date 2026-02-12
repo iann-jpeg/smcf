@@ -173,6 +173,7 @@ router.post("/login", async (req, res) => {
       phoneNumber: member.phone,
       member_id: member.member_id,
       memberId: member.member_id,
+      profile_picture: member.profile_picture || "",
       status: member.status,
       position: member.position,
       payment_status: member.payment_status || "pending",
