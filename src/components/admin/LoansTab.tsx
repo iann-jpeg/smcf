@@ -923,6 +923,7 @@ const LoansTab = ({ isReadOnly = false }: LoansTabProps) => {
                       <TableHead>Member</TableHead>
                       <TableHead>Amount</TableHead>
                       <TableHead>Purpose</TableHead>
+                      <TableHead>Guarantors</TableHead>
                       <TableHead>Approved By</TableHead>
                       <TableHead>Approved On</TableHead>
                       <TableHead>Actions</TableHead>
@@ -948,6 +949,40 @@ const LoansTab = ({ isReadOnly = false }: LoansTabProps) => {
                           <div className="text-sm break-words whitespace-normal">
                             {loan.purpose}
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          {loan.guarantors && loan.guarantors.total > 0 ? (
+                            <div className="space-y-1">
+                              <div className="flex flex-wrap gap-1">
+                                {loan.guarantors.accepted > 0 && (
+                                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                    ✓ {loan.guarantors.accepted} Accepted
+                                  </Badge>
+                                )}
+                                {loan.guarantors.pending > 0 && (
+                                  <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+                                    ⏳ {loan.guarantors.pending} Pending
+                                  </Badge>
+                                )}
+                                {loan.guarantors.declined > 0 && (
+                                  <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                                    ✗ {loan.guarantors.declined} Declined
+                                  </Badge>
+                                )}
+                              </div>
+                              {loan.guarantors.details && loan.guarantors.details.length > 0 && (
+                                <div className="text-xs text-muted-foreground space-y-0.5">
+                                  {loan.guarantors.details.map((g) => (
+                                    <div key={g.id}>
+                                      {g.guarantor_name} ({g.status})
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">No guarantors</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           {loan.approved_by?.name || "Admin"}
@@ -1096,6 +1131,40 @@ const LoansTab = ({ isReadOnly = false }: LoansTabProps) => {
                           )}
                         </TableCell>
                         <TableCell>
+                          {loan.guarantors && loan.guarantors.total > 0 ? (
+                            <div className="space-y-1">
+                              <div className="flex flex-wrap gap-1">
+                                {loan.guarantors.accepted > 0 && (
+                                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs">
+                                    ✓ {loan.guarantors.accepted}
+                                  </Badge>
+                                )}
+                                {loan.guarantors.pending > 0 && (
+                                  <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 text-xs">
+                                    ⏳ {loan.guarantors.pending}
+                                  </Badge>
+                                )}
+                                {loan.guarantors.declined > 0 && (
+                                  <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 text-xs">
+                                    ✗ {loan.guarantors.declined}
+                                  </Badge>
+                                )}
+                              </div>
+                              {loan.guarantors.details && loan.guarantors.details.length > 0 && (
+                                <div className="text-xs text-muted-foreground space-y-0.5">
+                                  {loan.guarantors.details.map((g) => (
+                                    <div key={g.id} className="truncate max-w-[120px]" title={`${g.guarantor_name} (${g.status})`}>
+                                      {g.guarantor_name}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">None</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
                           {isOverdue ? (
                             <Badge variant="destructive" className="flex items-center gap-1 w-fit">
                               <AlertTriangle className="w-3 h-3" />
@@ -1205,6 +1274,7 @@ const LoansTab = ({ isReadOnly = false }: LoansTabProps) => {
                       <TableHead>Member</TableHead>
                       <TableHead>Amount</TableHead>
                       <TableHead>Total Repaid</TableHead>
+                      <TableHead>Guarantors</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Completed On</TableHead>
                       <TableHead>Details</TableHead>
@@ -1236,6 +1306,40 @@ const LoansTab = ({ isReadOnly = false }: LoansTabProps) => {
                               <div className="text-xs text-red-600 font-semibold mt-1 flex items-center gap-1">
                                 <AlertTriangle className="w-3 h-3" /> Unpaid Late Fees: KES {loan.total_late_fees?.toLocaleString()}
                               </div>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {loan.guarantors && loan.guarantors.total > 0 ? (
+                              <div className="space-y-1">
+                                <div className="flex flex-wrap gap-1">
+                                  {loan.guarantors.accepted > 0 && (
+                                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs">
+                                      ✓ {loan.guarantors.accepted}
+                                    </Badge>
+                                  )}
+                                  {loan.guarantors.pending > 0 && (
+                                    <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 text-xs">
+                                      ⏳ {loan.guarantors.pending}
+                                    </Badge>
+                                  )}
+                                  {loan.guarantors.declined > 0 && (
+                                    <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 text-xs">
+                                      ✗ {loan.guarantors.declined}
+                                    </Badge>
+                                  )}
+                                </div>
+                                {loan.guarantors.details && loan.guarantors.details.length > 0 && (
+                                  <div className="text-xs text-muted-foreground space-y-0.5">
+                                    {loan.guarantors.details.map((g) => (
+                                      <div key={g.id} title={`${g.guarantor_name} (${g.status})`}>
+                                        {g.guarantor_name}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">None</span>
                             )}
                           </TableCell>
                           <TableCell>{getStatusBadge(loan.status)}</TableCell>
