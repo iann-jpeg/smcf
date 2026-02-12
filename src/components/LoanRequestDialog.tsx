@@ -154,6 +154,11 @@ const LoanRequestDialog = ({
         termsAcceptanceId: termsAcceptanceId,
         guarantor_ids: selectedGuarantors,
       };
+      
+      console.log("📤 Submitting loan request with data:", body);
+      console.log(`  Amount: ${amt}, Purpose: ${purpose.trim()}`);
+      console.log(`  Guarantors: ${selectedGuarantors.length} selected -`, selectedGuarantors);
+      
       const res = await fetch(`${API_BASE}/api/loans/request`, {
         method: "POST",
         headers: {
@@ -164,6 +169,7 @@ const LoanRequestDialog = ({
       });
 
       const data = await res.json();
+      console.log("📥 Loan request response:", data);
 
       if (!res.ok || !data.success) {
         throw new Error(data.error || "Failed to submit loan request");
@@ -171,16 +177,17 @@ const LoanRequestDialog = ({
 
       toast({
         title: "Loan Requested",
-        description: `Loan request for KES ${amt.toLocaleString()} submitted successfully`,
+        description: `Loan request for KES ${amt.toLocaleString()} submitted successfully${selectedGuarantors.length > 0 ? ` with ${selectedGuarantors.length} guarantors` : ''}`,
       });
       onOpenChange(false);
       setAmount("");
       setPurpose("");
       setTermsAccepted(false);
       setTermsAcceptanceId(null);
+      setSelectedGuarantors([]);
       if (onSubmitted) onSubmitted();
     } catch (e: any) {
-      console.error(e);
+      console.error("❌ Loan request error:", e);
       toast({
         title: "Error",
         description: e.message || "Could not submit loan request",

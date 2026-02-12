@@ -100,9 +100,13 @@ const GuarantorSelector = ({
     }
     
     if (selectedGuarantors.includes(guarantorId)) {
-      onSelectionChange(selectedGuarantors.filter((id) => id !== guarantorId));
+      const newSelection = selectedGuarantors.filter((id) => id !== guarantorId);
+      console.log(`🔄 Removing guarantor ${guarantorId}. New selection:`, newSelection);
+      onSelectionChange(newSelection);
     } else {
-      onSelectionChange([...selectedGuarantors, guarantorId]);
+      const newSelection = [...selectedGuarantors, guarantorId];
+      console.log(`✅ Adding guarantor ${guarantorId}. New selection:`, newSelection);
+      onSelectionChange(newSelection);
     }
   };
 
