@@ -32,6 +32,7 @@ import paymentRoutes from "./routes/payments.js";
 import savingsRoutes from "./routes/savings.js";
 import reserveRoutes from "./routes/reserve.js";
 import analyticsRoutes from "./routes/analytics.js";
+import guarantorRoutes from "./routes/guarantors.js";
 
 // Import interest service
 import { startInterestCronJob } from "./services/interestService.js";
@@ -326,6 +327,7 @@ app.use("/api/disbursements", disbursementRoutes);
 app.use("/api/announcements", announcementRoutes);
 app.use("/announcements", announcementRoutes); // Backward compatibility
 app.use("/api/loans", loanRoutes);
+app.use("/api/guarantors", guarantorRoutes);
 app.use("/api/savings", savingsRoutes);
 app.use("/api/reserve", reserveRoutes);
 app.use("/api/credit-score", creditScoreRoutes);

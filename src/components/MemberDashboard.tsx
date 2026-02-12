@@ -5,6 +5,8 @@ import LoanRequestDialog from "@/components/LoanRequestDialog";
 import MemberWallet from "@/components/MemberWallet";
 import PaymentDialog from "@/components/PaymentDialog";
 import ProfilePictureUpload from "@/components/ProfilePictureUpload";
+import GuarantorRequests from "@/components/GuarantorRequests";
+import GuarantorProfile from "@/components/GuarantorProfile";
 import { StyledSMCF } from "@/components/StyledSMCF";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,6 +43,7 @@ import {
   Megaphone,
   Phone,
   Receipt,
+  Shield,
   Trash2,
   TrendingUp,
   Wallet,
@@ -998,7 +1001,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
 
       <Tabs defaultValue={userData?.member_type === "wallet_only" ? "wallet" : "overview"} className="w-full">
         <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">
-          <TabsList className={`inline-flex w-auto min-w-max ${userData?.member_type === "wallet_only" ? "md:grid md:w-full md:grid-cols-2" : "md:grid md:w-full md:grid-cols-6"}`}>
+          <TabsList className={`inline-flex w-auto min-w-max ${userData?.member_type === "wallet_only" ? "md:grid md:w-full md:grid-cols-3" : "md:grid md:w-full md:grid-cols-7"}`}>
             {userData?.member_type !== "wallet_only" && (
               <TabsTrigger
                 value="overview"
@@ -1022,6 +1025,12 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
               value="loans"
               className="text-xs sm:text-sm whitespace-nowrap">
               My Loans
+            </TabsTrigger>
+            <TabsTrigger
+              value="guarantor"
+              className="text-xs sm:text-sm whitespace-nowrap">
+              <Shield className="w-3 h-3 mr-1 inline" />
+              Guarantor
             </TabsTrigger>
             {userData?.member_type !== "wallet_only" && (
               <TabsTrigger
@@ -1583,6 +1592,11 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="guarantor" className="space-y-4">
+          <GuarantorRequests />
+          <GuarantorProfile />
         </TabsContent>
 
         <TabsContent value="history" className="space-y-4">

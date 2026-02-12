@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import CreditScoreCard from "@/components/CreditScoreCard";
 import LoanTermsAgreement from "@/components/LoanTermsAgreement";
+import GuarantorSelector from "@/components/GuarantorSelector";
 import {
   Dialog,
   DialogContent,
@@ -43,6 +44,7 @@ const LoanRequestDialog = ({
   const [termsAcceptanceId, setTermsAcceptanceId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentTab, setCurrentTab] = useState("credit-score");
+  const [selectedGuarantors, setSelectedGuarantors] = useState<string[]>([]);
   const { toast } = useToast();
 
   // validation assumptions
@@ -59,6 +61,7 @@ const LoanRequestDialog = ({
       setTermsAccepted(false);
       setTermsAcceptanceId(null);
       setCurrentTab("credit-score");
+      setSelectedGuarantors([]);
     }
   }, [memberPhone, open]);
 
@@ -149,6 +152,7 @@ const LoanRequestDialog = ({
         purpose: purpose.trim(),
         interest_rate: ir,
         termsAcceptanceId: termsAcceptanceId,
+        guarantor_ids: selectedGuarantors,
       };
       const res = await fetch(`${API_BASE}/api/loans/request`, {
         method: "POST",
@@ -200,7 +204,7 @@ const LoanRequestDialog = ({
         </DialogHeader>
         
         <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="credit-score">Credit Score</TabsTrigger>
             <TabsTrigger value="terms">
               Terms & Conditions
@@ -208,6 +212,10 @@ const LoanRequestDialog = ({
             </TabsTrigger>
             <TabsTrigger value="loan-form" disabled={!termsAccepted}>
               Application
+            </TabsTrigger>
+            <TabsTrigger value="guarantors" disabled={!amount || Number(amount) <= 0}>
+              Guarantors
+              {selectedGuarantors.length >= 2 && <CheckCircle className="ml-1 w-3 h-3 text-financial-success" />}
             </TabsTrigger>
           </TabsList>
 
@@ -325,30 +333,47 @@ const LoanRequestDialog = ({
                   </div>
                 )}
 
-                <div className="flex gap-2">
-                  <Button 
-                    onClick={handleSubmit} 
-                    variant="default"
-                    disabled={!termsAccepted || isSubmitting}
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Submitting...
-                      </>
-                    ) : (
-                      "Submit Request"
-                    )}
-                  </Button>
+                <div className="flex justify-between">
                   <Button variant="outline" onClick={() => setCurrentTab("terms")}>
                     ← Back to Terms
                   </Button>
-                  <Button variant="outline" onClick={() => onOpenChange(false)}>
-                    Cancel
+                  <Button 
+                    onClick={() => setCurrentTab("guarantors")}
+                    disabled={!amount || Number(amount) <= 0}
+                  >
+                    Continue to Guarantors →
                   </Button>
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Guarantors Tab */}
+          <TabsContent value="guarantors" className="space-y-4">
+            <GuarantorSelector
+              loanAmount={Number(amount) || 0}
+              selectedGuarantors={selectedGuarantors}
+              onSelectionChange={setSelectedGuarantors}
+              minRequired={2}
+            />
+            <div className="flex justify-between pt-4">
+              <Button variant="outline" onClick={() => setCurrentTab("loan-form")}>
+                ← Back to Application
+              </Button>
+              <Button 
+                onClick={handleSubmit}
+                disabled={!termsAccepted || isSubmitting || selectedGuarantors.length < 2}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  `Submit Request (${selectedGuarantors.length}/2 guarantors selected)`
+                )}
+              </Button>
+            </div>
           </TabsContent>
         </Tabs>
       </DialogContent>
