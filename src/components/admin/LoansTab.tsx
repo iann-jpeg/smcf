@@ -90,6 +90,28 @@ interface Loan {
   rejection_reason?: string;
   notes?: string;
   created_at: string;
+  requires_guarantor_approval?: boolean;
+  guarantor_approval_pending?: boolean;
+  all_guarantors_accepted?: boolean;
+  guarantors?: {
+    total: number;
+    accepted: number;
+    pending: number;
+    declined: number;
+    details: Array<{
+      id: string;
+      guarantor_id: string;
+      guarantor_name: string;
+      guarantor_phone: string;
+      guarantor_member_id: string;
+      guarantor_savings?: number;
+      status: "pending" | "accepted" | "declined";
+      accepted_at?: string;
+      declined_at?: string;
+      decline_reason?: string;
+      liability_amount: number;
+    }>;
+  };
 }
 
 interface LoansTabProps {
@@ -752,6 +774,7 @@ const LoansTab = ({ isReadOnly = false }: LoansTabProps) => {
                       <TableHead>Purpose</TableHead>
                       <TableHead>Interest</TableHead>
                       <TableHead>Total Repayable</TableHead>
+                      <TableHead>Guarantors</TableHead>
                       <TableHead>Requested</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
@@ -793,15 +816,63 @@ const LoansTab = ({ isReadOnly = false }: LoansTabProps) => {
                           KES {loan.total_repayable.toLocaleString()}
                         </TableCell>
                         <TableCell>
+                          {loan.guarantors && loan.guarantors.total > 0 ? (
+                            <div className="space-y-1">
+                              <div className="flex gap-2 items-center flex-wrap">
+                                {loan.guarantors.accepted > 0 && (
+                                  <Badge variant="default" className="bg-green-600">
+                                    ✓ {loan.guarantors.accepted}
+                                  </Badge>
+                                )}
+                                {loan.guarantors.pending > 0 && (
+                                  <Badge variant="secondary" className="bg-yellow-500 text-white">
+                                    ⏳ {loan.guarantors.pending}
+                                  </Badge>
+                                )}
+                                {loan.guarantors.declined > 0 && (
+                                  <Badge variant="destructive">
+                                    ✗ {loan.guarantors.declined}
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {loan.guarantors.details.map((g, idx) => (
+                                  <div key={g.id}>
+                                    {g.guarantor_name} - {g.status}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">None</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
                           {new Date(loan.created_at).toLocaleDateString()}
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-2">
+                            {loan.requires_guarantor_approval && 
+                             loan.guarantors && 
+                             (loan.guarantors.pending > 0 || loan.guarantors.declined > 0) && (
+                              <div className="flex items-center gap-1 text-amber-600 text-xs mb-1" title="Awaiting all guarantors to accept">
+                                <AlertTriangle className="w-3 h-3" />
+                                <span className="hidden md:inline">Guarantors pending</span>
+                              </div>
+                            )}
                             <Button
                               size="sm"
                               onClick={() => handleApprove(loan)}
                               disabled={isReadOnly || isProcessing}
-                              title={isReadOnly ? "Read-only access" : undefined}>
+                              title={
+                                isReadOnly 
+                                  ? "Read-only access" 
+                                  : loan.requires_guarantor_approval && 
+                                    loan.guarantors && 
+                                    (loan.guarantors.pending > 0 || loan.guarantors.declined > 0)
+                                    ? "All guarantors must accept before approval"
+                                    : undefined
+                              }>
                               {isProcessing ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
                               ) : (

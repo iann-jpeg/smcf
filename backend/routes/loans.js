@@ -40,10 +40,36 @@ router.get("/", protect, async (req, res) => {
       .populate("approved_by", "name role")
       .sort({ created_at: -1 });
     
-    // Add calculated late fee info to each loan
-    const loansWithLateFees = loans.map(loan => {
+    // Import LoanGuarantor model
+    const LoanGuarantor = (await import("../models/LoanGuarantor.js")).default;
+    
+    // Add calculated late fee info and guarantor status to each loan
+    const loansWithLateFees = await Promise.all(loans.map(async (loan) => {
       const loanObj = loan.toObject();
       const lateFeeInfo = calculateLateFeeForLoan(loan);
+      
+      // Get guarantor information for this loan
+      const guarantors = await LoanGuarantor.find({ loan_id: loan._id })
+        .populate("guarantor_id", "name phone member_id");
+      
+      const guarantorSummary = {
+        total: guarantors.length,
+        accepted: guarantors.filter(g => g.status === "accepted").length,
+        pending: guarantors.filter(g => g.status === "pending").length,
+        declined: guarantors.filter(g => g.status === "declined").length,
+        details: guarantors.map(g => ({
+          id: g._id,
+          guarantor_id: g.guarantor_id?._id,
+          guarantor_name: g.guarantor_id?.name,
+          guarantor_phone: g.guarantor_id?.phone,
+          guarantor_member_id: g.guarantor_id?.member_id,
+          status: g.status,
+          accepted_at: g.accepted_at,
+          declined_at: g.declined_at,
+          decline_reason: g.decline_reason,
+        })),
+      };
+      
       return {
         ...loanObj,
         pending_late_fee: lateFeeInfo.lateFee,
@@ -54,8 +80,9 @@ router.get("/", protect, async (req, res) => {
         // Current total including pending late fees
         current_total_due: (loanObj.total_repayable || 0) + (lateFeeInfo.lateFee || 0),
         current_remaining: (loanObj.amount_remaining || 0) + (lateFeeInfo.lateFee || 0),
+        guarantors: guarantorSummary,
       };
-    });
+    }));
     
     res.json(loansWithLateFees);
   } catch (error) {
@@ -77,6 +104,31 @@ router.get("/:id", protect, async (req, res) => {
     const loanObj = loan.toObject();
     const lateFeeInfo = calculateLateFeeForLoan(loan);
     
+    // Import LoanGuarantor model and get guarantor information
+    const LoanGuarantor = (await import("../models/LoanGuarantor.js")).default;
+    const guarantors = await LoanGuarantor.find({ loan_id: req.params.id })
+      .populate("guarantor_id", "name phone member_id total_savings");
+    
+    const guarantorSummary = {
+      total: guarantors.length,
+      accepted: guarantors.filter(g => g.status === "accepted").length,
+      pending: guarantors.filter(g => g.status === "pending").length,
+      declined: guarantors.filter(g => g.status === "declined").length,
+      details: guarantors.map(g => ({
+        id: g._id,
+        guarantor_id: g.guarantor_id?._id,
+        guarantor_name: g.guarantor_id?.name,
+        guarantor_phone: g.guarantor_id?.phone,
+        guarantor_member_id: g.guarantor_id?.member_id,
+        guarantor_savings: g.guarantor_id?.total_savings,
+        status: g.status,
+        accepted_at: g.accepted_at,
+        declined_at: g.declined_at,
+        decline_reason: g.decline_reason,
+        liability_amount: g.liability_amount,
+      })),
+    };
+    
     res.json({
       success: true,
       data: {
@@ -88,6 +140,7 @@ router.get("/:id", protect, async (req, res) => {
         late_fee_daily_rate: lateFeeInfo.dailyRate,
         current_total_due: (loanObj.total_repayable || 0) + (lateFeeInfo.lateFee || 0),
         current_remaining: (loanObj.amount_remaining || 0) + (lateFeeInfo.lateFee || 0),
+        guarantors: guarantorSummary,
       }
     });
   } catch (error) {
@@ -265,6 +318,44 @@ router.put("/:id/status", protect, adminOnly, async (req, res) => {
     const updateData = { status };
 
     if (status === "approved") {
+      // First, check if this loan requires guarantor approval
+      const loan = await Loan.findById(req.params.id);
+      if (!loan) {
+        return res.status(404).json({ success: false, error: "Loan not found" });
+      }
+
+      // Check if loan requires guarantor approval
+      if (loan.requires_guarantor_approval) {
+        // Get all guarantors for this loan
+        const LoanGuarantor = (await import("../models/LoanGuarantor.js")).default;
+        const guarantors = await LoanGuarantor.find({ loan_id: req.params.id });
+        
+        if (guarantors.length === 0) {
+          return res.status(400).json({
+            success: false,
+            error: "This loan requires guarantors but none have been added yet.",
+          });
+        }
+
+        // Check if all guarantors have accepted
+        const allAccepted = guarantors.every((g) => g.status === "accepted");
+        const pendingCount = guarantors.filter((g) => g.status === "pending").length;
+        const declinedCount = guarantors.filter((g) => g.status === "declined").length;
+
+        if (!allAccepted) {
+          return res.status(400).json({
+            success: false,
+            error: `Cannot approve loan: ${pendingCount} guarantor(s) pending, ${declinedCount} guarantor(s) declined. All guarantors must accept before approval.`,
+            guarantor_summary: {
+              total: guarantors.length,
+              accepted: guarantors.filter((g) => g.status === "accepted").length,
+              pending: pendingCount,
+              declined: declinedCount,
+            },
+          });
+        }
+      }
+
       updateData.approved_by = req.admin._id;
       updateData.approval_date = new Date();
     } else if (status === "rejected") {
@@ -355,6 +446,44 @@ router.patch("/:id/status", protect, adminOnly, async (req, res) => {
     const updateData = { status };
 
     if (status === "approved") {
+      // First, check if this loan requires guarantor approval
+      const loan = await Loan.findById(req.params.id);
+      if (!loan) {
+        return res.status(404).json({ success: false, error: "Loan not found" });
+      }
+
+      // Check if loan requires guarantor approval
+      if (loan.requires_guarantor_approval) {
+        // Get all guarantors for this loan
+        const LoanGuarantor = (await import("../models/LoanGuarantor.js")).default;
+        const guarantors = await LoanGuarantor.find({ loan_id: req.params.id });
+        
+        if (guarantors.length === 0) {
+          return res.status(400).json({
+            success: false,
+            error: "This loan requires guarantors but none have been added yet.",
+          });
+        }
+
+        // Check if all guarantors have accepted
+        const allAccepted = guarantors.every((g) => g.status === "accepted");
+        const pendingCount = guarantors.filter((g) => g.status === "pending").length;
+        const declinedCount = guarantors.filter((g) => g.status === "declined").length;
+
+        if (!allAccepted) {
+          return res.status(400).json({
+            success: false,
+            error: `Cannot approve loan: ${pendingCount} guarantor(s) pending, ${declinedCount} guarantor(s) declined. All guarantors must accept before approval.`,
+            guarantor_summary: {
+              total: guarantors.length,
+              accepted: guarantors.filter((g) => g.status === "accepted").length,
+              pending: pendingCount,
+              declined: declinedCount,
+            },
+          });
+        }
+      }
+
       updateData.approved_by = req.admin._id;
       updateData.approval_date = new Date();
     } else if (status === "rejected") {

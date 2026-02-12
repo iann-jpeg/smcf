@@ -70,6 +70,19 @@ const loanSchema = new mongoose.Schema({
   notes: {
     type: String,
   },
+  // Guarantor approval tracking
+  requires_guarantor_approval: {
+    type: Boolean,
+    default: false,
+  },
+  guarantor_approval_pending: {
+    type: Boolean,
+    default: false,
+  },
+  all_guarantors_accepted: {
+    type: Boolean,
+    default: false,
+  },
   payment_history: [
     {
       amount: Number,
