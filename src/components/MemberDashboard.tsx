@@ -101,6 +101,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [memberLoans, setMemberLoans] = useState<any[]>([]);
   const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [pendingGuarantorRequests, setPendingGuarantorRequests] = useState(0);
   const [isTopSaver, setIsTopSaver] = useState(false);
   const [savingsBalance, setSavingsBalance] = useState(0);
   const [currentCycleData, setCurrentCycleData] = useState({
@@ -139,6 +140,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         memberRes,
         savingsSummaryRes,
         allSavingsRes,
+        guarantorRequestsRes,
       ] = await Promise.all([
         fetch(`${API_BASE}/api/cycles/current`, {
           headers: { ...authService.getAuthHeaders() },
@@ -159,6 +161,9 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
           headers: { ...authService.getAuthHeaders() },
         }),
         fetch(`${API_BASE}/api/savings/admin/all`, {
+          headers: { ...authService.getAuthHeaders() },
+        }),
+        fetch(`${API_BASE}/api/guarantors/my-guarantor-requests`, {
           headers: { ...authService.getAuthHeaders() },
         }),
       ]);
@@ -183,6 +188,17 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
       }
 
       const freshMemberData = await memberRes.json();
+
+      // Get pending guarantor requests count
+      try {
+        if (guarantorRequestsRes.ok) {
+          const guarantorData = await guarantorRequestsRes.json();
+          setPendingGuarantorRequests(guarantorData.count || 0);
+          console.log(`📋 Found ${guarantorData.count || 0} pending guarantor requests`);
+        }
+      } catch (err) {
+        console.error("Error fetching guarantor requests:", err);
+      }
 
       // Filter member's loans
       const memberLoansList = Array.isArray(loansData)
@@ -1028,9 +1044,16 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
             </TabsTrigger>
             <TabsTrigger
               value="guarantor"
-              className="text-xs sm:text-sm whitespace-nowrap">
+              className="text-xs sm:text-sm whitespace-nowrap relative">
               <Shield className="w-3 h-3 mr-1 inline" />
               Guarantor
+              {pendingGuarantorRequests > 0 && (
+                <Badge 
+                  variant="destructive" 
+                  className="ml-1 px-1 py-0 text-xs h-5 min-w-5">
+                  {pendingGuarantorRequests}
+                </Badge>
+              )}
             </TabsTrigger>
             {userData?.member_type !== "wallet_only" && (
               <TabsTrigger

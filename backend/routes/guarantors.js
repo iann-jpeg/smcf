@@ -376,6 +376,7 @@ router.post("/add-to-loan", protect, async (req, res) => {
 router.get("/my-guarantor-requests", protect, async (req, res) => {
   try {
     const guarantorId = req.user._id;
+    console.log(`Fetching guarantor requests for user: ${guarantorId}`);
 
     const requests = await LoanGuarantor.find({
       guarantor_id: guarantorId,
@@ -384,6 +385,8 @@ router.get("/my-guarantor-requests", protect, async (req, res) => {
       .populate("borrower_id", "name member_id phone")
       .populate("loan_id")
       .sort({ created_at: -1 });
+
+    console.log(`Found ${requests.length} pending guarantor requests for user ${guarantorId}`);
 
     res.json({
       success: true,
@@ -515,6 +518,7 @@ router.post("/decline/:guarantor_record_id", protect, async (req, res) => {
 router.get("/my-profile", protect, async (req, res) => {
   try {
     const guarantorId = req.user._id;
+    console.log(`Fetching guarantor profile for user: ${guarantorId}`);
 
     // Get exposure
     let exposure = await GuarantorExposure.findOne({ guarantor_id: guarantorId });
@@ -530,6 +534,8 @@ router.get("/my-profile", protect, async (req, res) => {
       .populate("loan_id")
       .populate("borrower_id", "name member_id phone")
       .sort({ created_at: -1 });
+
+    console.log(`Found ${guarantees.length} total guarantees for user ${guarantorId}`);
 
     // Get savings balance
     const guarantor = await Member.findById(guarantorId);

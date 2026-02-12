@@ -75,6 +75,9 @@ const GuarantorProfile = () => {
 
   useEffect(() => {
     fetchProfile();
+    // Auto-refresh every 30 seconds
+    const interval = setInterval(fetchProfile, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchProfile = async () => {
@@ -85,12 +88,14 @@ const GuarantorProfile = () => {
       });
 
       const data = await response.json();
+      console.log("Guarantor profile fetched:", data);
 
       if (response.ok && data.success) {
         setExposure(data.profile.exposure);
         setGuarantees(data.profile.guarantees);
         setSavingsBalance(data.profile.savings_balance);
         setMaxCapacity(data.profile.max_capacity);
+        console.log(`Guarantor profile: ${data.profile.guarantees.length} total guarantees`);
       } else {
         throw new Error(data.error || "Failed to fetch profile");
       }

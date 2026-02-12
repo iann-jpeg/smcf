@@ -64,6 +64,9 @@ const GuarantorRequests = () => {
 
   useEffect(() => {
     fetchRequests();
+    // Auto-refresh every 30 seconds
+    const interval = setInterval(fetchRequests, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchRequests = async () => {
@@ -74,9 +77,11 @@ const GuarantorRequests = () => {
       });
 
       const data = await response.json();
+      console.log("Guarantor requests fetched:", data);
 
       if (response.ok && data.success) {
         setRequests(data.requests);
+        console.log(`Found ${data.requests.length} pending guarantor requests`);
       } else {
         throw new Error(data.error || "Failed to fetch requests");
       }
