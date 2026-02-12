@@ -87,8 +87,8 @@ const AdminSavingsTab = ({ isReadOnly = false }: AdminSavingsTabProps) => {
   useEffect(() => {
     fetchSavingsData();
 
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchSavingsData, 30000);
+    // Refresh every 60 seconds (reduced from 30s to minimize server load)
+    const interval = setInterval(fetchSavingsData, 60000);
 
     // Listen for real-time withdrawal requests and status updates
     const socket = (window as any).socket;

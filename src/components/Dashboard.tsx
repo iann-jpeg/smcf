@@ -19,12 +19,15 @@ import { Clock, LogOut } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import io from "socket.io-client";
 
-// Initialize socket with proper config
+// Initialize socket with Render-optimized settings
 const socket = io(API_BASE, {
   transports: ["websocket", "polling"],
   reconnection: true,
   reconnectionDelay: 1000,
-  reconnectionAttempts: 5,
+  reconnectionDelayMax: 5000,
+  reconnectionAttempts: 10,
+  timeout: 20000,
+  autoConnect: true,
 });
 
 // Attach to window for debugging and access from other components

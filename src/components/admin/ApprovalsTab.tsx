@@ -123,8 +123,8 @@ const ApprovalsTab = ({ isReadOnly = false }: ApprovalsTabProps) => {
   useEffect(() => {
     fetchPendingItems();
     
-    // Auto-refresh every 15 seconds
-    const interval = setInterval(fetchPendingItems, 15000);
+    // Auto-refresh every 60 seconds (reduced from 15s to minimize server load)
+    const interval = setInterval(fetchPendingItems, 60000);
     return () => clearInterval(interval);
   }, []);
 

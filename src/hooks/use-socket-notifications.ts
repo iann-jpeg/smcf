@@ -55,12 +55,15 @@ export function useSocketNotifications() {
       return false;
     };
 
-    // Initialize socket connection
+    // Initialize socket connection with Render-optimized settings
     const socket = io(API_BASE, {
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
+      autoConnect: true,
     });
 
     socketRef.current = socket;

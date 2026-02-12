@@ -70,6 +70,11 @@ const io = new Server(httpServer, {
     credentials: true,
     allowedHeaders: ["Content-Type", "Authorization"],
   },
+  // Optimize for production (Render deployment)
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  transports: ['websocket', 'polling'],
+  allowEIO3: true,
 });
 
 // Make io accessible to routes and globally for cron jobs
