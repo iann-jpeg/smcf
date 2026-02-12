@@ -1,17 +1,68 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { QRCodeSVG } from "qrcode.react";
-import { Download, Copy, CheckCircle } from "lucide-react";
-import { useState } from "react";
+import { Download, Copy, CheckCircle, AlertCircle } from "lucide-react";
+import { useState, useEffect, Component, ReactNode, lazy, Suspense } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+
+// Lazy load QRCodeSVG to prevent constructor issues
+const QRCodeSVG = lazy(() =>
+  import("qrcode.react").then((module) => ({
+    default: module.QRCodeSVG,
+  })).catch((error) => {
+    console.error("Failed to load QR code library:", error);
+    // Return a placeholder component if loading fails
+    return {
+      default: () => (
+        <div className="w-[200px] h-[200px] flex items-center justify-center bg-gray-100">
+          <AlertCircle className="w-8 h-8 text-red-500" />
+        </div>
+      ),
+    };
+  })
+);
 
 interface MemberQRCodeProps {
   userData: any;
 }
 
+// Error Boundary for QR Code rendering
+class ErrorBoundary extends Component<
+  { children: ReactNode; onError: () => void },
+  { hasError: boolean }
+> {
+  constructor(props: { children: ReactNode; onError: () => void }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error('QR Code render error:', error);
+    this.props.onError();
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return null;
+    }
+    return this.props.children;
+  }
+}
+
 const MemberQRCode = ({ userData }: MemberQRCodeProps) => {
   const [copied, setCopied] = useState(false);
+  const [qrError, setQrError] = useState(false);
+  const [isClient, setIsClient] = useState(false);
   const { toast } = useToast();
+
+  // Ensure component only renders QR code on client-side
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   // Generate unique payment data for this member
   const paymentData = {
@@ -105,6 +156,28 @@ const MemberQRCode = ({ userData }: MemberQRCodeProps) => {
     }
   };
 
+  // Don't render QR code if userData is missing
+  if (!userData || (!userData.member_id && !userData.memberId)) {
+    return (
+      <Card className="border-2 border-blue-200">
+        <CardHeader className="text-center">
+          <CardTitle className="flex items-center justify-center gap-2 text-blue-700">
+            <span className="text-2xl">📱</span>
+            Your Payment QR Code
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Loading your QR code...
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="border-2 border-blue-200">
       <CardHeader className="text-center">
@@ -119,15 +192,39 @@ const MemberQRCode = ({ userData }: MemberQRCodeProps) => {
       <CardContent className="space-y-4">
         <div className="flex flex-col items-center">
           <div className="bg-white p-6 rounded-lg border-4 border-blue-500 shadow-lg">
-            <QRCodeSVG
-              id="member-qr-code"
-              value={qrValue}
-              size={200}
-              level="H"
-              includeMargin={true}
-              fgColor="#1e40af"
-              bgColor="#ffffff"
-            />
+            {/* Only render QR code on client-side and if no error */}
+            {isClient && !qrError ? (
+              <ErrorBoundary onError={() => setQrError(true)}>
+                <Suspense
+                  fallback={
+                    <div className="w-[200px] h-[200px] flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-700"></div>
+                    </div>
+                  }
+                >
+                  <QRCodeSVG
+                    id="member-qr-code"
+                    value={qrValue}
+                    size={200}
+                    level="H"
+                    includeMargin={true}
+                    fgColor="#1e40af"
+                    bgColor="#ffffff"
+                  />
+                </Suspense>
+              </ErrorBoundary>
+            ) : qrError ? (
+              <div className="w-[200px] h-[200px] flex items-center justify-center bg-gray-100 rounded">
+                <div className="text-center p-4">
+                  <AlertCircle className="w-8 h-8 mx-auto mb-2 text-red-500" />
+                  <p className="text-xs text-gray-600">QR code unavailable</p>
+                </div>
+              </div>
+            ) : (
+              <div className="w-[200px] h-[200px] flex items-center justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-700"></div>
+              </div>
+            )}
           </div>
           
           <div className="mt-4 text-center">
@@ -155,7 +252,8 @@ const MemberQRCode = ({ userData }: MemberQRCodeProps) => {
             onClick={handleDownloadQR}
             variant="default"
             className="flex-1"
-            size="sm">
+            size="sm"
+            disabled={qrError}>
             <Download className="w-4 h-4 mr-2" />
             Download QR
           </Button>

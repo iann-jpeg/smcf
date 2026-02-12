@@ -47,13 +47,15 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, lazy, Suspense } from "react";
 import { useAutoRefresh } from "@/hooks/use-auto-refresh";
 import smcfLogo from '@/assets/newsmcflogo.png';
 import TopSaverBadge from "@/components/analytics/TopSaverBadge";
-import MemberQRCode from "@/components/MemberQRCode";
 import QRScanner from "@/components/QRScanner";
 import { StyledSMCF } from "@/components/StyledSMCF";
+
+// Lazy load MemberQRCode to prevent constructor errors
+const MemberQRCode = lazy(() => import("@/components/MemberQRCode"));
 
 interface MemberWalletProps {
   userData: any;
@@ -1081,8 +1083,23 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
         </CardContent>
       </Card>
 
-      {/* Member QR Code */}
-      <MemberQRCode userData={userData} />
+      {/* Member QR Code - Lazy loaded with error protection */}
+      <Suspense fallback={
+        <Card className="border-2 border-blue-200">
+          <CardHeader className="text-center">
+            <CardTitle className="flex items-center justify-center gap-2 text-blue-700">
+              <span className="text-2xl">📱</span>
+              Your Payment QR Code
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-700 mx-auto"></div>
+            <p className="text-sm text-muted-foreground mt-4">Loading QR code...</p>
+          </CardContent>
+        </Card>
+      }>
+        <MemberQRCode userData={userData} />
+      </Suspense>
 
       {/* Transaction Fees Breakdown */}
       {transactionFees.length > 0 && (
