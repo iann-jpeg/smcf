@@ -164,10 +164,6 @@ router.get("/eligible-guarantors", protect, async (req, res) => {
       // Get savings balance
       const savingsBalance = member.total_savings || 0;
 
-      if (savingsBalance < MIN_SAVINGS_BALANCE) {
-        continue;
-      }
-
       // Get exposure
       let exposure = await GuarantorExposure.findOne({
         guarantor_id: member._id,
@@ -179,27 +175,47 @@ router.get("/eligible-guarantors", protect, async (req, res) => {
         });
       }
 
-      // Check eligibility
-      if (
-        !exposure.is_blacklisted &&
-        exposure.active_guarantee_count < MAX_LOANS_TO_GUARANTEE
-      ) {
-        const availableCapacity = exposure.max_guarantee_capacity - exposure.total_guaranteed_amount;
-        const requiredCapacity = parseFloat(loan_amount) / MIN_GUARANTORS_REQUIRED;
+      // Calculate capacities
+      const availableCapacity = exposure.max_guarantee_capacity - exposure.total_guaranteed_amount;
+      const requiredCapacity = parseFloat(loan_amount) / MIN_GUARANTORS_REQUIRED;
 
-        eligibleGuarantors.push({
-          id: member._id,
-          name: member.name,
-          member_id: member.member_id,
-          phone: member.phone,
-          savings_balance: savingsBalance,
-          current_exposure: exposure.total_guaranteed_amount,
-          available_capacity: availableCapacity,
-          active_guarantees: exposure.active_guarantee_count,
-          is_eligible: availableCapacity >= requiredCapacity,
-          risk_score: exposure.risk_score,
-        });
+      // Check eligibility and reasons for ineligibility
+      let is_eligible = true;
+      const ineligibility_reasons = [];
+
+      if (savingsBalance < MIN_SAVINGS_BALANCE) {
+        is_eligible = false;
+        ineligibility_reasons.push(`Insufficient savings (Min: KES ${MIN_SAVINGS_BALANCE})`);
       }
+
+      if (exposure.is_blacklisted) {
+        is_eligible = false;
+        ineligibility_reasons.push(`Blacklisted: ${exposure.blacklist_reason || 'Default record'}`);
+      }
+
+      if (exposure.active_guarantee_count >= MAX_LOANS_TO_GUARANTEE) {
+        is_eligible = false;
+        ineligibility_reasons.push(`Max guarantees reached (${MAX_LOANS_TO_GUARANTEE})`);
+      }
+
+      if (availableCapacity < requiredCapacity) {
+        is_eligible = false;
+        ineligibility_reasons.push(`Insufficient capacity (Available: KES ${availableCapacity.toFixed(0)})`);
+      }
+
+      eligibleGuarantors.push({
+        id: member._id,
+        name: member.name,
+        member_id: member.member_id,
+        phone: member.phone,
+        savings_balance: savingsBalance,
+        current_exposure: exposure.total_guaranteed_amount,
+        available_capacity: availableCapacity,
+        active_guarantees: exposure.active_guarantee_count,
+        is_eligible,
+        ineligibility_reasons,
+        risk_score: exposure.risk_score,
+      });
     }
 
     // Sort by available capacity (descending)

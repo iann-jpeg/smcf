@@ -27,6 +27,7 @@ interface Guarantor {
   available_capacity: number;
   active_guarantees: number;
   is_eligible: boolean;
+  ineligibility_reasons?: string[];
   risk_score: number;
 }
 
@@ -88,7 +89,16 @@ const GuarantorSelector = ({
     }
   };
 
-  const handleToggleGuarantor = (guarantorId: string) => {
+  const handleToggleGuarantor = (guarantorId: string, isEligible: boolean) => {
+    if (!isEligible) {
+      toast({
+        title: "Ineligible Guarantor",
+        description: "This member does not meet the guarantor requirements",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     if (selectedGuarantors.includes(guarantorId)) {
       onSelectionChange(selectedGuarantors.filter((id) => id !== guarantorId));
     } else {
@@ -110,6 +120,20 @@ const GuarantorSelector = ({
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
+    );
+  }
+
+  if (guarantors.length === 0) {
+    return (
+      <Alert variant="destructive">
+        <AlertTriangle className="h-4 w-4" />
+        <AlertDescription>
+          <strong>No Members Available</strong>
+          <p className="text-sm mt-1">
+            There are no members available to serve as guarantors at this time.
+          </p>
+        </AlertDescription>
+      </Alert>
     );
   }
 
@@ -143,123 +167,104 @@ const GuarantorSelector = ({
         </div>
       </div>
 
-      {/* Eligible Guarantors */}
-      {eligibleGuarantors.length > 0 ? (
-        <div>
-          <h3 className="font-semibold mb-3 flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-green-500" />
-            Eligible Guarantors ({eligibleGuarantors.length})
-          </h3>
-          <div className="space-y-2">
-            {eligibleGuarantors.map((guarantor) => (
-              <Card
-                key={guarantor.id}
-                className={`p-4 cursor-pointer transition-all hover:shadow-md ${
-                  selectedGuarantors.includes(guarantor.id)
-                    ? "ring-2 ring-primary bg-primary/5"
-                    : ""
-                }`}
-                onClick={() => handleToggleGuarantor(guarantor.id)}
-              >
-                <div className="flex items-start gap-3">
-                  <Checkbox
-                    checked={selectedGuarantors.includes(guarantor.id)}
-                    onCheckedChange={() => handleToggleGuarantor(guarantor.id)}
-                    className="mt-1"
-                  />
-                  <div className="flex-1 space-y-2">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-muted-foreground" />
-                          <p className="font-medium">{guarantor.name}</p>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          {guarantor.member_id} • {guarantor.phone}
-                        </p>
+      {/* All Members List */}
+      <div>
+        <h3 className="font-semibold mb-3 flex items-center gap-2">
+          <User className="h-4 w-4" />
+          Select Guarantors ({eligibleGuarantors.length} eligible of {guarantors.length} members)
+        </h3>
+        <div className="space-y-2 max-h-[500px] overflow-y-auto">
+          {guarantors.map((guarantor) => (
+            <Card
+              key={guarantor.id}
+              className={`p-4 transition-all ${
+                guarantor.is_eligible 
+                  ? `cursor-pointer hover:shadow-md ${
+                      selectedGuarantors.includes(guarantor.id)
+                        ? "ring-2 ring-primary bg-primary/5"
+                        : ""
+                    }`
+                  : "opacity-60 cursor-not-allowed bg-muted/50"
+              }`}
+              onClick={() => guarantor.is_eligible && handleToggleGuarantor(guarantor.id, guarantor.is_eligible)}
+            >
+              <div className="flex items-start gap-3">
+                <Checkbox
+                  checked={selectedGuarantors.includes(guarantor.id)}
+                  onCheckedChange={() => handleToggleGuarantor(guarantor.id, guarantor.is_eligible)}
+                  className="mt-1"
+                  disabled={!guarantor.is_eligible}
+                />
+                <div className="flex-1 space-y-2">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        <p className="font-medium">{guarantor.name}</p>
+                        {!guarantor.is_eligible && (
+                          <Badge variant="destructive" className="text-xs">
+                            Ineligible
+                          </Badge>
+                        )}
                       </div>
-                      {getRiskBadge(guarantor.risk_score)}
+                      <p className="text-xs text-muted-foreground">
+                        {guarantor.member_id} • {guarantor.phone}
+                      </p>
                     </div>
+                    {guarantor.is_eligible && getRiskBadge(guarantor.risk_score)}
+                  </div>
 
-                    <div className="grid grid-cols-2 gap-3 text-xs">
-                      <div className="flex items-center gap-1">
-                        <DollarSign className="h-3 w-3 text-green-600" />
-                        <span className="text-muted-foreground">Savings:</span>
-                        <span className="font-medium">
-                          KES {guarantor.savings_balance.toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <TrendingUp className="h-3 w-3 text-blue-600" />
-                        <span className="text-muted-foreground">Available:</span>
-                        <span className="font-medium text-green-600">
-                          KES {guarantor.available_capacity.toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Shield className="h-3 w-3 text-purple-600" />
-                        <span className="text-muted-foreground">Active:</span>
-                        <span className="font-medium">
-                          {guarantor.active_guarantees} loans
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <AlertTriangle className="h-3 w-3 text-yellow-600" />
-                        <span className="text-muted-foreground">Exposure:</span>
-                        <span className="font-medium">
-                          KES {guarantor.current_exposure.toLocaleString()}
-                        </span>
-                      </div>
+                  {/* Ineligibility Reasons */}
+                  {!guarantor.is_eligible && guarantor.ineligibility_reasons && guarantor.ineligibility_reasons.length > 0 && (
+                    <Alert variant="destructive" className="py-2 mt-2">
+                      <AlertTriangle className="h-3 w-3" />
+                      <AlertDescription className="text-xs">
+                        <strong>Reasons:</strong>
+                        <ul className="list-disc list-inside mt-1">
+                          {guarantor.ineligibility_reasons.map((reason, idx) => (
+                            <li key={idx}>{reason}</li>
+                          ))}
+                        </ul>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="flex items-center gap-1">
+                      <DollarSign className="h-3 w-3 text-green-600" />
+                      <span className="text-muted-foreground">Savings:</span>
+                      <span className="font-medium">
+                        KES {guarantor.savings_balance.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <TrendingUp className="h-3 w-3 text-blue-600" />
+                      <span className="text-muted-foreground">Available:</span>
+                      <span className={`font-medium ${guarantor.is_eligible ? 'text-green-600' : 'text-red-600'}`}>
+                        KES {guarantor.available_capacity.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Shield className="h-3 w-3 text-purple-600" />
+                      <span className="text-muted-foreground">Active:</span>
+                      <span className="font-medium">
+                        {guarantor.active_guarantees} loans
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3 text-yellow-600" />
+                      <span className="text-muted-foreground">Exposure:</span>
+                      <span className="font-medium">
+                        KES {guarantor.current_exposure.toLocaleString()}
+                      </span>
                     </div>
                   </div>
                 </div>
-              </Card>
-            ))}
-          </div>
+              </div>
+            </Card>
+          ))}
         </div>
-      ) : (
-        <Alert variant="destructive">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>
-            <strong>No Eligible Guarantors Available</strong>
-            <p className="text-sm mt-1">
-              There are currently no members who meet the guarantor requirements for this loan amount. 
-              Please contact the admin.
-            </p>
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {/* Ineligible Guarantors (collapsed) */}
-      {ineligibleGuarantors.length > 0 && (
-        <details className="group">
-          <summary className="cursor-pointer text-sm text-muted-foreground flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4" />
-            View {ineligibleGuarantors.length} Ineligible Members
-          </summary>
-          <div className="mt-3 space-y-2 opacity-60">
-            {ineligibleGuarantors.map((guarantor) => (
-              <Card key={guarantor.id} className="p-3 bg-muted/50">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="font-medium text-sm">{guarantor.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {guarantor.member_id}
-                    </p>
-                  </div>
-                  <Badge variant="destructive" className="text-xs">
-                    Ineligible
-                  </Badge>
-                </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Insufficient capacity: Available KES {guarantor.available_capacity.toLocaleString()} 
-                  (Required: KES {(loanAmount / (config?.min_required || 2)).toLocaleString()})
-                </p>
-              </Card>
-            ))}
-          </div>
-        </details>
-      )}
+      </div>
 
       {/* Info Footer */}
       <Alert className="bg-blue-50 border-blue-200">
