@@ -128,11 +128,11 @@ export default function ProfilePictureUpload({ userData, onUpdate }: ProfilePict
       return;
     }
 
-    // Validate file size (max 2MB)
-    if (file.size > 2 * 1024 * 1024) {
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
       toast({
         title: "File Too Large",
-        description: "Please select an image smaller than 2MB",
+        description: "Please select an image smaller than 10MB",
         variant: "destructive",
       });
       return;
@@ -313,7 +313,7 @@ export default function ProfilePictureUpload({ userData, onUpdate }: ProfilePict
                 </Button>
               )}
               <p className="text-xs text-muted-foreground">
-                JPG, PNG or GIF. Max size 2MB
+                JPG, PNG or GIF. Max size 10MB
               </p>
             </div>
           </div>
