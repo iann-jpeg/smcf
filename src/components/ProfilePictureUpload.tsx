@@ -14,11 +14,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 import API_BASE from "@/lib/api";
 import { authService } from "@/lib/authService";
-import { Camera, Upload, User, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { Camera, Upload, User, X, ZoomIn } from "lucide-react";
+import { useRef, useState, useCallback } from "react";
+import Cropper from "react-easy-crop";
+import type { Area, Point } from "react-easy-crop";
 
 interface Member {
   _id?: string;
@@ -32,9 +35,68 @@ interface ProfilePictureUploadProps {
   onUpdate?: (profilePicture: string) => void;
 }
 
+// Helper function to create image from URL
+const createImage = (url: string): Promise<HTMLImageElement> =>
+  new Promise((resolve, reject) => {
+    const image = new Image();
+    image.addEventListener("load", () => resolve(image));
+    image.addEventListener("error", (error) => reject(error));
+    image.src = url;
+  });
+
+// Helper function to get cropped image
+async function getCroppedImg(
+  imageSrc: string,
+  pixelCrop: Area
+): Promise<string> {
+  const image = await createImage(imageSrc);
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+
+  if (!ctx) {
+    throw new Error("No 2d context");
+  }
+
+  // Set canvas size to match the crop area
+  canvas.width = pixelCrop.width;
+  canvas.height = pixelCrop.height;
+
+  // Draw the cropped image
+  ctx.drawImage(
+    image,
+    pixelCrop.x,
+    pixelCrop.y,
+    pixelCrop.width,
+    pixelCrop.height,
+    0,
+    0,
+    pixelCrop.width,
+    pixelCrop.height
+  );
+
+  // Convert canvas to base64
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        resolve("");
+        return;
+      }
+      const reader = new FileReader();
+      reader.readAsDataURL(blob);
+      reader.onloadend = () => {
+        resolve(reader.result as string);
+      };
+    }, "image/jpeg", 0.95);
+  });
+}
+
 export default function ProfilePictureUpload({ userData, onUpdate }: ProfilePictureUploadProps) {
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [croppedImage, setCroppedImage] = useState<string | null>(null);
+  const [crop, setCrop] = useState<Point>({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -47,6 +109,10 @@ export default function ProfilePictureUpload({ userData, onUpdate }: ProfilePict
       .toUpperCase()
       .slice(0, 2);
   };
+
+  const onCropComplete = useCallback((croppedArea: Area, croppedAreaPixels: Area) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  }, []);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -82,10 +148,13 @@ export default function ProfilePictureUpload({ userData, onUpdate }: ProfilePict
   };
 
   const handleUpload = async () => {
-    if (!selectedImage) return;
+    if (!selectedImage || !croppedAreaPixels) return;
 
     setIsUploading(true);
     try {
+      // Generate cropped image
+      const croppedImg = await getCroppedImg(selectedImage, croppedAreaPixels);
+      
       const res = await fetch(`${API_BASE}/api/members/upload-profile-picture`, {
         method: "POST",
         headers: {
@@ -93,7 +162,7 @@ export default function ProfilePictureUpload({ userData, onUpdate }: ProfilePict
           ...authService.getAuthHeaders(),
         },
         body: JSON.stringify({
-          profile_picture: selectedImage,
+          profile_picture: croppedImg,
         }),
       });
 
@@ -126,6 +195,9 @@ export default function ProfilePictureUpload({ userData, onUpdate }: ProfilePict
 
       setShowUploadDialog(false);
       setSelectedImage(null);
+      setCroppedImage(null);
+      setCrop({ x: 0, y: 0 });
+      setZoom(1);
 
       // Trigger a soft refresh by reloading after a short delay
       setTimeout(() => {
@@ -248,24 +320,50 @@ export default function ProfilePictureUpload({ userData, onUpdate }: ProfilePict
         </CardContent>
       </Card>
 
-      {/* Upload Preview Dialog */}
+      {/* Upload Preview Dialog with Cropping */}
       <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Upload Profile Picture</DialogTitle>
+            <DialogTitle>Crop Profile Picture</DialogTitle>
             <DialogDescription>
-              Preview your profile picture before uploading
+              Adjust the crop area and zoom to get the perfect profile picture
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="flex justify-center">
-              <Avatar className="w-40 h-40">
-                <AvatarImage src={selectedImage || undefined} alt="Preview" />
-                <AvatarFallback>
-                  <User className="w-20 h-20" />
-                </AvatarFallback>
-              </Avatar>
+            {/* Crop Area */}
+            <div className="relative w-full h-64 bg-muted rounded-lg overflow-hidden">
+              {selectedImage && (
+                <Cropper
+                  image={selectedImage}
+                  crop={crop}
+                  zoom={zoom}
+                  aspect={1}
+                  cropShape="round"
+                  showGrid={false}
+                  onCropChange={setCrop}
+                  onZoomChange={setZoom}
+                  onCropComplete={onCropComplete}
+                />
+              )}
             </div>
+            
+            {/* Zoom Control */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <ZoomIn className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Zoom</span>
+              </div>
+              <Slider
+                value={[zoom]}
+                onValueChange={(value) => setZoom(value[0])}
+                min={1}
+                max={3}
+                step={0.1}
+                className="w-full"
+              />
+            </div>
+
+            {/* Action Buttons */}
             <div className="flex gap-2">
               <Button
                 variant="outline"
@@ -273,6 +371,8 @@ export default function ProfilePictureUpload({ userData, onUpdate }: ProfilePict
                 onClick={() => {
                   setShowUploadDialog(false);
                   setSelectedImage(null);
+                  setCrop({ x: 0, y: 0 });
+                  setZoom(1);
                 }}
                 disabled={isUploading}
               >
