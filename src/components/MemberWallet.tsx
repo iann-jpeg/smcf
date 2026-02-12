@@ -114,6 +114,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
   const [totalFeesPaid, setTotalFeesPaid] = useState(0);
   const [showDepositDialog, setShowDepositDialog] = useState(false);
   const [showWithdrawDialog, setShowWithdrawDialog] = useState(false);
+  const [showQRCode, setShowQRCode] = useState(false); // QR code is hidden by default to prevent constructor errors
   const [isProcessing, setIsProcessing] = useState(false);
   const [depositAmount, setDepositAmount] = useState("");
   const [depositPhone, setDepositPhone] = useState("");
@@ -1123,25 +1124,50 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
         </CardContent>
       </Card>
 
-      {/* Member QR Code - Fully protected with error boundary and lazy loading */}
-      <QRCodeErrorBoundary>
-        <Suspense fallback={
-          <Card className="border-2 border-blue-200">
-            <CardHeader className="text-center">
-              <CardTitle className="flex items-center justify-center gap-2 text-blue-700">
-                <span className="text-2xl">📱</span>
-                Your Payment QR Code
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-700 mx-auto"></div>
-              <p className="text-sm text-muted-foreground mt-4">Loading QR code...</p>
-            </CardContent>
-          </Card>
-        }>
-          <MemberQRCode userData={userData} />
-        </Suspense>
-      </QRCodeErrorBoundary>
+      {/* Member QR Code - Only loads when user explicitly requests it */}
+      {!showQRCode ? (
+        <Card className="border-2 border-blue-200">
+          <CardHeader className="text-center">
+            <CardTitle className="flex items-center justify-center gap-2 text-blue-700">
+              <span className="text-2xl">📱</span>
+              Your Payment QR Code
+            </CardTitle>
+            <CardDescription>
+              Generate your unique QR code for receiving wallet deposits
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-center py-6">
+            <p className="text-sm text-muted-foreground mb-4">
+              Click below to generate and view your payment QR code
+            </p>
+            <Button
+              onClick={() => setShowQRCode(true)}
+              className="bg-blue-600 hover:bg-blue-700">
+              <span className="text-lg mr-2">🔓</span>
+              Show My QR Code
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <QRCodeErrorBoundary>
+          <Suspense fallback={
+            <Card className="border-2 border-blue-200">
+              <CardHeader className="text-center">
+                <CardTitle className="flex items-center justify-center gap-2 text-blue-700">
+                  <span className="text-2xl">📱</span>
+                  Your Payment QR Code
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-700 mx-auto"></div>
+                <p className="text-sm text-muted-foreground mt-4">Loading QR code...</p>
+              </CardContent>
+            </Card>
+          }>
+            <MemberQRCode userData={userData} />
+          </Suspense>
+        </QRCodeErrorBoundary>
+      )}
 
       {/* Transaction Fees Breakdown */}
       {transactionFees.length > 0 && (
