@@ -3,6 +3,7 @@ import express from "express";
 import { adminOnly, protect } from "../middleware/auth.js";
 import Loan from "../models/Loan.js";
 import LoanTermsAcceptance from "../models/LoanTermsAcceptance.js";
+import LoanGuarantor from "../models/LoanGuarantor.js";
 import Payment from "../models/Payment.js";
 import { initiateLipiaPayment } from "../services/lipiaService.js";
 import { calculateLateFeeForLoan, applyLateFees } from "../services/lateFeesService.js";
@@ -40,9 +41,6 @@ router.get("/", protect, async (req, res) => {
       .populate("approved_by", "name role")
       .sort({ created_at: -1 });
     
-    // Import LoanGuarantor model
-    const LoanGuarantor = (await import("../models/LoanGuarantor.js")).default;
-    
     // Add calculated late fee info and guarantor status to each loan
     const loansWithLateFees = await Promise.all(loans.map(async (loan) => {
       const loanObj = loan.toObject();
@@ -69,6 +67,8 @@ router.get("/", protect, async (req, res) => {
           decline_reason: g.decline_reason,
         })),
       };
+      
+      console.log(`Loan ${loan._id} guarantor info:`, guarantorSummary);
       
       return {
         ...loanObj,
@@ -104,8 +104,7 @@ router.get("/:id", protect, async (req, res) => {
     const loanObj = loan.toObject();
     const lateFeeInfo = calculateLateFeeForLoan(loan);
     
-    // Import LoanGuarantor model and get guarantor information
-    const LoanGuarantor = (await import("../models/LoanGuarantor.js")).default;
+    // Get guarantor information
     const guarantors = await LoanGuarantor.find({ loan_id: req.params.id })
       .populate("guarantor_id", "name phone member_id total_savings");
     
@@ -327,7 +326,6 @@ router.put("/:id/status", protect, adminOnly, async (req, res) => {
       // Check if loan requires guarantor approval
       if (loan.requires_guarantor_approval) {
         // Get all guarantors for this loan
-        const LoanGuarantor = (await import("../models/LoanGuarantor.js")).default;
         const guarantors = await LoanGuarantor.find({ loan_id: req.params.id });
         
         if (guarantors.length === 0) {
@@ -455,7 +453,6 @@ router.patch("/:id/status", protect, adminOnly, async (req, res) => {
       // Check if loan requires guarantor approval
       if (loan.requires_guarantor_approval) {
         // Get all guarantors for this loan
-        const LoanGuarantor = (await import("../models/LoanGuarantor.js")).default;
         const guarantors = await LoanGuarantor.find({ loan_id: req.params.id });
         
         if (guarantors.length === 0) {

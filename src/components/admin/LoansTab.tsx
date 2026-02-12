@@ -219,6 +219,7 @@ const LoansTab = ({ isReadOnly = false }: LoansTabProps) => {
         },
       });
       const data = await res.json();
+      console.log("Loans data with guarantors:", data);
       setLoans(data);
     } catch (e) {
       console.error("Fetch loans error", e);
@@ -817,34 +818,42 @@ const LoansTab = ({ isReadOnly = false }: LoansTabProps) => {
                         </TableCell>
                         <TableCell>
                           {loan.guarantors && loan.guarantors.total > 0 ? (
-                            <div className="space-y-1">
-                              <div className="flex gap-2 items-center flex-wrap">
+                            <div className="space-y-2">
+                              <div className="flex gap-1 items-center flex-wrap">
                                 {loan.guarantors.accepted > 0 && (
-                                  <Badge variant="default" className="bg-green-600">
-                                    ✓ {loan.guarantors.accepted}
+                                  <Badge variant="default" className="bg-green-600 text-white">
+                                    ✓ {loan.guarantors.accepted} Accepted
                                   </Badge>
                                 )}
                                 {loan.guarantors.pending > 0 && (
                                   <Badge variant="secondary" className="bg-yellow-500 text-white">
-                                    ⏳ {loan.guarantors.pending}
+                                    ⏳ {loan.guarantors.pending} Pending
                                   </Badge>
                                 )}
                                 {loan.guarantors.declined > 0 && (
                                   <Badge variant="destructive">
-                                    ✗ {loan.guarantors.declined}
+                                    ✗ {loan.guarantors.declined} Declined
                                   </Badge>
                                 )}
                               </div>
-                              <div className="text-xs text-muted-foreground">
-                                {loan.guarantors.details.map((g, idx) => (
-                                  <div key={g.id}>
-                                    {g.guarantor_name} - {g.status}
-                                  </div>
-                                ))}
-                              </div>
+                              {loan.guarantors.details && loan.guarantors.details.length > 0 && (
+                                <div className="space-y-1 mt-2">
+                                  {loan.guarantors.details.map((g) => (
+                                    <div key={g.id} className="text-xs flex items-center gap-2">
+                                      <span className="font-medium">{g.guarantor_name || 'Unknown'}</span>
+                                      <Badge 
+                                        variant={g.status === 'accepted' ? 'default' : g.status === 'pending' ? 'secondary' : 'destructive'}
+                                        className={`text-xs py-0 ${g.status === 'accepted' ? 'bg-green-100 text-green-800' : g.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}
+                                      >
+                                        {g.status}
+                                      </Badge>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           ) : (
-                            <span className="text-muted-foreground text-sm">None</span>
+                            <span className="text-muted-foreground text-sm">No guarantors</span>
                           )}
                         </TableCell>
                         <TableCell>
