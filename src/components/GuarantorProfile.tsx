@@ -193,10 +193,10 @@ const GuarantorProfile = () => {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">
-              KES {exposure.total_guaranteed_amount.toLocaleString()}
+              KES {(exposure?.total_guaranteed_amount || 0).toLocaleString()}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              Across {exposure.active_guarantee_count} active loans
+              Across {exposure?.active_guarantee_count || 0} active loans
             </p>
           </CardContent>
         </Card>
@@ -210,10 +210,10 @@ const GuarantorProfile = () => {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold text-green-600">
-              KES {exposure.available_capacity.toLocaleString()}
+              KES {(exposure?.available_capacity || 0).toLocaleString()}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              Max: KES {exposure.max_guarantee_capacity.toLocaleString()}
+              Max: KES {(exposure?.max_guarantee_capacity || 0).toLocaleString()}
             </p>
           </CardContent>
         </Card>
@@ -227,7 +227,7 @@ const GuarantorProfile = () => {
           </CardHeader>
           <CardContent>
             <p className={`text-2xl font-bold ${riskLevel.color}`}>
-              {exposure.risk_score}/100
+              {exposure?.risk_score || 0}/100
             </p>
             <p className={`text-xs font-medium mt-1 ${riskLevel.color}`}>
               {riskLevel.label}
@@ -245,40 +245,40 @@ const GuarantorProfile = () => {
               Guarantee Capacity
             </span>
             <span className="text-sm font-normal text-muted-foreground">
-              {exposure.utilization_percentage.toFixed(1)}% Used
+              {(exposure?.utilization_percentage || 0).toFixed(1)}% Used
             </span>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Progress value={exposure.utilization_percentage} className="h-3" />
+          <Progress value={exposure?.utilization_percentage || 0} className="h-3" />
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
               <p className="text-muted-foreground">Savings Balance</p>
-              <p className="font-medium">KES {savingsBalance.toLocaleString()}</p>
+              <p className="font-medium">KES {(savingsBalance || 0).toLocaleString()}</p>
             </div>
             <div>
               <p className="text-muted-foreground">Max Capacity (3x Savings)</p>
-              <p className="font-medium">KES {maxCapacity.toLocaleString()}</p>
+              <p className="font-medium">KES {(maxCapacity || 0).toLocaleString()}</p>
             </div>
             <div>
               <p className="text-muted-foreground">Currently Guaranteed</p>
               <p className="font-medium text-orange-600">
-                KES {exposure.total_guaranteed_amount.toLocaleString()}
+                KES {(exposure?.total_guaranteed_amount || 0).toLocaleString()}
               </p>
             </div>
             <div>
               <p className="text-muted-foreground">Available to Guarantee</p>
               <p className="font-medium text-green-600">
-                KES {exposure.available_capacity.toLocaleString()}
+                KES {(exposure?.available_capacity || 0).toLocaleString()}
               </p>
             </div>
           </div>
 
-          {exposure.pending_guarantee_count > 0 && (
+          {(exposure?.pending_guarantee_count || 0) > 0 && (
             <Alert className="bg-yellow-50 border-yellow-200">
               <Clock className="h-4 w-4 text-yellow-600" />
               <AlertDescription className="text-sm text-yellow-800">
-                You have {exposure.pending_guarantee_count} pending guarantee request(s) awaiting
+                You have {exposure?.pending_guarantee_count || 0} pending guarantee request(s) awaiting
                 your response.
               </AlertDescription>
             </Alert>
@@ -309,15 +309,15 @@ const GuarantorProfile = () => {
                       <div className="flex items-center gap-2">
                         <User className="h-4 w-4 text-muted-foreground" />
                         <div>
-                          <p className="font-medium">{guarantee.borrower_id.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {guarantee.borrower_id.member_id}
-                          </p>
-                        </div>
+                        <p className="font-medium">{guarantee?.borrower_id?.name || 'Unknown'}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {guarantee?.borrower_id?.member_id || 'N/A'}
+                        </p>
                       </div>
-                      <div className="flex flex-col items-end gap-1">
-                        {getStatusBadge(guarantee.status)}
-                        {getLoanStatusBadge(guarantee.loan_id.status)}
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      {getStatusBadge(guarantee?.status || 'pending')}
+                      {getLoanStatusBadge(guarantee?.loan_id?.status || 'pending')}
                       </div>
                     </div>
 
@@ -325,31 +325,31 @@ const GuarantorProfile = () => {
                       <div>
                         <p className="text-xs text-muted-foreground">Loan Amount</p>
                         <p className="font-medium">
-                          KES {guarantee.loan_id.amount.toLocaleString()}
+                          KES {(guarantee?.loan_id?.amount || 0).toLocaleString()}
                         </p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Your Liability</p>
                         <p className="font-medium text-orange-600">
-                          KES {guarantee.liability_amount.toLocaleString()}
+                          KES {(guarantee?.liability_amount || 0).toLocaleString()}
                         </p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Purpose</p>
-                        <p className="font-medium truncate">{guarantee.loan_id.purpose}</p>
+                        <p className="font-medium truncate">{guarantee?.loan_id?.purpose || 'N/A'}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Interest Rate</p>
-                        <p className="font-medium">{guarantee.loan_id.interest_rate}%</p>
+                        <p className="font-medium">{guarantee?.loan_id?.interest_rate || 0}%</p>
                       </div>
                     </div>
 
-                    {guarantee.recovered_amount > 0 && (
+                    {(guarantee?.recovered_amount || 0) > 0 && (
                       <Alert variant="destructive" className="text-xs">
                         <AlertTriangle className="h-3 w-3" />
                         <AlertDescription>
                           <strong>Recovery Made:</strong> KES{" "}
-                          {guarantee.recovered_amount.toLocaleString()} deducted from your savings
+                          {(guarantee?.recovered_amount || 0).toLocaleString()} deducted from your savings
                         </AlertDescription>
                       </Alert>
                     )}
@@ -362,7 +362,7 @@ const GuarantorProfile = () => {
       </Card>
 
       {/* Default History */}
-      {exposure.default_history && exposure.default_history.length > 0 && (
+      {exposure?.default_history && exposure.default_history.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
@@ -380,22 +380,22 @@ const GuarantorProfile = () => {
                   <div className="flex justify-between items-start">
                     <div>
                       <p className="font-medium text-red-900">
-                        Defaulted: KES {item.defaulted_amount.toLocaleString()}
+                        Defaulted: KES {(item?.defaulted_amount || 0).toLocaleString()}
                       </p>
                       <p className="text-xs text-red-700">
-                        Recovered: KES {item.recovered_amount.toLocaleString()}
+                        Recovered: KES {(item?.recovered_amount || 0).toLocaleString()}
                       </p>
                     </div>
                     <Badge
                       className={
-                        item.status === "fully_recovered"
+                        item?.status === "fully_recovered"
                           ? "bg-green-500"
-                          : item.status === "partially_recovered"
+                          : item?.status === "partially_recovered"
                           ? "bg-yellow-500"
                           : "bg-red-500"
                       }
                     >
-                      {item.status.replace("_", " ")}
+                      {(item?.status || 'pending').replace("_", " ")}
                     </Badge>
                   </div>
                 </div>

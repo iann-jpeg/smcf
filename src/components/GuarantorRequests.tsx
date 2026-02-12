@@ -125,7 +125,7 @@ const GuarantorRequests = () => {
       if (response.ok && data.success) {
         toast({
           title: "Guarantor Accepted",
-          description: `You have accepted to guarantee ${selectedRequest.borrower_id.name}'s loan of KES ${selectedRequest.liability_amount.toLocaleString()}`,
+          description: `You have accepted to guarantee ${selectedRequest?.borrower_id?.name || 'the borrower'}'s loan of KES ${(selectedRequest?.liability_amount || 0).toLocaleString()}`,
         });
         setShowAcceptDialog(false);
         setSelectedRequest(null);
@@ -226,9 +226,9 @@ const GuarantorRequests = () => {
                       <div className="flex items-center gap-2">
                         <User className="h-5 w-5 text-primary" />
                         <div>
-                          <p className="font-semibold">{request.borrower_id.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {request.borrower_id.member_id} • {request.borrower_id.phone}
+                        <p className="font-semibold">{request?.borrower_id?.name || 'Unknown'}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {request?.borrower_id?.member_id || 'N/A'} • {request?.borrower_id?.phone || 'N/A'}
                           </p>
                         </div>
                       </div>
@@ -241,7 +241,7 @@ const GuarantorRequests = () => {
                         <div>
                           <p className="text-xs text-muted-foreground">Loan Amount</p>
                           <p className="font-medium">
-                            KES {request.loan_id.amount.toLocaleString()}
+                            KES {(request?.loan_id?.amount || 0).toLocaleString()}
                           </p>
                         </div>
                       </div>
@@ -250,7 +250,7 @@ const GuarantorRequests = () => {
                         <div>
                           <p className="text-xs text-muted-foreground">Your Liability</p>
                           <p className="font-medium text-orange-600">
-                            KES {request.liability_amount.toLocaleString()}
+                            KES {(request?.liability_amount || 0).toLocaleString()}
                           </p>
                         </div>
                       </div>
@@ -258,7 +258,7 @@ const GuarantorRequests = () => {
                         <FileText className="h-4 w-4 text-blue-600" />
                         <div>
                           <p className="text-xs text-muted-foreground">Purpose</p>
-                          <p className="font-medium">{request.loan_id.purpose}</p>
+                          <p className="font-medium">{request?.loan_id?.purpose || 'N/A'}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -276,7 +276,7 @@ const GuarantorRequests = () => {
                       <AlertTriangle className="h-4 w-4 text-blue-600" />
                       <AlertDescription className="text-xs text-blue-800">
                         <strong>Joint & Several Liability:</strong> If the borrower defaults, you may be
-                        required to repay up to KES {request.liability_amount.toLocaleString()} from
+                        required to repay up to KES {(request?.liability_amount || 0).toLocaleString()} from
                         your savings account.
                       </AlertDescription>
                     </Alert>
@@ -350,23 +350,23 @@ const GuarantorRequests = () => {
                 <CardContent className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Borrower:</span>
-                    <span className="font-medium">{selectedRequest.borrower_id.name}</span>
+                    <span className="font-medium">{selectedRequest?.borrower_id?.name || 'Unknown'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Loan Amount:</span>
                     <span className="font-medium">
-                      KES {selectedRequest.loan_id.amount.toLocaleString()}
+                      KES {(selectedRequest?.loan_id?.amount || 0).toLocaleString()}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Your Liability:</span>
                     <span className="font-medium text-orange-600">
-                      KES {selectedRequest.liability_amount.toLocaleString()}
+                      KES {(selectedRequest?.liability_amount || 0).toLocaleString()}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Interest Rate:</span>
-                    <span className="font-medium">{selectedRequest.loan_id.interest_rate}%</span>
+                    <span className="font-medium">{selectedRequest?.loan_id?.interest_rate || 0}%</span>
                   </div>
                 </CardContent>
               </Card>
@@ -375,7 +375,7 @@ const GuarantorRequests = () => {
                 <p className="font-semibold mb-2 text-sm">Legal Declaration:</p>
                 <p className="text-xs leading-relaxed">{LEGAL_DECLARATION}</p>
                 <p className="text-xs text-muted-foreground mt-3">
-                  Policy Version: {selectedRequest.policy_version}
+                  Policy Version: {selectedRequest?.policy_version || 'N/A'}
                 </p>
               </div>
 
@@ -438,9 +438,9 @@ const GuarantorRequests = () => {
             <div className="space-y-4">
               <div className="text-sm">
                 <p className="text-muted-foreground">Declining guarantee for:</p>
-                <p className="font-medium">{selectedRequest.borrower_id.name}</p>
+                <p className="font-medium">{selectedRequest?.borrower_id?.name || 'Unknown'}</p>
                 <p className="font-medium text-muted-foreground">
-                  Loan Amount: KES {selectedRequest.loan_id.amount.toLocaleString()}
+                  Loan Amount: KES {(selectedRequest?.loan_id?.amount || 0).toLocaleString()}
                 </p>
               </div>
 
