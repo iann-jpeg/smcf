@@ -59,6 +59,7 @@ import {
   Save,
   Send,
   Settings,
+  Shield,
   Trash2,
   TrendingUp,
   User,
@@ -74,6 +75,7 @@ import OnlineMembersCard from "./admin/OnlineMembersCard";
 import ProfileSettings from "./admin/ProfileSettings";
 import ReportsTab from "./admin/ReportsTab";
 import TrafficDashboard from "./admin/TrafficDashboard";
+import AdminGuarantorManagement from "./admin/AdminGuarantorManagement";
 
 
 interface AdminDashboardProps {
@@ -2778,7 +2780,7 @@ Thank you for your cooperation! 🙏`;
   return (
     <Tabs defaultValue="members" className="w-full">
         <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0 scrollbar-thin scrollbar-thumb-primary/30 scrollbar-track-transparent">
-          <TabsList className="flex w-max min-w-full space-x-2 md:grid md:w-full md:grid-cols-12 min-w-max bg-white/80 dark:bg-background/80 sticky top-0 z-10">
+          <TabsList className="flex w-max min-w-full space-x-2 md:grid md:w-full md:grid-cols-[repeat(13,minmax(0,1fr))] min-w-max bg-white/80 dark:bg-background/80 sticky top-0 z-10">
             <TabsTrigger
               value="members"
               className="text-xs sm:text-sm whitespace-nowrap">
@@ -2856,6 +2858,12 @@ Thank you for your cooperation! 🙏`;
               value="reports"
               className="text-xs sm:text-sm whitespace-nowrap">
               Reports
+            </TabsTrigger>
+            <TabsTrigger
+              value="guarantors"
+              className="text-xs sm:text-sm whitespace-nowrap">
+              <Shield className="w-4 h-4 mr-1 inline" />
+              Guarantors
             </TabsTrigger>
             <TabsTrigger
               value="settings"
@@ -3916,6 +3924,10 @@ Thank you for your cooperation! 🙏`;
 
         <TabsContent value="reports" className="space-y-6">
           <ReportsTab />
+        </TabsContent>
+
+        <TabsContent value="guarantors" className="space-y-6">
+          <AdminGuarantorManagement />
         </TabsContent>
 
         <TabsContent value="settings" className="space-y-6">
