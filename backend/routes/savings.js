@@ -589,6 +589,14 @@ router.get("/admin/all", protect, adminOnly, async (req, res) => {
         const totalLockedSavings = lockedDeposits.reduce((sum, deposit) => sum + deposit.amount, 0);
         const lockedDepositsCount = lockedDeposits.length;
         const earliestUnlockDate = lockedDeposits.length > 0 ? lockedDeposits[0].unlock_date : null;
+        
+        // Get lock period details for display
+        const lockPeriodDetails = lockedDeposits.map(deposit => ({
+          amount: deposit.amount,
+          lock_period_months: deposit.lock_period_months || 0,
+          unlock_date: deposit.unlock_date,
+          created_at: deposit.created_at
+        }));
 
         return {
           _id: member._id,
@@ -604,6 +612,7 @@ router.get("/admin/all", protect, adminOnly, async (req, res) => {
           totalLockedSavings,
           lockedDepositsCount,
           earliestUnlockDate,
+          lockPeriodDetails, // Include lock period information
           lastTransaction:
             transactions.length > 0 ? transactions[0].created_at : null,
         };

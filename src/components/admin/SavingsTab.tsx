@@ -622,7 +622,7 @@ const AdminSavingsTab = ({ isReadOnly = false }: AdminSavingsTabProps) => {
                           KES {(member.currentBalance || 0).toLocaleString()}
                         </TableCell>
                         <TableCell className="text-orange-600">
-                          <div className="min-w-[120px]">
+                          <div className="min-w-[180px]">
                             <div className="flex items-center gap-1 font-semibold">
                               <Clock className="w-3 h-3" />
                               KES {(member.totalLockedSavings || 0).toLocaleString()}
@@ -632,8 +632,22 @@ const AdminSavingsTab = ({ isReadOnly = false }: AdminSavingsTabProps) => {
                                 {member.lockedDepositsCount} deposit{member.lockedDepositsCount > 1 ? 's' : ''} locked
                               </div>
                             )}
+                            {member.lockPeriodDetails && member.lockPeriodDetails.length > 0 && (
+                              <div className="text-xs space-y-1 mt-2">
+                                {member.lockPeriodDetails.map((detail: any, idx: number) => (
+                                  <div key={idx} className="flex items-center justify-between gap-2 bg-orange-50 px-2 py-1 rounded border border-orange-200">
+                                    <span className="font-medium text-orange-700">
+                                      {detail.lock_period_months} {detail.lock_period_months === 1 ? 'month' : 'months'}
+                                    </span>
+                                    <span className="text-muted-foreground">
+                                      KES {detail.amount.toLocaleString()}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                             {member.earliestUnlockDate && (
-                              <div className="text-xs text-muted-foreground">
+                              <div className="text-xs text-muted-foreground mt-1">
                                 Next unlock: {new Date(member.earliestUnlockDate).toLocaleDateString()}
                               </div>
                             )}
