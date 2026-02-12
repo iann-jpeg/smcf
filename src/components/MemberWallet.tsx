@@ -47,7 +47,7 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react";
-import { useEffect, useState, useCallback, lazy, Suspense } from "react";
+import { useEffect, useState, useCallback, lazy, Suspense, Component, ReactNode } from "react";
 import { useAutoRefresh } from "@/hooks/use-auto-refresh";
 import smcfLogo from '@/assets/newsmcflogo.png';
 import TopSaverBadge from "@/components/analytics/TopSaverBadge";
@@ -56,6 +56,46 @@ import { StyledSMCF } from "@/components/StyledSMCF";
 
 // Lazy load MemberQRCode to prevent constructor errors
 const MemberQRCode = lazy(() => import("@/components/MemberQRCode"));
+
+// Error Boundary for the entire QR Code section
+class QRCodeErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: any) {
+    console.error('QR Code section error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <Card className="border-2 border-gray-200">
+          <CardHeader className="text-center">
+            <CardTitle className="flex items-center justify-center gap-2 text-gray-600">
+              <AlertCircle className="w-5 h-5" />
+              QR Code Unavailable
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-center py-4">
+            <p className="text-sm text-muted-foreground">
+              Payment QR code could not be loaded. You can still use other payment methods.
+            </p>
+          </CardContent>
+        </Card>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 interface MemberWalletProps {
   userData: any;
@@ -1083,23 +1123,25 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
         </CardContent>
       </Card>
 
-      {/* Member QR Code - Lazy loaded with error protection */}
-      <Suspense fallback={
-        <Card className="border-2 border-blue-200">
-          <CardHeader className="text-center">
-            <CardTitle className="flex items-center justify-center gap-2 text-blue-700">
-              <span className="text-2xl">📱</span>
-              Your Payment QR Code
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-700 mx-auto"></div>
-            <p className="text-sm text-muted-foreground mt-4">Loading QR code...</p>
-          </CardContent>
-        </Card>
-      }>
-        <MemberQRCode userData={userData} />
-      </Suspense>
+      {/* Member QR Code - Fully protected with error boundary and lazy loading */}
+      <QRCodeErrorBoundary>
+        <Suspense fallback={
+          <Card className="border-2 border-blue-200">
+            <CardHeader className="text-center">
+              <CardTitle className="flex items-center justify-center gap-2 text-blue-700">
+                <span className="text-2xl">📱</span>
+                Your Payment QR Code
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-700 mx-auto"></div>
+              <p className="text-sm text-muted-foreground mt-4">Loading QR code...</p>
+            </CardContent>
+          </Card>
+        }>
+          <MemberQRCode userData={userData} />
+        </Suspense>
+      </QRCodeErrorBoundary>
 
       {/* Transaction Fees Breakdown */}
       {transactionFees.length > 0 && (
