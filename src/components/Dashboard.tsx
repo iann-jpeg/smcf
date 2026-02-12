@@ -507,11 +507,35 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
       );
     });
 
+    // Listen for profile picture updates (for real-time updates across tabs/sessions)
+    socket.on("member:updated", (data) => {
+      console.log("👤 Dashboard received: member:updated", data);
+      // If the updated member is the current user and profile_picture was updated
+      if (userData && data.memberId === userData._id && data.profile_picture !== undefined) {
+        // Update localStorage to ensure consistency
+        const storedUser = localStorage.getItem("user");
+        if (storedUser) {
+          try {
+            const user = JSON.parse(storedUser);
+            user.profile_picture = data.profile_picture;
+            localStorage.setItem("user", JSON.stringify(user));
+            console.log("✅ Profile picture updated in localStorage via Socket.IO");
+          } catch (error) {
+            console.error("Error updating localStorage:", error);
+          }
+        }
+        
+        // Trigger page reload to reflect changes (will happen automatically via ProfilePictureUpload component)
+        // This handler mainly ensures other tabs/windows also get updated
+      }
+    });
+
     return () => {
       console.log("🧹 Dashboard: Cleaning up Socket.IO listeners");
       socket.off("announcement:new");
       socket.off("announcementCreated");
       socket.off("member:new");
+      socket.off("member:updated");
       socket.off("payment:completed");
       socket.off("payment:new");
       socket.off("cycle:updated");
