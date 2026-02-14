@@ -105,53 +105,9 @@ router.put("/:id/mark-paid", protect, adminOnly, async (req, res) => {
 // Get all members (admin only)
 router.get("/", protect, adminOnly, async (req, res) => {
   try {
-    const Payment = (await import("../models/Payment.js")).default;
-    
-    // Get all members
+    // Simple approach: return members as-is for now to restore functionality
     const members = await Member.find().sort({ position: 1, created_at: 1 }).lean();
-    
-    // Use aggregation to calculate totals efficiently
-    const paymentTotals = await Payment.aggregate([
-      {
-        $match: { status: "completed" }
-      },
-      {
-        $group: {
-          _id: "$member_id",
-          total_contributed: { $sum: "$amount" },
-          payment_count: { $sum: 1 }
-        }
-      }
-    ]);
-    
-    // Create a map of member totals
-    const totalsMap = new Map();
-    paymentTotals.forEach(item => {
-      const paymentCount = item.payment_count || 0;
-      totalsMap.set(item._id.toString(), {
-        total_contributed: item.total_contributed || 0,
-        total_cycle_contribution: paymentCount * 200,
-        total_member_credit: paymentCount * 20,
-        total_transaction_fees: paymentCount * 4
-      });
-    });
-    
-    // Merge totals with member data
-    const membersWithTotals = members.map(member => {
-      const totals = totalsMap.get(member._id.toString()) || {
-        total_contributed: 0,
-        total_cycle_contribution: 0,
-        total_member_credit: 0,
-        total_transaction_fees: 0
-      };
-      
-      return {
-        ...member,
-        ...totals
-      };
-    });
-    
-    res.json(membersWithTotals);
+    res.json(members);
   } catch (error) {
     console.error("Error fetching members:", error);
     res.status(500).json({ success: false, error: error.message });
