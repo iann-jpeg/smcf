@@ -82,4 +82,9 @@ const paymentSchema = new mongoose.Schema({
   },
 });
 
+// Add indexes for performance
+paymentSchema.index({ member_id: 1, status: 1 });
+paymentSchema.index({ status: 1 });
+paymentSchema.index({ date: -1 });
+
 export default mongoose.model("Payment", paymentSchema);

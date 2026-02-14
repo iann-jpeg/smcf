@@ -112,9 +112,11 @@ const connectDB = async () => {
     }
     
     const mongooseOptions = {
-      serverSelectionTimeoutMS: 10000, // Increased from 5000 to 10000ms
-      socketTimeoutMS: 45000,
-      connectTimeoutMS: 10000, // Added connection timeout
+      serverSelectionTimeoutMS: 15000, // Increased to 15 seconds
+      socketTimeoutMS: 60000, // Increased to 60 seconds
+      connectTimeoutMS: 15000, // Increased to 15 seconds
+      maxPoolSize: 10, // Maximum number of sockets in the connection pool
+      minPoolSize: 2, // Minimum number of sockets
     };
     
     const conn = await mongoose.connect(
