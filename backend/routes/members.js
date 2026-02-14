@@ -109,7 +109,7 @@ router.get("/", protect, adminOnly, async (req, res) => {
     // Avoid aggregation during connectivity issues
     const members = await Member.find()
       .sort({ position: 1, created_at: 1 })
-      .select('_id name phone email position member_type payment_status wallet_balance savings_balance loan_balance credit_score total_contributed total_cycle_contribution total_member_credit total_transaction_fees created_at payment_date')
+      .select('_id name phone email position member_type payment_status wallet_balance savings_balance loan_balance credit_score total_contributed total_cycle_contribution total_member_credit total_transaction_fees created_at payment_date profile_picture member_id status')
       .lean()
       .maxTimeMS(30000); // Increased to 30 seconds
     
