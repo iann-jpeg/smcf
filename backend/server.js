@@ -99,8 +99,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// Database connection
-const connectDB = async () => {
+// Database connection with retry logic
+const connectDB = async (retries = 5) => {
   try {
     if (!process.env.MONGODB_URI) {
       console.error('❌ MONGODB_URI environment variable is not set!');
@@ -112,21 +112,52 @@ const connectDB = async () => {
     }
     
     const mongooseOptions = {
-      serverSelectionTimeoutMS: 15000, // Increased to 15 seconds
-      socketTimeoutMS: 60000, // Increased to 60 seconds
-      connectTimeoutMS: 15000, // Increased to 15 seconds
-      maxPoolSize: 10, // Maximum number of sockets in the connection pool
-      minPoolSize: 2, // Minimum number of sockets
+      // Aggressive timeout increases for poor network conditions
+      serverSelectionTimeoutMS: 30000, // 30 seconds
+      socketTimeoutMS: 120000, // 2 minutes
+      connectTimeoutMS: 30000, // 30 seconds
+      heartbeatFrequencyMS: 10000, // 10 seconds between heartbeats
+      // Connection pool settings
+      maxPoolSize: 10,
+      minPoolSize: 2,
+      maxIdleTimeMS: 30000, // Close idle connections after 30s
+      // Retry settings
+      retryWrites: true,
+      retryReads: true,
+      // Compression for better network performance
+      compressors: ['zlib'],
     };
     
     const conn = await mongoose.connect(
       process.env.MONGODB_URI || "mongodb://localhost:27017/smcf",
       mongooseOptions
     );
+    
+    // Set up connection event handlers
+    mongoose.connection.on('error', (err) => {
+      console.error('❌ MongoDB connection error:', err.message);
+    });
+    
+    mongoose.connection.on('disconnected', () => {
+      console.warn('⚠️  MongoDB disconnected. Will attempt to reconnect...');
+    });
+    
+    mongoose.connection.on('reconnected', () => {
+      console.log('✅ MongoDB reconnected successfully');
+    });
+    
     console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
+    console.log(`📊 Connection pool: min=${mongooseOptions.minPoolSize}, max=${mongooseOptions.maxPoolSize}`);
     return true;
   } catch (error) {
-    console.error(`❌ MongoDB Connection Error: ${error.message}`);
+    console.error(`❌ MongoDB Connection Error (attempt ${6 - retries}/5): ${error.message}`);
+    
+    if (retries > 0) {
+      const delay = (6 - retries) * 2000; // Exponential backoff: 2s, 4s, 6s, 8s, 10s
+      console.log(`🔄 Retrying connection in ${delay/1000} seconds...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return connectDB(retries - 1);
+    }
     
     if (process.env.NODE_ENV === 'production') {
       console.error('⚠️  Cannot start in production without MongoDB. Please check:');
@@ -134,6 +165,7 @@ const connectDB = async () => {
       console.error('   2. MongoDB Atlas network access allows connections from anywhere (0.0.0.0/0)');
       console.error('   3. Database user credentials are correct');
       console.error('   4. MongoDB cluster is not paused');
+      console.error('   5. Check MongoDB Atlas status: https://status.mongodb.com/');
       process.exit(1);
     } else {
       console.error(`\n⚠️  MongoDB is not running. Please start MongoDB with:`);

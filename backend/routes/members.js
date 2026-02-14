@@ -105,78 +105,41 @@ router.put("/:id/mark-paid", protect, adminOnly, async (req, res) => {
 // Get all members (admin only)
 router.get("/", protect, adminOnly, async (req, res) => {
   try {
-    const Payment = (await import("../models/Payment.js")).default;
-    
-    // Get all members first
+    // Simplified approach: just return members with stored totals
+    // Avoid aggregation during connectivity issues
     const members = await Member.find()
       .sort({ position: 1, created_at: 1 })
+      .select('_id name phone email position member_type payment_status wallet_balance savings_balance loan_balance credit_score total_contributed total_cycle_contribution total_member_credit total_transaction_fees created_at payment_date')
       .lean()
-      .maxTimeMS(5000);
+      .maxTimeMS(30000); // Increased to 30 seconds
     
-    // Use aggregation with timeout to calculate totals efficiently
-    let paymentTotals = [];
-    try {
-      paymentTotals = await Payment.aggregate([
-        {
-          $match: { status: "completed" }
-        },
-        {
-          $group: {
-            _id: "$member_id",
-            total_contributed: { $sum: "$amount" },
-            payment_count: { $sum: 1 }
-          }
-        }
-      ]).maxTimeMS(10000);
-    } catch (aggError) {
-      console.error("Aggregation timeout, using fallback:", aggError.message);
-      // Fallback: return members with zero totals if aggregation fails
-      return res.json(members.map(m => ({
-        ...m,
-        total_contributed: 0,
-        total_cycle_contribution: 0,
-        total_member_credit: 0,
-        total_transaction_fees: 0
-      })));
-    }
+    // Return members with their stored totals
+    // If totals are not populated, they'll show as 0 or undefined
+    const membersWithDefaults = members.map(member => ({
+      ...member,
+      total_contributed: member.total_contributed || 0,
+      total_cycle_contribution: member.total_cycle_contribution || 0,
+      total_member_credit: member.total_member_credit || 0,
+      total_transaction_fees: member.total_transaction_fees || 0
+    }));
     
-    // Create a map of member totals
-    const totalsMap = new Map();
-    paymentTotals.forEach(item => {
-      if (item._id) {
-        const paymentCount = item.payment_count || 0;
-        totalsMap.set(item._id.toString(), {
-          total_contributed: item.total_contributed || 0,
-          total_cycle_contribution: paymentCount * 200,
-          total_member_credit: paymentCount * 20,
-          total_transaction_fees: paymentCount * 4
-        });
-      }
-    });
-    
-    // Merge totals with member data
-    const membersWithTotals = members.map(member => {
-      const totals = totalsMap.get(member._id.toString()) || {
-        total_contributed: 0,
-        total_cycle_contribution: 0,
-        total_member_credit: 0,
-        total_transaction_fees: 0
-      };
-      
-      return {
-        ...member,
-        total_contributed: totals.total_contributed,
-        total_cycle_contribution: totals.total_cycle_contribution,
-        total_member_credit: totals.total_member_credit,
-        total_transaction_fees: totals.total_transaction_fees
-      };
-    });
-    
-    res.json(membersWithTotals);
+    res.json(membersWithDefaults);
   } catch (error) {
     console.error("Error fetching members:", error);
-    // Return empty array instead of error to prevent login issues
-    res.json([]);
+    
+    // Check if it's a timeout error
+    if (error.name === 'MongoNetworkTimeoutError' || error.name === 'MongoPoolClearedError') {
+      console.error('🚨 CRITICAL: MongoDB timeout - check Atlas connection');
+      // Return empty array to prevent cascading failures
+      return res.json([]);
+    }
+    
+    // Other errors
+    res.status(500).json({ 
+      success: false, 
+      error: 'Database error',
+      message: process.env.NODE_ENV === 'development' ? error.message : 'Please try again later'
+    });
   }
 });
 
