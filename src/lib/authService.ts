@@ -97,7 +97,7 @@ export const api = {
 
   // Members
   members: {
-    getAll: () => apiRequest("/api/members"),
+    getAll: () => apiRequest("/api/members/with-totals"),
 
     getOne: (id: string) => apiRequest(`/api/members/${id}`),
 

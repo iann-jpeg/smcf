@@ -114,7 +114,7 @@ const Index = () => {
             fetch(`${API_BASE}/api/cycles/current`, {
               headers: { ...authService.getAuthHeaders() },
             }),
-            fetch(`${API_BASE}/api/members`, {
+            fetch(`${API_BASE}/api/members/with-totals`, {
               headers: { ...authService.getAuthHeaders() },
             }),
             fetch(`${API_BASE}/api/announcements`, {
@@ -278,7 +278,7 @@ const Index = () => {
   // Silent refresh members without UI flicker
   const refreshMembers = async () => {
     try {
-      const membersRes = await fetch(`${API_BASE}/api/members`, {
+      const membersRes = await fetch(`${API_BASE}/api/members/with-totals`, {
         headers: { ...authService.getAuthHeaders() },
       });
       const membersData = await membersRes.json();
