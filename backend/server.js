@@ -34,6 +34,7 @@ import reserveRoutes from "./routes/reserve.js";
 import analyticsRoutes from "./routes/analytics.js";
 import guarantorRoutes from "./routes/guarantors.js";
 import searchRoutes from "./routes/search.js";
+import dashboardRoutes from "./routes/dashboard.js";
 
 // Import interest service
 import { startInterestCronJob } from "./services/interestService.js";
@@ -374,6 +375,7 @@ app.use("/api/credit-score", creditScoreRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/reports", analyticsRoutes); // Alias to avoid ad blocker issues
 app.use("/api/search", searchRoutes);
+app.use("/api", dashboardRoutes); // Optimized dashboard endpoint
 
 // Health check endpoint
 app.get("/health", (req, res) => {

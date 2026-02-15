@@ -175,12 +175,13 @@ router.get('/searches', async (req, res) => {
     // Get searches by category
     const searchesByCategory = await SearchLog.getSearchesByCategory(dateFrom);
     
-    // Get recent searches
+    // Get recent searches (optimized with lean)
     const recentSearches = await SearchLog.find(query)
       .sort({ createdAt: -1 })
-      .limit(parseInt(limit))
+      .limit(Math.min(parseInt(limit), 50))
       .populate('userId', 'name phone member_id')
-      .select('-__v');
+      .select('-__v')
+      .lean();
     
     // Get searches per user
     const searchesPerUser = await SearchLog.aggregate([
@@ -272,11 +273,12 @@ router.get('/logins', async (req, res) => {
       { $sort: { count: -1 } }
     ]);
     
-    // Get active sessions
+    // Get active sessions (optimized with lean)
     const activeSessions = await UserSession.find({ isActive: true })
       .populate('userId', 'name phone member_id')
       .sort({ loginTime: -1 })
-      .limit(50);
+      .limit(20)
+      .lean();
     
     // Get failed login attempts
     const failedAttempts = await LoginAttempt.aggregate([
@@ -338,13 +340,14 @@ router.get('/activities', async (req, res) => {
     // Get activities by type
     const activitiesByType = await ActivityLog.getActivityStats(dateFrom, dateTo);
     
-    // Get recent activities
+    // Get recent activities (optimized with lean)
     const recentActivities = await ActivityLog.find(query)
       .sort({ createdAt: -1 })
-      .limit(parseInt(limit))
+      .limit(Math.min(parseInt(limit), 50))
       .populate('userId', 'name phone member_id')
       .populate('actorId', 'name phone member_id')
-      .select('-hash -__v');
+      .select('-__v')
+      .lean();
     
     // Get most active users with their details
     const mostActiveUsersRaw = await ActivityLog.aggregate([
@@ -455,13 +458,14 @@ router.get('/timeline/all', async (req, res) => {
       }
     }
     
-    // Get all activities with user information
+    // Get all activities with user information (optimized with lean)
     const activities = await ActivityLog.find(query)
       .sort({ createdAt: -1 })
-      .limit(parseInt(limit))
+      .limit(Math.min(parseInt(limit), 100))
       .populate('userId', 'name phone member_id')
       .populate('actorId', 'name phone member_id')
-      .select('-hash -__v');
+      .select('-hash -__v')
+      .lean();
     
     // Get total count
     const totalCount = await ActivityLog.countDocuments(query);
