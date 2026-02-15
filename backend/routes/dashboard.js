@@ -5,7 +5,7 @@ import Payment from '../models/Payment.js';
 import Saving from '../models/Saving.js';
 import Cycle from '../models/Cycle.js';
 import Announcement from '../models/Announcement.js';
-import Guarantor from '../models/Guarantor.js';
+import LoanGuarantor from '../models/LoanGuarantor.js';
 import { protect } from '../middleware/auth.js';
 import { cacheMiddleware } from '../utils/cache.js';
 
@@ -74,7 +74,7 @@ router.get('/member-dashboard/:memberId', cacheMiddleware(2 * 60 * 1000), async 
           .lean(),
       
       // Pending guarantor requests count
-      Guarantor.countDocuments({
+      LoanGuarantor.countDocuments({
         guarantor_id: memberId,
         status: 'pending'
       })
@@ -181,7 +181,7 @@ router.get('/member-dashboard/:memberId/wallet', cacheMiddleware(60 * 1000), asy
         .select('loan_id amount balance status')
         .lean(),
       
-      Guarantor.countDocuments({
+      LoanGuarantor.countDocuments({
         guarantor_id: memberId,
         status: 'pending'
       })
