@@ -248,42 +248,43 @@ const AdminDashboard = ({
   );
 
   // Calculate advance payments - members who have paid for future cycles
+  // Based on TOTAL AMOUNT PAID (KES 200 per cycle)
   const advancePaymentsData = (() => {
-    if (!currentCycleNumber) return { members: [], totalAdvanceCycles: 0 };
+    const CYCLE_AMOUNT = 200;
+    const currCycle = currentCycle?.cycle_number || 1;
     
-    // Get all completed payments for cycles AFTER the current one
-    const futurePayments = allPayments.filter(
-      (p: any) => p.status === "completed" && p.cycle_number > currentCycleNumber
-    );
+    if (!currCycle) return { members: [], totalAdvanceCycles: 0 };
     
-    // Group by member and find max cycle paid
-    const memberAdvanceMap = new Map<string, { name: string; memberId: string; maxCycle: number; cyclesAhead: number }>();
+    // Calculate advance payments for each member based on total paid
+    const memberAdvanceList: Array<{ name: string; memberId: string; cyclesPaid: number; cyclesAhead: number }> = [];
+    let totalAdvanceCycles = 0;
     
-    futurePayments.forEach((p: any) => {
-      const memberId = p.member_id?._id || p.member_id;
-      const memberName = p.member_id?.name || "Unknown";
-      const memberCode = p.member_id?.member_id || "";
+    orderedMembers.forEach((member: any) => {
+      // Skip wallet-only members
+      if (member.member_type === "wallet_only") return;
       
-      if (!memberAdvanceMap.has(memberId)) {
-        memberAdvanceMap.set(memberId, {
-          name: memberName,
-          memberId: memberCode,
-          maxCycle: p.cycle_number,
-          cyclesAhead: p.cycle_number - currentCycleNumber
+      // Get completed cycle payments for this member
+      const memberPayments = allPayments
+        .filter((p: any) => (p.member_id?._id || p.member_id) === (member._id || member.id))
+        .filter((p: any) => p.status === "completed" && p.type === "cycle_payment");
+      
+      // Calculate total paid and cycles paid for
+      const totalPaid = memberPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+      const cyclesPaidFor = Math.floor(totalPaid / CYCLE_AMOUNT);
+      const advanceCycles = cyclesPaidFor > currCycle ? cyclesPaidFor - currCycle : 0;
+      
+      if (advanceCycles > 0) {
+        memberAdvanceList.push({
+          name: member.name,
+          memberId: member.member_id || member._id,
+          cyclesPaid: cyclesPaidFor,
+          cyclesAhead: advanceCycles
         });
-      } else {
-        const existing = memberAdvanceMap.get(memberId)!;
-        if (p.cycle_number > existing.maxCycle) {
-          existing.maxCycle = p.cycle_number;
-          existing.cyclesAhead = p.cycle_number - currentCycleNumber;
-        }
+        totalAdvanceCycles += advanceCycles;
       }
     });
     
-    const membersWithAdvance = Array.from(memberAdvanceMap.values());
-    const totalAdvanceCycles = membersWithAdvance.reduce((sum, m) => sum + m.cyclesAhead, 0);
-    
-    return { members: membersWithAdvance, totalAdvanceCycles };
+    return { members: memberAdvanceList, totalAdvanceCycles };
   })();
 
   // Calculate total collected from current cycle payments only
@@ -3143,37 +3144,45 @@ Thank you for your cooperation! 🙏`;
                       return null;
                     })()}
                     {orderedMembers.map((member, index) => {
-                      // Calculate cycles in advance paid for this member
-                      // Find all completed payments for this member
+                      // Calculate cycles in advance based on TOTAL AMOUNT PAID
+                      // Cycle contribution is KES 200 per cycle
+                      const CYCLE_AMOUNT = 200;
+                      
+                      // Find all completed cycle payments for this member
                       const memberPayments = allPayments
                         .filter((p: any) => (p.member_id?._id || p.member_id) === (member._id || member.id))
-                        .filter((p: any) => p.status === "completed" && typeof p.cycle_number === "number");
-                      // Get unique cycle numbers paid for
-                      const paidCycles = Array.from(new Set(memberPayments.map((p: any) => p.cycle_number)));
+                        .filter((p: any) => p.status === "completed" && p.type === "cycle_payment");
+                      
+                      // Calculate total amount paid for cycles (excluding fees/credits)
+                      const totalPaid = memberPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+                      
+                      // Calculate how many cycles have been paid for
+                      const cyclesPaidFor = Math.floor(totalPaid / CYCLE_AMOUNT);
+                      
                       // Current cycle number
                       const currCycle = currentCycle?.cycle_number || 1;
-                      // Count how many cycles in advance (including current) are paid
-                      const cyclesPaid = paidCycles.filter((n) => n >= currCycle).length;
-                      // Find the highest cycle paid for
-                      const maxCyclePaid = paidCycles.length > 0 ? Math.max(...paidCycles) : null;
-                      // Compute advance cycles (maxCyclePaid - currCycle)
-                      const advanceCycles = maxCyclePaid && maxCyclePaid > currCycle ? maxCyclePaid - currCycle : 0;
                       
-                      // Debug logging for first member with advance payments
-                      if (advanceCycles > 0 && index < 3) {
+                      // Calculate advance cycles (if paid for more cycles than current)
+                      const advanceCycles = cyclesPaidFor > currCycle ? cyclesPaidFor - currCycle : 0;
+                      
+                      // Cycles paid (at least current or more)
+                      const cyclesPaid = cyclesPaidFor >= currCycle ? 1 : 0;
+                      
+                      // Debug logging for first 5 members to see calculations
+                      if (index < 5) {
                         console.log(`🔍 Advance Payment Debug for ${member.name}:`, {
                           memberId: member._id,
                           memberName: member.name,
                           totalPayments: memberPayments.length,
-                          paidCycles: paidCycles,
-                          paidCyclesSorted: paidCycles.sort((a, b) => a - b),
+                          totalPaid: `KES ${totalPaid}`,
+                          cyclesPaidFor: cyclesPaidFor,
                           currentCycle: currCycle,
-                          maxCyclePaid,
-                          advanceCycles,
-                          calculation: `${maxCyclePaid} - ${currCycle} = ${advanceCycles}`,
-                          shouldShowBadge: advanceCycles > 0 ? '✅ YES' : '❌ NO'
+                          advanceCycles: advanceCycles,
+                          calculation: `${totalPaid} ÷ ${CYCLE_AMOUNT} = ${cyclesPaidFor} cycles | ${cyclesPaidFor} - ${currCycle} = ${advanceCycles} advance`,
+                          shouldShowBadge: advanceCycles > 0 ? '✅ YES' : '❌ NO',
+                          status: totalPaid >= (currCycle * CYCLE_AMOUNT) ? '✅ PAID' : '⏳ PENDING'
                         });
-                      }
+```                      }
                       return (
                         <TableRow key={member._id || member.id || index}>
                           <TableCell>
@@ -3237,18 +3246,22 @@ Thank you for your cooperation! 🙏`;
                             )}
                           </TableCell>
                           <TableCell>
-                            {cyclesPaid > 0 ? (
+                            {member.member_type === "wallet_only" ? (
+                              <span className="text-muted-foreground text-sm">N/A</span>
+                            ) : cyclesPaidFor > 0 ? (
                               advanceCycles > 0 ? (
                                 <div className="flex items-center gap-2">
                                   <Badge variant="outline" className="bg-cyan-100 text-cyan-800 border-cyan-400 font-bold text-sm px-3 py-1">
                                     +{advanceCycles} cycle{advanceCycles > 1 ? "s" : ""}
                                   </Badge>
                                   <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                    (#{currentCycle?.cycle_number || 1} + {advanceCycles})
+                                    (Paid {cyclesPaidFor}/{currCycle})
                                   </span>
                                 </div>
                               ) : (
-                                <span className="text-muted-foreground text-sm">Current cycle only</span>
+                                <span className="text-muted-foreground text-sm">
+                                  Paid {cyclesPaidFor}/{currCycle}
+                                </span>
                               )
                             ) : (
                               <span className="text-muted-foreground text-sm">Not paid</span>
