@@ -374,11 +374,14 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
 
       // Update payment history silently only if changed
       setPaymentHistory((prev) => {
+        const currentCycleNum = cycleData.data?.cycle_number || 1;
         const newHistory = memberPayments.map((p) => ({
           cycle: p.cycle_number,
           amount: p.amount,
           date: new Date(p.date).toLocaleDateString(),
           status: p.status,
+          isAdvance: p.cycle_number > currentCycleNum, // Check if payment is for future cycle
+          cyclesAhead: p.cycle_number > currentCycleNum ? p.cycle_number - currentCycleNum : 0, // How many cycles ahead
         }));
         if (JSON.stringify(prev) !== JSON.stringify(newHistory)) {
           return newHistory;
@@ -1702,6 +1705,11 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                         <div>
                           <div className="font-medium">
                             Cycle #{payment.cycle}
+                            {payment.isAdvance && (
+                              <span className="ml-2 text-xs text-cyan-600 font-semibold">
+                                (Advance: +{payment.cyclesAhead} cycle{payment.cyclesAhead > 1 ? "s" : ""})
+                              </span>
+                            )}
                           </div>
                           <div className="text-sm text-muted-foreground">
                             {payment.date}
@@ -1712,8 +1720,17 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                         <div className="font-semibold text-financial-success">
                           KES {payment.amount}
                         </div>
-                        <Badge variant="secondary" className="text-xs">
-                          {payment.status}
+                        <Badge 
+                          variant={payment.status === "completed" || payment.status === "Paid" ? "default" : "secondary"} 
+                          className={`text-xs ${
+                            payment.isAdvance 
+                              ? "bg-cyan-100 text-cyan-700 border-cyan-300" 
+                              : payment.status === "completed" || payment.status === "Paid"
+                              ? "bg-green-100 text-green-700 border-green-300"
+                              : ""
+                          }`}>
+                          {payment.status === "completed" ? "Paid" : payment.status}
+                          {payment.isAdvance && " (Advance)"}
                         </Badge>
                       </div>
                     </div>
