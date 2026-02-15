@@ -243,11 +243,9 @@ export default function MemberActivityTimeline() {
               <p>No activities found</p>
               <p className="text-sm mt-1">{searchTerm ? 'Try a different search term' : 'Activities will appear here as members use the system'}</p>
             </div>
-              )}
-            </CardContent>
-          </Card>
-        </>
-      )}
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
