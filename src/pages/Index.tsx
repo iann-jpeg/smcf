@@ -110,12 +110,11 @@ const Index = () => {
       const fetchData = async () => {
         try {
           // Fetch all data in parallel for better performance
-          // Use lean query for members to exclude large profile pictures
           const [cycleRes, membersRes, announcementsRes] = await Promise.all([
             fetch(`${API_BASE}/api/cycles/current`, {
               headers: { ...authService.getAuthHeaders() },
             }),
-            fetch(`${API_BASE}/api/members?lean=true`, {
+            fetch(`${API_BASE}/api/members`, {
               headers: { ...authService.getAuthHeaders() },
             }),
             fetch(`${API_BASE}/api/announcements`, {
@@ -279,7 +278,7 @@ const Index = () => {
   // Silent refresh members without UI flicker
   const refreshMembers = async () => {
     try {
-      const membersRes = await fetch(`${API_BASE}/api/members?lean=true`, {
+      const membersRes = await fetch(`${API_BASE}/api/members`, {
         headers: { ...authService.getAuthHeaders() },
       });
       const membersData = await membersRes.json();
