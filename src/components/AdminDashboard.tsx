@@ -3182,7 +3182,7 @@ Thank you for your cooperation! 🙏`;
                           shouldShowBadge: advanceCycles > 0 ? '✅ YES' : '❌ NO',
                           status: totalPaid >= (currCycle * CYCLE_AMOUNT) ? '✅ PAID' : '⏳ PENDING'
                         });
-```                      }
+                      }
                       return (
                         <TableRow key={member._id || member.id || index}>
                           <TableCell>
