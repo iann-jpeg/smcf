@@ -3120,6 +3120,18 @@ Thank you for your cooperation! 🙏`;
                     </TableRow>
                   </TableHeader>
                   <TableBody>
+                    {(() => {
+                      // Debug: Log payment data state
+                      console.log('💳 Payment Data State:', {
+                        totalPayments: allPayments.length,
+                        currentCycle: currentCycle?.cycle_number,
+                        paymentsWithCycles: allPayments.filter((p: any) => typeof p.cycle_number === 'number').length,
+                        completedPayments: allPayments.filter((p: any) => p.status === 'completed').length,
+                        samplePayment: allPayments[0],
+                        allCycles: Array.from(new Set(allPayments.map((p: any) => p.cycle_number).filter(Boolean))).sort()
+                      });
+                      return null;
+                    })()}
                     {orderedMembers.map((member, index) => {
                       // Calculate cycles in advance paid for this member
                       // Find all completed payments for this member
@@ -3136,6 +3148,19 @@ Thank you for your cooperation! 🙏`;
                       const maxCyclePaid = paidCycles.length > 0 ? Math.max(...paidCycles) : null;
                       // Compute advance cycles (maxCyclePaid - currCycle)
                       const advanceCycles = maxCyclePaid && maxCyclePaid > currCycle ? maxCyclePaid - currCycle : 0;
+                      
+                      // Debug logging for first member with advance payments
+                      if (advanceCycles > 0 && index < 3) {
+                        console.log(`🔍 Advance Payment Debug for ${member.name}:`, {
+                          memberId: member._id,
+                          memberPayments: memberPayments.length,
+                          paidCycles: paidCycles.sort((a, b) => a - b),
+                          currentCycle: currCycle,
+                          maxCyclePaid,
+                          advanceCycles,
+                          samplePayment: memberPayments[0]
+                        });
+                      }
                       return (
                         <TableRow key={member._id || member.id || index}>
                           <TableCell>
