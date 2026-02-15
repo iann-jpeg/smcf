@@ -248,14 +248,14 @@ const AdminDashboard = ({
   );
 
   // Calculate advance payments - members who have paid for future cycles
-  // Based on TOTAL AMOUNT PAID (KES 200 per cycle)
+  // Based on stored total_cycle_contribution field (KES 200 per cycle)
   const advancePaymentsData = (() => {
     const CYCLE_AMOUNT = 200;
     const currCycle = currentCycle?.cycle_number || 1;
     
     if (!currCycle) return { members: [], totalAdvanceCycles: 0 };
     
-    // Calculate advance payments for each member based on total paid
+    // Calculate advance payments for each member based on stored total_cycle_contribution
     const memberAdvanceList: Array<{ name: string; memberId: string; cyclesPaid: number; cyclesAhead: number }> = [];
     let totalAdvanceCycles = 0;
     
@@ -263,14 +263,8 @@ const AdminDashboard = ({
       // Skip wallet-only members
       if (member.member_type === "wallet_only") return;
       
-      // Get completed cycle payments for this member
-      // Include payments with type "cycle_payment" OR payments that don't have a type field (legacy)
-      const memberPayments = allPayments
-        .filter((p: any) => (p.member_id?._id || p.member_id) === (member._id || member.id))
-        .filter((p: any) => p.status === "completed" && (!p.type || p.type === "cycle_payment" || p.type === "contribution"));
-      
-      // Calculate total paid and cycles paid for
-      const totalPaid = memberPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+      // Use the stored total_cycle_contribution from member data
+      const totalPaid = member.total_cycle_contribution || 0;
       const cyclesPaidFor = Math.floor(totalPaid / CYCLE_AMOUNT);
       const advanceCycles = cyclesPaidFor > currCycle ? cyclesPaidFor - currCycle : 0;
       
@@ -3155,18 +3149,12 @@ Thank you for your cooperation! 🙏`;
                       return null;
                     })()}
                     {orderedMembers.map((member, index) => {
-                      // Calculate cycles in advance based on TOTAL AMOUNT PAID
-                      // Cycle contribution is KES 200 per cycle
+                      // Calculate cycles in advance based on STORED total_cycle_contribution
+                      // This is more reliable than summing payments
                       const CYCLE_AMOUNT = 200;
                       
-                      // Find all completed cycle payments for this member
-                      // Include payments with type "cycle_payment" OR payments that don't have a type field (legacy)
-                      const memberPayments = allPayments
-                        .filter((p: any) => (p.member_id?._id || p.member_id) === (member._id || member.id))
-                        .filter((p: any) => p.status === "completed" && (!p.type || p.type === "cycle_payment" || p.type === "contribution"));
-                      
-                      // Calculate total amount paid for cycles (excluding fees/credits)
-                      const totalPaid = memberPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+                      // Use the stored total_cycle_contribution from member data
+                      const totalPaid = member.total_cycle_contribution || 0;
                       
                       // Calculate how many cycles have been paid for
                       const cyclesPaidFor = Math.floor(totalPaid / CYCLE_AMOUNT);
@@ -3185,14 +3173,8 @@ Thank you for your cooperation! 🙏`;
                         const expectedAmount = currCycle * CYCLE_AMOUNT;
                         const overpayment = totalPaid - expectedAmount;
                         console.log(`🔍 Cycle Payment Analysis for ${member.name} (#${member.position || index + 1}):`, {
+                          dataSource: 'member.total_cycle_contribution (STORED)',
                           currentCycle: `#${currCycle}`,
-                          paymentsFound: memberPayments.length,
-                          paymentDetails: memberPayments.slice(0, 3).map((p: any) => ({
-                            amount: p.amount,
-                            type: p.type || 'NO TYPE',
-                            cycle: p.cycle_number,
-                            date: p.created_at
-                          })),
                           expectedByNow: `KES ${expectedAmount}`,
                           actualPaid: `KES ${totalPaid}`,
                           difference: overpayment > 0 ? `+KES ${overpayment} (OVERPAID)` : overpayment < 0 ? `-KES ${Math.abs(overpayment)} (UNDERPAID)` : 'EXACT',
