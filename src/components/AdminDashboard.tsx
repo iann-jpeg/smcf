@@ -264,9 +264,10 @@ const AdminDashboard = ({
       if (member.member_type === "wallet_only") return;
       
       // Get completed cycle payments for this member
+      // Include payments with type "cycle_payment" OR payments that don't have a type field (legacy)
       const memberPayments = allPayments
         .filter((p: any) => (p.member_id?._id || p.member_id) === (member._id || member.id))
-        .filter((p: any) => p.status === "completed" && p.type === "cycle_payment");
+        .filter((p: any) => p.status === "completed" && (!p.type || p.type === "cycle_payment" || p.type === "contribution"));
       
       // Calculate total paid and cycles paid for
       const totalPaid = memberPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
@@ -3127,6 +3128,7 @@ Thank you for your cooperation! 🙏`;
                       const paymentsWithCycles = allPayments.filter((p: any) => typeof p.cycle_number === 'number');
                       const completedPayments = allPayments.filter((p: any) => p.status === 'completed');
                       const allCycles = Array.from(new Set(allPayments.map((p: any) => p.cycle_number).filter(Boolean))).sort((a, b) => a - b);
+                      const paymentTypes = Array.from(new Set(allPayments.map((p: any) => p.type).filter(Boolean)));
                       
                       console.log('💳 Payment Data State:', {
                         totalPayments: allPayments.length,
@@ -3134,8 +3136,16 @@ Thank you for your cooperation! 🙏`;
                         paymentsWithCycles: paymentsWithCycles.length,
                         completedPayments: completedPayments.length,
                         allCycles: allCycles,
+                        paymentTypes: paymentTypes,
                         maxCycle: allCycles.length > 0 ? Math.max(...allCycles) : 0,
-                        hasData: allPayments.length > 0 ? '✅ YES' : '❌ NO'
+                        hasData: allPayments.length > 0 ? '✅ YES' : '❌ NO',
+                        samplePayments: allPayments.slice(0, 3).map((p: any) => ({
+                          member: p.member_id?.name || 'Unknown',
+                          amount: p.amount,
+                          type: p.type || 'NO TYPE',
+                          status: p.status,
+                          cycle: p.cycle_number
+                        }))
                       });
                       
                       // Alert if no payment data
@@ -3150,9 +3160,10 @@ Thank you for your cooperation! 🙏`;
                       const CYCLE_AMOUNT = 200;
                       
                       // Find all completed cycle payments for this member
+                      // Include payments with type "cycle_payment" OR payments that don't have a type field (legacy)
                       const memberPayments = allPayments
                         .filter((p: any) => (p.member_id?._id || p.member_id) === (member._id || member.id))
-                        .filter((p: any) => p.status === "completed" && p.type === "cycle_payment");
+                        .filter((p: any) => p.status === "completed" && (!p.type || p.type === "cycle_payment" || p.type === "contribution"));
                       
                       // Calculate total amount paid for cycles (excluding fees/credits)
                       const totalPaid = memberPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
@@ -3175,6 +3186,13 @@ Thank you for your cooperation! 🙏`;
                         const overpayment = totalPaid - expectedAmount;
                         console.log(`🔍 Cycle Payment Analysis for ${member.name} (#${member.position || index + 1}):`, {
                           currentCycle: `#${currCycle}`,
+                          paymentsFound: memberPayments.length,
+                          paymentDetails: memberPayments.slice(0, 3).map((p: any) => ({
+                            amount: p.amount,
+                            type: p.type || 'NO TYPE',
+                            cycle: p.cycle_number,
+                            date: p.created_at
+                          })),
                           expectedByNow: `KES ${expectedAmount}`,
                           actualPaid: `KES ${totalPaid}`,
                           difference: overpayment > 0 ? `+KES ${overpayment} (OVERPAID)` : overpayment < 0 ? `-KES ${Math.abs(overpayment)} (UNDERPAID)` : 'EXACT',
