@@ -110,11 +110,12 @@ const Index = () => {
       const fetchData = async () => {
         try {
           // Fetch all data in parallel for better performance
+          // Use lean query for members to exclude large profile pictures
           const [cycleRes, membersRes, announcementsRes] = await Promise.all([
             fetch(`${API_BASE}/api/cycles/current`, {
               headers: { ...authService.getAuthHeaders() },
             }),
-            fetch(`${API_BASE}/api/members`, {
+            fetch(`${API_BASE}/api/members?lean=true`, {
               headers: { ...authService.getAuthHeaders() },
             }),
             fetch(`${API_BASE}/api/announcements`, {
@@ -127,11 +128,11 @@ const Index = () => {
           const announcementsData = await announcementsRes.json();
 
           // Batch state updates to prevent multiple re-renders
-          // Update members silently
+          // Update members silently - use simple length check instead of expensive JSON.stringify
           setMembers((prev) => {
             const newData = Array.isArray(membersData) ? membersData : [];
-            // Only update if data actually changed to prevent flicker
-            if (JSON.stringify(prev) !== JSON.stringify(newData)) {
+            // Only update if length changed or data is new
+            if (!prev || prev.length !== newData.length) {
               return newData;
             }
             return prev;
@@ -142,7 +143,7 @@ const Index = () => {
             const newData = Array.isArray(announcementsData)
               ? announcementsData
               : [];
-            if (JSON.stringify(prev) !== JSON.stringify(newData)) {
+            if (!prev || prev.length !== newData.length) {
               return newData;
             }
             return prev;
@@ -278,15 +279,15 @@ const Index = () => {
   // Silent refresh members without UI flicker
   const refreshMembers = async () => {
     try {
-      const membersRes = await fetch(`${API_BASE}/api/members`, {
+      const membersRes = await fetch(`${API_BASE}/api/members?lean=true`, {
         headers: { ...authService.getAuthHeaders() },
       });
       const membersData = await membersRes.json();
 
-      // Only update if data changed to prevent unnecessary re-renders
+      // Only update if length changed - avoid expensive JSON.stringify
       setMembers((prev) => {
         const newData = Array.isArray(membersData) ? membersData : [];
-        if (JSON.stringify(prev) !== JSON.stringify(newData)) {
+        if (!prev || prev.length !== newData.length) {
           return newData;
         }
         return prev;

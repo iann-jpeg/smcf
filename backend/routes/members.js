@@ -107,9 +107,16 @@ router.get("/", protect, adminOnly, async (req, res) => {
   try {
     // Simplified approach: just return members with stored totals
     // Avoid aggregation during connectivity issues
+    // Support lean=true query param to exclude large fields like profile_picture
+    const isLean = req.query.lean === 'true';
+    
+    const selectFields = isLean 
+      ? '_id name phone email position member_type payment_status wallet_balance savings_balance loan_balance credit_score total_contributed total_cycle_contribution total_member_credit total_transaction_fees created_at payment_date member_id status'
+      : '_id name phone email position member_type payment_status wallet_balance savings_balance loan_balance credit_score total_contributed total_cycle_contribution total_member_credit total_transaction_fees created_at payment_date profile_picture member_id status';
+    
     const members = await Member.find()
       .sort({ position: 1, created_at: 1 })
-      .select('_id name phone email position member_type payment_status wallet_balance savings_balance loan_balance credit_score total_contributed total_cycle_contribution total_member_credit total_transaction_fees created_at payment_date profile_picture member_id status')
+      .select(selectFields)
       .lean()
       .maxTimeMS(30000); // Increased to 30 seconds
     
