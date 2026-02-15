@@ -179,7 +179,7 @@ router.get('/searches', async (req, res) => {
     const recentSearches = await SearchLog.find(query)
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
-      .populate('userId', 'firstName lastName phoneNumber')
+      .populate('userId', 'name phone member_id')
       .select('-__v');
     
     // Get searches per user
@@ -274,7 +274,7 @@ router.get('/logins', async (req, res) => {
     
     // Get active sessions
     const activeSessions = await UserSession.find({ isActive: true })
-      .populate('userId', 'firstName lastName phoneNumber')
+      .populate('userId', 'name phone member_id')
       .sort({ loginTime: -1 })
       .limit(50);
     
@@ -342,22 +342,45 @@ router.get('/activities', async (req, res) => {
     const recentActivities = await ActivityLog.find(query)
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
-      .populate('userId', 'firstName lastName phoneNumber')
-      .populate('actorId', 'firstName lastName')
+      .populate('userId', 'name phone member_id')
+      .populate('actorId', 'name phone member_id')
       .select('-hash -__v');
     
-    // Get most active users
-    const mostActiveUsers = await ActivityLog.aggregate([
+    // Get most active users with their details
+    const mostActiveUsersRaw = await ActivityLog.aggregate([
       { $match: query },
       {
         $group: {
           _id: '$userId',
+          userModel: { $first: '$userModel' },
           activityCount: { $sum: 1 }
         }
       },
       { $sort: { activityCount: -1 } },
       { $limit: 10 }
     ]);
+    
+    // Populate user details for most active users
+    const Member = (await import('../models/Member.js')).default;
+    const Admin = (await import('../models/Admin.js')).default;
+    
+    const mostActiveUsers = await Promise.all(
+      mostActiveUsersRaw.map(async (item) => {
+        if (!item._id) return item;
+        
+        const Model = item.userModel === 'Member' ? Member : Admin;
+        const user = await Model.findById(item._id).select('name phone member_id');
+        
+        return {
+          _id: item._id,
+          activityCount: item.activityCount,
+          name: user?.name || 'Unknown User',
+          phone: user?.phone,
+          member_id: user?.member_id,
+          userModel: item.userModel
+        };
+      })
+    );
     
     // Get activity trends (daily counts)
     const activityTrends = await ActivityLog.aggregate([
@@ -384,6 +407,72 @@ router.get('/activities', async (req, res) => {
   } catch (error) {
     console.error('Error fetching activity analytics:', error);
     res.status(500).json({ message: 'Error fetching activity analytics', error: error.message });
+  }
+});
+
+/**
+ * GET /api/analytics/timeline/all
+ * Get complete activity timeline for all members
+ */
+router.get('/timeline/all', async (req, res) => {
+  try {
+    const { limit = 100, search } = req.query;
+    
+    // Build query
+    let query = { archived: false };
+    
+    // If search term provided, find matching members first
+    if (search) {
+      const Member = (await import('../models/Member.js')).default;
+      const Admin = (await import('../models/Admin.js')).default;
+      
+      const searchRegex = new RegExp(search, 'i');
+      const [members, admins] = await Promise.all([
+        Member.find({
+          $or: [
+            { name: searchRegex },
+            { member_id: searchRegex },
+            { phone: searchRegex }
+          ]
+        }).select('_id'),
+        Admin.find({
+          $or: [
+            { name: searchRegex },
+            { phone: searchRegex }
+          ]
+        }).select('_id')
+      ]);
+      
+      const userIds = [...members.map(m => m._id), ...admins.map(a => a._id)];
+      if (userIds.length > 0) {
+        query.userId = { $in: userIds };
+      } else {
+        // No matching users found
+        return res.json({
+          activities: [],
+          totalCount: 0
+        });
+      }
+    }
+    
+    // Get all activities with user information
+    const activities = await ActivityLog.find(query)
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit))
+      .populate('userId', 'name phone member_id')
+      .populate('actorId', 'name phone member_id')
+      .select('-hash -__v');
+    
+    // Get total count
+    const totalCount = await ActivityLog.countDocuments(query);
+    
+    res.json({
+      activities,
+      totalCount
+    });
+  } catch (error) {
+    console.error('Error fetching activity timeline:', error);
+    res.status(500).json({ message: 'Error fetching activity timeline', error: error.message });
   }
 });
 
@@ -646,6 +735,102 @@ router.post('/generate-stats', async (req, res) => {
   } catch (error) {
     console.error('Error generating usage stats:', error);
     res.status(500).json({ message: 'Error generating usage stats', error: error.message });
+  }
+});
+
+/**
+ * GET /api/analytics/financial-trends
+ * Get financial trends data for charts (last 7 months of savings, loans, repayments)
+ */
+router.get('/financial-trends', async (req, res) => {
+  try {
+    const { months = 7 } = req.query;
+    const numMonths = parseInt(months);
+    
+    // Import models
+    const Saving = (await import('../models/Saving.js')).default;
+    const Loan = (await import('../models/Loan.js')).default;
+    
+    const now = new Date();
+    const monthlyData = [];
+    
+    // Generate data for each of the last N months
+    for (let i = numMonths - 1; i >= 0; i--) {
+      const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+      const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0, 23, 59, 59, 999);
+      
+      // Get month name (short format)
+      const monthName = monthDate.toLocaleDateString('en-US', { month: 'short' });
+      
+      // Calculate savings deposits for the month (completed deposits only)
+      const savingsDeposits = await Saving.find({
+        transaction_type: 'deposit',
+        status: 'completed',
+        created_at: { $gte: monthStart, $lte: monthEnd }
+      });
+      const monthlySavings = savingsDeposits.reduce((sum, s) => sum + (s.amount || 0), 0);
+      
+      // Calculate loans disbursed for the month
+      const loansDisbursed = await Loan.find({
+        status: { $in: ['disbursed', 'repaid'] },
+        disbursement_date: { $gte: monthStart, $lte: monthEnd }
+      });
+      const monthlyLoans = loansDisbursed.reduce((sum, l) => sum + (l.amount || 0), 0);
+      
+      // Calculate repayments for the month
+      // Get loans that had repayments made during this month
+      const loansWithRepayments = await Loan.find({
+        $or: [
+          { status: 'repaid', updated_at: { $gte: monthStart, $lte: monthEnd } },
+          { 
+            status: 'disbursed', 
+            amount_paid: { $gt: 0 },
+            updated_at: { $gte: monthStart, $lte: monthEnd }
+          }
+        ]
+      });
+      
+      // For accurate repayment tracking, we should use payment records
+      const Payment = (await import('../models/Payment.js')).default;
+      const monthlyPayments = await Payment.find({
+        payment_type: 'loan_repayment',
+        status: 'confirmed',
+        created_at: { $gte: monthStart, $lte: monthEnd }
+      });
+      
+      const monthlyRepayments = monthlyPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+      
+      monthlyData.push({
+        month: monthName,
+        year: monthDate.getFullYear(),
+        monthNumber: monthDate.getMonth() + 1,
+        Savings: monthlySavings / 1000000, // Convert to millions for display
+        'Loans Disbursed': monthlyLoans / 1000000,
+        Repayments: monthlyRepayments / 1000000,
+        // Also include raw values for reference
+        rawSavings: monthlySavings,
+        rawLoans: monthlyLoans,
+        rawRepayments: monthlyRepayments
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: monthlyData,
+      metadata: {
+        months: numMonths,
+        generatedAt: new Date(),
+        currency: 'KES'
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching financial trends:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      message: 'Error fetching financial trends data'
+    });
   }
 });
 

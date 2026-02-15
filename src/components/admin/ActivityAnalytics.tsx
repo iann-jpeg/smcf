@@ -16,15 +16,22 @@ interface ActivityAnalyticsProps {
       activityType: string;
       description: string;
       userId: {
-        firstName?: string;
-        lastName?: string;
-        phoneNumber: string;
+        name?: string;
+        phone?: string;
+        member_id?: string;
       };
       amount: number | null;
       status: string;
       createdAt: string;
     }>;
-    mostActiveUsers: Array<{ _id: string; activityCount: number }>;
+    mostActiveUsers: Array<{ 
+      _id: string; 
+      activityCount: number;
+      name?: string;
+      phone?: string;
+      member_id?: string;
+      userModel?: string;
+    }>;
     activityTrends: Array<{ _id: string; count: number }>;
   };
 }
@@ -146,7 +153,13 @@ export default function ActivityAnalytics({ data }: ActivityAnalyticsProps) {
                   <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">
                     {index + 1}
                   </div>
-                  <span className="font-medium">User #{user._id.slice(-6)}</span>
+                  <div>
+                    <div className="font-medium">{user.name || 'Unknown User'}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {user.member_id && `${user.member_id} | `}
+                      {user.phone || 'No phone'}
+                    </div>
+                  </div>
                 </div>
                 <Badge variant="secondary">{user.activityCount} activities</Badge>
               </div>
@@ -187,12 +200,11 @@ export default function ActivityAnalytics({ data }: ActivityAnalyticsProps) {
                   <TableCell>
                     <div>
                       <div className="font-medium text-sm">
-                        {activity.userId?.firstName && activity.userId?.lastName
-                          ? `${activity.userId.firstName} ${activity.userId.lastName}`
-                          : 'Unknown'}
+                        {activity.userId?.name || 'Unknown User'}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {activity.userId?.phoneNumber}
+                        {activity.userId?.member_id && `${activity.userId.member_id} | `}
+                        {activity.userId?.phone || 'No phone'}
                       </div>
                     </div>
                   </TableCell>

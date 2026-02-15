@@ -1,133 +1,127 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { useEffect, useState } from 'react';
+import { useAutoRefresh } from "@/hooks/use-auto-refresh";
 import API_BASE from "@/lib/api";
 import { authService } from "@/lib/authService";
 
 interface ChartDataPoint {
   month: string;
+  year: number;
+  monthNumber: number;
   Savings: number;
   'Loans Disbursed': number;
   Repayments: number;
+  rawSavings: number;
+  rawLoans: number;
+  rawRepayments: number;
 }
 
-interface SavingsTransaction {
-  created_at?: string;
-  date?: string;
-  transaction_type: string;
-  amount: number;
-}
-
-interface Loan {
-  disbursement_date?: string;
-  created_at?: string;
-  updated_at?: string;
-  status: string;
-  amount: number;
-  amount_paid?: number;
+interface SocketIOClient {
+  on: (event: string, callback: (data: unknown) => void) => void;
+  off: (event: string, callback: (data: unknown) => void) => void;
 }
 
 const FinancialTrendsChart = () => {
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchFinancialData();
-  }, []);
-
+  // Fetch financial trends data
   const fetchFinancialData = async () => {
     try {
       setLoading(true);
+      setError(null);
       
-      // Fetch last 6-7 months of data
-      const months = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan'];
-      const data = [];
-
-      // For now, generate sample data based on actual API patterns
-      // You would replace this with actual API calls to get monthly aggregates
-      const response = await Promise.all([
-        fetch(`${API_BASE}/api/savings/admin/all`, {
-          headers: authService.getAuthHeaders(),
-        }),
-        fetch(`${API_BASE}/api/loans`, {
-          headers: authService.getAuthHeaders(),
-        }),
-        fetch(`${API_BASE}/api/payments`, {
-          headers: authService.getAuthHeaders(),
-        }),
-      ]);
-
-      const [savingsRes, loansRes, paymentsRes] = response;
-      const savingsData = await savingsRes.json();
-      const loansData = await loansRes.json();
-      const paymentsData = await paymentsRes.json();
-
-      // Calculate monthly aggregates
-      const now = new Date();
-      const monthlyData = months.map((month, index) => {
-        const monthDate = new Date(now.getFullYear(), now.getMonth() - (6 - index), 1);
-        const monthStart = monthDate.getTime();
-        const monthEnd = new Date(now.getFullYear(), now.getMonth() - (6 - index) + 1, 0).getTime();
-
-        // Calculate savings deposits for the month
-        const monthlySavings = (savingsData.savings || [])
-          .filter((s: SavingsTransaction) => {
-            const created = new Date(s.created_at || s.date).getTime();
-            return created >= monthStart && created <= monthEnd && s.transaction_type === 'deposit';
-          })
-          .reduce((sum: number, s: SavingsTransaction) => sum + (s.amount || 0), 0);
-
-        // Calculate loans disbursed for the month
-        const monthlyLoans = (loansData.loans || [])
-          .filter((l: Loan) => {
-            const disbursed = new Date(l.disbursement_date || l.created_at).getTime();
-            return disbursed >= monthStart && disbursed <= monthEnd && 
-                   (l.status === 'disbursed' || l.status === 'repaid');
-          })
-          .reduce((sum: number, l: Loan) => sum + (l.amount || 0), 0);
-
-        // Calculate repayments for the month
-        const monthlyRepayments = (loansData.loans || [])
-          .filter((l: Loan) => {
-            const updated = new Date(l.updated_at || l.created_at).getTime();
-            return updated >= monthStart && updated <= monthEnd && (l.amount_paid || 0) > 0;
-          })
-          .reduce((sum: number, l: Loan) => sum + (l.amount_paid || 0), 0);
-
-        return {
-          month,
-          Savings: monthlySavings / 1000000, // Convert to millions
-          'Loans Disbursed': monthlyLoans / 1000000,
-          Repayments: monthlyRepayments / 1000000,
-        };
+      console.log('📊 Fetching financial trends data...');
+      
+      const response = await fetch(`${API_BASE}/api/analytics/financial-trends?months=7`, {
+        headers: authService.getAuthHeaders(),
       });
 
-      setChartData(monthlyData);
-    } catch (error) {
-      console.error('Error fetching financial trends:', error);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
       
-      // Fallback to sample data if API fails
-      const sampleData = [
-        { month: 'Jul', Savings: 3.2, 'Loans Disbursed': 2.0, Repayments: 1.8 },
-        { month: 'Aug', Savings: 3.4, 'Loans Disbursed': 2.3, Repayments: 1.9 },
-        { month: 'Sep', Savings: 3.0, 'Loans Disbursed': 1.8, Repayments: 2.1 },
-        { month: 'Oct', Savings: 3.5, 'Loans Disbursed': 2.8, Repayments: 2.3 },
-        { month: 'Nov', Savings: 3.8, 'Loans Disbursed': 2.6, Repayments: 2.5 },
-        { month: 'Dec', Savings: 4.0, 'Loans Disbursed': 3.0, Repayments: 2.7 },
-        { month: 'Jan', Savings: 4.2, 'Loans Disbursed': 2.8, Repayments: 2.9 },
-      ];
-      setChartData(sampleData);
+      console.log('📊 Financial trends response:', result);
+
+      if (result.success && result.data) {
+        setChartData(result.data);
+        console.log('✅ Chart data updated:', result.data.length, 'months');
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (error) {
+      console.error('❌ Error fetching financial trends:', error);
+      setError(error instanceof Error ? error.message : 'Failed to load data');
+      
+      // Show empty data instead of sample data to make the issue obvious
+      setChartData([]);
     } finally {
       setLoading(false);
     }
   };
 
+  // Initial load
+  useEffect(() => {
+    fetchFinancialData();
+
+    // Set up Socket.IO listeners for real-time updates
+    const socket = (window as Window & { socket?: SocketIOClient }).socket;
+    if (socket) {
+      console.log('📊 Setting up real-time chart updates...');
+      
+      // Listen for financial events that should trigger chart refresh
+      const events = [
+        'savingDeposit',
+        'saving:new',
+        'withdrawalApproved',
+        'loanDisbursed',
+        'loanPayment',
+        'loanStatusUpdated',
+        'payment:completed',
+        'interestApplied'
+      ];
+
+      const handleFinancialUpdate = (data: unknown) => {
+        console.log('💰 Financial update received, refreshing chart...', data);
+        // Refresh chart data when financial transactions occur
+        fetchFinancialData();
+      };
+
+      events.forEach(event => {
+        socket.on(event, handleFinancialUpdate);
+      });
+
+      // Cleanup listeners on unmount
+      return () => {
+        events.forEach(event => {
+          socket.off(event, handleFinancialUpdate);
+        });
+      };
+    }
+  }, []);
+
+  // Auto-refresh every 2 minutes as a fallback
+  useAutoRefresh({
+    onRefresh: fetchFinancialData,
+    refreshOnVisible: true,
+    refreshOnFocus: true,
+    debounceMs: 10000, // Don't refresh more than once per 10 seconds
+    debug: false
+  });
+
   const formatYAxis = (value: number) => {
+    if (value === 0) return '0';
+    if (value < 0.01) return '<0.01M';
     return `${value.toFixed(1)}M`;
   };
 
-  const formatTooltip = (value: number) => {
-    return `KES ${(value * 1000000).toLocaleString()}`;
+  const formatTooltip = (value: number, name: string) => {
+    const valueInKES = value * 1000000;
+    return [`KES ${valueInKES.toLocaleString()}`, name];
   };
 
   if (loading) {
@@ -135,9 +129,59 @@ const FinancialTrendsChart = () => {
       <Card>
         <CardHeader>
           <CardTitle>Financial Trends</CardTitle>
+          <CardDescription>
+            Monthly overview of savings, loans, and repayments
+          </CardDescription>
         </CardHeader>
         <CardContent className="flex items-center justify-center h-[400px]">
-          <p className="text-muted-foreground">Loading chart data...</p>
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+            <p className="text-sm text-muted-foreground">Loading financial data...</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Financial Trends</CardTitle>
+          <CardDescription>
+            Monthly overview of savings, loans, and repayments
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex items-center justify-center h-[400px]">
+          <div className="text-center">
+            <p className="text-sm text-destructive mb-2">Failed to load chart data</p>
+            <p className="text-xs text-muted-foreground">{error}</p>
+            <button 
+              onClick={fetchFinancialData}
+              className="mt-4 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm hover:bg-primary/90"
+            >
+              Retry
+            </button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!chartData || chartData.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Financial Trends</CardTitle>
+          <CardDescription>
+            Monthly overview of savings, loans, and repayments
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex items-center justify-center h-[400px]">
+          <div className="text-center">
+            <p className="text-sm text-muted-foreground">No financial data available yet</p>
+            <p className="text-xs text-muted-foreground mt-1">Data will appear as transactions are recorded</p>
+          </div>
         </CardContent>
       </Card>
     );

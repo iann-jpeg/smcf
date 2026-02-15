@@ -15,9 +15,9 @@ interface SearchAnalyticsProps {
       searchTerm: string;
       searchCategory: string;
       userId: {
-        firstName?: string;
-        lastName?: string;
-        phoneNumber: string;
+        name?: string;
+        phone?: string;
+        member_id?: string;
       };
       resultsCount: number;
       createdAt: string;
@@ -156,12 +156,11 @@ export default function SearchAnalytics({ data }: SearchAnalyticsProps) {
                   <TableCell>
                     <div>
                       <div className="font-medium">
-                        {search.userId?.firstName && search.userId?.lastName
-                          ? `${search.userId.firstName} ${search.userId.lastName}`
-                          : 'Unknown'}
+                        {search.userId?.name || 'Unknown'}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {search.userId?.phoneNumber}
+                        {search.userId?.member_id && `${search.userId.member_id} • `}
+                        {search.userId?.phone}
                       </div>
                     </div>
                   </TableCell>

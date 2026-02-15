@@ -33,6 +33,7 @@ import savingsRoutes from "./routes/savings.js";
 import reserveRoutes from "./routes/reserve.js";
 import analyticsRoutes from "./routes/analytics.js";
 import guarantorRoutes from "./routes/guarantors.js";
+import searchRoutes from "./routes/search.js";
 
 // Import interest service
 import { startInterestCronJob } from "./services/interestService.js";
@@ -372,6 +373,7 @@ app.use("/api/reserve", reserveRoutes);
 app.use("/api/credit-score", creditScoreRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/reports", analyticsRoutes); // Alias to avoid ad blocker issues
+app.use("/api/search", searchRoutes);
 
 // Health check endpoint
 app.get("/health", (req, res) => {

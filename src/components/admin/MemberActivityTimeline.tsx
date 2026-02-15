@@ -4,9 +4,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Search, Clock, LogIn, DollarSign, FileText, User } from 'lucide-react';
+import { Search, Clock, LogIn, DollarSign, FileText, User, RefreshCw } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import API_BASE from '@/lib/api';
+import { authService } from '@/lib/authService';
 
 interface TimelineActivity {
   _id: string;
@@ -15,48 +16,56 @@ interface TimelineActivity {
   amount: number | null;
   status: string;
   createdAt: string;
+  userId?: {
+    name?: string;
+    phone?: string;
+    member_id?: string;
+  };
   actorId?: {
-    firstName?: string;
-    lastName?: string;
+    name?: string;
+    phone?: string;
+    member_id?: string;
   };
 }
 
 export default function MemberActivityTimeline() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [memberId, setMemberId] = useState('');
-  const [timeline, setTimeline] = useState<TimelineActivity[]>([]);
-  const [loginHistory, setLoginHistory] = useState<any[]>([]);
-  const [searchHistory, setSearchHistory] = useState<any[]>([]);
-  const [lastLogin, setLastLogin] = useState<any>(null);
+  const [activities, setActivities] = useState<TimelineActivity[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [searched, setSearched] = useState(false);
 
-  const fetchMemberTimeline = async () => {
-    if (!memberId) return;
+  // Fetch all activities on component mount
+  useEffect(() => {
+    fetchAllActivities();
+  }, []);
 
+  const fetchAllActivities = async (search?: string) => {
     setLoading(true);
-    setSearched(true);
     try {
-      const token = localStorage.getItem('smcf_token');
-      const response = await fetch(`${API_BASE}/api/reports/members/${memberId}/timeline`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      const searchParam = search ? `?search=${encodeURIComponent(search)}` : '';
+      const response = await fetch(`${API_BASE}/api/analytics/timeline/all${searchParam}&limit=200`, {
+        headers: authService.getAuthHeaders()
       });
 
       if (response.ok) {
         const data = await response.json();
-        setTimeline(data.timeline || []);
-        setLoginHistory(data.loginHistory || []);
-        setSearchHistory(data.searchHistory || []);
-        setLastLogin(data.lastLogin);
+        setActivities(data.activities || []);
+        setTotalCount(data.totalCount || 0);
       }
     } catch (error) {
-      console.error('Error fetching member timeline:', error);
+      console.error('Error fetching activity timeline:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSearch = () => {
+    fetchAllActivities(searchTerm);
+  };
+
+  const handleReset = () => {
+    setSearchTerm('');
+    fetchAllActivities();
   };
 
   const getActivityIcon = (type: string) => {
@@ -91,210 +100,153 @@ export default function MemberActivityTimeline() {
 
   return (
     <div className="space-y-6">
-      {/* Search Card */}
+      {/* Header Card with Search */}
       <Card>
         <CardHeader>
-          <CardTitle>Member Activity Timeline</CardTitle>
-          <CardDescription>View complete activity history for any member</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Complete Activity Timeline</CardTitle>
+              <CardDescription>All member activities across the system ({totalCount.toLocaleString()} total)</CardDescription>
+            </div>
+            <Button onClick={handleReset} variant="outline" size="sm" disabled={loading}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="flex gap-3">
             <Input
-              placeholder="Enter member ID or phone number"
+              placeholder="Search by member name, ID, or phone number"
               value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setMemberId(e.target.value);
-              }}
+              onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
-                  fetchMemberTimeline();
+                  handleSearch();
                 }
               }}
               className="flex-1"
             />
-            <Button onClick={fetchMemberTimeline} disabled={loading || !memberId}>
+            <Button onClick={handleSearch} disabled={loading}>
               <Search className="h-4 w-4 mr-2" />
               {loading ? 'Searching...' : 'Search'}
             </Button>
+            {searchTerm && (
+              <Button onClick={handleReset} variant="outline">
+                Clear
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Results */}
-      {searched && (
-        <>
-          {/* Last Login Info */}
-          {lastLogin && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Clock className="h-5 w-5 text-primary" />
-                  Last Login
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Time</p>
-                    <p className="font-medium">
-                      {formatDistanceToNow(new Date(lastLogin.loginTime), { addSuffix: true })}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Device</p>
-                    <p className="font-medium capitalize">{lastLogin.deviceType || 'Unknown'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Browser</p>
-                    <p className="font-medium">{lastLogin.browser || 'Unknown'}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+      {/* Activity Timeline */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Activity Timeline</CardTitle>
+          <CardDescription>
+            {activities.length > 0 ? `Showing ${activities.length} of ${totalCount} activities` : 'No activities found'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="text-center py-12">
+              <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-2 text-muted-foreground" />
+              <p className="text-muted-foreground">Loading activities...</p>
+            </div>
+          ) : activities.length > 0 ? (
+            <div className="relative space-y-4 max-h-[800px] overflow-auto">
+              {/* Timeline line */}
+              <div className="absolute left-5 top-0 bottom-0 w-0.5 bg-border" />
 
-          {/* Activity Timeline */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Activity Timeline</CardTitle>
-              <CardDescription>
-                {timeline.length} activities found
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {timeline.length > 0 ? (
-                <div className="relative space-y-4">
-                  {/* Timeline line */}
-                  <div className="absolute left-5 top-0 bottom-0 w-0.5 bg-border" />
+              {activities.map((activity) => (
+                <div key={activity._id} className="relative flex gap-4 pl-12">
+                  {/* Timeline dot */}
+                  <div 
+                    className={`absolute left-3 w-4 h-4 rounded-full ${getActivityColor(activity.activityType)} flex items-center justify-center`}
+                  >
+                    <div className="w-2 h-2 bg-white rounded-full" />
+                  </div>
 
-                  {timeline.map((activity, index) => (
-                    <div key={activity._id} className="relative flex gap-4 pl-12">
-                      {/* Timeline dot */}
-                      <div 
-                        className={`absolute left-3 w-4 h-4 rounded-full ${getActivityColor(activity.activityType)} flex items-center justify-center`}
-                      >
-                        <div className="w-2 h-2 bg-white rounded-full" />
+                  {/* Activity card */}
+                  <div className="flex-1 bg-muted/50 rounded-lg p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        {/* User Info */}
+                        <div className="flex items-center gap-2 mb-2">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-semibold text-sm">
+                            {activity.userId?.name || 'Unknown User'}
+                          </span>
+                          {activity.userId?.member_id && (
+                            <Badge variant="secondary" className="text-xs">
+                              {activity.userId.member_id}
+                            </Badge>
+                          )}
+                        </div>
+
+                        {/* Activity Type */}
+                        <div className="flex items-center gap-2 mb-1">
+                          {getActivityIcon(activity.activityType)}
+                          <Badge variant="outline" className="capitalize">
+                            {activity.activityType.replace(/_/g, ' ')}
+                          </Badge>
+                          {activity.status && (
+                            <Badge 
+                              variant={activity.status === 'success' ? 'default' : 
+                                       activity.status === 'failed' ? 'destructive' : 'secondary'}
+                              className="capitalize"
+                            >
+                              {activity.status}
+                            </Badge>
+                          )}
+                        </div>
+
+                        {/* Description */}
+                        <p className="text-sm">{activity.description}</p>
+
+                        {/* Amount */}
+                        {activity.amount && (
+                          <p className="text-sm font-semibold text-primary mt-1">
+                            KES {activity.amount.toLocaleString()}
+                          </p>
+                        )}
+
+                        {/* Actor */}
+                        {activity.actorId && activity.actorId.name && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            By: {activity.actorId.name}
+                            {activity.actorId.member_id && ` (${activity.actorId.member_id})`}
+                          </p>
+                        )}
+
+                        {/* Phone */}
+                        {activity.userId?.phone && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {activity.userId.phone}
+                          </p>
+                        )}
                       </div>
 
-                      {/* Activity card */}
-                      <div className="flex-1 bg-muted/50 rounded-lg p-4">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              {getActivityIcon(activity.activityType)}
-                              <Badge variant="outline" className="capitalize">
-                                {activity.activityType.replace(/_/g, ' ')}
-                              </Badge>
-                              {activity.status && (
-                                <Badge 
-                                  variant={activity.status === 'success' ? 'default' : 
-                                           activity.status === 'failed' ? 'destructive' : 'secondary'}
-                                  className="capitalize"
-                                >
-                                  {activity.status}
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="text-sm">{activity.description}</p>
-                            {activity.amount && (
-                              <p className="text-sm font-semibold text-primary mt-1">
-                                KES {activity.amount.toLocaleString()}
-                              </p>
-                            )}
-                            {activity.actorId && (
-                              <p className="text-xs text-muted-foreground mt-1">
-                                By: {activity.actorId.firstName} {activity.actorId.lastName}
-                              </p>
-                            )}
-                          </div>
-                          <div className="text-xs text-muted-foreground whitespace-nowrap">
-                            {formatDistanceToNow(new Date(activity.createdAt), { addSuffix: true })}
-                          </div>
-                        </div>
+                      {/* Timestamp */}
+                      <div className="text-xs text-muted-foreground whitespace-nowrap">
+                        {formatDistanceToNow(new Date(activity.createdAt), { addSuffix: true })}
                       </div>
                     </div>
-                  ))}
+                  </div>
                 </div>
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  No activities found for this member
-                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12 text-muted-foreground">
+              <User className="h-12 w-12 mx-auto mb-3 opacity-50" />
+              <p>No activities found</p>
+              <p className="text-sm mt-1">{searchTerm ? 'Try a different search term' : 'Activities will appear here as members use the system'}</p>
+            </div>
               )}
             </CardContent>
           </Card>
-
-          {/* Login History */}
-          {loginHistory.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Login History</CardTitle>
-                <CardDescription>Recent login sessions</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {loginHistory.map((login) => (
-                    <div key={login._id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                      <div className="flex items-center gap-3">
-                        <LogIn className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                          <p className="text-sm font-medium">
-                            {new Date(login.loginTime).toLocaleString()}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {login.deviceType} • {login.browser}
-                            {login.sessionDuration > 0 && ` • ${Math.floor(login.sessionDuration / 60)} min`}
-                          </p>
-                        </div>
-                      </div>
-                      <Badge variant={login.isActive ? 'default' : 'secondary'}>
-                        {login.isActive ? 'Active' : 'Ended'}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Search History */}
-          {searchHistory.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Search History</CardTitle>
-                <CardDescription>Recent searches by this member</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {searchHistory.map((search) => (
-                    <div key={search._id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                      <div className="flex items-center gap-3">
-                        <Search className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                          <p className="text-sm font-medium">{search.searchTerm}</p>
-                          <p className="text-xs text-muted-foreground capitalize">
-                            {search.searchCategory} • {search.resultsCount} results
-                          </p>
-                        </div>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDistanceToNow(new Date(search.createdAt), { addSuffix: true })}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </>
-      )}
-
-      {searched && timeline.length === 0 && !loading && (
-        <Card>
-          <CardContent className="p-12 text-center">
-            <p className="text-muted-foreground">No data found for this member ID</p>
-          </CardContent>
-        </Card>
       )}
     </div>
   );

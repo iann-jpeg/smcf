@@ -1017,40 +1017,43 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
 
       <Tabs defaultValue={userData?.member_type === "wallet_only" ? "wallet" : "overview"} className="w-full">
         <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">
-          <TabsList className={`inline-flex w-auto min-w-max ${userData?.member_type === "wallet_only" ? "md:grid md:w-full md:grid-cols-3" : "md:grid md:w-full md:grid-cols-7"}`}>
+          <TabsList className={`inline-flex w-auto min-w-max h-auto p-2 gap-1 ${userData?.member_type === "wallet_only" ? "md:grid md:w-full md:grid-cols-3" : "md:grid md:w-full md:grid-cols-7"}`}>
             {userData?.member_type !== "wallet_only" && (
               <TabsTrigger
                 value="overview"
-                className="text-xs sm:text-sm whitespace-nowrap">
+                className="text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                 Overview
               </TabsTrigger>
             )}
             {userData?.member_type !== "wallet_only" && (
               <TabsTrigger
                 value="announcements"
-                className="text-xs sm:text-sm whitespace-nowrap">
+                className="text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <Megaphone className="w-4 h-4 mr-1.5 inline" />
                 Announcements
               </TabsTrigger>
             )}
             <TabsTrigger
               value="wallet"
-              className="text-xs sm:text-sm whitespace-nowrap">
+              className="text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <Wallet className="w-4 h-4 mr-1.5 inline" />
               Wallet
             </TabsTrigger>
             <TabsTrigger
               value="loans"
-              className="text-xs sm:text-sm whitespace-nowrap">
+              className="text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <FileText className="w-4 h-4 mr-1.5 inline" />
               My Loans
             </TabsTrigger>
             <TabsTrigger
               value="guarantor"
-              className="text-xs sm:text-sm whitespace-nowrap relative">
-              <Shield className="w-3 h-3 mr-1 inline" />
+              className="text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground relative">
+              <Shield className="w-4 h-4 mr-1.5 inline" />
               Guarantor
               {pendingGuarantorRequests > 0 && (
                 <Badge 
                   variant="destructive" 
-                  className="ml-1 px-1 py-0 text-xs h-5 min-w-5">
+                  className="ml-1.5 px-1.5 py-0.5 text-xs h-5 min-w-5">
                   {pendingGuarantorRequests}
                 </Badge>
               )}
@@ -1058,7 +1061,8 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
             {userData?.member_type !== "wallet_only" && (
               <TabsTrigger
                 value="history"
-                className="text-xs sm:text-sm whitespace-nowrap">
+                className="text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <Receipt className="w-4 h-4 mr-1.5 inline" />
                 <span className="hidden sm:inline">Payment History</span>
                 <span className="sm:hidden">History</span>
               </TabsTrigger>
@@ -1066,7 +1070,8 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
             {userData?.member_type !== "wallet_only" && (
               <TabsTrigger
                 value="payouts"
-                className="text-xs sm:text-sm whitespace-nowrap">
+                className="text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <TrendingUp className="w-4 h-4 mr-1.5 inline" />
                 Payouts
               </TabsTrigger>
             )}

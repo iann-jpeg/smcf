@@ -173,12 +173,11 @@ export default function LoginAnalytics({ data }: LoginAnalyticsProps) {
                   <TableCell>
                     <div>
                       <div className="font-medium">
-                        {session.userId?.firstName && session.userId?.lastName
-                          ? `${session.userId.firstName} ${session.userId.lastName}`
-                          : 'Unknown'}
+                        {session.userId?.name || 'Unknown User'}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {session.userId?.phoneNumber}
+                        {session.userId?.member_id && `ID: ${session.userId.member_id} | `}
+                        {session.userId?.phone || 'No phone'}
                       </div>
                     </div>
                   </TableCell>
