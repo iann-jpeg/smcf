@@ -3121,15 +3121,25 @@ Thank you for your cooperation! 🙏`;
                   </TableHeader>
                   <TableBody>
                     {(() => {
-                      // Debug: Log payment data state
+                      // Debug: Log payment data state with expanded details
+                      const paymentsWithCycles = allPayments.filter((p: any) => typeof p.cycle_number === 'number');
+                      const completedPayments = allPayments.filter((p: any) => p.status === 'completed');
+                      const allCycles = Array.from(new Set(allPayments.map((p: any) => p.cycle_number).filter(Boolean))).sort((a, b) => a - b);
+                      
                       console.log('💳 Payment Data State:', {
                         totalPayments: allPayments.length,
-                        currentCycle: currentCycle?.cycle_number,
-                        paymentsWithCycles: allPayments.filter((p: any) => typeof p.cycle_number === 'number').length,
-                        completedPayments: allPayments.filter((p: any) => p.status === 'completed').length,
-                        samplePayment: allPayments[0],
-                        allCycles: Array.from(new Set(allPayments.map((p: any) => p.cycle_number).filter(Boolean))).sort()
+                        currentCycle: currentCycle?.cycle_number || 'NOT SET',
+                        paymentsWithCycles: paymentsWithCycles.length,
+                        completedPayments: completedPayments.length,
+                        allCycles: allCycles,
+                        maxCycle: allCycles.length > 0 ? Math.max(...allCycles) : 0,
+                        hasData: allPayments.length > 0 ? '✅ YES' : '❌ NO'
                       });
+                      
+                      // Alert if no payment data
+                      if (allPayments.length === 0) {
+                        console.warn('⚠️ NO PAYMENT DATA LOADED - Advance badges will not show!');
+                      }
                       return null;
                     })()}
                     {orderedMembers.map((member, index) => {
@@ -3153,12 +3163,15 @@ Thank you for your cooperation! 🙏`;
                       if (advanceCycles > 0 && index < 3) {
                         console.log(`🔍 Advance Payment Debug for ${member.name}:`, {
                           memberId: member._id,
-                          memberPayments: memberPayments.length,
-                          paidCycles: paidCycles.sort((a, b) => a - b),
+                          memberName: member.name,
+                          totalPayments: memberPayments.length,
+                          paidCycles: paidCycles,
+                          paidCyclesSorted: paidCycles.sort((a, b) => a - b),
                           currentCycle: currCycle,
                           maxCyclePaid,
                           advanceCycles,
-                          samplePayment: memberPayments[0]
+                          calculation: `${maxCyclePaid} - ${currCycle} = ${advanceCycles}`,
+                          shouldShowBadge: advanceCycles > 0 ? '✅ YES' : '❌ NO'
                         });
                       }
                       return (
@@ -3209,15 +3222,15 @@ Thank you for your cooperation! 🙏`;
                                 variant={
                                   cyclesPaid > 0 ? "default" : "secondary"
                                 }
-                                className={advanceCycles > 0 ? "bg-cyan-600 hover:bg-cyan-700" : ""}>
+                                className={advanceCycles > 0 ? "bg-cyan-500 hover:bg-cyan-600 text-white font-bold border-0" : ""}>
                                 {cyclesPaid > 0
                                   ? advanceCycles > 0
                                     ? `Paid (Advance +${advanceCycles})`
                                     : "Paid"
                                   : "Pending"}
                                 {advanceCycles > 0 && (
-                                  <span className="ml-1 px-1.5 py-0.5 bg-white/30 rounded-full text-xs font-bold">
-                                    {advanceCycles}
+                                  <span className="ml-2 px-2 py-0.5 bg-white text-cyan-700 rounded-full text-xs font-bold">
+                                    +{advanceCycles}
                                   </span>
                                 )}
                               </Badge>
@@ -3226,12 +3239,12 @@ Thank you for your cooperation! 🙏`;
                           <TableCell>
                             {cyclesPaid > 0 ? (
                               advanceCycles > 0 ? (
-                                <div className="flex items-center gap-1">
-                                  <Badge variant="outline" className="bg-cyan-50 text-cyan-700 border-cyan-300 font-semibold">
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="outline" className="bg-cyan-100 text-cyan-800 border-cyan-400 font-bold text-sm px-3 py-1">
                                     +{advanceCycles} cycle{advanceCycles > 1 ? "s" : ""}
                                   </Badge>
-                                  <span className="text-xs text-muted-foreground">
-                                    (Cycle #{currentCycle?.cycle_number || 1} + {advanceCycles})
+                                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                    (#{currentCycle?.cycle_number || 1} + {advanceCycles})
                                   </span>
                                 </div>
                               ) : (
