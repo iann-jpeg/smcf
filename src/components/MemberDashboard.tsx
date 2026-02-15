@@ -63,6 +63,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
   const [selectedLoanLoading, setSelectedLoanLoading] = useState(false);
     // Fetch latest loan details from backend when opening repayment dialog
     const openRepaymentDialog = async (loan: any) => {
+      console.log('🔵 Opening repayment dialog for loan:', loan._id);
       setSelectedLoanLoading(true);
       try {
         const res = await fetch(`${API_BASE}/api/loans/${loan._id}`, {
@@ -70,6 +71,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         });
         const data = await res.json();
         if (data.success && data.data) {
+          console.log('✅ Fetched latest loan data:', data.data);
           setSelectedLoan(data.data);
         } else {
           console.error('Failed to fetch loan details:', data.error);
@@ -91,6 +93,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
       }
       setSelectedLoanLoading(false);
       setShowRepayment(true);
+      console.log('🔵 Repayment dialog opened');
     };
   const [isProcessingRepayment, setIsProcessingRepayment] = useState(false);
   const [repaymentState, setRepaymentState] = useState<
@@ -753,7 +756,15 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
   };
 
   const handleLoanRepayment = async () => {
-    if (!selectedLoan || !partialPaymentAmount) return;
+    console.log('💰 handleLoanRepayment called');
+    console.log('Selected loan:', selectedLoan);
+    console.log('Payment amount:', partialPaymentAmount);
+    console.log('Repayment phone:', repaymentPhone);
+    
+    if (!selectedLoan || !partialPaymentAmount) {
+      console.log('❌ Missing selectedLoan or partialPaymentAmount');
+      return;
+    }
 
     const paymentAmount = parseFloat(partialPaymentAmount);
     if (isNaN(paymentAmount) || paymentAmount <= 0) {
@@ -1613,7 +1624,10 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                                 </div>
                                 <Button
                                   type="button"
-                                  onClick={() => openRepaymentDialog(loan)}
+                                  onClick={() => {
+                                    console.log('🔴 Repay button clicked for loan:', loan._id, loan);
+                                    openRepaymentDialog(loan);
+                                  }}
                                   variant={loan.is_overdue ? "destructive" : "mpesa"}
                                   size="sm"
                                   className="w-full sm:w-auto"
@@ -2045,6 +2059,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
 
               <DialogFooter className="gap-2">
                 <Button
+                  type="button"
                   variant="outline"
                   onClick={() => {
                     setShowRepayment(false);
@@ -2055,11 +2070,19 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                   Cancel
                 </Button>
                 <Button
+                  type="button"
                   variant="mpesa"
-                  onClick={handleLoanRepayment}
+                  onClick={() => {
+                    console.log('💚 Pay button clicked in dialog');
+                    console.log('Amount:', partialPaymentAmount);
+                    console.log('Phone:', repaymentPhone);
+                    console.log('Is disabled:', isProcessingRepayment || !partialPaymentAmount || isNaN(parseFloat(partialPaymentAmount)) || parseFloat(partialPaymentAmount) <= 0);
+                    handleLoanRepayment();
+                  }}
                   disabled={
                     isProcessingRepayment ||
                     !partialPaymentAmount ||
+                    isNaN(parseFloat(partialPaymentAmount)) ||
                     parseFloat(partialPaymentAmount) <= 0
                   }>
                   {isProcessingRepayment ? (
