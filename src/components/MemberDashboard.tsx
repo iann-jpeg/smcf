@@ -72,10 +72,22 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         if (data.success && data.data) {
           setSelectedLoan(data.data);
         } else {
+          console.error('Failed to fetch loan details:', data.error);
           setSelectedLoan(loan); // fallback
+          toast({
+            title: "Warning",
+            description: "Using cached loan data. Some information may be outdated.",
+            variant: "default",
+          });
         }
       } catch (e) {
+        console.error('Error fetching loan:', e);
         setSelectedLoan(loan);
+        toast({
+          title: "Warning",
+          description: "Could not fetch latest loan details. Using cached data.",
+          variant: "default",
+        });
       }
       setSelectedLoanLoading(false);
       setShowRepayment(true);
@@ -1600,6 +1612,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                                   )}
                                 </div>
                                 <Button
+                                  type="button"
                                   onClick={() => openRepaymentDialog(loan)}
                                   variant={loan.is_overdue ? "destructive" : "mpesa"}
                                   size="sm"
