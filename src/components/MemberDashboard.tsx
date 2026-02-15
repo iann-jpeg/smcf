@@ -951,6 +951,76 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
       </Card>
       )}
 
+      {/* Advance Payment Status - Hidden for wallet-only members */}
+      {userData?.member_type !== "wallet_only" && (() => {
+        const expectedByNow = (currentCycleData?.currentCycle || 1) * 200;
+        const totalPaid = userData?.total_cycle_contribution || 0;
+        const cyclesPaidFor = Math.floor(totalPaid / 200);
+        const advanceCycles = cyclesPaidFor - (currentCycleData?.currentCycle || 1);
+        const nextCycleAdvance = Math.max(0, advanceCycles - 1);
+
+        // Debug logging
+        console.log('💎 Member Advance Payment Calculation:', {
+          currentCycle: currentCycleData?.currentCycle,
+          expectedByNow,
+          totalPaid,
+          cyclesPaidFor,
+          advanceCycles,
+          nextCycleAdvance
+        });
+
+        return advanceCycles > 0 ? (
+          <Card className="border-l-4 border-l-cyan-500 bg-cyan-50/50">
+            <CardContent className="pt-4 sm:pt-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3">
+                <div className="flex items-center gap-1 sm:gap-2 md:gap-3">
+                  <TrendingUp className="w-4 h-4 md:w-5 md:h-5 text-cyan-600 flex-shrink-0" />
+                  <div>
+                    <h3 className="text-xs sm:text-sm md:text-base font-semibold text-cyan-900">
+                      Advance Payment
+                    </h3>
+                    <p className="text-xs sm:text-sm text-cyan-700">
+                      You've paid ahead for future cycles
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <Badge className="bg-cyan-500 text-white hover:bg-cyan-600 text-xs sm:text-sm px-2 sm:px-3 py-1">
+                    +{advanceCycles} {advanceCycles === 1 ? 'cycle' : 'cycles'} ahead
+                  </Badge>
+                  {nextCycleAdvance > 0 && (
+                    <span className="text-[10px] sm:text-xs text-cyan-600">
+                      Will reduce to +{nextCycleAdvance} next cycle
+                    </span>
+                  )}
+                  {nextCycleAdvance === 0 && (
+                    <span className="text-[10px] sm:text-xs text-cyan-600">
+                      Current by next cycle
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="mt-3 pt-3 border-t border-cyan-200">
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground">Expected</p>
+                    <p className="text-xs sm:text-sm font-semibold">KES {expectedByNow.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground">You Paid</p>
+                    <p className="text-xs sm:text-sm font-semibold text-cyan-600">KES {totalPaid.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground">Extra</p>
+                    <p className="text-xs sm:text-sm font-semibold text-cyan-600">KES {(totalPaid - expectedByNow).toLocaleString()}</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null;
+      })()}
+
       {/* M-Pesa Payment Section - Hidden for wallet-only members */}
       {userData?.member_type !== "wallet_only" && (
         <Card className="border-mpesa-green bg-gradient-to-br from-mpesa-green/5 to-mpesa-green/10">
