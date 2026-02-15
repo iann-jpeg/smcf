@@ -3183,21 +3183,38 @@ Thank you for your cooperation! 🙏`;
                               <Badge
                                 variant={
                                   cyclesPaid > 0 ? "default" : "secondary"
-                                }>
+                                }
+                                className={advanceCycles > 0 ? "bg-cyan-600 hover:bg-cyan-700" : ""}>
                                 {cyclesPaid > 0
                                   ? advanceCycles > 0
-                                    ? `Paid (Advance: +${advanceCycles})`
+                                    ? `Paid (Advance +${advanceCycles})`
                                     : "Paid"
                                   : "Pending"}
+                                {advanceCycles > 0 && (
+                                  <span className="ml-1 px-1.5 py-0.5 bg-white/30 rounded-full text-xs font-bold">
+                                    {advanceCycles}
+                                  </span>
+                                )}
                               </Badge>
                             )}
                           </TableCell>
                           <TableCell>
-                            {cyclesPaid > 0
-                              ? advanceCycles > 0
-                                ? `Paid for current + ${advanceCycles} cycle${advanceCycles > 1 ? "s" : ""}`
-                                : "Paid for current cycle"
-                              : "Not paid"}
+                            {cyclesPaid > 0 ? (
+                              advanceCycles > 0 ? (
+                                <div className="flex items-center gap-1">
+                                  <Badge variant="outline" className="bg-cyan-50 text-cyan-700 border-cyan-300 font-semibold">
+                                    +{advanceCycles} cycle{advanceCycles > 1 ? "s" : ""}
+                                  </Badge>
+                                  <span className="text-xs text-muted-foreground">
+                                    (Cycle #{currentCycle?.cycle_number || 1} + {advanceCycles})
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground text-sm">Current cycle only</span>
+                              )
+                            ) : (
+                              <span className="text-muted-foreground text-sm">Not paid</span>
+                            )}
                           </TableCell>
                           <TableCell className="text-right font-medium text-blue-600">
                             KES {(member.total_cycle_contribution || 0).toLocaleString()}
