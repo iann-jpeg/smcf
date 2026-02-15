@@ -3102,7 +3102,8 @@ Thank you for your cooperation! 🙏`;
             <CardHeader>
               <CardTitle>All Members</CardTitle>
               <CardDescription>
-                Total: {safeMembers.length} members | Payment Breakdown: KES 200 (Cycle) + KES 20 (Credit) + KES 4 (Transaction Fee) = KES 224
+                Cycle #{currentCycle?.cycle_number || 1} | Expected by now: KES {((currentCycle?.cycle_number || 1) * 200).toLocaleString()} per member | 
+                Breakdown: KES 200 (Cycle) + KES 20 (Credit) + KES 4 (Fee) = KES 224 total payment
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -3170,17 +3171,18 @@ Thank you for your cooperation! 🙏`;
                       
                       // Debug logging for first 5 members to see calculations
                       if (index < 5) {
-                        console.log(`🔍 Advance Payment Debug for ${member.name}:`, {
-                          memberId: member._id,
-                          memberName: member.name,
-                          totalPayments: memberPayments.length,
-                          totalPaid: `KES ${totalPaid}`,
-                          cyclesPaidFor: cyclesPaidFor,
-                          currentCycle: currCycle,
-                          advanceCycles: advanceCycles,
-                          calculation: `${totalPaid} ÷ ${CYCLE_AMOUNT} = ${cyclesPaidFor} cycles | ${cyclesPaidFor} - ${currCycle} = ${advanceCycles} advance`,
-                          shouldShowBadge: advanceCycles > 0 ? '✅ YES' : '❌ NO',
-                          status: totalPaid >= (currCycle * CYCLE_AMOUNT) ? '✅ PAID' : '⏳ PENDING'
+                        const expectedAmount = currCycle * CYCLE_AMOUNT;
+                        const overpayment = totalPaid - expectedAmount;
+                        console.log(`🔍 Cycle Payment Analysis for ${member.name} (#${member.position || index + 1}):`, {
+                          currentCycle: `#${currCycle}`,
+                          expectedByNow: `KES ${expectedAmount}`,
+                          actualPaid: `KES ${totalPaid}`,
+                          difference: overpayment > 0 ? `+KES ${overpayment} (OVERPAID)` : overpayment < 0 ? `-KES ${Math.abs(overpayment)} (UNDERPAID)` : 'EXACT',
+                          cyclesPaidFor: `${cyclesPaidFor} cycles`,
+                          advanceCycles: advanceCycles > 0 ? `+${advanceCycles} cycles ahead` : advanceCycles === 0 && cyclesPaidFor >= currCycle ? 'Current only' : 'Not paid',
+                          calculation: `${totalPaid} ÷ ${CYCLE_AMOUNT} = ${cyclesPaidFor} cycles paid | ${cyclesPaidFor} - ${currCycle} = ${advanceCycles} advance`,
+                          noteForNextCycle: advanceCycles > 0 ? `At cycle #${currCycle + 1}, advance will be ${advanceCycles - 1}` : 'N/A',
+                          badge: advanceCycles > 0 ? '🔵 CYAN BADGE' : cyclesPaidFor >= currCycle ? '✅ GREEN BADGE' : '⏳ PENDING'
                         });
                       }
                       return (
@@ -3250,21 +3252,28 @@ Thank you for your cooperation! 🙏`;
                               <span className="text-muted-foreground text-sm">N/A</span>
                             ) : cyclesPaidFor > 0 ? (
                               advanceCycles > 0 ? (
-                                <div className="flex items-center gap-2">
-                                  <Badge variant="outline" className="bg-cyan-100 text-cyan-800 border-cyan-400 font-bold text-sm px-3 py-1">
-                                    +{advanceCycles} cycle{advanceCycles > 1 ? "s" : ""}
-                                  </Badge>
-                                  <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                    (Paid {cyclesPaidFor}/{currCycle})
+                                <div className="flex flex-col gap-1">
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className="bg-cyan-100 text-cyan-800 border-cyan-400 font-bold text-sm px-3 py-1">
+                                      +{advanceCycles} ahead
+                                    </Badge>
+                                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                      ({cyclesPaidFor}/{currCycle} cycles)
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] text-muted-foreground">
+                                    Will reduce to +{advanceCycles - 1} next cycle
                                   </span>
                                 </div>
                               ) : (
                                 <span className="text-muted-foreground text-sm">
-                                  Paid {cyclesPaidFor}/{currCycle}
+                                  Current only ({cyclesPaidFor}/{currCycle})
                                 </span>
                               )
                             ) : (
-                              <span className="text-muted-foreground text-sm">Not paid</span>
+                              <span className="text-red-500 text-sm font-medium">
+                                Not paid (0/{currCycle})
+                              </span>
                             )}
                           </TableCell>
                           <TableCell className="text-right font-medium text-blue-600">
