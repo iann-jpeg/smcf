@@ -4,7 +4,7 @@ const systemSettingsSchema = new mongoose.Schema({
   // Early Withdrawal Settings
   early_withdrawal_enabled: {
     type: Boolean,
-    default: false, // Disabled by default - admin must enable
+    default: true, // Enabled by default - penalties auto-apply for locked deposits
   },
   early_withdrawal_penalty_type: {
     type: String,

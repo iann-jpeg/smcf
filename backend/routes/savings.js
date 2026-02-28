@@ -748,8 +748,8 @@ router.post("/admin/approve-withdrawal/:id", protect, adminOnly, async (req, res
     // Calculate net amount after early withdrawal penalty
     const netAmountAfterPenalty = saving.amount - earlyWithdrawalPenalty;
 
-    // Calculate withdrawal fee on net amount (after penalty)
-    const withdrawalFee = calculateWithdrawalFee(netAmountAfterPenalty);
+    // Calculate withdrawal fee on requested amount (based on tariff chart)
+    const withdrawalFee = calculateWithdrawalFee(saving.amount);
     
     // Total deduction from balance = requested amount + withdrawal fee
     const totalDeduction = saving.amount + withdrawalFee;
@@ -1453,7 +1453,7 @@ router.post("/check-early-withdrawal", protect, async (req, res) => {
     }
 
     const netAmount = amount - totalPenalty;
-    const withdrawalFee = calculateWithdrawalFee(netAmount); // Fee on net amount after penalty
+    const withdrawalFee = calculateWithdrawalFee(amount); // Fee calculated on requested amount per tariff chart
     const finalAmount = netAmount - withdrawalFee;
 
     res.json({
