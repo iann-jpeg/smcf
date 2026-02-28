@@ -43,19 +43,24 @@ export const calculateTopUpFee = (method, amount) => {
 
 /**
  * Calculate wallet withdrawal fee based on amount
+ * Fees are calculated to cover M-Pesa B2C transaction costs + 25-35% profit margin
  * @param {number} amount - Withdrawal amount in KES
  * @returns {number} Fee amount in KES
  */
 export const calculateWithdrawalFee = (amount) => {
-  if (amount < 1000) return 10;
-  if (amount < 5000) return 20;
-  if (amount < 10000) return 30;
-  if (amount < 20000) return 40;
-  if (amount < 50000) return 60;
-  if (amount <= 100000) return 80;
+  // New tariff structure (2026) - covers M-Pesa costs + profit for SMCF
+  if (amount <= 100) return 15;      // M-Pesa cost: ~KES 11, Profit: ~KES 4
+  if (amount <= 500) return 18;      // M-Pesa cost: ~KES 13, Profit: ~KES 5
+  if (amount <= 1000) return 30;     // M-Pesa cost: ~KES 23, Profit: ~KES 7
+  if (amount <= 2500) return 38;     // M-Pesa cost: ~KES 28, Profit: ~KES 10
+  if (amount <= 5000) return 95;     // M-Pesa cost: ~KES 75, Profit: ~KES 20
+  if (amount <= 10000) return 145;   // M-Pesa cost: ~KES 115, Profit: ~KES 30
+  if (amount <= 20000) return 235;   // M-Pesa cost: ~KES 185, Profit: ~KES 50
+  if (amount <= 50000) return 350;   // M-Pesa cost: ~KES 278, Profit: ~KES 72
+  if (amount <= 100000) return 385;  // M-Pesa cost: ~KES 300, Profit: ~KES 85
   
-  // For amounts above 100,000 KES
-  return 80;
+  // For amounts above 100,000 KES (limit should be enforced elsewhere)
+  return 385;
 };
 
 /**
@@ -124,12 +129,15 @@ export const getFeeTiers = (transactionType) => {
       
     case 'withdrawal':
       return [
-        { min: 1, max: 999, fee: 10, description: 'KES 10' },
-        { min: 1000, max: 4999, fee: 20, description: 'KES 20' },
-        { min: 5000, max: 9999, fee: 30, description: 'KES 30' },
-        { min: 10000, max: 19999, fee: 40, description: 'KES 40' },
-        { min: 20000, max: 49999, fee: 60, description: 'KES 60' },
-        { min: 50000, max: 100000, fee: 80, description: 'KES 80' },
+        { min: 1, max: 100, fee: 15, description: 'KES 15' },
+        { min: 101, max: 500, fee: 18, description: 'KES 18' },
+        { min: 501, max: 1000, fee: 30, description: 'KES 30' },
+        { min: 1001, max: 2500, fee: 38, description: 'KES 38' },
+        { min: 2501, max: 5000, fee: 95, description: 'KES 95' },
+        { min: 5001, max: 10000, fee: 145, description: 'KES 145' },
+        { min: 10001, max: 20000, fee: 235, description: 'KES 235' },
+        { min: 20001, max: 50000, fee: 350, description: 'KES 350' },
+        { min: 50001, max: 100000, fee: 385, description: 'KES 385' },
       ];
       
     default:

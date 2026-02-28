@@ -1151,7 +1151,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
                   <li>• Transfers under KES 100 are free</li>
                   <li>• Direct deposits are free (no fee)</li>
                   <li>• STK Push deposits: KES 5 per transaction</li>
-                  <li>• Withdrawal fees range from KES 10 to KES 80</li>
+                  <li>• Withdrawal fees range from KES 15 to KES 385 (covers M-Pesa costs)</li>
                 </ul>
               </div>
             </div>

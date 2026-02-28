@@ -233,11 +233,17 @@ const TransactionFeesReport = () => {
             <div>
               <h4 className="font-semibold mb-3 text-orange-700">Withdrawals</h4>
               <div className="space-y-2 text-sm">
-                <div className="flex justify-between"><span>KES 1 - 999</span><span className="font-semibold">KES 10</span></div>
-                <div className="flex justify-between"><span>KES 1,000 - 4,999</span><span className="font-semibold">KES 20</span></div>
-                <div className="flex justify-between"><span>KES 5,000 - 9,999</span><span className="font-semibold">KES 30</span></div>
-                <div className="flex justify-between"><span>KES 10,000 - 19,999</span><span className="font-semibold">KES 40</span></div>
-                <div className="flex justify-between"><span>KES 20,000 - 49,999</span><span className="font-semibold">KES 60</span></div>
+                <div className="flex justify-between"><span>KES 1 - 100</span><span className="font-semibold">KES 15</span></div>
+                <div className="flex justify-between"><span>KES 101 - 500</span><span className="font-semibold">KES 18</span></div>
+                <div className="flex justify-between"><span>KES 501 - 1,000</span><span className="font-semibold">KES 30</span></div>
+                <div className="flex justify-between"><span>KES 1,001 - 2,500</span><span className="font-semibold">KES 38</span></div>
+                <div className="flex justify-between"><span>KES 2,501 - 5,000</span><span className="font-semibold">KES 95</span></div>
+                <div className="flex justify-between"><span>KES 5,001 - 10,000</span><span className="font-semibold">KES 145</span></div>
+                <div className="flex justify-between"><span>KES 10,001 - 20,000</span><span className="font-semibold">KES 235</span></div>
+                <div className="flex justify-between"><span>KES 20,001 - 50,000</span><span className="font-semibold">KES 350</span></div>
+                <div className="flex justify-between"><span>KES 50,001 - 100,000</span><span className="font-semibold">KES 385</span></div>
+              </div>
+            </div>
                 <div className="flex justify-between"><span>KES 50,000 - 100,000</span><span className="font-semibold">KES 80</span></div>
               </div>
             </div>
