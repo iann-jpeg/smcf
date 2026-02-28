@@ -244,9 +244,6 @@ const TransactionFeesReport = () => {
                 <div className="flex justify-between"><span>KES 50,001 - 100,000</span><span className="font-semibold">KES 385</span></div>
               </div>
             </div>
-                <div className="flex justify-between"><span>KES 50,000 - 100,000</span><span className="font-semibold">KES 80</span></div>
-              </div>
-            </div>
           </div>
         </CardContent>
       </Card>
