@@ -880,6 +880,76 @@ const Index = () => {
         </div>
       </section>
 
+      {/* SMCF SACCO Section */}
+      <section className="py-10 sm:py-16 md:py-20 px-3 sm:px-4 bg-accent/10">
+        <div className="container mx-auto max-w-4xl">
+          <Card className="overflow-hidden hover-lift hover-glow border-2 border-accent/30 shadow-xl animate-fade-in-up">
+            <div className="bg-gradient-to-br from-accent/10 via-primary/5 to-accent/5 p-6 sm:p-8 md:p-10">
+              <div className="text-center mb-6 sm:mb-8">
+                <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 bg-gradient-accent rounded-full mb-4 sm:mb-6 animate-pulse-glow">
+                  <Users className="w-8 h-8 sm:w-10 sm:h-10 text-accent-foreground" />
+                </div>
+                <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4 bg-gradient-accent bg-clip-text text-transparent">
+                  SMCF SACCO – Official Member Portal
+                </h2>
+                <p className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
+                  SMCF SACCO is our dedicated platform for registered members to access exclusive SACCO services, manage their savings, apply for loans, and view statements securely online.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6 sm:mb-8">
+                <div className="flex items-start gap-3 p-4 bg-background/50 rounded-lg hover:bg-background/80 transition-all duration-300 hover:scale-105">
+                  <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-accent flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="font-semibold text-sm sm:text-base mb-1">Member Dashboard</h4>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Track savings, loans, and payouts</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-4 bg-background/50 rounded-lg hover:bg-background/80 transition-all duration-300 hover:scale-105">
+                  <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-accent flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="font-semibold text-sm sm:text-base mb-1">Online Statements</h4>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Download and view your SACCO statements</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-4 bg-background/50 rounded-lg hover:bg-background/80 transition-all duration-300 hover:scale-105">
+                  <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-accent flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="font-semibold text-sm sm:text-base mb-1">Loan Applications</h4>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Apply for SACCO loans directly online</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-4 bg-background/50 rounded-lg hover:bg-background/80 transition-all duration-300 hover:scale-105">
+                  <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-accent flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="font-semibold text-sm sm:text-base mb-1">Secure Access</h4>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Protected with OTP and encrypted login</p>
+                  </div>
+                </div>
+              </div>
+              <div className="text-center">
+                <a 
+                  href="https://smcfsacco.vercel.app" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="inline-block"
+                >
+                  <Button
+                    size="lg"
+                    className="text-base sm:text-lg px-8 sm:px-12 py-4 sm:py-6 h-auto hover-lift hover-shine bg-gradient-accent text-accent-foreground font-bold shadow-lg hover:shadow-2xl transition-all duration-300 group"
+                  >
+                    Go to SMCF SACCO Portal
+                    <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform duration-300" />
+                  </Button>
+                </a>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-4 italic">
+                  For registered members only. Use your SACCO credentials to log in.
+                </p>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </section>
+
       {/* Call to Action Section */}
       <section className="py-10 sm:py-16 md:py-20 px-3 sm:px-4 bg-gradient-primary overflow-hidden">
         <div className="container mx-auto max-w-4xl text-center">
