@@ -101,151 +101,79 @@ app.use((req, res, next) => {
   next();
 });
 
-// Database connection with retry logic
-const connectDB = async (retries = 5) => {
-  try {
-    if (!process.env.MONGODB_URI) {
-      console.error('❌ MONGODB_URI environment variable is not set!');
-      if (process.env.NODE_ENV === 'production') {
-        console.error('⚠️  Cannot start in production without MongoDB connection');
-        process.exit(1);
-      }
+// Track MongoDB connection state
+let isDbConnected = false;
+
+const mongooseOptions = {
+  serverSelectionTimeoutMS: 30000, // 30 seconds per attempt
+  socketTimeoutMS: 120000,
+  connectTimeoutMS: 30000,
+  heartbeatFrequencyMS: 10000,
+  maxPoolSize: 10,
+  minPoolSize: 2,
+  maxIdleTimeMS: 30000,
+  retryWrites: true,
+  retryReads: true,
+  compressors: ['zlib'],
+};
+
+// Database connection with unlimited background retries — never crashes the server
+const connectDB = async (attempt = 1) => {
+  if (!process.env.MONGODB_URI) {
+    console.error('❌ MONGODB_URI environment variable is not set!');
+    if (process.env.NODE_ENV !== 'production') {
       console.log('ℹ️  Using default local MongoDB connection');
     }
-    
-    const mongooseOptions = {
-      // Aggressive timeout increases for poor network conditions
-      serverSelectionTimeoutMS: 30000, // 30 seconds
-      socketTimeoutMS: 120000, // 2 minutes
-      connectTimeoutMS: 30000, // 30 seconds
-      heartbeatFrequencyMS: 10000, // 10 seconds between heartbeats
-      // Connection pool settings
-      maxPoolSize: 10,
-      minPoolSize: 2,
-      maxIdleTimeMS: 30000, // Close idle connections after 30s
-      // Retry settings
-      retryWrites: true,
-      retryReads: true,
-      // Compression for better network performance
-      compressors: ['zlib'],
-    };
-    
+  }
+
+  try {
     const conn = await mongoose.connect(
       process.env.MONGODB_URI || "mongodb://localhost:27017/smcf",
       mongooseOptions
     );
-    
-    // Set up connection event handlers
+
+    isDbConnected = true;
+    console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
+    console.log(`📊 Connection pool: min=${mongooseOptions.minPoolSize}, max=${mongooseOptions.maxPoolSize}`);
+
     mongoose.connection.on('error', (err) => {
       console.error('❌ MongoDB connection error:', err.message);
     });
-    
+
     mongoose.connection.on('disconnected', () => {
-      console.warn('⚠️  MongoDB disconnected. Will attempt to reconnect...');
+      isDbConnected = false;
+      console.warn('⚠️  MongoDB disconnected. Scheduling reconnect...');
+      setTimeout(() => connectDB(1), 5000);
     });
-    
+
     mongoose.connection.on('reconnected', () => {
+      isDbConnected = true;
       console.log('✅ MongoDB reconnected successfully');
     });
-    
-    console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
-    console.log(`📊 Connection pool: min=${mongooseOptions.minPoolSize}, max=${mongooseOptions.maxPoolSize}`);
+
     return true;
   } catch (error) {
-    console.error(`❌ MongoDB Connection Error (attempt ${6 - retries}/5): ${error.message}`);
-    
-    if (retries > 0) {
-      const delay = (6 - retries) * 2000; // Exponential backoff: 2s, 4s, 6s, 8s, 10s
-      console.log(`🔄 Retrying connection in ${delay/1000} seconds...`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-      return connectDB(retries - 1);
-    }
-    
-    if (process.env.NODE_ENV === 'production') {
-      console.error('⚠️  Cannot start in production without MongoDB. Please check:');
-      console.error('   1. MONGODB_URI environment variable is set correctly');
-      console.error('   2. MongoDB Atlas network access allows connections from anywhere (0.0.0.0/0)');
-      console.error('   3. Database user credentials are correct');
-      console.error('   4. MongoDB cluster is not paused');
-      console.error('   5. Check MongoDB Atlas status: https://status.mongodb.com/');
-      process.exit(1);
-    } else {
-      console.error(`\n⚠️  MongoDB is not running. Please start MongoDB with:`);
-      console.error(`   sudo systemctl start mongodb`);
-      console.error(`   or`);
-      console.error(`   mongod --dbpath /path/to/data\n`);
-      process.exit(1);
-    }
+    isDbConnected = false;
+    // Cap the backoff at 60 seconds
+    const delay = Math.min(attempt * 5000, 60000);
+    console.error(`❌ MongoDB Connection Error (attempt ${attempt}): ${error.message}`);
+    console.error('   Check: Atlas IP whitelist includes 0.0.0.0/0, credentials are correct, cluster is not paused.');
+    console.log(`🔄 Retrying in ${delay / 1000}s...`);
+    await new Promise(resolve => setTimeout(resolve, delay));
+    return connectDB(attempt + 1);
   }
 };
 
-// Start the server only after database connection
+// Start the HTTP server immediately, then connect to DB in the background
 const startServer = async () => {
-  // Connect to database first
-  await connectDB();
-  
-  // Start server
+  // Start server immediately so Render health checks pass
   const PORT = process.env.PORT || 4000;
   httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🚀 SMCF Backend Server running on port ${PORT}`);
     console.log(`📡 Environment: ${process.env.NODE_ENV || "development"}`);
     console.log(`🔌 Socket.IO enabled for real-time updates`);
+    console.log(`⏳ Connecting to MongoDB in background...`);
 
-    // Start interest calculation cron job
-    startInterestCronJob();
-    
-    // Start late fees calculation cron job
-    startLateFeesCronJob();
-
-    // Start loan due date fix cron job
-    startLoanDueDateCronJob();
-    
-    // Run loan due date fix on startup (catch up on any missing due dates)
-    setTimeout(async () => {
-      try {
-        console.log("📅 Running initial loan due date fix...");
-        const setLoanDueDates = (await import("./scripts/set-loan-due-dates.js")).default;
-        await setLoanDueDates();
-      } catch (err) {
-        console.error("❌ Error running initial loan due date fix:", err.message);
-      }
-    }, 6000); // Run 6 seconds after startup
-    
-    // Run interest calculation on startup (catch up on any missed runs)
-    setTimeout(async () => {
-      try {
-        console.log("💰 Running initial interest calculation...");
-        const { applyMonthlyInterest } = await import("./services/interestService.js");
-        await applyMonthlyInterest();
-      } catch (err) {
-        console.error("❌ Error running initial interest calculation:", err.message);
-      }
-    }, 5000); // Run 5 seconds after startup
-    
-    // Start daily maturity check (runs at midnight every day)
-    setInterval(async () => {
-      try {
-        const now = new Date();
-        // Run at midnight (00:00)
-        if (now.getHours() === 0 && now.getMinutes() === 0) {
-          console.log("⏰ Running daily maturity check...");
-          await checkMaturedDeposits();
-        }
-      } catch (err) {
-        console.error("❌ Error in daily maturity check:", err.message);
-      }
-    }, 60000); // Check every minute
-    
-    // Run maturity check on startup
-    setTimeout(async () => {
-      try {
-        console.log("🔍 Running initial maturity check...");
-        await checkMaturedDeposits();
-      } catch (err) {
-        console.error("❌ Error running initial maturity check:", err.message);
-      }
-    }, 5000); // Run 5 seconds after startup
-    
     console.log(`\n📚 API Documentation:`);
     console.log(`   Health: http://localhost:${PORT}/health`);
     console.log(`   Admin Setup: http://localhost:${PORT}/api/admin/setup`);
@@ -258,6 +186,58 @@ const startServer = async () => {
     console.log(`   Announcements: http://localhost:${PORT}/api/announcements`);
     console.log(`   Loans: http://localhost:${PORT}/api/loans`);
     console.log(`   Savings: http://localhost:${PORT}/api/savings\n`);
+  });
+
+  // Connect to MongoDB in the background — server stays alive regardless
+  connectDB().then((connected) => {
+    if (connected) {
+      // Start cron jobs only once DB is ready
+      startInterestCronJob();
+      startLateFeesCronJob();
+      startLoanDueDateCronJob();
+
+      setTimeout(async () => {
+        try {
+          console.log("📅 Running initial loan due date fix...");
+          const setLoanDueDates = (await import("./scripts/set-loan-due-dates.js")).default;
+          await setLoanDueDates();
+        } catch (err) {
+          console.error("❌ Error running initial loan due date fix:", err.message);
+        }
+      }, 6000);
+
+      setTimeout(async () => {
+        try {
+          console.log("💰 Running initial interest calculation...");
+          const { applyMonthlyInterest } = await import("./services/interestService.js");
+          await applyMonthlyInterest();
+        } catch (err) {
+          console.error("❌ Error running initial interest calculation:", err.message);
+        }
+      }, 5000);
+
+      setTimeout(async () => {
+        try {
+          console.log("🔍 Running initial maturity check...");
+          await checkMaturedDeposits();
+        } catch (err) {
+          console.error("❌ Error running initial maturity check:", err.message);
+        }
+      }, 5000);
+
+      // Daily maturity check at midnight
+      setInterval(async () => {
+        try {
+          const now = new Date();
+          if (now.getHours() === 0 && now.getMinutes() === 0) {
+            console.log("⏰ Running daily maturity check...");
+            await checkMaturedDeposits();
+          }
+        } catch (err) {
+          console.error("❌ Error in daily maturity check:", err.message);
+        }
+      }, 60000);
+    }
   });
 };
 
@@ -381,6 +361,7 @@ app.use("/api", dashboardRoutes); // Optimized dashboard endpoint
 app.get("/health", (req, res) => {
   res.json({
     status: "ok",
+    db: isDbConnected ? "connected" : "connecting",
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || "development",
   });
