@@ -61,11 +61,13 @@ export default function Members() {
   const createMember = useCreateMember();
 
   // Auto-generate suggested member ID
+  // Fix: read only the last 3 chars as the sequence to avoid compounding corrupted prefixes
   const nextMemberId = (() => {
     const year = new Date().getFullYear().toString().slice(-2);
     const max = members.reduce((acc: number, m: any) => {
-      const num = parseInt((m.member_id ?? "").replace(/\D/g, ""), 10);
-      return isNaN(num) ? acc : Math.max(acc, num);
+      const id = String(m.member_id ?? "");
+      const seq = parseInt(id.slice(-3), 10);
+      return isNaN(seq) ? acc : Math.max(acc, seq);
     }, 0);
     return `MEM${year}${String(max + 1).padStart(3, "0")}`;
   })();
