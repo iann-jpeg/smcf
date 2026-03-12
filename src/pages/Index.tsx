@@ -407,9 +407,7 @@ const Index = () => {
           <div className="flex items-center gap-2 sm:gap-3">
             <nav className="flex items-center gap-1">
               <a
-                href="https://www.smcf.app"
-                target="_blank"
-                rel="noopener noreferrer"
+                href="#sacco-portal"
                 className="text-[10px] sm:text-sm font-medium px-2 sm:px-3 py-1 sm:py-1.5 rounded-md text-primary border border-primary/30 hover:bg-primary/10 transition-colors duration-200 whitespace-nowrap">
                 SACCO
               </a>
@@ -896,7 +894,7 @@ const Index = () => {
       </section>
 
       {/* SMCF SACCO Section */}
-      <section className="py-10 sm:py-16 md:py-20 px-3 sm:px-4 bg-accent/10">
+      <section id="sacco-portal" className="py-10 sm:py-16 md:py-20 px-3 sm:px-4 bg-accent/10">
         <div className="container mx-auto max-w-4xl">
           <Card className="overflow-hidden hover-lift hover-glow border-2 border-accent/30 shadow-xl animate-fade-in-up">
             <div className="bg-gradient-to-br from-accent/10 via-primary/5 to-accent/5 p-6 sm:p-8 md:p-10">
