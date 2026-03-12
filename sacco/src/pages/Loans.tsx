@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Plus, Gavel, CreditCard, Loader2, CheckCircle2 } from "lucide-react";
+import { Plus, Gavel, CreditCard, Loader2, CheckCircle2, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -49,6 +49,7 @@ export default function Loans() {
   const [note,     setNote]     = useState("");
   const [saving,   setSaving]   = useState(false);
   const [success,  setSuccess]  = useState(false);
+  const [disbursing, setDisbursing] = useState(false);
 
   function openPayDialog(loan: any) {
     setPayLoan(loan);
@@ -61,6 +62,20 @@ export default function Loans() {
   function closePayDialog() {
     setPayLoan(null);
     setSuccess(false);
+  }
+
+  async function handleDisburse(loanId: string) {
+    if (!confirm("Confirm disbursement of this loan?")) return;
+    setDisbursing(true);
+    try {
+      await api.put(`/loans/${loanId}/disburse`);
+      toast.success("Loan disbursed successfully");
+      qc.invalidateQueries({ queryKey: ["loans"] });
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to disburse loan");
+    } finally {
+      setDisbursing(false);
+    }
   }
 
   async function handleRecordPayment() {
@@ -136,6 +151,18 @@ export default function Loans() {
                     <TableCell><Badge variant={riskBadge(loan.risk_rating ?? "medium")}>{loan.risk_rating ?? "medium"}</Badge></TableCell>
                     <TableCell><Badge variant={statusBadge(loan.status)}>{loan.status}</Badge></TableCell>
                     <TableCell>
+                      {loan.status === "approved" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5 text-xs border-green-400 text-green-600 hover:bg-green-50 hover:text-green-700 whitespace-nowrap"
+                          onClick={() => handleDisburse(loan.id)}
+                          disabled={disbursing}
+                        >
+                          <ArrowRight className="h-3.5 w-3.5" />
+                          Disburse
+                        </Button>
+                      )}
                       {["active", "disbursed", "repaying"].includes(loan.status) && Number(loan.balance) > 0 && (
                         <Button
                           size="sm"
