@@ -404,7 +404,21 @@ const Index = () => {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <nav className="hidden sm:flex items-center gap-1">
+              <a
+                href="https://www.smcf.app"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs sm:text-sm font-medium px-3 py-1.5 rounded-md text-primary border border-primary/30 hover:bg-primary/10 transition-colors duration-200">
+                SMCF SACCO
+              </a>
+              <a
+                href="#non-member-loans"
+                className="text-xs sm:text-sm font-medium px-3 py-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors duration-200">
+                Non-Member Loan
+              </a>
+            </nav>
             <ThemeToggle />
             <Button
               onClick={() => setShowAuth(true)}
@@ -704,7 +718,7 @@ const Index = () => {
       </section>
 
       {/* Non-Member Loan Section */}
-      <section className="py-10 sm:py-16 md:py-20 px-3 sm:px-4 bg-gradient-to-br from-primary/5 via-accent/5 to-primary/10 relative overflow-hidden">
+      <section id="non-member-loans" className="py-10 sm:py-16 md:py-20 px-3 sm:px-4 bg-gradient-to-br from-primary/5 via-accent/5 to-primary/10 relative overflow-hidden">
         {/* Background decoration */}
         <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
         
