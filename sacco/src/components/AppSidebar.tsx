@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Users, Landmark, BookOpen, BarChart3, Shield, Settings,
-  FileText, AlertTriangle, ShieldCheck, Gavel, UserCircle, CreditCard, CalendarCheck, FlaskConical,
+  FileText, AlertTriangle, ShieldCheck, Gavel, UserCircle, UserCircle2, CreditCard, CalendarCheck, FlaskConical,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -24,6 +24,7 @@ const staffNav = [
 const memberNav = [
   { title: "My Account", url: "/my-account", icon: UserCircle },
   { title: "Apply for Loan", url: "/loans/apply", icon: CreditCard },
+  { title: "Profile", url: "/my-account?tab=profile", icon: UserCircle2 },
 ];
 
 const adminNav = [

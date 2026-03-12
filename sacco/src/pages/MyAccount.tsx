@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 
 function openDataUrl(dataUrl: string) {
   const arr = dataUrl.split(",");
@@ -86,7 +87,8 @@ export default function MyAccount() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
-  // Extended profile state
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get("tab") || "repayments";
   const [extProfile, setExtProfile] = useState<{
     name: string; nationalId: string; dateOfBirth: string;
     gender: string; county: string; occupation: string; employer: string;
@@ -450,7 +452,7 @@ export default function MyAccount() {
       )}
 
       {/* Tabs */}
-      <Tabs defaultValue="repayments" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={(v) => setSearchParams({ tab: v }, { replace: true })} className="space-y-4">
         <TabsList className="flex h-auto flex-wrap gap-1 rounded-xl border border-border bg-card p-1.5 shadow-sm">
           <TabsTrigger
             value="repayments"
@@ -468,7 +470,6 @@ export default function MyAccount() {
             <Sparkles className="mr-1 h-3.5 w-3.5" />
             Growth
           </TabsTrigger>
-          <TabsTrigger value="profile" className="rounded-lg px-4 py-2 text-sm font-semibold text-foreground/60 transition-all hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">Profile</TabsTrigger>
           <TabsTrigger value="guarantors" className="rounded-lg px-4 py-2 text-sm font-semibold text-foreground/60 transition-all hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">
             <Shield className="mr-1 h-3.5 w-3.5" />
             Guarantor Requests
