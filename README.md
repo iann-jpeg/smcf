@@ -164,8 +164,17 @@ ADMIN_PHONE=254759097157
 
 ### Frontend Environment Variables
 ```env
+# Main SMCF app backend (this project's backend on Render)
 VITE_API_URL=http://localhost:4000
+
+# SACCO sub-app backend (separate Render service + separate MongoDB)
+VITE_SACCO_API_URL=http://localhost:5000/api
+
+# For SACCO payment bridge through the main backend
+VITE_SMCF_PAYMENT_URL=http://localhost:4000/api
+VITE_SMCF_API_KEY=smcf-sacco-bridge-2026-secure
 ```
+> The SACCO frontend is served at `/sacco/*` within this same deployment — it is **not** a separate Vercel project.
 
 ## 📱 API Endpoints
 

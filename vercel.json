@@ -1,10 +1,14 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "npm run build && cd sacco && npm install && npm run build && mkdir -p ../dist/sacco && cp -r dist/* ../dist/sacco/",
   "outputDirectory": "dist",
   "devCommand": "npm run dev",
   "installCommand": "npm install",
   "framework": "vite",
   "rewrites": [
+    {
+      "source": "/sacco/:path*",
+      "destination": "/sacco/index.html"
+    },
     {
       "source": "/(.*)",
       "destination": "/index.html"
