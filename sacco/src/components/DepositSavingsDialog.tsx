@@ -56,8 +56,8 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone }: P
   function startPolling(id: string) {
     pollRef.current = setInterval(async () => {
       try {
-        const res = await api.get(`/mpesa/status/${id}`);
-        const d   = res.data?.data ?? res.data;
+        // api.get already unwraps json.data, so res = { status, mpesaRef, ... }
+        const d = await api.get<{ status: string; mpesaRef?: string; resultDesc?: string }>(`/mpesa/status/${id}`);
         if (d.status === "success") {
           stopPolling();
           setMpesaRef(d.mpesaRef ?? null);
@@ -73,7 +73,7 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone }: P
           setStep("failed");
         }
       } catch {
-        // network hiccup — keep polling
+        // network hiccup — keep polling (ignore 404 while Map not yet populated)
       }
     }, 3000);
 
@@ -91,13 +91,14 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone }: P
 
     setLoading(true);
     try {
-      const res = await api.post("/mpesa/deposit", {
+      // api.post unwraps json.data, so the result is { checkoutRequestId }
+      const res = await api.post<{ checkoutRequestId: string }>("/mpesa/deposit", {
         memberId,
         amount: num,
         phone: phone.trim(),
       });
-      const id = res.data?.data?.checkoutRequestId;
-      if (!id) throw new Error("No checkout ID returned");
+      const id = res?.checkoutRequestId;
+      if (!id) throw new Error("No checkout ID returned — please try again");
       setStep("processing");
       startPolling(id);
     } catch (err: unknown) {

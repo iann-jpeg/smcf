@@ -54,15 +54,19 @@ const queryClient = new QueryClient({
 });
 
 function ProtectedRoutes() {
-  const { user, loading } = useAuth();
+  const { user, loading, isStaff } = useAuth();
   const queryClient = useQueryClient();
 
   // As soon as we know the user is authenticated (resolved from localStorage
   // synchronously), kick off background prefetches so dashboard data is already
   // in-flight before the user even clicks the Dashboard link.
+
   useEffect(() => {
     if (!user) return;
-    queryClient.prefetchQuery({ queryKey: DASHBOARD_STATS_KEY, queryFn: fetchDashboardStats });
+    // dashboard/stats is staff-only on the backend — skip prefetch for regular members
+    if (isStaff) {
+      queryClient.prefetchQuery({ queryKey: DASHBOARD_STATS_KEY, queryFn: fetchDashboardStats });
+    }
     queryClient.prefetchQuery({
       queryKey: ["notifications"],
       queryFn: async () => {

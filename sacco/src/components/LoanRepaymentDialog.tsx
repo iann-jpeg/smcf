@@ -61,8 +61,8 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
   function startPolling(id: string) {
     pollRef.current = setInterval(async () => {
       try {
-        const res = await api.get(`/mpesa/repay-status/${id}`);
-        const d   = res.data?.data ?? res.data;
+        // api.get already unwraps json.data, so d = { status, mpesaRef, loanCompleted, ... }
+        const d = await api.get<{ status: string; mpesaRef?: string; loanCompleted?: boolean; resultDesc?: string }>(`/mpesa/repay-status/${id}`);
         if (d.status === "success") {
           stopPolling();
           setMpesaRef(d.mpesaRef ?? null);
@@ -98,13 +98,14 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
 
     setLoading(true);
     try {
-      const res = await api.post("/mpesa/loan-repay", {
+      // api.post unwraps json.data, so the result is { checkoutRequestId }
+      const res = await api.post<{ checkoutRequestId: string }>("/mpesa/loan-repay", {
         loanId: loan.id,
         amount: num,
         phone: phone.trim(),
       });
-      const id = res.data?.data?.checkoutRequestId;
-      if (!id) throw new Error("No checkout ID returned");
+      const id = res?.checkoutRequestId;
+      if (!id) throw new Error("No checkout ID returned — please try again");
       setStep("processing");
       startPolling(id);
     } catch (err: unknown) {
