@@ -405,18 +405,19 @@ const Index = () => {
             </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
-            <nav className="hidden sm:flex items-center gap-1">
+            <nav className="flex items-center gap-1">
               <a
                 href="https://www.smcf.app"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs sm:text-sm font-medium px-3 py-1.5 rounded-md text-primary border border-primary/30 hover:bg-primary/10 transition-colors duration-200">
-                SMCF SACCO
+                className="text-[10px] sm:text-sm font-medium px-2 sm:px-3 py-1 sm:py-1.5 rounded-md text-primary border border-primary/30 hover:bg-primary/10 transition-colors duration-200 whitespace-nowrap">
+                SACCO
               </a>
               <a
                 href="#non-member-loans"
-                className="text-xs sm:text-sm font-medium px-3 py-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors duration-200">
-                Non-Member Loan
+                className="text-[10px] sm:text-sm font-medium px-2 sm:px-3 py-1 sm:py-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors duration-200 whitespace-nowrap">
+                <span className="sm:hidden">Loan</span>
+                <span className="hidden sm:inline">Non-Member Loan</span>
               </a>
             </nav>
             <ThemeToggle />
