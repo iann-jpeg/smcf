@@ -41,11 +41,15 @@ connectDB();
 app.use(helmet());
 
 // CORS
+// FRONTEND_URL may be a comma-separated list of origins, e.g.
+// "https://smcf.app,https://www.smcf.app"
 const ALLOWED_ORIGINS = [
-  process.env.FRONTEND_URL,
+  ...(process.env.FRONTEND_URL || '').split(',').map(s => s.trim()).filter(Boolean),
+  'https://smcf.app',
+  'https://www.smcf.app',
   'http://localhost:5173',
   'http://localhost:3000',
-].filter(Boolean) as string[];
+];
 
 app.use(cors({
   origin: (origin, callback) => {
