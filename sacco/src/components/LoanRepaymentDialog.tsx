@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+﻿import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -6,16 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  CreditCard, RefreshCw, ExternalLink, Clock, CheckCircle2, Loader2, Smartphone,
+  CreditCard, RefreshCw, CheckCircle2, Loader2, Smartphone, XCircle, Banknote,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
-import { initiateSaccoPayment } from "@/lib/paymentApi";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 
-const LIPIA_PAYMENT_URL = "https://lipia-online.vercel.app/link/smcfholdings";
-
-type Step = "input" | "sent";
+type Step = "input" | "processing" | "success" | "failed";
 
 interface Props {
   open: boolean;
@@ -30,10 +28,21 @@ interface Props {
 }
 
 export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props) {
-  const [step,    setStep]    = useState<Step>("input");
-  const [amount,  setAmount]  = useState(String(loan.monthly_installment || ""));
-  const [phone,   setPhone]   = useState(memberPhone ?? "");
-  const [loading, setLoading] = useState(false);
+  const [step,          setStep]          = useState<Step>("input");
+  const [amount,        setAmount]        = useState(String(loan.monthly_installment || ""));
+  const [phone,         setPhone]         = useState(memberPhone ?? "");
+  const [loading,       setLoading]       = useState(false);
+  const [mpesaRef,      setMpesaRef]      = useState<string | null>(null);
+  const [loanCompleted, setLoanCompleted] = useState(false);
+  const [failReason,    setFailReason]    = useState<string | null>(null);
+  const pollRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const queryClient = useQueryClient();
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current)    { clearInterval(pollRef.current);  pollRef.current    = null; }
+    if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+  }, []);
 
   useEffect(() => {
     if (open) {
@@ -41,8 +50,46 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
       setAmount(String(loan.monthly_installment || ""));
       setPhone(memberPhone ?? "");
       setLoading(false);
+      setMpesaRef(null);
+      setLoanCompleted(false);
+      setFailReason(null);
+      stopPolling();
     }
-  }, [open, loan, memberPhone]);
+    return () => stopPolling();
+  }, [open, loan, memberPhone, stopPolling]);
+
+  function startPolling(id: string) {
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await api.get(`/mpesa/repay-status/${id}`);
+        const d   = res.data?.data ?? res.data;
+        if (d.status === "success") {
+          stopPolling();
+          setMpesaRef(d.mpesaRef ?? null);
+          setLoanCompleted(!!d.loanCompleted);
+          setStep("success");
+          queryClient.invalidateQueries({ queryKey: ["my-loans"] });
+          queryClient.invalidateQueries({ queryKey: ["my-transactions"] });
+          queryClient.invalidateQueries({ queryKey: ["my-repayments"] });
+          queryClient.invalidateQueries({ queryKey: ["loans"] });
+          queryClient.invalidateQueries({ queryKey: ["transactions"] });
+          queryClient.invalidateQueries({ queryKey: ["members"] });
+        } else if (d.status === "failed") {
+          stopPolling();
+          setFailReason(d.resultDesc || "Payment cancelled or failed. Please try again.");
+          setStep("failed");
+        }
+      } catch {
+        // network hiccup — keep polling
+      }
+    }, 3000);
+
+    timeoutRef.current = setTimeout(() => {
+      stopPolling();
+      setFailReason("Payment timed out. If you completed the payment, contact support.");
+      setStep("failed");
+    }, 2 * 60 * 1000);
+  }
 
   async function handlePay() {
     const num = Number(amount);
@@ -51,29 +98,17 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
 
     setLoading(true);
     try {
-      // Record payment in sacco backend (updates loan balance on admin confirmation)
-      const saccoRecord = await api.post<{ transactionRef?: string }>("/mpesa/payment-initiated", {
-        memberId: undefined, // server resolves from loanId
-        amount: num,
-        phone: phone.trim(),
-        type: "loan_repay",
+      const res = await api.post("/mpesa/loan-repay", {
         loanId: loan.id,
-      });
-
-      // Also record in main SMCF backend — uses the same Lipia/M-Pesa payment gateway.
-      // Fire-and-forget: a failure here must never block the user's payment flow.
-      initiateSaccoPayment({
-        phone: phone.trim(),
         amount: num,
-        type: "loan_repay",
-        description: `SMCF SACCO loan repayment — ${loan.loan_number}`,
-        externalRef: (saccoRecord as any)?.data?.transactionRef,
-      }).catch((e: Error) => console.warn("[paymentApi] bridge call failed (non-blocking):", e.message));
-
-      window.open(LIPIA_PAYMENT_URL, "_blank", "noopener,noreferrer");
-      setStep("sent");
+        phone: phone.trim(),
+      });
+      const id = res.data?.data?.checkoutRequestId;
+      if (!id) throw new Error("No checkout ID returned");
+      setStep("processing");
+      startPolling(id);
     } catch (err: unknown) {
-      toast.error((err as Error)?.message || "Failed to initiate payment. Please try again.");
+      toast.error((err as Error)?.message || "Failed to send M-Pesa prompt. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -81,12 +116,13 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
 
   const amountNum = Number(amount) || 0;
   const pct       = loan.balance > 0 ? Math.min(100, Math.round((amountNum / loan.balance) * 100)) : 0;
+  const isFull    = amountNum >= loan.balance;
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { stopPolling(); onClose(); } }}>
       <DialogContent className="sm:max-w-md">
 
-        {/* ── Step 1: Input ─────────────────────────────────────────────── */}
+        {/* Step 1: Input */}
         {step === "input" && (
           <>
             <DialogHeader>
@@ -97,12 +133,11 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
                 Repay Loan via M-Pesa
               </DialogTitle>
               <DialogDescription>
-                Paying towards <span className="font-semibold text-foreground">{loan.loan_number}</span>. Select an amount and you will be taken to our secure payment page.
+                An STK push will be sent to your phone. Enter your M-Pesa PIN to complete the payment for <span className="font-semibold text-foreground">{loan.loan_number}</span>.
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-5 py-2">
-              {/* Outstanding balance card */}
               <div className="rounded-xl border bg-muted/40 p-4 space-y-1">
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">Outstanding Balance</p>
                 <p className="text-2xl font-bold font-heading text-destructive">
@@ -113,7 +148,40 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
                 </p>
               </div>
 
-              {/* Quick amounts */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Payment Type</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAmount(String(Math.round(loan.monthly_installment)))}
+                    className={cn(
+                      "rounded-lg border-2 py-3 px-2 text-xs font-semibold transition-all text-center",
+                      !isFull && amountNum > 0
+                        ? "border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                        : "border-border hover:border-blue-300 hover:bg-blue-50/50"
+                    )}
+                  >
+                    <Banknote className="h-4 w-4 mx-auto mb-1 text-blue-500" />
+                    <span className="block font-bold">Lipa Pole Pole</span>
+                    <span className="text-[10px] text-muted-foreground">Partial / Instalment</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAmount(String(Math.round(loan.balance)))}
+                    className={cn(
+                      "rounded-lg border-2 py-3 px-2 text-xs font-semibold transition-all text-center",
+                      isFull && amountNum > 0
+                        ? "border-green-500 bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                        : "border-border hover:border-green-300 hover:bg-green-50/50"
+                    )}
+                  >
+                    <CheckCircle2 className="h-4 w-4 mx-auto mb-1 text-green-500" />
+                    <span className="block font-bold">Full Clearance</span>
+                    <span className="text-[10px] text-muted-foreground">Clear entire balance</span>
+                  </button>
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Quick Select</Label>
                 <div className="grid grid-cols-3 gap-2">
@@ -138,9 +206,8 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
                 </div>
               </div>
 
-              {/* Amount input */}
               <div className="space-y-1.5">
-                <Label htmlFor="repay-amount">Amount to Pay (KES)</Label>
+                <Label htmlFor="repay-amount">Custom Amount (KES)</Label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium text-sm select-none">KES</span>
                   <Input
@@ -160,13 +227,12 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Paying <span className="font-semibold text-blue-600">{pct}%</span> of outstanding balance.
-                      {amountNum >= loan.balance && <span className="text-green-600 font-semibold ml-1">This will fully clear the loan!</span>}
+                      {isFull && <span className="text-green-600 font-semibold ml-1">This will fully clear the loan!</span>}
                     </p>
                   </div>
                 )}
               </div>
 
-              {/* Phone */}
               <div className="space-y-1.5">
                 <Label htmlFor="repay-phone">M-Pesa Phone Number</Label>
                 <div className="relative">
@@ -182,13 +248,12 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
                 </div>
               </div>
 
-              {/* Lipia info strip */}
               <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-900/10 flex items-start gap-3 px-4 py-3">
                 <div className="flex items-center justify-center rounded bg-[#00A550] px-2 py-0.5 shrink-0 mt-0.5">
                   <span className="text-white text-[11px] font-black tracking-wide">M-PESA</span>
                 </div>
                 <p className="text-[12px] text-muted-foreground leading-snug">
-                  Payments go to <span className="font-semibold text-foreground"><span className="text-[#C9A227]">SMC</span><span className="text-[#2D7A36]">F</span> SACCO Till 6938069</span> via Lipia Online. A payment page will open in a new tab.
+                  A prompt will be sent to your phone. Enter your PIN to pay <span className="font-semibold text-foreground"><span className="text-[#C9A227]">SMC</span><span className="text-[#2D7A36]">F</span> SACCO Accounts</span>. Payment is instant.
                 </p>
               </div>
             </div>
@@ -200,29 +265,28 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
                 onClick={handlePay}
                 disabled={loading || !amount || amountNum < 10 || !phone.trim()}
               >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
-                {loading ? "Opening..." : "Pay via Lipia"}
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Smartphone className="h-4 w-4" />}
+                {loading ? "Sending..." : "Send M-Pesa Prompt"}
               </Button>
             </div>
           </>
         )}
 
-        {/* ── Step 2: Awaiting payment ───────────────────────────────────── */}
-        {step === "sent" && (
+        {/* Step 2: Processing */}
+        {step === "processing" && (
           <div className="flex flex-col items-center text-center py-4 gap-5">
             <div className="relative">
               <div className="absolute inset-0 rounded-full bg-blue-400/20 animate-ping" />
               <div className="relative p-5 rounded-full bg-blue-100 dark:bg-blue-900/40">
-                <Clock className="h-10 w-10 text-blue-600 dark:text-blue-400" />
+                <Smartphone className="h-10 w-10 text-blue-600 dark:text-blue-400" />
               </div>
             </div>
 
             <div className="space-y-1">
-              <h3 className="font-heading font-bold text-lg">Complete Payment on Lipia</h3>
+              <h3 className="font-heading font-bold text-lg">Check Your Phone</h3>
               <p className="text-muted-foreground text-sm max-w-xs">
-                Pay{" "}
-                <span className="font-semibold text-foreground">KES {amountNum.toLocaleString()}</span>{" "}
-                on the Lipia tab that just opened using your M-Pesa number.
+                An M-Pesa STK push has been sent to <span className="font-semibold text-foreground">{phone}</span>. Enter your PIN to pay{" "}
+                <span className="font-semibold text-foreground">KES {amountNum.toLocaleString()}</span> towards loan {loan.loan_number}.
               </p>
             </div>
 
@@ -236,46 +300,86 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
                 <span className="font-bold text-blue-600">KES {amountNum.toLocaleString()}</span>
               </div>
               <div className="flex justify-between px-4 py-2.5">
-                <span className="text-muted-foreground">Pay To</span>
-                <span className="font-semibold"><span className="text-[#C9A227]">SMC</span><span className="text-[#2D7A36]">F</span> SACCO (Till 6938069)</span>
-              </div>
-              <div className="flex justify-between px-4 py-2.5">
-                <span className="text-muted-foreground">Via</span>
-                <span className="font-medium">Lipia Online</span>
+                <span className="text-muted-foreground">Status</span>
+                <span className="flex items-center gap-1.5 text-blue-600 font-medium">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Awaiting PIN...
+                </span>
               </div>
             </div>
 
             <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/10 dark:border-amber-800 px-4 py-3 text-[12px] text-amber-700 dark:text-amber-400 text-left w-full flex items-start gap-2">
-              <span className="text-base">⏳</span>
-              <span>Once you complete the payment, your repayment will show as <strong>Pending</strong> until an admin confirms it. Your loan balance will update immediately after confirmation.</span>
+              <span className="text-base">📱</span>
+              <span>A pop-up should appear on your phone. Enter your <strong>M-Pesa PIN</strong> to complete the payment. This page will update automatically.</span>
             </div>
 
-            <Button
-              className="w-full gap-2 h-11 text-base font-semibold"
-              onClick={onClose}
-            >
-              <CheckCircle2 className="h-5 w-5" /> Done — I Have Paid
+            <Button variant="outline" className="w-full" onClick={() => { stopPolling(); setStep("input"); }}>
+              <RefreshCw className="mr-2 h-4 w-4" /> Cancel / Try Again
             </Button>
+          </div>
+        )}
+
+        {/* Step 3: Success */}
+        {step === "success" && (
+          <div className="flex flex-col items-center text-center py-4 gap-5">
+            <div className="relative p-5 rounded-full bg-green-100 dark:bg-green-900/40">
+              <CheckCircle2 className="h-10 w-10 text-green-600 dark:text-green-400" />
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="font-heading font-bold text-lg text-green-700 dark:text-green-400">
+                {loanCompleted ? "Loan Fully Cleared! 🎉" : "Repayment Confirmed!"}
+              </h3>
+              <p className="text-muted-foreground text-sm max-w-xs">
+                KES {amountNum.toLocaleString()} has been applied to loan {loan.loan_number}.
+                {loanCompleted && " Your loan is now fully cleared."}
+              </p>
+            </div>
+
+            <div className="w-full rounded-xl border bg-muted/40 divide-y text-sm">
+              <div className="flex justify-between px-4 py-2.5">
+                <span className="text-muted-foreground">Amount Paid</span>
+                <span className="font-bold text-green-600">KES {amountNum.toLocaleString()}</span>
+              </div>
+              {mpesaRef && (
+                <div className="flex justify-between px-4 py-2.5">
+                  <span className="text-muted-foreground">M-Pesa Ref</span>
+                  <span className="font-mono text-xs">{mpesaRef}</span>
+                </div>
+              )}
+              <div className="flex justify-between px-4 py-2.5">
+                <span className="text-muted-foreground">Status</span>
+                <span className="text-green-600 font-semibold">✓ Completed</span>
+              </div>
+            </div>
+
+            <Button className="w-full gap-2 h-11 text-base font-semibold" onClick={onClose}>
+              <CheckCircle2 className="h-5 w-5" /> Done
+            </Button>
+          </div>
+        )}
+
+        {/* Step 4: Failed */}
+        {step === "failed" && (
+          <div className="flex flex-col items-center text-center py-4 gap-5">
+            <div className="relative p-5 rounded-full bg-red-100 dark:bg-red-900/40">
+              <XCircle className="h-10 w-10 text-red-600 dark:text-red-400" />
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="font-heading font-bold text-lg text-red-700 dark:text-red-400">Payment Failed</h3>
+              <p className="text-muted-foreground text-sm max-w-xs">{failReason}</p>
+            </div>
 
             <div className="flex gap-2 w-full">
-              <Button variant="outline" className="flex-1" onClick={() => setStep("input")}>
-                <RefreshCw className="mr-2 h-4 w-4" /> Back
-              </Button>
-              <Button
-                variant="ghost"
-                className="flex-1 gap-2 text-muted-foreground"
-                onClick={() => window.open(LIPIA_PAYMENT_URL, "_blank", "noopener,noreferrer")}
-              >
-                <ExternalLink className="h-4 w-4" /> Reopen Page
+              <Button variant="outline" className="flex-1" onClick={onClose}>Close</Button>
+              <Button className="flex-1 gap-2" onClick={() => setStep("input")}>
+                <RefreshCw className="h-4 w-4" /> Try Again
               </Button>
             </div>
-
-            <p className="text-[11px] text-muted-foreground">
-              Contact <span className="font-semibold">+254 759 097 157</span> if your balance does not update.
-            </p>
           </div>
         )}
       </DialogContent>
     </Dialog>
+  
   );
 }
