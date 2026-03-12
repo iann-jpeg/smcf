@@ -42,7 +42,7 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader className="p-6 border-b border-sidebar-border">
         <div className="flex items-center gap-3">
-          <img src="/favicon.png" alt="SMCF SACCO" className="w-10 h-10 rounded-lg" />
+          <img src={`${import.meta.env.BASE_URL}favicon.png`} alt="SMCF SACCO" className="w-10 h-10 rounded-lg" />
           <div>
             <h1 className="text-base font-heading font-bold">
               <span className="text-[#C9A227]">SMC</span><span className="text-[#2D7A36]">F</span>

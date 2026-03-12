@@ -78,7 +78,7 @@ export default function Auth() {
       />
       <Card className="w-full max-w-md relative z-10">
         <CardHeader className="text-center space-y-4">
-          <img src="/favicon.png" alt="SMCF SACCO" className="mx-auto w-16 h-16 rounded-xl" />
+          <img src={`${import.meta.env.BASE_URL}favicon.png`} alt="SMCF SACCO" className="mx-auto w-16 h-16 rounded-xl" />
           <div>
             <CardTitle className="text-2xl font-heading"><span className="text-[#C9A227]">SMC</span><span className="text-[#2D7A36]">F</span> SACCO</CardTitle>
             <CardDescription>Empowering Members Through Financial Excellence</CardDescription>
