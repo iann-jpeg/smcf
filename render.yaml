@@ -33,3 +33,7 @@ services:
         value: TILL
       - key: LIPIA_API_URL
         value: https://lipia-api.kreativelabske.com/api/v2
+      - key: SACCO_API_KEY
+        sync: false
+      - key: SACCO_CLIENT_URL
+        value: https://smcf.app

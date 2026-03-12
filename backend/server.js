@@ -35,6 +35,7 @@ import analyticsRoutes from "./routes/analytics.js";
 import guarantorRoutes from "./routes/guarantors.js";
 import searchRoutes from "./routes/search.js";
 import dashboardRoutes from "./routes/dashboard.js";
+import saccoPaymentRoutes from "./routes/saccoPayments.js";
 
 // Import interest service
 import { startInterestCronJob } from "./services/interestService.js";
@@ -60,7 +61,10 @@ const allowedOrigins = [
   "https://smcf.app",
   "https://www.smcf.app",
   "https://smcf-finance.vercel.app", // Vercel deployment
+  "https://smcfsacco.vercel.app",     // SACCO portal
+  "https://smcf-sacco.vercel.app",    // SACCO portal (alt)
   process.env.CLIENT_URL,
+  process.env.SACCO_CLIENT_URL,
 ].filter(Boolean);
 
 console.log("🔓 Allowed CORS origins:", allowedOrigins);
@@ -355,6 +359,7 @@ app.use("/api/credit-score", creditScoreRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/reports", analyticsRoutes); // Alias to avoid ad blocker issues
 app.use("/api/search", searchRoutes);
+app.use("/api/sacco-payments", saccoPaymentRoutes); // SACCO portal payment bridge
 app.use("/api", dashboardRoutes); // Optimized dashboard endpoint
 
 // Health check endpoint

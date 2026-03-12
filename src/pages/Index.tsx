@@ -927,10 +927,8 @@ const Index = () => {
                 </div>
               </div>
               <div className="text-center">
-                <a 
-                  href="https://smcfsacco.vercel.app" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
+                <button
+                  onClick={() => { window.location.href = '/sacco'; }}
                   className="inline-block"
                 >
                   <Button
@@ -940,7 +938,7 @@ const Index = () => {
                     Go to SMCF SACCO Portal
                     <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform duration-300" />
                   </Button>
-                </a>
+                </button>
                 <p className="text-xs sm:text-sm text-muted-foreground mt-4 italic">
                   For registered members only. Use your SACCO credentials to log in.
                 </p>
