@@ -480,18 +480,33 @@ export default function MyAccount() {
         {/* Repayments */}
         <TabsContent value="repayments">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
               <CardTitle className="font-heading text-lg">Repayment Schedule</CardTitle>
-              {repayments.length > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => exportMyRepayments(member.name, member.member_id, repayments)}
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  Download PDF
-                </Button>
-              )}
+              <div className="flex items-center gap-2 flex-wrap">
+                {loans.filter((l: any) => ["active", "disbursed"].includes(l.status) && Number(l.balance) > 0).length > 0 && (
+                  <Button
+                    size="sm"
+                    className="bg-blue-600 hover:bg-blue-700 text-white gap-1"
+                    onClick={() => {
+                      const activeLoan = loans.find((l: any) => ["active", "disbursed"].includes(l.status) && Number(l.balance) > 0);
+                      if (activeLoan) setRepayLoan(activeLoan);
+                    }}
+                  >
+                    <CreditCard className="h-4 w-4" />
+                    Repay Loan via M-Pesa
+                  </Button>
+                )}
+                {repayments.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => exportMyRepayments(member.name, member.member_id, repayments)}
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Download PDF
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               {repayments.length === 0 ? (
@@ -505,10 +520,13 @@ export default function MyAccount() {
                       <TableHead className="text-right">Amount Due</TableHead>
                       <TableHead className="text-right">Paid</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {repayments.map((r: any) => (
+                    {repayments.map((r: any) => {
+                      const matchedLoan = loans.find((l: any) => l.id === r.loan_id && ["active", "disbursed"].includes(l.status) && Number(l.balance) > 0);
+                      return (
                       <TableRow key={r.id}>
                         <TableCell className="font-mono text-xs">{r.loans?.loan_number ?? "—"}</TableCell>
                         <TableCell>{new Date(r.due_date).toLocaleDateString()}</TableCell>
@@ -517,8 +535,21 @@ export default function MyAccount() {
                         <TableCell>
                           <Badge variant={statusVariant(r.status)}>{r.status}</Badge>
                         </TableCell>
+                        <TableCell>
+                          {matchedLoan && (
+                            <Button
+                              size="sm"
+                              className="bg-blue-600 hover:bg-blue-700 text-white gap-1 text-xs whitespace-nowrap"
+                              onClick={() => setRepayLoan(matchedLoan)}
+                            >
+                              <CreditCard className="h-3.5 w-3.5" />
+                              Pay via M-Pesa
+                            </Button>
+                          )}
+                        </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               )}
