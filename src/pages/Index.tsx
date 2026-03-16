@@ -30,7 +30,6 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 // Test components removed; render the real AdminDashboard
-import DebugInfo from "@/components/DebugInfo";
 import OrganizationDialog from "@/components/OrganizationDialog";
 import API_BASE from "@/lib/api";
 import { authService } from "@/lib/authService";
@@ -378,11 +377,6 @@ const Index = () => {
       </nav>
 
       
-      <DebugInfo
-        userRole={userRole}
-        currentUser={currentUser}
-        showAuth={showAuth}
-      />
       {/* Header */}
       <header className="fixed inset-x-0 top-0 z-50 border-b bg-background/90 backdrop-blur-md animate-fade-in">
         <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-4 flex items-center justify-between">
