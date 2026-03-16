@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "build:dev": "vite build --mode development",
-    "build:sacco": "cd sacco && npm install && npm run build && mkdir -p ../dist/sacco && cp -r dist/* ../dist/sacco/",
+    "build:sacco": "npm --prefix sacco run build && mkdir -p dist/sacco && cp -r sacco/dist/* dist/sacco/",
     "build:all": "npm run build && npm run build:sacco",
     "lint": "eslint .",
     "preview": "vite preview"

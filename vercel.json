@@ -1,8 +1,8 @@
 {
-  "buildCommand": "npm run build && cd sacco && npm install && npm run build && mkdir -p ../dist/sacco && cp -r dist/* ../dist/sacco/",
+  "buildCommand": "npm run build:all",
   "outputDirectory": "dist",
   "devCommand": "npm run dev",
-  "installCommand": "npm install",
+  "installCommand": "npm ci --no-audit --no-fund && npm ci --prefix sacco --no-audit --no-fund",
   "framework": "vite",
   "rewrites": [
     {
