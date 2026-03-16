@@ -496,7 +496,7 @@ const Index = () => {
               <Card className="text-center hover-lift hover-glow animate-scale-in animation-delay-200">
                 <CardContent className="pt-6 pb-6">
                   <div className="text-3xl sm:text-4xl md:text-5xl font-bold text-financial-success mb-3 animate-float">
-                    KES 224
+                    Contribute
                   </div>
                   <div className="text-sm sm:text-base text-muted-foreground">
                     Every 5 Days
