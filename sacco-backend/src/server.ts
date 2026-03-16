@@ -45,22 +45,20 @@ connectDB();
 app.use(helmet());
 
 // CORS
-// FRONTEND_URL may be a comma-separated list of origins, e.g.
-// "https://smcf.app,https://www.smcf.app"
 const ALLOWED_ORIGINS = [
-  ...(process.env.FRONTEND_URL || '').split(',').map(s => s.trim()).filter(Boolean),
-  'https://smcf.app',
+  process.env.FRONTEND_URL,
   'https://www.smcf.app',
+  'https://smcf.app',
   'http://localhost:5173',
   'http://localhost:3000',
-];
+].filter(Boolean) as string[];
 
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (mobile apps, curl, Postman, etc.)
     if (!origin) return callback(null, true);
     // Allow any vercel.app subdomain + explicit allowlist
-    if (ALLOWED_ORIGINS.includes(origin) || /\.vercel\.app$/.test(origin)) {
+    if (ALLOWED_ORIGINS.includes(origin) || /\.vercel\.app$/.test(origin) || /\.smcf\.app$/.test(origin)) {
       return callback(null, true);
     }
     callback(new Error(`CORS: origin ${origin} not allowed`));

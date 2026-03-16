@@ -192,6 +192,7 @@ export default function Accounts() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Ref</TableHead>
+                      <TableHead>M-Pesa Code</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead>Member</TableHead>
                       <TableHead>Type</TableHead>
@@ -203,6 +204,7 @@ export default function Accounts() {
                     {transactions.map((txn: any) => (
                       <TableRow key={txn.id}>
                         <TableCell className="font-mono text-xs">{txn.transaction_ref}</TableCell>
+                        <TableCell className="font-mono text-xs">{txn.mpesa_ref || txn.mpesaRef || "—"}</TableCell>
                         <TableCell>{new Date(txn.processed_at).toLocaleDateString()}</TableCell>
                         <TableCell className="font-medium">{txn.members?.name ?? "—"}</TableCell>
                         <TableCell>{txn.type}</TableCell>

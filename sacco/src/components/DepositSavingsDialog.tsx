@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { playAtmDepositSound } from "@/lib/sound";
 
 type Step = "input" | "processing" | "success" | "failed";
 
@@ -25,12 +26,13 @@ interface Props {
 const QUICK_AMOUNTS = [500, 1000, 2000, 5000];
 
 export function DepositSavingsDialog({ open, onClose, memberId, memberPhone }: Props) {
-  const [step,       setStep]       = useState<Step>("input");
-  const [amount,     setAmount]     = useState("");
-  const [phone,      setPhone]      = useState(memberPhone ?? "");
-  const [loading,    setLoading]    = useState(false);
-  const [mpesaRef,   setMpesaRef]   = useState<string | null>(null);
-  const [failReason, setFailReason] = useState<string | null>(null);
+  const [step,        setStep]        = useState<Step>("input");
+  const [amount,      setAmount]      = useState("");
+  const [phone,       setPhone]       = useState(memberPhone ?? "");
+  const [loading,     setLoading]     = useState(false);
+  const [checkoutId,  setCheckoutId]  = useState<string | null>(null);
+  const [mpesaRef,    setMpesaRef]    = useState<string | null>(null);
+  const [failReason,  setFailReason]  = useState<string | null>(null);
   const pollRef    = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const queryClient = useQueryClient();
@@ -46,6 +48,7 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone }: P
       setAmount("");
       setPhone(memberPhone ?? "");
       setLoading(false);
+      setCheckoutId(null);
       setMpesaRef(null);
       setFailReason(null);
       stopPolling();
@@ -56,10 +59,11 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone }: P
   function startPolling(id: string) {
     pollRef.current = setInterval(async () => {
       try {
-        // api.get already unwraps json.data, so res = { status, mpesaRef, ... }
-        const d = await api.get<{ status: string; mpesaRef?: string; resultDesc?: string }>(`/mpesa/status/${id}`);
+        const res = await api.get(`/mpesa/status/${id}`);
+        const d   = res.data?.data ?? res.data;
         if (d.status === "success") {
           stopPolling();
+          playAtmDepositSound();
           setMpesaRef(d.mpesaRef ?? null);
           setStep("success");
           queryClient.invalidateQueries({ queryKey: ["my-member"] });
@@ -73,7 +77,7 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone }: P
           setStep("failed");
         }
       } catch {
-        // network hiccup — keep polling (ignore 404 while Map not yet populated)
+        // network hiccup — keep polling
       }
     }, 3000);
 
@@ -91,14 +95,14 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone }: P
 
     setLoading(true);
     try {
-      // api.post unwraps json.data, so the result is { checkoutRequestId }
-      const res = await api.post<{ checkoutRequestId: string }>("/mpesa/deposit", {
+      const res = await api.post("/mpesa/deposit", {
         memberId,
         amount: num,
         phone: phone.trim(),
       });
-      const id = res?.checkoutRequestId;
-      if (!id) throw new Error("No checkout ID returned — please try again");
+      const id = res.data?.data?.checkoutRequestId;
+      if (!id) throw new Error("No checkout ID returned");
+      setCheckoutId(id);
       setStep("processing");
       startPolling(id);
     } catch (err: unknown) {
@@ -166,6 +170,13 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone }: P
                     placeholder="0"
                   />
                 </div>
+                {amountNum > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Depositing{" "}
+                    <span className="font-semibold text-green-600">KES {amountNum.toLocaleString()}</span>{" "}
+                    into your savings account.
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -256,8 +267,10 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone }: P
         {/* Step 3: Success */}
         {step === "success" && (
           <div className="flex flex-col items-center text-center py-4 gap-5">
-            <div className="relative p-5 rounded-full bg-green-100 dark:bg-green-900/40">
-              <CheckCircle2 className="h-10 w-10 text-green-600 dark:text-green-400" />
+            <div className="relative">
+              <div className="relative p-5 rounded-full bg-green-100 dark:bg-green-900/40">
+                <CheckCircle2 className="h-10 w-10 text-green-600 dark:text-green-400" />
+              </div>
             </div>
 
             <div className="space-y-1">
@@ -293,23 +306,30 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone }: P
         {/* Step 4: Failed */}
         {step === "failed" && (
           <div className="flex flex-col items-center text-center py-4 gap-5">
-            <div className="relative p-5 rounded-full bg-red-100 dark:bg-red-900/40">
-              <XCircle className="h-10 w-10 text-red-600 dark:text-red-400" />
+            <div className="relative">
+              <div className="relative p-5 rounded-full bg-red-100 dark:bg-red-900/40">
+                <XCircle className="h-10 w-10 text-red-600 dark:text-red-400" />
+              </div>
             </div>
 
             <div className="space-y-1">
               <h3 className="font-heading font-bold text-lg text-red-700 dark:text-red-400">Payment Failed</h3>
-              <p className="text-muted-foreground text-sm max-w-xs">{failReason}</p>
+              <p className="text-muted-foreground text-sm max-w-xs">{failReason || "The payment was cancelled or failed. Please try again."}</p>
             </div>
 
             <div className="flex gap-2 w-full">
               <Button variant="outline" className="flex-1" onClick={onClose}>Close</Button>
-              <Button className="flex-1 gap-2 bg-green-600 hover:bg-green-700 text-white" onClick={() => setStep("input")}>
+              <Button className="flex-1 gap-2 bg-green-600 hover:bg-green-700 text-white" onClick={() => { setStep("input"); setFailReason(null); }}>
                 <RefreshCw className="h-4 w-4" /> Try Again
               </Button>
             </div>
+
+            <p className="text-[11px] text-muted-foreground">
+              Contact <span className="font-semibold">+254 759 097 157</span> if you were charged but the balance did not update.
+            </p>
           </div>
         )}
+
       </DialogContent>
     </Dialog>
   );

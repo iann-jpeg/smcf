@@ -9,6 +9,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { lazy, Suspense, useEffect } from "react";
 import { api, normalizeNotification } from "@/lib/api";
 import { fetchDashboardStats, DASHBOARD_STATS_KEY } from "@/hooks/useDashboardStats";
+import { useConnectivityNotifications } from "@/hooks/useConnectivityNotifications";
 
 // Lazy-load every page so only the current route's JS is parsed on startup.
 const Dashboard        = lazy(() => import("./pages/Dashboard"));
@@ -54,19 +55,17 @@ const queryClient = new QueryClient({
 });
 
 function ProtectedRoutes() {
-  const { user, loading, isStaff } = useAuth();
+  const { user, loading } = useAuth();
   const queryClient = useQueryClient();
+
+  useConnectivityNotifications(!!user);
 
   // As soon as we know the user is authenticated (resolved from localStorage
   // synchronously), kick off background prefetches so dashboard data is already
   // in-flight before the user even clicks the Dashboard link.
-
   useEffect(() => {
     if (!user) return;
-    // dashboard/stats is staff-only on the backend — skip prefetch for regular members
-    if (isStaff) {
-      queryClient.prefetchQuery({ queryKey: DASHBOARD_STATS_KEY, queryFn: fetchDashboardStats });
-    }
+    queryClient.prefetchQuery({ queryKey: DASHBOARD_STATS_KEY, queryFn: fetchDashboardStats });
     queryClient.prefetchQuery({
       queryKey: ["notifications"],
       queryFn: async () => {
@@ -132,7 +131,7 @@ const App = () => (
         <TooltipProvider>
           <Toaster />
           <Sonner />
-          <BrowserRouter basename="/sacco">
+          <BrowserRouter>
             <Routes>
               <Route path="/auth" element={<AuthRoute />} />
               <Route path="/*" element={<ProtectedRoutes />} />
