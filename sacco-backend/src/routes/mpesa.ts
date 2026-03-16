@@ -80,28 +80,106 @@ async function sendLipiaSTK(phone: string, amount: number, reference: string, de
   // Lipia requires 07xx/01xx format — convert from 254xxx if needed
   const lipiaPhone = normalizePhoneForLipia(phone);
 
-  const res = await fetch(`${baseUrl}/request/stk`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
+  const attempts = [
+    {
+      url: `${baseUrl}/payments/stk-push`,
+      body: {
+        phone_number: lipiaPhone,
+        amount,
+        external_reference: reference,
+      },
     },
-    body: JSON.stringify({
-      phone: lipiaPhone,
-      amount,
-      reference,
-      description,
-      callback_url: callbackUrl,
-    }),
-  });
+    {
+      url: `${baseUrl}/request/stk`,
+      body: {
+        phone: lipiaPhone,
+        amount,
+        reference,
+        description,
+        callback_url: callbackUrl,
+      },
+    },
+  ];
 
-  const data = (await res.json()) as any;
-  if (!res.ok) {
-    const reason = typeof data === 'string' ? data : (data?.message || data?.error || 'Unknown error');
-    if (res.status === 403) throw new Error(`Payment service suspended — please contact SMCF admin. (${reason})`);
-    throw new Error(`Lipia STK push failed (HTTP ${res.status}): ${reason}`);
+  let lastStatus = 500;
+  let lastReason = 'Unknown error';
+
+  for (const attempt of attempts) {
+    const res = await fetch(attempt.url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(attempt.body),
+    });
+
+    const responseText = await res.text().catch(() => '');
+    let data: any = {};
+    try {
+      data = responseText ? JSON.parse(responseText) : {};
+    } catch {
+      data = { message: responseText || 'Unexpected response from payment service' };
+    }
+
+    if (!res.ok) {
+      lastStatus = res.status;
+      lastReason = typeof data === 'string' ? data : (data?.error?.message || data?.message || data?.error || 'Unknown error');
+      continue;
+    }
+
+    if (data?.success === false) {
+      lastStatus = 400;
+      lastReason = data?.error?.mpesaError?.errorMessage || data?.error?.message || data?.message || 'Payment initiation failed';
+      continue;
+    }
+
+    const checkoutRequestId = extractCheckoutRequestId(data);
+    if (!checkoutRequestId) {
+      lastStatus = 502;
+      lastReason = 'Payment service response missing checkout request id';
+      continue;
+    }
+
+    return {
+      ...data,
+      CheckoutRequestID: checkoutRequestId,
+      checkoutRequestId,
+    };
   }
-  return data;
+
+  if (lastStatus === 403) {
+    const err = new Error(`Payment service suspended — please contact SMCF admin. (${lastReason})`) as Error & { statusCode?: number };
+    err.statusCode = 503;
+    throw err;
+  }
+
+  if (lastStatus >= 400 && lastStatus < 500) {
+    const err = new Error(`Payment request rejected: ${lastReason}`) as Error & { statusCode?: number };
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const err = new Error(`Lipia STK push failed (HTTP ${lastStatus}): ${lastReason}`) as Error & { statusCode?: number };
+  err.statusCode = 502;
+  throw err;
+}
+
+function extractCheckoutRequestId(payload: any): string | undefined {
+  return (
+    payload?.data?.TransactionReference ||
+    payload?.data?.CheckoutRequestID ||
+    payload?.data?.checkoutRequestId ||
+    payload?.data?.checkout_request_id ||
+    payload?.data?.checkoutRequestID ||
+    payload?.data?.requestId ||
+    payload?.data?.reference ||
+    payload?.CheckoutRequestID ||
+    payload?.checkoutRequestId ||
+    payload?.checkout_request_id ||
+    payload?.transactionReference ||
+    payload?.reference
+  );
 }
 
 function normalizePhone(raw: string): string {
@@ -192,13 +270,12 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
 
     // Lipia proxies the Safaricom response — CheckoutRequestID may be top-level
     // or nested under data depending on the Lipia version.
-    const checkoutRequestId: string =
-      stkData.CheckoutRequestID ?? stkData.checkoutRequestId ?? stkData.data?.CheckoutRequestID ?? stkData.data?.checkoutRequestId;
+    const checkoutRequestId = extractCheckoutRequestId(stkData);
 
     if (!checkoutRequestId) {
       return res.status(400).json({
         success: false,
-        message: stkData.message || stkData.error || 'STK Push failed. Check Lipia credentials.',
+        message: stkData.message || stkData.error || 'STK Push failed. Payment service did not return a checkout request ID.',
       });
     }
 
@@ -380,8 +457,7 @@ router.post('/loan-repay', protect, async (req: AuthRequest, res: Response, next
       `SMCF Loan Repayment ${loan.loanNumber}`,
     );
 
-    const checkoutRequestId: string =
-      stkData.CheckoutRequestID ?? stkData.checkoutRequestId ?? stkData.data?.CheckoutRequestID ?? stkData.data?.checkoutRequestId;
+    const checkoutRequestId = extractCheckoutRequestId(stkData);
 
     if (!checkoutRequestId) {
       return res.status(400).json({ success: false, message: stkData.message || stkData.error || 'STK Push failed' });
