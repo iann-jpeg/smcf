@@ -34,6 +34,10 @@ import sharesRoutes from './routes/shares';
 // Initialize app
 const app: Application = express();
 
+// Render/other reverse proxies forward the client IP in X-Forwarded-For.
+// trust proxy must be enabled so rate limiting and req.ip work correctly.
+app.set('trust proxy', 1);
+
 // Connect to database
 connectDB();
 
