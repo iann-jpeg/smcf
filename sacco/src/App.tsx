@@ -54,6 +54,8 @@ const queryClient = new QueryClient({
   },
 });
 
+const routerBasename = import.meta.env.BASE_URL === "/" ? undefined : import.meta.env.BASE_URL.replace(/\/$/, "");
+
 function ProtectedRoutes() {
   const { user, loading } = useAuth();
   const queryClient = useQueryClient();
@@ -131,7 +133,7 @@ const App = () => (
         <TooltipProvider>
           <Toaster />
           <Sonner />
-          <BrowserRouter>
+          <BrowserRouter basename={routerBasename}>
             <Routes>
               <Route path="/auth" element={<AuthRoute />} />
               <Route path="/*" element={<ProtectedRoutes />} />
