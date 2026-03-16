@@ -96,20 +96,43 @@ export default function Reports() {
               </div>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow><TableHead>Item</TableHead><TableHead className="text-right">Amount (KES)</TableHead></TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow><TableCell className="font-semibold" colSpan={2}>Assets</TableCell></TableRow>
-                  <TableRow><TableCell className="pl-8">Loan Portfolio (Outstanding)</TableCell><TableCell className="text-right font-mono">{balanceSheet.totalLoanBalance.toLocaleString()}</TableCell></TableRow>
-                  <TableRow className="border-t"><TableCell className="font-semibold" colSpan={2}>Liabilities</TableCell></TableRow>
-                  <TableRow><TableCell className="pl-8">Member Savings</TableCell><TableCell className="text-right font-mono">{balanceSheet.totalSavings.toLocaleString()}</TableCell></TableRow>
-                  <TableRow className="border-t"><TableCell className="font-semibold" colSpan={2}>Equity</TableCell></TableRow>
-                  <TableRow><TableCell className="pl-8">Share Capital</TableCell><TableCell className="text-right font-mono">{balanceSheet.totalShares.toLocaleString()}</TableCell></TableRow>
-                  <TableRow className="bg-muted/50 font-bold"><TableCell>Total Deposits (Savings + Shares)</TableCell><TableCell className="text-right font-mono">{balanceSheet.totalDeposits.toLocaleString()}</TableCell></TableRow>
-                </TableBody>
-              </Table>
+              <div className="space-y-2 md:hidden">
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Assets</p>
+                  <p className="text-sm">Loan Portfolio (Outstanding)</p>
+                  <p className="font-semibold">KES {balanceSheet.totalLoanBalance.toLocaleString()}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Liabilities</p>
+                  <p className="text-sm">Member Savings</p>
+                  <p className="font-semibold">KES {balanceSheet.totalSavings.toLocaleString()}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Equity</p>
+                  <p className="text-sm">Share Capital</p>
+                  <p className="font-semibold">KES {balanceSheet.totalShares.toLocaleString()}</p>
+                </div>
+                <div className="rounded-lg border bg-muted/50 p-3">
+                  <p className="text-sm font-medium">Total Deposits (Savings + Shares)</p>
+                  <p className="font-bold">KES {balanceSheet.totalDeposits.toLocaleString()}</p>
+                </div>
+              </div>
+              <div className="hidden md:block overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow><TableHead>Item</TableHead><TableHead className="text-right">Amount (KES)</TableHead></TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow><TableCell className="font-semibold" colSpan={2}>Assets</TableCell></TableRow>
+                    <TableRow><TableCell className="pl-8">Loan Portfolio (Outstanding)</TableCell><TableCell className="text-right font-mono">{balanceSheet.totalLoanBalance.toLocaleString()}</TableCell></TableRow>
+                    <TableRow className="border-t"><TableCell className="font-semibold" colSpan={2}>Liabilities</TableCell></TableRow>
+                    <TableRow><TableCell className="pl-8">Member Savings</TableCell><TableCell className="text-right font-mono">{balanceSheet.totalSavings.toLocaleString()}</TableCell></TableRow>
+                    <TableRow className="border-t"><TableCell className="font-semibold" colSpan={2}>Equity</TableCell></TableRow>
+                    <TableRow><TableCell className="pl-8">Share Capital</TableCell><TableCell className="text-right font-mono">{balanceSheet.totalShares.toLocaleString()}</TableCell></TableRow>
+                    <TableRow className="bg-muted/50 font-bold"><TableCell>Total Deposits (Savings + Shares)</TableCell><TableCell className="text-right font-mono">{balanceSheet.totalDeposits.toLocaleString()}</TableCell></TableRow>
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -162,26 +185,52 @@ export default function Reports() {
               </div>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Loan #</TableHead><TableHead>Member</TableHead><TableHead className="text-right">Principal</TableHead>
-                    <TableHead className="text-right">Balance</TableHead><TableHead>Status</TableHead><TableHead>Risk</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              <>
+                <div className="space-y-3 md:hidden">
                   {loans.map((loan: any) => (
-                    <TableRow key={loan.id}>
-                      <TableCell className="font-mono text-xs">{loan.loan_number}</TableCell>
-                      <TableCell>{loan.members?.name ?? "—"}</TableCell>
-                      <TableCell className="text-right font-mono">KES {Number(loan.principal).toLocaleString()}</TableCell>
-                      <TableCell className="text-right font-mono">KES {Number(loan.balance).toLocaleString()}</TableCell>
-                      <TableCell><Badge variant={loan.status === "repaying" ? "default" : loan.status === "defaulted" ? "destructive" : "secondary"}>{loan.status}</Badge></TableCell>
-                      <TableCell><Badge variant={loan.risk_rating === "low" ? "default" : loan.risk_rating === "high" ? "destructive" : "secondary"}>{loan.risk_rating}</Badge></TableCell>
-                    </TableRow>
+                    <div key={loan.id} className="rounded-lg border p-3 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-mono text-xs truncate">{loan.loan_number}</p>
+                        <Badge variant={loan.status === "repaying" ? "default" : loan.status === "defaulted" ? "destructive" : "secondary"}>{loan.status}</Badge>
+                      </div>
+                      <p className="text-sm">{loan.members?.name ?? "—"}</p>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div>
+                          <p className="text-xs text-muted-foreground">Principal</p>
+                          <p className="font-medium">KES {Number(loan.principal).toLocaleString()}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Balance</p>
+                          <p className="font-medium">KES {Number(loan.balance).toLocaleString()}</p>
+                        </div>
+                      </div>
+                      <Badge variant={loan.risk_rating === "low" ? "default" : loan.risk_rating === "high" ? "destructive" : "secondary"}>{loan.risk_rating}</Badge>
+                    </div>
                   ))}
-                </TableBody>
-              </Table>
+                </div>
+                <div className="hidden md:block overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Loan #</TableHead><TableHead>Member</TableHead><TableHead className="text-right">Principal</TableHead>
+                        <TableHead className="text-right">Balance</TableHead><TableHead>Status</TableHead><TableHead>Risk</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {loans.map((loan: any) => (
+                        <TableRow key={loan.id}>
+                          <TableCell className="font-mono text-xs">{loan.loan_number}</TableCell>
+                          <TableCell>{loan.members?.name ?? "—"}</TableCell>
+                          <TableCell className="text-right font-mono">KES {Number(loan.principal).toLocaleString()}</TableCell>
+                          <TableCell className="text-right font-mono">KES {Number(loan.balance).toLocaleString()}</TableCell>
+                          <TableCell><Badge variant={loan.status === "repaying" ? "default" : loan.status === "defaulted" ? "destructive" : "secondary"}>{loan.status}</Badge></TableCell>
+                          <TableCell><Badge variant={loan.risk_rating === "low" ? "default" : loan.risk_rating === "high" ? "destructive" : "secondary"}>{loan.risk_rating}</Badge></TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
             </CardContent>
           </Card>
         </TabsContent>
@@ -197,29 +246,49 @@ export default function Reports() {
               </div>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Guarantor</TableHead><TableHead className="text-right">Total Guaranteed</TableHead>
-                    <TableHead className="text-right">Savings</TableHead><TableHead className="text-right">Max Allowed</TableHead>
-                    <TableHead className="text-right">Exposure %</TableHead><TableHead className="text-center">Guarantees</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              <>
+                <div className="space-y-3 md:hidden">
                   {guarantorExposure.map((g, i) => (
-                    <TableRow key={i}>
-                      <TableCell className="font-medium">{g.name}</TableCell>
-                      <TableCell className="text-right font-mono">KES {g.total.toLocaleString()}</TableCell>
-                      <TableCell className="text-right font-mono">KES {g.savings.toLocaleString()}</TableCell>
-                      <TableCell className="text-right font-mono">KES {g.maxAllowed.toLocaleString()}</TableCell>
-                      <TableCell className="text-right">
+                    <div key={i} className="rounded-lg border p-3 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-medium text-sm">{g.name}</p>
                         <Badge variant={Number(g.ratio) > 80 ? "destructive" : Number(g.ratio) > 50 ? "secondary" : "default"}>{g.ratio}%</Badge>
-                      </TableCell>
-                      <TableCell className="text-center">{g.count}</TableCell>
-                    </TableRow>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <p>Total: KES {g.total.toLocaleString()}</p>
+                        <p>Savings: KES {g.savings.toLocaleString()}</p>
+                        <p>Max: KES {g.maxAllowed.toLocaleString()}</p>
+                        <p>Guarantees: {g.count}</p>
+                      </div>
+                    </div>
                   ))}
-                </TableBody>
-              </Table>
+                </div>
+                <div className="hidden md:block overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Guarantor</TableHead><TableHead className="text-right">Total Guaranteed</TableHead>
+                        <TableHead className="text-right">Savings</TableHead><TableHead className="text-right">Max Allowed</TableHead>
+                        <TableHead className="text-right">Exposure %</TableHead><TableHead className="text-center">Guarantees</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {guarantorExposure.map((g, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="font-medium">{g.name}</TableCell>
+                          <TableCell className="text-right font-mono">KES {g.total.toLocaleString()}</TableCell>
+                          <TableCell className="text-right font-mono">KES {g.savings.toLocaleString()}</TableCell>
+                          <TableCell className="text-right font-mono">KES {g.maxAllowed.toLocaleString()}</TableCell>
+                          <TableCell className="text-right">
+                            <Badge variant={Number(g.ratio) > 80 ? "destructive" : Number(g.ratio) > 50 ? "secondary" : "default"}>{g.ratio}%</Badge>
+                          </TableCell>
+                          <TableCell className="text-center">{g.count}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
             </CardContent>
           </Card>
         </TabsContent>
@@ -235,27 +304,47 @@ export default function Reports() {
               </div>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Member ID</TableHead><TableHead>Name</TableHead>
-                    <TableHead className="text-right">Savings</TableHead><TableHead className="text-right">Shares</TableHead>
-                    <TableHead className="text-right">Loan Balance</TableHead><TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              <>
+                <div className="space-y-3 md:hidden">
                   {members.map((m: any) => (
-                    <TableRow key={m.id}>
-                      <TableCell className="font-mono text-xs">{m.member_id}</TableCell>
-                      <TableCell className="font-medium">{m.name}</TableCell>
-                      <TableCell className="text-right font-mono">KES {Number(m.savings).toLocaleString()}</TableCell>
-                      <TableCell className="text-right font-mono">KES {Number(m.shares).toLocaleString()}</TableCell>
-                      <TableCell className="text-right font-mono">KES {Number(m.loan_balance).toLocaleString()}</TableCell>
-                      <TableCell><Badge variant={m.status === "active" ? "default" : "secondary"}>{m.status}</Badge></TableCell>
-                    </TableRow>
+                    <div key={m.id} className="rounded-lg border p-3 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-medium text-sm">{m.name}</p>
+                        <Badge variant={m.status === "active" ? "default" : "secondary"}>{m.status}</Badge>
+                      </div>
+                      <p className="font-mono text-xs text-muted-foreground">{m.member_id}</p>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <p>Savings: KES {Number(m.savings).toLocaleString()}</p>
+                        <p>Shares: KES {Number(m.shares).toLocaleString()}</p>
+                        <p className="col-span-2">Loan Balance: KES {Number(m.loan_balance).toLocaleString()}</p>
+                      </div>
+                    </div>
                   ))}
-                </TableBody>
-              </Table>
+                </div>
+                <div className="hidden md:block overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Member ID</TableHead><TableHead>Name</TableHead>
+                        <TableHead className="text-right">Savings</TableHead><TableHead className="text-right">Shares</TableHead>
+                        <TableHead className="text-right">Loan Balance</TableHead><TableHead>Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {members.map((m: any) => (
+                        <TableRow key={m.id}>
+                          <TableCell className="font-mono text-xs">{m.member_id}</TableCell>
+                          <TableCell className="font-medium">{m.name}</TableCell>
+                          <TableCell className="text-right font-mono">KES {Number(m.savings).toLocaleString()}</TableCell>
+                          <TableCell className="text-right font-mono">KES {Number(m.shares).toLocaleString()}</TableCell>
+                          <TableCell className="text-right font-mono">KES {Number(m.loan_balance).toLocaleString()}</TableCell>
+                          <TableCell><Badge variant={m.status === "active" ? "default" : "secondary"}>{m.status}</Badge></TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
             </CardContent>
           </Card>
         </TabsContent>

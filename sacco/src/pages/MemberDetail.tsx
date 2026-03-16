@@ -307,28 +307,47 @@ export default function MemberDetail() {
               {transactions.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-6 text-center">No transactions yet.</p>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Ref</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead className="text-right">Amount (KES)</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                <>
+                  <div className="space-y-3 md:hidden">
                     {transactions.map((txn: any) => (
-                      <TableRow key={txn.id}>
-                        <TableCell className="font-mono text-xs">{txn.transaction_ref}</TableCell>
-                        <TableCell>{new Date(txn.processed_at).toLocaleDateString()}</TableCell>
-                        <TableCell className="font-medium">{txn.type}</TableCell>
-                        <TableCell className="text-right font-semibold">{Number(txn.amount).toLocaleString()}</TableCell>
-                        <TableCell><Badge variant={txn.status === "completed" ? "default" : "destructive"}>{txn.status}</Badge></TableCell>
-                      </TableRow>
+                      <div key={txn.id} className="rounded-lg border p-3 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-mono text-xs truncate">{txn.transaction_ref}</p>
+                          <Badge variant={txn.status === "completed" ? "default" : "destructive"}>{txn.status}</Badge>
+                        </div>
+                        <p className="text-sm">{txn.type}</p>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">{new Date(txn.processed_at).toLocaleDateString()}</span>
+                          <span className="font-semibold">KES {Number(txn.amount).toLocaleString()}</span>
+                        </div>
+                      </div>
                     ))}
-                  </TableBody>
-                </Table>
+                  </div>
+                  <div className="hidden md:block overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Ref</TableHead>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead className="text-right">Amount (KES)</TableHead>
+                          <TableHead>Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {transactions.map((txn: any) => (
+                          <TableRow key={txn.id}>
+                            <TableCell className="font-mono text-xs">{txn.transaction_ref}</TableCell>
+                            <TableCell>{new Date(txn.processed_at).toLocaleDateString()}</TableCell>
+                            <TableCell className="font-medium">{txn.type}</TableCell>
+                            <TableCell className="text-right font-semibold">{Number(txn.amount).toLocaleString()}</TableCell>
+                            <TableCell><Badge variant={txn.status === "completed" ? "default" : "destructive"}>{txn.status}</Badge></TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
@@ -341,34 +360,61 @@ export default function MemberDetail() {
               {loans.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-6 text-center">No loan accounts.</p>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Loan #</TableHead>
-                      <TableHead className="text-right">Principal</TableHead>
-                      <TableHead>Rate / Model</TableHead>
-                      <TableHead>Term</TableHead>
-                      <TableHead className="text-right">Balance</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                <>
+                  <div className="space-y-3 md:hidden">
                     {loans.map((loan: any) => (
-                      <TableRow key={loan.id}>
-                        <TableCell className="font-mono text-xs">{loan.loan_number}</TableCell>
-                        <TableCell className="text-right">KES {Number(loan.principal).toLocaleString()}</TableCell>
-                        <TableCell className="text-sm">{loan.interest_rate}% {loan.interest_model}</TableCell>
-                        <TableCell>{loan.term_months}mo</TableCell>
-                        <TableCell className="text-right font-semibold">KES {Number(loan.balance).toLocaleString()}</TableCell>
-                        <TableCell>
+                      <div key={loan.id} className="rounded-lg border p-3 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-mono text-xs truncate">{loan.loan_number}</p>
                           <Badge variant={loan.status === "defaulted" ? "destructive" : loan.status === "pending" ? "outline" : "default"}>
                             {loan.status}
                           </Badge>
-                        </TableCell>
-                      </TableRow>
+                        </div>
+                        <p className="text-sm">{loan.interest_rate}% {loan.interest_model} • {loan.term_months}mo</p>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div>
+                            <p className="text-xs text-muted-foreground">Principal</p>
+                            <p className="font-medium">KES {Number(loan.principal).toLocaleString()}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">Balance</p>
+                            <p className="font-semibold">KES {Number(loan.balance).toLocaleString()}</p>
+                          </div>
+                        </div>
+                      </div>
                     ))}
-                  </TableBody>
-                </Table>
+                  </div>
+                  <div className="hidden md:block overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Loan #</TableHead>
+                          <TableHead className="text-right">Principal</TableHead>
+                          <TableHead>Rate / Model</TableHead>
+                          <TableHead>Term</TableHead>
+                          <TableHead className="text-right">Balance</TableHead>
+                          <TableHead>Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {loans.map((loan: any) => (
+                          <TableRow key={loan.id}>
+                            <TableCell className="font-mono text-xs">{loan.loan_number}</TableCell>
+                            <TableCell className="text-right">KES {Number(loan.principal).toLocaleString()}</TableCell>
+                            <TableCell className="text-sm">{loan.interest_rate}% {loan.interest_model}</TableCell>
+                            <TableCell>{loan.term_months}mo</TableCell>
+                            <TableCell className="text-right font-semibold">KES {Number(loan.balance).toLocaleString()}</TableCell>
+                            <TableCell>
+                              <Badge variant={loan.status === "defaulted" ? "destructive" : loan.status === "pending" ? "outline" : "default"}>
+                                {loan.status}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>

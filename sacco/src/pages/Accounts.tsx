@@ -155,26 +155,42 @@ export default function Accounts() {
               {isLoading ? (
                 <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Code</TableHead>
-                      <TableHead>Account Name</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead className="text-right">Balance (KES)</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                <>
+                  <div className="space-y-3 md:hidden">
                     {chartOfAccounts.map((acc) => (
-                      <TableRow key={acc.code}>
-                        <TableCell className="font-mono text-xs">{acc.code}</TableCell>
-                        <TableCell className="font-medium">{acc.name}</TableCell>
-                        <TableCell><Badge variant="secondary">{acc.type}</Badge></TableCell>
-                        <TableCell className="text-right font-semibold">{acc.balance.toLocaleString()}</TableCell>
-                      </TableRow>
+                      <div key={acc.code} className="rounded-lg border p-3 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-medium text-sm">{acc.name}</p>
+                          <Badge variant="secondary">{acc.type}</Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground font-mono">Code: {acc.code}</p>
+                        <p className="text-sm font-semibold">KES {acc.balance.toLocaleString()}</p>
+                      </div>
                     ))}
-                  </TableBody>
-                </Table>
+                  </div>
+                  <div className="hidden md:block overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Code</TableHead>
+                          <TableHead>Account Name</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead className="text-right">Balance (KES)</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {chartOfAccounts.map((acc) => (
+                          <TableRow key={acc.code}>
+                            <TableCell className="font-mono text-xs">{acc.code}</TableCell>
+                            <TableCell className="font-medium">{acc.name}</TableCell>
+                            <TableCell><Badge variant="secondary">{acc.type}</Badge></TableCell>
+                            <TableCell className="text-right font-semibold">{acc.balance.toLocaleString()}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
@@ -188,32 +204,52 @@ export default function Accounts() {
               ) : transactions.length === 0 ? (
                 <p className="text-center text-muted-foreground py-8">No transactions yet.</p>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Ref</TableHead>
-                      <TableHead>M-Pesa Code</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Member</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead className="text-right">Amount (KES)</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                <>
+                  <div className="space-y-3 md:hidden">
                     {transactions.map((txn: any) => (
-                      <TableRow key={txn.id}>
-                        <TableCell className="font-mono text-xs">{txn.transaction_ref}</TableCell>
-                        <TableCell className="font-mono text-xs">{txn.mpesa_ref || txn.mpesaRef || "—"}</TableCell>
-                        <TableCell>{new Date(txn.processed_at).toLocaleDateString()}</TableCell>
-                        <TableCell className="font-medium">{txn.members?.name ?? "—"}</TableCell>
-                        <TableCell>{txn.type}</TableCell>
-                        <TableCell className="text-right font-semibold">{Number(txn.amount).toLocaleString()}</TableCell>
-                        <TableCell><Badge variant={txn.status === "completed" ? "default" : txn.status === "declined" ? "destructive" : "secondary"}>{txn.status}</Badge></TableCell>
-                      </TableRow>
+                      <div key={txn.id} className="rounded-lg border p-3 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-mono text-xs truncate">{txn.transaction_ref}</p>
+                          <Badge variant={txn.status === "completed" ? "default" : txn.status === "declined" ? "destructive" : "secondary"}>{txn.status}</Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">M-Pesa: {txn.mpesa_ref || txn.mpesaRef || "—"}</p>
+                        <p className="text-sm">{txn.members?.name ?? "—"} • {txn.type}</p>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">{new Date(txn.processed_at).toLocaleDateString()}</span>
+                          <span className="font-semibold">KES {Number(txn.amount).toLocaleString()}</span>
+                        </div>
+                      </div>
                     ))}
-                  </TableBody>
-                </Table>
+                  </div>
+                  <div className="hidden md:block overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Ref</TableHead>
+                          <TableHead>M-Pesa Code</TableHead>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Member</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead className="text-right">Amount (KES)</TableHead>
+                          <TableHead>Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {transactions.map((txn: any) => (
+                          <TableRow key={txn.id}>
+                            <TableCell className="font-mono text-xs">{txn.transaction_ref}</TableCell>
+                            <TableCell className="font-mono text-xs">{txn.mpesa_ref || txn.mpesaRef || "—"}</TableCell>
+                            <TableCell>{new Date(txn.processed_at).toLocaleDateString()}</TableCell>
+                            <TableCell className="font-medium">{txn.members?.name ?? "—"}</TableCell>
+                            <TableCell>{txn.type}</TableCell>
+                            <TableCell className="text-right font-semibold">{Number(txn.amount).toLocaleString()}</TableCell>
+                            <TableCell><Badge variant={txn.status === "completed" ? "default" : txn.status === "declined" ? "destructive" : "secondary"}>{txn.status}</Badge></TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
@@ -227,56 +263,98 @@ export default function Accounts() {
               ) : pending.length === 0 ? (
                 <p className="text-center text-muted-foreground py-8">No pending payments.</p>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Member</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead className="text-right">Amount (KES)</TableHead>
-                      <TableHead className="text-center">Action</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                <>
+                  <div className="space-y-3 md:hidden">
                     {pending.map((txn: any) => (
-                      <TableRow key={txn.id}>
-                        <TableCell>{new Date(txn.processed_at).toLocaleDateString()}</TableCell>
-                        <TableCell className="font-medium">{txn.members?.name ?? txn.member_name ?? "—"}</TableCell>
-                        <TableCell><Badge variant="secondary">{txn.type}</Badge></TableCell>
-                        <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">{txn.description ?? "—"}</TableCell>
-                        <TableCell className="text-right font-semibold">{Number(txn.amount).toLocaleString()}</TableCell>
-                        <TableCell className="text-center">
-                          <div className="flex items-center justify-center gap-2">
-                            <Button
-                              size="sm"
-                              className="gap-1.5 bg-green-600 hover:bg-green-700 text-white"
-                              onClick={() => confirmPayment(txn.id)}
-                              disabled={confirmingId === txn.id || decliningId === txn.id}
-                            >
-                              {confirmingId === txn.id
-                                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                : <Check className="h-3.5 w-3.5" />}
-                              {confirmingId === txn.id ? "Confirming…" : "Confirm"}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="gap-1.5 border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
-                              onClick={() => declinePayment(txn.id)}
-                              disabled={confirmingId === txn.id || decliningId === txn.id}
-                            >
-                              {decliningId === txn.id
-                                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                : <X className="h-3.5 w-3.5" />}
-                              {decliningId === txn.id ? "Declining…" : "Decline"}
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
+                      <div key={txn.id} className="rounded-lg border p-3 space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-medium text-sm">{txn.members?.name ?? txn.member_name ?? "—"}</p>
+                          <Badge variant="secondary">{txn.type}</Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{new Date(txn.processed_at).toLocaleDateString()}</p>
+                        <p className="text-xs text-muted-foreground">{txn.description ?? "—"}</p>
+                        <p className="text-sm font-semibold">KES {Number(txn.amount).toLocaleString()}</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Button
+                            size="sm"
+                            className="gap-1.5 bg-green-600 hover:bg-green-700 text-white"
+                            onClick={() => confirmPayment(txn.id)}
+                            disabled={confirmingId === txn.id || decliningId === txn.id}
+                          >
+                            {confirmingId === txn.id
+                              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              : <Check className="h-3.5 w-3.5" />}
+                            {confirmingId === txn.id ? "Confirming…" : "Confirm"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5 border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+                            onClick={() => declinePayment(txn.id)}
+                            disabled={confirmingId === txn.id || decliningId === txn.id}
+                          >
+                            {decliningId === txn.id
+                              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              : <X className="h-3.5 w-3.5" />}
+                            {decliningId === txn.id ? "Declining…" : "Decline"}
+                          </Button>
+                        </div>
+                      </div>
                     ))}
-                  </TableBody>
-                </Table>
+                  </div>
+                  <div className="hidden md:block overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Member</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Description</TableHead>
+                          <TableHead className="text-right">Amount (KES)</TableHead>
+                          <TableHead className="text-center">Action</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {pending.map((txn: any) => (
+                          <TableRow key={txn.id}>
+                            <TableCell>{new Date(txn.processed_at).toLocaleDateString()}</TableCell>
+                            <TableCell className="font-medium">{txn.members?.name ?? txn.member_name ?? "—"}</TableCell>
+                            <TableCell><Badge variant="secondary">{txn.type}</Badge></TableCell>
+                            <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">{txn.description ?? "—"}</TableCell>
+                            <TableCell className="text-right font-semibold">{Number(txn.amount).toLocaleString()}</TableCell>
+                            <TableCell className="text-center">
+                              <div className="flex items-center justify-center gap-2">
+                                <Button
+                                  size="sm"
+                                  className="gap-1.5 bg-green-600 hover:bg-green-700 text-white"
+                                  onClick={() => confirmPayment(txn.id)}
+                                  disabled={confirmingId === txn.id || decliningId === txn.id}
+                                >
+                                  {confirmingId === txn.id
+                                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    : <Check className="h-3.5 w-3.5" />}
+                                  {confirmingId === txn.id ? "Confirming…" : "Confirm"}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1.5 border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+                                  onClick={() => declinePayment(txn.id)}
+                                  disabled={confirmingId === txn.id || decliningId === txn.id}
+                                >
+                                  {decliningId === txn.id
+                                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    : <X className="h-3.5 w-3.5" />}
+                                  {decliningId === txn.id ? "Declining…" : "Decline"}
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
@@ -419,26 +497,42 @@ export default function Accounts() {
               {(dividends as any[]).length === 0 ? (
                 <p className="text-center text-muted-foreground py-6 text-sm">No dividend distributions yet.</p>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Member</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead className="text-right">Amount (KES)</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                <>
+                  <div className="space-y-3 md:hidden">
                     {(dividends as any[]).map((txn: any) => (
-                      <TableRow key={txn.id}>
-                        <TableCell className="text-sm">{new Date(txn.processed_at).toLocaleDateString()}</TableCell>
-                        <TableCell className="font-medium text-sm">{txn.members?.name ?? "—"}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground max-w-[220px] truncate">{txn.description ?? "—"}</TableCell>
-                        <TableCell className="text-right font-semibold text-sm">{Number(txn.amount).toLocaleString()}</TableCell>
-                      </TableRow>
+                      <div key={txn.id} className="rounded-lg border p-3 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-medium text-sm">{txn.members?.name ?? "—"}</p>
+                          <p className="text-sm font-semibold">KES {Number(txn.amount).toLocaleString()}</p>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{new Date(txn.processed_at).toLocaleDateString()}</p>
+                        <p className="text-xs text-muted-foreground">{txn.description ?? "—"}</p>
+                      </div>
                     ))}
-                  </TableBody>
-                </Table>
+                  </div>
+                  <div className="hidden md:block overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Member</TableHead>
+                          <TableHead>Description</TableHead>
+                          <TableHead className="text-right">Amount (KES)</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(dividends as any[]).map((txn: any) => (
+                          <TableRow key={txn.id}>
+                            <TableCell className="text-sm">{new Date(txn.processed_at).toLocaleDateString()}</TableCell>
+                            <TableCell className="font-medium text-sm">{txn.members?.name ?? "—"}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground max-w-[220px] truncate">{txn.description ?? "—"}</TableCell>
+                            <TableCell className="text-right font-semibold text-sm">{Number(txn.amount).toLocaleString()}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
