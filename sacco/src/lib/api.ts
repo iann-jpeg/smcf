@@ -9,6 +9,10 @@ const BASE =
   "http://localhost:5000/api";
 const TOKEN_KEY = "smcf_auth_token";
 
+export function getApiBaseForDebug(): string {
+  return BASE;
+}
+
 function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
