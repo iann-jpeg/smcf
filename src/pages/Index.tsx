@@ -456,7 +456,7 @@ const Index = () => {
               <p className="text-base sm:text-lg md:text-xl text-muted-foreground mb-6 sm:mb-8 animate-fade-in-left animation-delay-300">
                 Kenya's #1 automated chama management system.{" "}
                 <br className="hidden sm:block" />
-                KES 224 every 5 days • 3% monthly interest • Instant M-Pesa payments
+                Contribute every 5 days • 3% monthly interest • Instant M-Pesa payments
               </p>
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-8 sm:mb-10 animate-fade-in-left animation-delay-400">
                 <Button
