@@ -1,9 +1,12 @@
 /**
  * Central API client for the SMCF SACCO backend (MongoDB/Express on Render).
- * Reads VITE_API_URL at build time; attaches JWT from localStorage on every request.
+ * Reads VITE_SACCO_API_URL first, then falls back to VITE_API_URL.
  */
 
-const BASE = (import.meta.env.VITE_API_URL as string) || "http://localhost:5000/api";
+const BASE =
+  (import.meta.env.VITE_SACCO_API_URL as string) ||
+  (import.meta.env.VITE_API_URL as string) ||
+  "http://localhost:5000/api";
 const TOKEN_KEY = "smcf_auth_token";
 
 function getToken(): string | null {
@@ -33,7 +36,9 @@ async function handle<T>(res: Response): Promise<T> {
     // Token expired / invalid – clear session and redirect to login
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem("smcf_auth_user");
-    window.location.href = "/auth";
+    if (window.location.pathname !== "/sacco/auth") {
+      window.location.href = "/sacco/auth";
+    }
     throw new Error("Unauthorized");
   }
   const json = await res.json().catch(() => ({})) as ApiResponse<T>;
