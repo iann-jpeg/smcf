@@ -142,6 +142,20 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
+  html,
+  body,
+  #root {
+    width: 100%;
+    min-height: 100%;
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  * {
+    min-width: 0;
+  }
+
   body {
     @apply bg-background text-foreground;
   }
@@ -173,6 +187,12 @@ All colors MUST be HSL.
   button,
   a {
     -webkit-tap-highlight-color: transparent;
+  }
+
+  .overflow-auto,
+  .overflow-x-auto,
+  .overflow-y-auto {
+    -webkit-overflow-scrolling: touch;
   }
 }
 

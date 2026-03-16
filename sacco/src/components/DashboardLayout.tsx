@@ -14,12 +14,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     <SidebarProvider>
       <div className="min-h-screen flex w-full">
         <AppSidebar />
-        <div className="flex-1 flex flex-col">
-          <header className="h-14 border-b bg-card flex items-center justify-between px-4">
+        <div className="flex-1 flex min-w-0 flex-col">
+          <header className="h-14 border-b bg-card flex items-center justify-between px-2 sm:px-4">
             <div className="flex items-center gap-2">
               <SidebarTrigger />
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 sm:gap-3">
               <span className="text-xs text-muted-foreground hidden sm:inline">{user?.email}</span>
               <Button
                 variant="ghost"
@@ -36,7 +36,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               </Button>
             </div>
           </header>
-          <main className="flex-1 p-6 overflow-auto">
+          <main className="flex-1 overflow-auto p-3 sm:p-4 lg:p-6">
             {children}
           </main>
         </div>
