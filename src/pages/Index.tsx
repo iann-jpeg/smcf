@@ -384,7 +384,7 @@ const Index = () => {
         showAuth={showAuth}
       />
       {/* Header */}
-      <header className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-50 animate-fade-in">
+      <header className="fixed inset-x-0 top-0 z-50 border-b bg-background/90 backdrop-blur-md animate-fade-in">
         <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-4 flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3 hover:scale-105 transition-transform duration-300 cursor-pointer">
             <img
@@ -431,7 +431,7 @@ const Index = () => {
       </header>
 
       {/* Hero Section */}
-      <section className="py-10 sm:py-16 md:py-20 px-3 sm:px-4 overflow-hidden relative">
+      <section className="pt-24 sm:pt-28 md:pt-32 pb-10 sm:pb-16 md:pb-20 px-3 sm:px-4 overflow-hidden relative">
         {/* Background Image */}
         <div 
           className="absolute inset-0 z-0"
