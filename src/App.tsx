@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Admin from "./pages/Admin";
 import Index from "./pages/Index";
@@ -21,6 +22,15 @@ function SocketNotificationHandler({ children }: { children: React.ReactNode }) 
   return <>{children}</>;
 }
 
+function SaccoBridge() {
+  useEffect(() => {
+    // Force-load SACCO app entry in case a stale root bundle handles /sacco/*.
+    window.location.replace("/sacco/index.html");
+  }, []);
+
+  return null;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider defaultTheme="system" storageKey="smcf-ui-theme">
@@ -32,7 +42,8 @@ const App = () => (
             <BrowserRouter>
               <Routes>
                 <Route path="/" element={<Index />} />
-                <Route path="/auth" element={<Navigate to="/sacco/auth" replace />} />
+                <Route path="/auth" element={<SaccoBridge />} />
+                <Route path="/sacco/*" element={<SaccoBridge />} />
                 <Route
                   path="/admin"
                   element={<Admin userData={userData} onLogout={onLogout} />}
