@@ -6,6 +6,9 @@ export interface IUser extends Document {
   fullName: string | null;
   avatarUrl: string | null;
   roles: ('admin' | 'credit_officer' | 'credit_committee' | 'treasurer' | 'auditor' | 'member')[];
+  isEmailVerified: boolean;
+  emailVerificationToken?: string;
+  emailVerificationExpires?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -36,6 +39,18 @@ const UserSchema = new Schema<IUser>({
     enum: ['admin', 'credit_officer', 'credit_committee', 'treasurer', 'auditor', 'member'],
     default: 'member'
   }],
+  isEmailVerified: {
+    type: Boolean,
+    default: false
+  },
+  emailVerificationToken: {
+    type: String,
+    select: false
+  },
+  emailVerificationExpires: {
+    type: Date,
+    select: false
+  },
   createdAt: { 
     type: Date, 
     default: Date.now 

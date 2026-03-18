@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Eye, EyeOff } from "lucide-react";
+import { Loader2, Eye, EyeOff, CheckCircle2, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { storeAuth } from "@/hooks/useAuth";
 
@@ -13,12 +13,27 @@ const API_URL = import.meta.env.VITE_SACCO_API_URL || "http://localhost:5000/api
 
 export default function Auth() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [tab, setTab] = useState("login");
   const [showPassword, setShowPassword] = useState(false);
+  
+  // Email verification states
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState("");
+  const [verificationToken, setVerificationToken] = useState("");
+  const [verifyingEmail, setVerifyingEmail] = useState(false);
+  const [resendingEmail, setResendingEmail] = useState(false);
+
+  // Check if there's a verification token in URL
+  const tokenFromUrl = searchParams.get('token');
+  if (tokenFromUrl && !verificationToken && !showVerificationModal) {
+    setVerificationToken(tokenFromUrl);
+    setShowVerificationModal(true);
+  }
 
   // Use backend REST API for login
   const handleLogin = async (e: React.FormEvent) => {
@@ -33,7 +48,14 @@ export default function Auth() {
       const data = await res.json();
       setLoading(false);
       if (!res.ok) {
-        toast.error(data.message || "Login failed");
+        if (data.requiresEmailVerification) {
+          toast.error("Please verify your email before logging in");
+          setVerificationEmail(data.email || email);
+          setShowVerificationModal(true);
+          setTab("signup");
+        } else {
+          toast.error(data.message || "Login failed");
+        }
       } else {
         storeAuth(data.data.token, data.data.user);
         toast.success("Login successful!");
@@ -60,10 +82,15 @@ export default function Auth() {
       if (!res.ok) {
         toast.error(data.message || "Signup failed");
       } else {
-        // Backend returns a token on register — log in directly
-        storeAuth(data.data.token, data.data.user);
-        toast.success("Account created! Welcome to SMCF SACCO.");
-        navigate("/");
+        // Show verification modal
+        if (data.requiresEmailVerification) {
+          setVerificationEmail(email);
+          setShowVerificationModal(true);
+          toast.success("Account created! Please verify your email.");
+          // Clear form
+          setPassword("");
+          setFullName("");
+        }
       }
     } catch (error) {
       setLoading(false);
@@ -71,11 +98,75 @@ export default function Auth() {
     }
   };
 
+  // Verify email with token
+  const handleVerifyEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!verificationToken.trim()) {
+      toast.error("Please enter the verification code");
+      return;
+    }
+
+    setVerifyingEmail(true);
+    try {
+      const res = await fetch(`${API_URL}/auth/verify-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: verificationToken }),
+      });
+      const data = await res.json();
+      
+      if (!res.ok) {
+        toast.error(data.message || "Verification failed");
+      } else {
+        toast.success("Email verified successfully!");
+        setShowVerificationModal(false);
+        setVerificationToken("");
+        setVerificationEmail("");
+        
+        // Redirect to login tab
+        setTab("login");
+        setEmail(verificationEmail || "");
+      }
+    } catch (error) {
+      toast.error("Verification failed – check your connection");
+    } finally {
+      setVerifyingEmail(false);
+    }
+  };
+
+  // Resend verification email
+  const handleResendVerificationEmail = async () => {
+    if (!verificationEmail.trim()) {
+      toast.error("Email address is required");
+      return;
+    }
+
+    setResendingEmail(true);
+    try {
+      const res = await fetch(`${API_URL}/auth/resend-verification-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: verificationEmail }),
+      });
+      const data = await res.json();
+      
+      if (!res.ok) {
+        toast.error(data.message || "Failed to resend email");
+      } else {
+        toast.success("Verification email sent! Check your inbox.");
+      }
+    } catch (error) {
+      toast.error("Failed to resend – check your connection");
+    } finally {
+      setResendingEmail(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-background">
-      <div
-        className="absolute inset-0 opacity-10 bg-cover bg-center auth-bg-image"
-      />
+      <div className="absolute inset-0 opacity-10 bg-cover bg-center auth-bg-image" />
+      
+      {/* Main Auth Card */}
       <Card className="w-full max-w-md relative z-10">
         <CardHeader className="text-center space-y-4">
           <img src={`${import.meta.env.BASE_URL}favicon.png`} alt="SMCF SACCO" className="mx-auto w-16 h-16 rounded-xl" />
@@ -141,6 +232,85 @@ export default function Auth() {
           </Tabs>
         </CardContent>
       </Card>
+
+      {/* Email Verification Modal */}
+      {showVerificationModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <Card className="w-full max-w-md">
+            <CardHeader className="text-center space-y-2">
+              <div className="flex justify-center mb-2">
+                <div className="bg-blue-100 p-3 rounded-full">
+                  <Mail className="w-6 h-6 text-blue-600" />
+                </div>
+              </div>
+              <CardTitle>Verify Your Email</CardTitle>
+              <CardDescription>
+                We sent a verification code to<br />
+                <span className="font-semibold text-foreground">{verificationEmail}</span>
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <form onSubmit={handleVerifyEmail} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="verify-token">Verification Code</Label>
+                  <Input
+                    id="verify-token"
+                    type="text"
+                    placeholder="Paste the code from your email"
+                    value={verificationToken}
+                    onChange={(e) => setVerificationToken(e.target.value)}
+                    disabled={tokenFromUrl ? true : false}
+                  />
+                  {tokenFromUrl && (
+                    <p className="text-xs text-green-600 flex items-center gap-1">
+                      <CheckCircle2 className="w-4 h-4" />
+                      Code from email detected
+                    </p>
+                  )}
+                </div>
+
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={verifyingEmail || !verificationToken.trim()}
+                >
+                  {verifyingEmail && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Verify Email
+                </Button>
+              </form>
+
+              <div className="border-t pt-4">
+                <p className="text-sm text-muted-foreground text-center mb-3">
+                  Didn't receive the code?
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={handleResendVerificationEmail}
+                  disabled={resendingEmail}
+                >
+                  {resendingEmail && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Resend Code
+                </Button>
+              </div>
+
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full"
+                onClick={() => {
+                  setShowVerificationModal(false);
+                  setVerificationToken("");
+                  setVerificationEmail("");
+                }}
+              >
+                Cancel
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

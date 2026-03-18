@@ -4,6 +4,11 @@ import jwt from 'jsonwebtoken';
 import { body, validationResult } from 'express-validator';
 import User from '../models/User';
 import { protect, AuthRequest } from '../middleware/auth';
+import { 
+  generateVerificationToken, 
+  sendVerificationEmail,
+  verifyEmailToken
+} from '../services/emailService';
 
 const router = Router();
 
@@ -17,7 +22,7 @@ const generateToken = (id: string): string => {
 };
 
 // @route   POST /api/auth/register
-// @desc    Register a new user
+// @desc    Register a new user and send verification email
 // @access  Public
 router.post(
   '/register',
@@ -51,27 +56,44 @@ router.post(
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(password, salt);
 
+      // Generate verification token
+      const { token: verificationToken, hash: tokenHash, expiresIn } = generateVerificationToken();
+
       // Create user
       const user = await User.create({
         email,
         password: hashedPassword,
         fullName,
-        roles: ['member'] // Default role
+        roles: ['member'],
+        isEmailVerified: false,
+        emailVerificationToken: tokenHash,
+        emailVerificationExpires: expiresIn
       });
 
-      // Generate token
-      const token = generateToken(user._id.toString());
+      // Send verification email
+      const emailSent = await sendVerificationEmail(
+        user.email,
+        user.fullName || user.email,
+        verificationToken
+      );
+
+      if (!emailSent.success) {
+        console.warn('Failed to send verification email:', emailSent.error);
+        // Continue anyway - user can request resend
+      }
 
       res.status(201).json({
         success: true,
+        message: 'Account created! Please check your email to verify your address.',
         data: {
-          token,
           user: {
             id: user._id,
             email: user.email,
             fullName: user.fullName,
-            roles: user.roles
-          }
+            roles: user.roles,
+            isEmailVerified: user.isEmailVerified
+          },
+          requiresEmailVerification: true
         }
       });
     } catch (error) {
@@ -119,6 +141,16 @@ router.post(
         });
       }
 
+      // Check if email is verified
+      if (!user.isEmailVerified) {
+        return res.status(403).json({
+          success: false,
+          message: 'Please verify your email before logging in',
+          requiresEmailVerification: true,
+          email: user.email
+        });
+      }
+
       // Generate token
       const token = generateToken(user._id.toString());
 
@@ -130,7 +162,8 @@ router.post(
             id: user._id,
             email: user.email,
             fullName: user.fullName,
-            roles: user.roles
+            roles: user.roles,
+            isEmailVerified: user.isEmailVerified
           }
         }
       });
@@ -140,7 +173,131 @@ router.post(
   }
 );
 
-// @route   GET /api/auth/me
+// @route   POST /api/auth/verify-email
+// @desc    Verify email address with token
+// @access  Public
+router.post(
+  '/verify-email',
+  [body('token').exists().withMessage('Verification token is required')],
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          errors: errors.array()
+        });
+      }
+
+      const { token } = req.body;
+
+      // Hash the token to compare with stored hash
+      const tokenHash = verifyEmailToken(token);
+
+      // Find user with this verification token
+      const user = await User.findOne({
+        emailVerificationToken: tokenHash,
+        emailVerificationExpires: { $gt: new Date() }
+      }).select('+emailVerificationToken +emailVerificationExpires');
+
+      if (!user) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid or expired verification token'
+        });
+      }
+
+      // Mark email as verified
+      user.isEmailVerified = true;
+      user.emailVerificationToken = undefined;
+      user.emailVerificationExpires = undefined;
+      await user.save();
+
+      res.json({
+        success: true,
+        message: 'Email verified successfully! You can now log in.',
+        data: {
+          user: {
+            id: user._id,
+            email: user.email,
+            fullName: user.fullName,
+            isEmailVerified: user.isEmailVerified
+          }
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// @route   POST /api/auth/resend-verification-email
+// @desc    Resend verification email
+// @access  Public
+router.post(
+  '/resend-verification-email',
+  [body('email').isEmail().withMessage('Please provide a valid email')],
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          errors: errors.array()
+        });
+      }
+
+      const { email } = req.body;
+
+      // Find user
+      const user = await User.findOne({ email });
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found with this email'
+        });
+      }
+
+      // Check if already verified
+      if (user.isEmailVerified) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email is already verified'
+        });
+      }
+
+      // Generate new verification token
+      const { token: verificationToken, hash: tokenHash, expiresIn } = generateVerificationToken();
+
+      // Update user with new token
+      user.emailVerificationToken = tokenHash;
+      user.emailVerificationExpires = expiresIn;
+      await user.save();
+
+      // Send verification email
+      const emailSent = await sendVerificationEmail(
+        user.email,
+        user.fullName || user.email,
+        verificationToken
+      );
+
+      if (!emailSent.success) {
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to send verification email'
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'Verification email sent! Please check your inbox.'
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 // @desc    Get current user
 // @access  Private
 router.get('/me', protect, async (req: AuthRequest, res, next) => {
