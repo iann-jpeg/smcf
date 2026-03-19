@@ -2,7 +2,7 @@ import { useMembers, useDeleteMember, useCreateMember } from "@/hooks/useMembers
 import { useAuth } from "@/hooks/useAuth";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,7 +27,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Search, UserPlus, Trash2 } from "lucide-react";
+import { Search, UserPlus, Trash2, Wallet, Landmark, Activity, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -43,6 +43,48 @@ function statusVariant(status: string) {
   if (status === "active") return "default" as const;
   if (status === "suspended") return "destructive" as const;
   return "secondary" as const;
+}
+
+function formatKES(value: number) {
+  return `KES ${Number(value || 0).toLocaleString()}`;
+}
+
+function barHeightClass(value: number, max: number) {
+  if (max <= 0) return "h-3";
+  const ratio = Math.max(0, Math.min(1, value / max));
+  if (ratio >= 0.9) return "h-9";
+  if (ratio >= 0.75) return "h-8";
+  if (ratio >= 0.6) return "h-7";
+  if (ratio >= 0.45) return "h-6";
+  if (ratio >= 0.3) return "h-5";
+  if (ratio >= 0.15) return "h-4";
+  return "h-3";
+}
+
+function buildMemberReport(member: any) {
+  const shares = Number(member.shares || 0);
+  const savings = Number(member.savings || 0);
+  const loan = Number(member.loan_balance || 0);
+  const risk = Number(member.risk_score ?? 50);
+
+  const tags: Array<{ label: string; className: string }> = [];
+
+  if (member.status !== "active") {
+    tags.push({ label: "Needs Attention", className: "bg-amber-100 text-amber-800 border-amber-300" });
+  }
+  if (loan > shares + savings) {
+    tags.push({ label: "Overexposed", className: "bg-rose-100 text-rose-800 border-rose-300" });
+  } else if (savings > loan * 1.2 && risk >= 70) {
+    tags.push({ label: "Stable", className: "bg-emerald-100 text-emerald-800 border-emerald-300" });
+  } else if (savings > shares * 1.4) {
+    tags.push({ label: "Strong Saver", className: "bg-sky-100 text-sky-800 border-sky-300" });
+  }
+
+  if (tags.length === 0) {
+    tags.push({ label: "Balanced", className: "bg-slate-100 text-slate-700 border-slate-300" });
+  }
+
+  return tags.slice(0, 2);
 }
 
 export default function Members() {
@@ -118,28 +160,102 @@ export default function Members() {
     }
   };
 
-  const filtered = members.filter((m: any) =>
-    m.name.toLowerCase().includes(search.toLowerCase()) || m.member_id.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = members.filter((m: any) => {
+    const term = search.toLowerCase();
+    const name = String(m.name || "").toLowerCase();
+    const memberIdValue = String(m.member_id || "").toLowerCase();
+    return name.includes(term) || memberIdValue.includes(term);
+  });
+
+  const totalShares = members.reduce((sum: number, m: any) => sum + Number(m.shares || 0), 0);
+  const totalSavings = members.reduce((sum: number, m: any) => sum + Number(m.savings || 0), 0);
+  const totalLoanBalance = members.reduce((sum: number, m: any) => sum + Number(m.loan_balance || 0), 0);
+  const avgRiskScore = members.length
+    ? Math.round(members.reduce((sum: number, m: any) => sum + Number(m.risk_score ?? 50), 0) / members.length)
+    : 0;
+  const activeCount = members.filter((m: any) => m.status === "active").length;
+
+  const maxShares = Math.max(...members.map((m: any) => Number(m.shares || 0)), 0);
+  const maxSavings = Math.max(...members.map((m: any) => Number(m.savings || 0)), 0);
+  const maxLoans = Math.max(...members.map((m: any) => Number(m.loan_balance || 0)), 0);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-heading font-bold">Members</h1>
-          <p className="text-muted-foreground text-sm">{members.length} registered members</p>
+          <p className="text-muted-foreground text-sm">Corporate member portfolio overview for {members.length} registered members</p>
         </div>
         <Button className="gap-2" onClick={openAdd}>
           <UserPlus className="h-4 w-4" /> Add Member
         </Button>
       </div>
 
-      <Card>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <Card className="border-slate-200 bg-gradient-to-br from-slate-50 via-white to-slate-100">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-semibold">Portfolio Savings</CardTitle>
+              <Wallet className="h-4 w-4 text-sky-600" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-xl font-semibold tracking-tight">{formatKES(totalSavings)}</p>
+            <p className="text-xs text-muted-foreground mt-1">Across all member accounts</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 bg-gradient-to-br from-slate-50 via-white to-slate-100">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-semibold">Portfolio Shares</CardTitle>
+              <Landmark className="h-4 w-4 text-indigo-600" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-xl font-semibold tracking-tight">{formatKES(totalShares)}</p>
+            <p className="text-xs text-muted-foreground mt-1">Capital participation level</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 bg-gradient-to-br from-slate-50 via-white to-slate-100">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-semibold">Outstanding Loans</CardTitle>
+              <Activity className="h-4 w-4 text-rose-600" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-xl font-semibold tracking-tight">{formatKES(totalLoanBalance)}</p>
+            <p className="text-xs text-muted-foreground mt-1">Current portfolio exposure</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 bg-gradient-to-br from-slate-50 via-white to-slate-100">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-semibold">Portfolio Health</CardTitle>
+              <ShieldCheck className="h-4 w-4 text-emerald-600" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-xl font-semibold tracking-tight">{avgRiskScore}/100</p>
+            <p className="text-xs text-muted-foreground mt-1">{activeCount} active members</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="overflow-hidden border-slate-200 shadow-sm">
         <CardHeader className="pb-3">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search members..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Input placeholder="Search by name or member ID..." className="pl-9 bg-white" value={search} onChange={(e) => setSearch(e.target.value)} />
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-sky-500" />Savings</span>
+              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-indigo-500" />Shares</span>
+              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-rose-500" />Loans</span>
             </div>
           </div>
         </CardHeader>
@@ -151,15 +267,18 @@ export default function Members() {
           ) : filtered.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">No members found. Add your first member to get started.</p>
           ) : (
+            <div className="rounded-xl border border-slate-200 bg-white overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow>
+                <TableRow className="bg-slate-50/80">
                   <TableHead>Member ID</TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Phone</TableHead>
                   <TableHead className="text-right">Shares (KES)</TableHead>
                   <TableHead className="text-right">Savings (KES)</TableHead>
                   <TableHead className="text-right">Loan Bal. (KES)</TableHead>
+                  <TableHead className="text-center">Mini Analytics</TableHead>
+                  <TableHead>Member Report</TableHead>
                   <TableHead className="text-center">Risk Score</TableHead>
                   <TableHead>Status</TableHead>
                   {isAdmin && <TableHead className="w-[60px]"></TableHead>}
@@ -167,18 +286,42 @@ export default function Members() {
               </TableHeader>
               <TableBody>
                 {filtered.map((m: any) => (
-                  <TableRow key={m.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/members/${m.id}`)}>
+                  <TableRow key={m.id} className="cursor-pointer hover:bg-slate-50/80 transition-colors" onClick={() => navigate(`/members/${m.id}`)}>
                     <TableCell className="font-mono text-xs">{m.member_id}</TableCell>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
                         <MemberAvatar name={m.name} photo={m.profile_photo} size="sm" />
-                        {m.name}
+                        <div>
+                          <p className="font-medium leading-none">{m.name}</p>
+                          <p className="text-[11px] text-muted-foreground mt-1">{String(m.email || "No email")}</p>
+                        </div>
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm">{m.phone}</TableCell>
+                    <TableCell className="text-sm">{String(m.phone || "—")}</TableCell>
                     <TableCell className="text-right">{Number(m.shares).toLocaleString()}</TableCell>
                     <TableCell className="text-right">{Number(m.savings).toLocaleString()}</TableCell>
                     <TableCell className="text-right">{Number(m.loan_balance).toLocaleString()}</TableCell>
+                    <TableCell className="text-center">
+                      <div className="mx-auto w-[92px] rounded-md border border-slate-200 bg-slate-50/80 px-2 py-1.5">
+                        <div className="flex items-end justify-center gap-1.5 h-10">
+                          <div className={cn("w-2 rounded-sm bg-indigo-500", barHeightClass(Number(m.shares || 0), maxShares))} />
+                          <div className={cn("w-2 rounded-sm bg-sky-500", barHeightClass(Number(m.savings || 0), maxSavings))} />
+                          <div className={cn("w-2 rounded-sm bg-rose-500", barHeightClass(Number(m.loan_balance || 0), maxLoans))} />
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1.5">
+                        {buildMemberReport(m).map((tag) => (
+                          <span
+                            key={`${m.id}-${tag.label}`}
+                            className={cn("inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-semibold", tag.className)}
+                          >
+                            {tag.label}
+                          </span>
+                        ))}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-center">
                       <span className={cn("font-bold", riskColor(m.risk_score ?? 50))}>{m.risk_score ?? 50}</span>
                     </TableCell>
@@ -201,6 +344,7 @@ export default function Members() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>
