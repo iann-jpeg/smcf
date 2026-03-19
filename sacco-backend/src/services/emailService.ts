@@ -2,6 +2,7 @@ import { Resend } from 'resend';
 import crypto from 'crypto';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
+const DEFAULT_FROM_EMAIL = 'noreply@smcf.app';
 
 /**
  * Generate a verification token
@@ -26,7 +27,7 @@ export const sendVerificationEmail = async (
     const verificationLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify-email?token=${verificationToken}`;
 
     const result = await resend.emails.send({
-      from: 'noreply@smcfsacco.co.ke',
+      from: process.env.RESEND_FROM_EMAIL || DEFAULT_FROM_EMAIL,
       to: email,
       subject: 'Verify Your Email Address - SMCF SACCO',
       html: `
