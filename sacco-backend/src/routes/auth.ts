@@ -167,8 +167,12 @@ router.post(
         });
       }
 
-      // Check if email is verified
-      if (!user.isEmailVerified) {
+      // Admin accounts can sign in without verification; other roles must verify after signup.
+      const normalizedRoles = (Array.isArray(user.roles) ? user.roles : [user.roles])
+        .filter(Boolean)
+        .map((role: any) => String(role).toLowerCase());
+      const isAdminUser = normalizedRoles.includes('admin');
+      if (!user.isEmailVerified && !isAdminUser) {
         return res.status(403).json({
           success: false,
           message: 'Please verify your email before logging in',
@@ -215,7 +219,14 @@ router.post(
         });
       }
 
-      const { token } = req.body;
+      const rawToken = String(req.body.token || '');
+      const token = rawToken.trim().replace(/\s+/g, '');
+      if (!token) {
+        return res.status(400).json({
+          success: false,
+          message: 'Verification token is required'
+        });
+      }
 
       // Hash the token to compare with stored hash
       const tokenHash = verifyEmailToken(token);

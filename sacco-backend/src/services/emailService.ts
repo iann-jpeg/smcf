@@ -8,7 +8,7 @@ const DEFAULT_FROM_EMAIL = 'noreply@smcf.app';
  * Generate a verification token
  */
 export const generateVerificationToken = (): { token: string; hash: string; expiresIn: Date } => {
-  const token = crypto.randomBytes(32).toString('hex');
+  const token = crypto.randomInt(100000, 1000000).toString();
   const hash = crypto.createHash('sha256').update(token).digest('hex');
   const expiresIn = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
   
@@ -56,11 +56,12 @@ export const sendVerificationEmail = async (
             </a>
           </p>
 
-          <p style="color: #666; font-size: 12px;">
-            If your app asks for a verification code, use this token:
-            <br/>
-            <strong style="word-break: break-all;">${verificationToken}</strong>
-          </p>
+          <div style="margin: 16px 0; padding: 14px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; text-align: center;">
+            <p style="margin: 0 0 6px; color: #334155; font-size: 12px; letter-spacing: 0.03em;">VERIFICATION CODE</p>
+            <p style="margin: 0; color: #0f172a; font-size: 28px; font-weight: 700; letter-spacing: 0.2em; font-family: 'Courier New', monospace;">
+              ${verificationToken}
+            </p>
+          </div>
           
           <p style="color: #999; font-size: 12px; margin-top: 20px; border-top: 1px solid #ddd; padding-top: 20px;">
             This link will expire in 24 hours. If you didn't create this account, please ignore this email.
