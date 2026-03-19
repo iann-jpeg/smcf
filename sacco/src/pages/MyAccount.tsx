@@ -25,8 +25,10 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Progress } from "@/components/ui/progress";
 import { StatCard } from "@/components/StatCard";
-import { Wallet, Landmark, TrendingUp, CreditCard, CalendarCheck, PlusCircle, User, Download, Bell, CheckCheck, Save, Lock, FileText, CalendarIcon, Sparkles, Shield, ShieldCheck, ShieldX, Clock, ArrowRightLeft, Camera, Upload, Eye, Trash2 } from "lucide-react";
+import { Wallet, Landmark, TrendingUp, CreditCard, CalendarCheck, PlusCircle, User, Download, Bell, CheckCheck, Save, Lock, FileText, CalendarIcon, Sparkles, Shield, ShieldCheck, ShieldX, Clock, ArrowRightLeft, Camera, Upload, Eye, Trash2, AlertCircle } from "lucide-react";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { Separator } from "@/components/ui/separator";
 import { exportMyTransactions, exportMyRepayments, exportMyLoans, exportMyStatement, downloadMembershipForm } from "@/lib/pdf-export";
@@ -188,6 +190,24 @@ export default function MyAccount() {
     occupation: (member as any)?.occupation ?? "",
     employer: (member as any)?.employer ?? "",
   };
+
+  const profileCompletionItems = [
+    { label: "Profile photo", complete: Boolean(member?.profile_photo) },
+    { label: "Full name", complete: Boolean(currentExt.name.trim()) },
+    { label: "National ID / Passport", complete: Boolean(currentExt.nationalId.trim()) },
+    { label: "Phone number", complete: Boolean(currentPhone.trim()) },
+    { label: "Email address", complete: Boolean(currentEmail.trim()) },
+    { label: "Date of birth", complete: Boolean(currentExt.dateOfBirth) },
+    { label: "Gender", complete: Boolean(currentExt.gender) },
+    { label: "County / Physical address", complete: Boolean(currentExt.county.trim()) },
+    { label: "Occupation", complete: Boolean(currentExt.occupation.trim()) },
+    { label: "Employer / Business name", complete: Boolean(currentExt.employer.trim()) },
+  ];
+  const completedProfileFields = profileCompletionItems.filter((item) => item.complete).length;
+  const profileCompletionPercentage = Math.round((completedProfileFields / profileCompletionItems.length) * 100);
+  const missingProfileFields = profileCompletionItems
+    .filter((item) => !item.complete)
+    .map((item) => item.label);
 
   const handleExtProfileSave = async () => {
     if (!currentExt.name.trim()) { toast.error("Full name is required"); return; }
@@ -745,6 +765,32 @@ export default function MyAccount() {
         {/* Profile */}
         <TabsContent value="profile">
           <div className="space-y-6">
+            <Card className="border-primary/30 bg-primary/5">
+              <CardHeader className="pb-3">
+                <CardTitle className="font-heading text-base flex items-center justify-between gap-3">
+                  <span>Profile Completion</span>
+                  <Badge variant={profileCompletionPercentage === 100 ? "default" : "outline"}>
+                    {profileCompletionPercentage}%
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Progress value={profileCompletionPercentage} className="h-2.5" />
+                <p className="text-sm text-muted-foreground">
+                  {completedProfileFields} of {profileCompletionItems.length} required profile details completed.
+                </p>
+                {profileCompletionPercentage < 100 && (
+                  <Alert className="border-amber-300/70 bg-amber-50 text-amber-900">
+                    <AlertCircle className="h-4 w-4 text-amber-700" />
+                    <AlertTitle>Finish updating your profile</AlertTitle>
+                    <AlertDescription>
+                      Complete the remaining details to keep your member account accurate.
+                      {missingProfileFields.length > 0 ? ` Missing: ${missingProfileFields.join(", ")}.` : ""}
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </CardContent>
+            </Card>
 
             {/* ── Personal Information ─────────────────────────────── */}
             <Card>
