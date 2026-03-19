@@ -126,6 +126,14 @@ function AuthRoute() {
   );
 }
 
+function VerifyEmailRoute() {
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <Auth />
+    </Suspense>
+  );
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
@@ -136,6 +144,7 @@ const App = () => (
           <BrowserRouter basename={routerBasename}>
             <Routes>
               <Route path="/auth" element={<AuthRoute />} />
+              <Route path="/verify-email" element={<VerifyEmailRoute />} />
               <Route path="/*" element={<ProtectedRoutes />} />
             </Routes>
           </BrowserRouter>

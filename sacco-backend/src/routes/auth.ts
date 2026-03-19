@@ -11,6 +11,24 @@ import {
 } from '../services/emailService';
 
 const router = Router();
+const allowEmailTokenFallback = process.env.ALLOW_EMAIL_TOKEN_FALLBACK !== 'false';
+const resendCooldownSeconds = Math.max(1, Number(process.env.EMAIL_RESEND_COOLDOWN_SECONDS || 60));
+const resendCooldownMs = resendCooldownSeconds * 1000;
+const resendAttemptByEmail = new Map<string, number>();
+
+const getRetryAfterSeconds = (email: string): number => {
+  const lastAttemptAt = resendAttemptByEmail.get(email);
+  if (!lastAttemptAt) {
+    return 0;
+  }
+
+  const remainingMs = resendCooldownMs - (Date.now() - lastAttemptAt);
+  return remainingMs > 0 ? Math.ceil(remainingMs / 1000) : 0;
+};
+
+const markResendAttempt = (email: string): void => {
+  resendAttemptByEmail.set(email, Date.now());
+};
 
 // Generate JWT Token
 const generateToken = (id: string): string => {
@@ -42,9 +60,10 @@ router.post(
       }
 
       const { email, password, fullName } = req.body;
+      const normalizedEmail = String(email).toLowerCase().trim();
 
       // Check if user already exists
-      const existingUser = await User.findOne({ email });
+      const existingUser = await User.findOne({ email: normalizedEmail });
       if (existingUser) {
         return res.status(400).json({
           success: false,
@@ -61,7 +80,7 @@ router.post(
 
       // Create user
       const user = await User.create({
-        email,
+        email: normalizedEmail,
         password: hashedPassword,
         fullName,
         roles: ['member'],
@@ -78,13 +97,19 @@ router.post(
       );
 
       if (!emailSent.success) {
-        console.warn('Failed to send verification email:', emailSent.error);
-        // Continue anyway - user can request resend
+        if (!allowEmailTokenFallback) {
+          return res.status(503).json({
+            success: false,
+            message: `Account created, but verification email could not be sent: ${emailSent.error || 'Email service unavailable'}`
+          });
+        }
       }
 
       res.status(201).json({
         success: true,
-        message: 'Account created! Please check your email to verify your address.',
+        message: emailSent.success
+          ? 'Account created! Please check your email to verify your address.'
+          : 'Account created! Email delivery is unavailable, use the one-time code shown below to verify.',
         data: {
           user: {
             id: user._id,
@@ -93,7 +118,8 @@ router.post(
             roles: user.roles,
             isEmailVerified: user.isEmailVerified
           },
-          requiresEmailVerification: true
+          requiresEmailVerification: true,
+          verificationToken: !emailSent.success && allowEmailTokenFallback ? verificationToken : undefined
         }
       });
     } catch (error) {
@@ -247,10 +273,10 @@ router.post(
         });
       }
 
-      const { email } = req.body;
+      const normalizedEmail = String(req.body.email).toLowerCase().trim();
 
       // Find user
-      const user = await User.findOne({ email });
+      const user = await User.findOne({ email: normalizedEmail });
       if (!user) {
         return res.status(404).json({
           success: false,
@@ -266,7 +292,18 @@ router.post(
         });
       }
 
+      const retryAfterSeconds = getRetryAfterSeconds(normalizedEmail);
+      if (retryAfterSeconds > 0) {
+        return res.status(429).json({
+          success: false,
+          message: `Please wait ${retryAfterSeconds} second(s) before requesting another code.`,
+          retryAfterSeconds,
+        });
+      }
+
       // Generate new verification token
+  const prevToken = user.emailVerificationToken;
+  const prevExpiry = user.emailVerificationExpires;
       const { token: verificationToken, hash: tokenHash, expiresIn } = generateVerificationToken();
 
       // Update user with new token
@@ -282,12 +319,29 @@ router.post(
       );
 
       if (!emailSent.success) {
-        return res.status(500).json({
+        if (allowEmailTokenFallback) {
+          markResendAttempt(normalizedEmail);
+          return res.json({
+            success: true,
+            message: 'Email delivery is unavailable. Use the one-time verification code shown below.',
+            data: {
+              verificationToken,
+            },
+          });
+        }
+
+        // Keep old token valid when email provider is down / misconfigured.
+        user.emailVerificationToken = prevToken;
+        user.emailVerificationExpires = prevExpiry;
+        await user.save();
+
+        return res.status(503).json({
           success: false,
-          message: 'Failed to send verification email'
+          message: `Failed to send verification email: ${emailSent.error || 'Email service unavailable'}`
         });
       }
 
+      markResendAttempt(normalizedEmail);
       res.json({
         success: true,
         message: 'Verification email sent! Please check your inbox.'

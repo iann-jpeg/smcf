@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { storeAuth } from "@/hooks/useAuth";
 
 const API_URL = import.meta.env.VITE_SACCO_API_URL || "http://localhost:5000/api";
+const DEFAULT_RESEND_COOLDOWN_SECONDS = 60;
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -25,8 +26,10 @@ export default function Auth() {
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [verificationEmail, setVerificationEmail] = useState("");
   const [verificationToken, setVerificationToken] = useState("");
+  const [fallbackCode, setFallbackCode] = useState("");
   const [verifyingEmail, setVerifyingEmail] = useState(false);
   const [resendingEmail, setResendingEmail] = useState(false);
+  const [resendCooldownSeconds, setResendCooldownSeconds] = useState(0);
 
   // Check if there's a verification token in URL
   const tokenFromUrl = searchParams.get('token');
@@ -34,6 +37,20 @@ export default function Auth() {
     setVerificationToken(tokenFromUrl);
     setShowVerificationModal(true);
   }
+
+  useEffect(() => {
+    if (resendCooldownSeconds <= 0) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setResendCooldownSeconds((current) => (current > 0 ? current - 1 : 0));
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [resendCooldownSeconds]);
 
   // Use backend REST API for login
   const handleLogin = async (e: React.FormEvent) => {
@@ -83,10 +100,17 @@ export default function Auth() {
         toast.error(data.message || "Signup failed");
       } else {
         // Show verification modal
-        if (data.requiresEmailVerification) {
-          setVerificationEmail(email);
+        if (data.requiresEmailVerification || data?.data?.requiresEmailVerification) {
+          setVerificationEmail((data?.data?.user?.email || email || "").trim());
+          const tokenFromApi = String(data?.data?.verificationToken || data?.verificationToken || "").trim();
+          if (tokenFromApi) {
+            setFallbackCode(tokenFromApi);
+            setVerificationToken(tokenFromApi);
+          } else {
+            setFallbackCode("");
+          }
           setShowVerificationModal(true);
-          toast.success("Account created! Please verify your email.");
+          toast.success(data?.message || "Account created! Please verify your email.");
           // Clear form
           setPassword("");
           setFullName("");
@@ -141,6 +165,11 @@ export default function Auth() {
       return;
     }
 
+    if (resendCooldownSeconds > 0) {
+      toast.error(`Please wait ${resendCooldownSeconds}s before requesting another code.`);
+      return;
+    }
+
     setResendingEmail(true);
     try {
       const res = await fetch(`${API_URL}/auth/resend-verification-email`, {
@@ -151,9 +180,25 @@ export default function Auth() {
       const data = await res.json();
       
       if (!res.ok) {
+        if (res.status === 429) {
+          const retryAfter = Math.max(1, Number(data?.retryAfterSeconds || DEFAULT_RESEND_COOLDOWN_SECONDS));
+          setResendCooldownSeconds(retryAfter);
+          toast.error(data.message || `Please wait ${retryAfter}s before requesting another code.`);
+          return;
+        }
+
         toast.error(data.message || "Failed to resend email");
       } else {
-        toast.success("Verification email sent! Check your inbox.");
+        setResendCooldownSeconds(DEFAULT_RESEND_COOLDOWN_SECONDS);
+        const tokenFromApi = String(data?.data?.verificationToken || data?.verificationToken || "").trim();
+        if (tokenFromApi) {
+          setFallbackCode(tokenFromApi);
+          setVerificationToken(tokenFromApi);
+          toast.success("Email service unavailable. Use the one-time code shown in the dialog.");
+        } else {
+          setFallbackCode("");
+          toast.success("Verification email sent! Check your inbox.");
+        }
       }
     } catch (error) {
       toast.error("Failed to resend – check your connection");
@@ -267,6 +312,11 @@ export default function Auth() {
                       Code from email detected
                     </p>
                   )}
+                  {fallbackCode && (
+                    <p className="text-xs text-amber-600">
+                      Email delivery is currently unavailable. Use this one-time code: <span className="font-mono font-semibold">{fallbackCode}</span>
+                    </p>
+                  )}
                 </div>
 
                 <Button
@@ -288,11 +338,16 @@ export default function Auth() {
                   variant="outline"
                   className="w-full"
                   onClick={handleResendVerificationEmail}
-                  disabled={resendingEmail}
+                  disabled={resendingEmail || resendCooldownSeconds > 0}
                 >
                   {resendingEmail && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Resend Code
+                  {resendCooldownSeconds > 0 ? `Resend in ${resendCooldownSeconds}s` : "Resend Code"}
                 </Button>
+                {resendCooldownSeconds > 0 && (
+                  <p className="text-xs text-center text-muted-foreground mt-2">
+                    You can request another code when the timer ends.
+                  </p>
+                )}
               </div>
 
               <Button
@@ -303,6 +358,7 @@ export default function Auth() {
                   setShowVerificationModal(false);
                   setVerificationToken("");
                   setVerificationEmail("");
+                  setFallbackCode("");
                 }}
               >
                 Cancel

@@ -24,12 +24,13 @@ export const sendVerificationEmail = async (
   verificationToken: string
 ): Promise<{ success: boolean; error?: string }> => {
   try {
-    const verificationLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify-email?token=${verificationToken}`;
+    const verificationLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/auth?token=${verificationToken}`;
 
     const result = await resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL || DEFAULT_FROM_EMAIL,
       to: email,
       subject: 'Verify Your Email Address - SMCF SACCO',
+      text: `Welcome to SMCF SACCO, ${fullName}!\n\nUse this verification code: ${verificationToken}\n\nVerification link: ${verificationLink}\n\nThis code/link expires in 24 hours.`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #1a3a52;">Welcome to SMCF SACCO, ${fullName}!</h2>
@@ -53,6 +54,12 @@ export const sendVerificationEmail = async (
             <a href="${verificationLink}" style="color: #1a3a52; text-decoration: none; word-break: break-all;">
               ${verificationLink}
             </a>
+          </p>
+
+          <p style="color: #666; font-size: 12px;">
+            If your app asks for a verification code, use this token:
+            <br/>
+            <strong style="word-break: break-all;">${verificationToken}</strong>
           </p>
           
           <p style="color: #999; font-size: 12px; margin-top: 20px; border-top: 1px solid #ddd; padding-top: 20px;">
