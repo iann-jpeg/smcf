@@ -49,6 +49,10 @@ function formatKES(value: number) {
   return `KES ${Number(value || 0).toLocaleString()}`;
 }
 
+function formatNumber(value: any) {
+  return Number(value || 0).toLocaleString();
+}
+
 function barHeightClass(value: number, max: number) {
   if (max <= 0) return "h-3";
   const ratio = Math.max(0, Math.min(1, value / max));
@@ -298,9 +302,9 @@ export default function Members() {
                       </div>
                     </TableCell>
                     <TableCell className="text-sm">{String(m.phone || "—")}</TableCell>
-                    <TableCell className="text-right">{Number(m.shares).toLocaleString()}</TableCell>
-                    <TableCell className="text-right">{Number(m.savings).toLocaleString()}</TableCell>
-                    <TableCell className="text-right">{Number(m.loan_balance).toLocaleString()}</TableCell>
+                    <TableCell className="text-right font-semibold text-indigo-700">{formatNumber(m.shares)}</TableCell>
+                    <TableCell className="text-right">{formatNumber(m.savings)}</TableCell>
+                    <TableCell className="text-right">{formatNumber(m.loan_balance)}</TableCell>
                     <TableCell className="text-center">
                       <div className="mx-auto w-[92px] rounded-md border border-slate-200 bg-slate-50/80 px-2 py-1.5">
                         <div className="flex items-end justify-center gap-1.5 h-10">
@@ -312,6 +316,9 @@ export default function Members() {
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1.5">
+                        <span className="inline-flex items-center rounded-md border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-800">
+                          Shares: {formatKES(Number(m.shares || 0))}
+                        </span>
                         {buildMemberReport(m).map((tag) => (
                           <span
                             key={`${m.id}-${tag.label}`}

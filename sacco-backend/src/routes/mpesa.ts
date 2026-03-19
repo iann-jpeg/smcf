@@ -62,11 +62,26 @@ interface PendingDeposit {
 
 const pendingDeposits = new Map<string, PendingDeposit>();
 
+interface PendingSharePurchase {
+  memberId: string;
+  amount: number;
+  phone: string;
+  status: 'pending' | 'success' | 'failed';
+  mpesaRef?: string;
+  resultDesc?: string;
+  createdAt: number;
+}
+
+const pendingSharePurchases = new Map<string, PendingSharePurchase>();
+
 // Purge stale entries every 10 min
 setInterval(() => {
   const cutoff = Date.now() - 10 * 60 * 1000;
   for (const [k, v] of pendingDeposits.entries()) {
     if (v.createdAt < cutoff) pendingDeposits.delete(k);
+  }
+  for (const [k, v] of pendingSharePurchases.entries()) {
+    if (v.createdAt < cutoff) pendingSharePurchases.delete(k);
   }
 }, 10 * 60 * 1000);
 
@@ -134,7 +149,7 @@ async function queryLipiaStatus(checkoutRequestId: string): Promise<{
  * Updates in-memory Map so the frontend's /status poll picks it up immediately.
  */
 async function pollSACCOPayment(
-  type: 'deposit' | 'loan_repay',
+  type: 'deposit' | 'loan_repay' | 'share_purchase',
   checkoutRequestId: string,
   pendingTxnId: string,   // DB Transaction._id (string) of the pending record
   memberId: string,
@@ -153,6 +168,9 @@ async function pollSACCOPayment(
       if (type === 'deposit') {
         const d = pendingDeposits.get(checkoutRequestId);
         if (d) { d.status = 'failed'; d.resultDesc = 'Payment timed out'; pendingDeposits.set(checkoutRequestId, d); }
+      } else if (type === 'share_purchase') {
+        const s = pendingSharePurchases.get(checkoutRequestId);
+        if (s) { s.status = 'failed'; s.resultDesc = 'Payment timed out'; pendingSharePurchases.set(checkoutRequestId, s); }
       } else {
         const r = pendingRepayments.get(checkoutRequestId);
         if (r) { r.status = 'failed'; r.resultDesc = 'Payment timed out'; pendingRepayments.set(checkoutRequestId, r); }
@@ -179,6 +197,19 @@ async function pollSACCOPayment(
           const d = pendingDeposits.get(checkoutRequestId);
           if (d) { d.status = 'success'; d.mpesaRef = mpesaReceiptNumber; d.amount = confirmedAmount; pendingDeposits.set(checkoutRequestId, d); }
 
+        } else if (type === 'share_purchase') {
+          await Transaction.findByIdAndUpdate(pendingTxnId, {
+            status: 'completed',
+            mpesaRef: mpesaReceiptNumber,
+            amount: confirmedAmount,
+            description: `M-Pesa Share Purchase — Ref: ${mpesaReceiptNumber} — ${phone}`,
+            processedAt: new Date(),
+            depositProcessed: true,
+          });
+          await Member.findByIdAndUpdate(memberId, { $inc: { shares: confirmedAmount } });
+          const s = pendingSharePurchases.get(checkoutRequestId);
+          if (s) { s.status = 'success'; s.mpesaRef = mpesaReceiptNumber; s.amount = confirmedAmount; pendingSharePurchases.set(checkoutRequestId, s); }
+
         } else if (type === 'loan_repay' && loanId) {
           // Delete placeholder, processRepayment creates the real transaction
           await Transaction.findByIdAndDelete(pendingTxnId);
@@ -195,6 +226,9 @@ async function pollSACCOPayment(
         if (type === 'deposit') {
           const d = pendingDeposits.get(checkoutRequestId);
           if (d) { d.status = 'failed'; d.resultDesc = 'Processing error after payment confirmed'; pendingDeposits.set(checkoutRequestId, d); }
+        } else if (type === 'share_purchase') {
+          const s = pendingSharePurchases.get(checkoutRequestId);
+          if (s) { s.status = 'failed'; s.resultDesc = 'Processing error after payment confirmed'; pendingSharePurchases.set(checkoutRequestId, s); }
         } else {
           const r = pendingRepayments.get(checkoutRequestId);
           if (r) { r.status = 'failed'; r.resultDesc = 'Processing error after payment confirmed'; pendingRepayments.set(checkoutRequestId, r); }
@@ -208,6 +242,9 @@ async function pollSACCOPayment(
       if (type === 'deposit') {
         const d = pendingDeposits.get(checkoutRequestId);
         if (d) { d.status = 'failed'; d.resultDesc = resultDesc || 'Payment cancelled or failed'; pendingDeposits.set(checkoutRequestId, d); }
+      } else if (type === 'share_purchase') {
+        const s = pendingSharePurchases.get(checkoutRequestId);
+        if (s) { s.status = 'failed'; s.resultDesc = resultDesc || 'Payment cancelled or failed'; pendingSharePurchases.set(checkoutRequestId, s); }
       } else {
         const r = pendingRepayments.get(checkoutRequestId);
         if (r) { r.status = 'failed'; r.resultDesc = resultDesc || 'Payment cancelled or failed'; pendingRepayments.set(checkoutRequestId, r); }
@@ -538,6 +575,107 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
   }
 });
 
+// ─── POST /api/mpesa/share-purchase ─────────────────────────────────────────
+// Initiates STK Push for share purchase and records a pending transaction.
+
+router.post('/share-purchase', protect, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { memberId, amount, phone } = req.body;
+
+    if (!memberId) return res.status(400).json({ success: false, message: 'memberId is required' });
+    if (!phone)    return res.status(400).json({ success: false, message: 'Phone number is required' });
+    if (!amount || Number(amount) < 100)
+      return res.status(400).json({ success: false, message: 'Minimum share purchase is KES 100' });
+
+    const mpesaPhone = normalizePhone(phone);
+    const numAmount  = Math.round(Number(amount));
+    const hasCredentials = !!(process.env.LIPIA_API_KEY);
+
+    if (!hasCredentials) {
+      const simId = `SHRSIM-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+      pendingSharePurchases.set(simId, {
+        memberId,
+        amount: numAmount,
+        phone: mpesaPhone,
+        status: 'pending',
+        createdAt: Date.now(),
+      });
+
+      setTimeout(async () => {
+        const s = pendingSharePurchases.get(simId);
+        if (!s || s.status !== 'pending') return;
+        try {
+          const ref = `SHRSIM${Date.now()}`;
+          const txnCount = await Transaction.countDocuments();
+          const txnRef   = `TXN${new Date().getFullYear()}${String(txnCount + 1).padStart(8, '0')}`;
+          await Transaction.create({
+            transactionRef: txnRef,
+            memberId,
+            type: 'share_purchase',
+            amount: numAmount,
+            description: `M-Pesa Share Purchase — Ref: ${ref} — ${mpesaPhone}`,
+            status: 'completed',
+            mpesaRef: ref,
+            createdBy: null,
+          });
+          await Member.findByIdAndUpdate(memberId, { $inc: { shares: numAmount } });
+          s.status = 'success';
+          s.mpesaRef = ref;
+        } catch {
+          s.status = 'failed';
+          s.resultDesc = 'Simulation internal error';
+        }
+        pendingSharePurchases.set(simId, s);
+      }, 5000);
+
+      return res.json({
+        success: true,
+        simulated: true,
+        data: { checkoutRequestId: simId },
+      });
+    }
+
+    const stkData = await sendLipiaSTK(mpesaPhone, numAmount, 'SMCF-SHARES', 'SMCF SACCO Share Purchase');
+    const checkoutRequestId = extractCheckoutRequestId(stkData);
+
+    if (!checkoutRequestId) {
+      return res.status(400).json({
+        success: false,
+        message: stkData.message || stkData.error || 'STK Push failed. Payment service did not return a checkout request ID.',
+      });
+    }
+
+    const txnCount = await Transaction.countDocuments();
+    const txnRef   = `TXN${new Date().getFullYear()}${String(txnCount + 1).padStart(8, '0')}`;
+    const txnDoc   = await Transaction.create({
+      transactionRef: txnRef,
+      memberId,
+      type: 'share_purchase',
+      amount: numAmount,
+      description: `M-Pesa Share Purchase — STK Pending — ${mpesaPhone}`,
+      status: 'pending',
+      checkoutRequestId,
+      createdBy: null,
+    });
+
+    pendingSharePurchases.set(checkoutRequestId, {
+      memberId,
+      amount: numAmount,
+      phone: mpesaPhone,
+      status: 'pending',
+      createdAt: Date.now(),
+    });
+
+    pollSACCOPayment('share_purchase', checkoutRequestId, String(txnDoc._id), memberId, numAmount, mpesaPhone).catch(
+      (err) => console.error('[pollSACCOPayment share-purchase]', err)
+    );
+
+    return res.json({ success: true, data: { checkoutRequestId } });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─── POST /api/mpesa/callback ────────────────────────────────────────────────
 // Safaricom posts the result here. Handles both savings deposits and loan repayments.
 
@@ -569,6 +707,40 @@ router.post('/callback', async (req: Request, res: Response) => {
         deposit.amount   = amt;
       }
       pendingDeposits.set(CheckoutRequestID, deposit);
+      return;
+    }
+
+    // ── Share purchase ───────────────────────────────────────────────────
+    const sharePurchase = pendingSharePurchases.get(CheckoutRequestID);
+    if (sharePurchase) {
+      if (ResultCode !== 0) {
+        sharePurchase.status = 'failed';
+        sharePurchase.resultDesc = ResultDesc || 'Payment cancelled or failed';
+      } else {
+        const amt = paidAmt || sharePurchase.amount;
+        const txn = await Transaction.findOneAndUpdate(
+          { checkoutRequestId: CheckoutRequestID, type: 'share_purchase', status: 'pending' },
+          {
+            status: 'completed',
+            mpesaRef,
+            amount: amt,
+            description: `M-Pesa Share Purchase — Ref: ${mpesaRef} — ${sharePurchase.phone}`,
+            processedAt: new Date(),
+            depositProcessed: true,
+          },
+          { new: true }
+        );
+
+        if (txn) {
+          await Member.findByIdAndUpdate(sharePurchase.memberId, { $inc: { shares: amt } });
+        }
+
+        sharePurchase.status = 'success';
+        sharePurchase.mpesaRef = mpesaRef;
+        sharePurchase.amount = amt;
+      }
+
+      pendingSharePurchases.set(CheckoutRequestID, sharePurchase);
       return;
     }
 
@@ -617,8 +789,21 @@ router.get('/status/:checkoutRequestId', protect, async (req: AuthRequest, res: 
       });
     }
 
+    const sharePurchase = pendingSharePurchases.get(checkoutRequestId);
+    if (sharePurchase) {
+      return res.json({
+        success: true,
+        data: {
+          status:     sharePurchase.status,
+          mpesaRef:   sharePurchase.mpesaRef,
+          amount:     sharePurchase.amount,
+          resultDesc: sharePurchase.resultDesc,
+        },
+      });
+    }
+
     // Fallback: DB lookup (handles server restart where Map was cleared)
-    const txn = await Transaction.findOne({ checkoutRequestId, type: 'deposit' }).select('status mpesaRef amount');
+    const txn = await Transaction.findOne({ checkoutRequestId, type: { $in: ['deposit', 'share_purchase'] } }).select('status mpesaRef amount');
     if (txn) {
       return res.json({
         success: true,
