@@ -4,6 +4,8 @@ import { Navigate } from "react-router-dom";
 import { Mail, Send, TestTubeDiagonal, Loader2, MailOpen } from "lucide-react";
 import { toast } from "sonner";
 import {
+  api,
+  normalizeMember,
   getAdminCommsHealthStatus,
   getAdminMemberMessages,
   getMainSmcfBridgeMessages,
@@ -41,7 +43,7 @@ export default function AdminEmail() {
     verifiedUsersOnly: false,
   });
   const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set());
-  const [manualEmails, setManualEmails] = useState("");
+  const [recipientSearch, setRecipientSearch] = useState("");
   const [lastResult, setLastResult] = useState<AdminEmailBroadcastResponse | null>(null);
   const seenMessageIdsRef = useRef<Set<string>>(new Set());
   const seededMessageIdsRef = useRef(false);
@@ -62,6 +64,25 @@ export default function AdminEmail() {
   const { data: history = [], isLoading: historyLoading, refetch: refetchHistory } = useQuery({
     queryKey: ["admin-email-history"],
     queryFn: getAdminEmailBroadcastHistory,
+  });
+
+  const { data: recipientMembers = [], isLoading: recipientsLoading } = useQuery({
+    queryKey: ["admin-email-recipient-members"],
+    queryFn: async () => {
+      const res = await api.get("/members");
+      const arr = Array.isArray(res) ? res : (res as any)?.data ?? [];
+      return arr
+        .map(normalizeMember)
+        .map((m: any) => ({
+          id: String(m.id || m._id || ""),
+          name: String(m.name || "Unnamed Member"),
+          email: typeof m.email === "string" ? m.email.trim() : "",
+          memberId: String(m.member_id || m.memberId || ""),
+          status: String(m.status || ""),
+        }))
+        .filter((m: any) => m.id && m.email);
+    },
+    enabled: recipientMode === "manual",
   });
 
   const {
@@ -137,9 +158,33 @@ export default function AdminEmail() {
     showMessageActivityToast(latest.subject, `${latest.senderName} sent: ${latest.subject}`);
   }, [combinedMemberMessages]);
 
+  const filteredRecipientMembers = useMemo(() => {
+    const term = recipientSearch.trim().toLowerCase();
+    if (!term) return recipientMembers;
+    return recipientMembers.filter((m: any) => {
+      const haystack = `${m.name} ${m.email} ${m.memberId}`.toLowerCase();
+      return haystack.includes(term);
+    });
+  }, [recipientMembers, recipientSearch]);
+
+  const selectedRecipientEmails = useMemo(() => {
+    if (recipientMode !== "manual") return [] as string[];
+    return recipientMembers
+      .filter((m: any) => selectedMemberIds.has(m.id))
+      .map((m: any) => m.email)
+      .filter(Boolean);
+  }, [recipientMode, recipientMembers, selectedMemberIds]);
+
   const canSubmit = useMemo(() => {
+    if (recipientMode === "manual") {
+      return (
+        subject.trim().length > 0 &&
+        message.trim().length > 0 &&
+        selectedMemberIds.size > 0
+      );
+    }
     return subject.trim().length > 0 && message.trim().length > 0;
-  }, [subject, message]);
+  }, [subject, message, recipientMode, selectedMemberIds]);
 
   const sourceLabel = (source: string) => {
     if (source === "landing-page") return "Landing Page Message Center";
@@ -150,10 +195,6 @@ export default function AdminEmail() {
 
   const runBroadcast = useMutation({
     mutationFn: async ({ dryRun }: { dryRun: boolean }) => {
-      const emailList = recipientMode === "manual" 
-        ? manualEmails.split(/[,\n]/).map(e => e.trim()).filter(Boolean)
-        : [];
-      
       return sendAdminEmailBroadcast({
         subject: subject.trim(),
         message: message.trim(),
@@ -163,7 +204,7 @@ export default function AdminEmail() {
         recipientMode,
         filters: recipientMode === "filters" ? filters : undefined,
         selectedMemberIds: recipientMode === "manual" ? Array.from(selectedMemberIds) : undefined,
-        manualEmails: recipientMode === "manual" ? emailList : undefined,
+        manualEmails: recipientMode === "manual" ? selectedRecipientEmails : undefined,
       });
     },
     onSuccess: (payload, vars) => {
@@ -216,12 +257,12 @@ export default function AdminEmail() {
             {commsHealthLoading ? (
               <Badge variant="secondary">Checking...</Badge>
             ) : !commsHealth?.bridgeApi.configured ? (
-              <Badge variant="secondary">Not Configured</Badge>
+              <Badge variant="secondary">Optional (Not Configured)</Badge>
             ) : commsHealth?.bridgeApi.ok ? (
               <Badge className="bg-emerald-600 text-white">Online</Badge>
             ) : (
-              <Badge variant="destructive">
-                Offline{commsHealth?.bridgeApi.status ? ` (${commsHealth.bridgeApi.status})` : ""}
+              <Badge variant="secondary">
+                Optional - Unavailable{commsHealth?.bridgeApi.status ? ` (${commsHealth.bridgeApi.status})` : ""}
               </Badge>
             )}
 
@@ -241,7 +282,7 @@ export default function AdminEmail() {
                 <p>Email API detail: {commsHealth.emailApi.message || "No response"}</p>
               )}
               {commsHealth.bridgeApi.configured && !commsHealth.bridgeApi.ok && (
-                <p>Bridge API detail: {commsHealth.bridgeApi.message || "No response"}</p>
+                <p>Bridge API detail: {commsHealth.bridgeApi.message || "No response"} (optional integration, does not block SACCO email send).</p>
               )}
             </div>
           )}
@@ -341,18 +382,87 @@ export default function AdminEmail() {
           )}
 
           {recipientMode === "manual" && (
-            <div className="space-y-2">
-              <Label htmlFor="manual-emails">Recipients (Email or Member IDs)</Label>
-              <Textarea
-                id="manual-emails"
-                value={manualEmails}
-                onChange={(e) => setManualEmails(e.target.value)}
-                className="min-h-[120px]"
-                placeholder="Enter emails or member IDs separated by commas or newlines..."
-              />
-              <p className="text-xs text-muted-foreground">
-                Separate multiple recipients by comma or newline. Can be email addresses or member IDs.
-              </p>
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label htmlFor="recipient-search">Select Recipients (Member Emails)</Label>
+                <Input
+                  id="recipient-search"
+                  value={recipientSearch}
+                  onChange={(e) => setRecipientSearch(e.target.value)}
+                  placeholder="Search by name, member ID, or email..."
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedMemberIds(new Set(recipientMembers.map((m: any) => m.id)));
+                  }}
+                  disabled={recipientsLoading || recipientMembers.length === 0}
+                >
+                  Select All Members
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedMemberIds(new Set(filteredRecipientMembers.map((m: any) => m.id)));
+                  }}
+                  disabled={recipientsLoading || filteredRecipientMembers.length === 0}
+                >
+                  Select Visible
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedMemberIds(new Set())}
+                  disabled={selectedMemberIds.size === 0}
+                >
+                  Clear
+                </Button>
+                <Badge variant="secondary">Selected: {selectedMemberIds.size}</Badge>
+              </div>
+
+              <div className="border rounded-md p-3 max-h-64 overflow-y-auto space-y-2">
+                {recipientsLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Loading member emails...
+                  </div>
+                ) : filteredRecipientMembers.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No members with email found.</p>
+                ) : (
+                  filteredRecipientMembers.map((m: any) => (
+                    <label key={m.id} className="flex items-start gap-2 text-sm">
+                      <Checkbox
+                        checked={selectedMemberIds.has(m.id)}
+                        onCheckedChange={(checked) => {
+                          setSelectedMemberIds((prev) => {
+                            const next = new Set(prev);
+                            if (Boolean(checked)) {
+                              next.add(m.id);
+                            } else {
+                              next.delete(m.id);
+                            }
+                            return next;
+                          });
+                        }}
+                      />
+                      <span className="leading-tight">
+                        <span className="font-medium">{m.name}</span>
+                        <span className="block text-xs text-muted-foreground">{m.email}</span>
+                        {m.memberId ? (
+                          <span className="block text-[11px] text-muted-foreground">ID: {m.memberId}</span>
+                        ) : null}
+                      </span>
+                    </label>
+                  ))
+                )}
+              </div>
             </div>
           )}
 
@@ -371,7 +481,11 @@ export default function AdminEmail() {
               type="button"
               disabled={!canSubmit || sending}
               onClick={() => {
-                const confirmed = window.confirm("Send this email to all deduplicated user emails in the system now?");
+                const confirmed = window.confirm(
+                  recipientMode === "manual"
+                    ? `Send this email to ${selectedMemberIds.size} selected recipient(s) now?`
+                    : "Send this email to all deduplicated user emails in the system now?"
+                );
                 if (confirmed) runBroadcast.mutate({ dryRun: false });
               }}
             >
