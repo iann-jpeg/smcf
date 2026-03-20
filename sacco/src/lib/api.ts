@@ -220,3 +220,129 @@ export function normalizeAuditLog(a: DbDocument) {
     created_at: a.createdAt ?? a.created_at,
   };
 }
+
+// ─── Admin Communications API ──────────────────────────────────────────────
+
+export interface MemberMessageItem {
+  _id: string;
+  subject: string;
+  message: string;
+  senderName: string;
+  senderContact: string | null;
+  source: string;
+  status: "new" | "read";
+  createdAt: string;
+}
+
+export interface AdminEmailBroadcastPayload {
+  subject: string;
+  message: string;
+  dryRun?: boolean;
+  isHtml?: boolean;
+  templateMode?: "plain" | "branded";
+  filters?: {
+    staffOnly?: boolean;
+    activeMembersOnly?: boolean;
+    verifiedUsersOnly?: boolean;
+  };
+}
+
+export interface AdminEmailBroadcastResponse {
+  dryRun: boolean;
+  recipients: {
+    fromUsers: number;
+    fromMembers: number;
+    dedupedTotal: number;
+    skippedByCap: number;
+    attempted: number;
+  };
+  delivery?: {
+    sent: number;
+    failed: number;
+  };
+}
+
+export async function getAdminMemberMessages(): Promise<MemberMessageItem[]> {
+  try {
+    const res = await api.get<MemberMessageItem[]>("/communications/member-messages");
+    return Array.isArray(res) ? res : [];
+  } catch (err) {
+    console.error("Error fetching admin member messages:", err);
+    return [];
+  }
+}
+
+export async function getMainSmcfBridgeMessages(): Promise<MemberMessageItem[]> {
+  try {
+    // Try to get bridge messages from Main SMCF admin if env vars are configured
+    const mainSmcfUrl = 
+      (import.meta.env.VITE_MAIN_SMCF_API_URL as string) || 
+      (import.meta.env.VITE_SMCF_PAYMENT_URL as string);
+    const bridgeKey = 
+      (import.meta.env.VITE_MAIN_SMCF_BRIDGE_KEY as string) || 
+      (import.meta.env.VITE_SMCF_API_KEY as string);
+
+    if (!mainSmcfUrl || !bridgeKey) {
+      console.warn("Bridge config incomplete, skipping Main SMCF bridge feed");
+      return [];
+    }
+
+    const bridgeBase = mainSmcfUrl.endsWith("/api") ? mainSmcfUrl : `${mainSmcfUrl.replace(/\/+$/, "")}/api`;
+    const res = await fetch(`${bridgeBase}/member-messages/bridge-feed`, {
+      headers: {
+        "Content-Type": "application/json",
+        "x-bridge-key": bridgeKey,
+      },
+    });
+
+    if (!res.ok) {
+      console.warn("Bridge feed fetch failed:", res.status);
+      return [];
+    }
+
+    const data = await res.json();
+    const messages = Array.isArray(data) ? data : (data?.data ?? []);
+    return messages.map((m: any) => ({
+      _id: m._id || m.id || "",
+      subject: m.subject || "",
+      message: m.message || m.messageBody || "",
+      senderName: m.senderName || m.sender_name || "Unknown",
+      senderContact: m.senderContact || m.sender_contact || null,
+      source: m.source || "main-smcf",
+      status: m.status || "new",
+      createdAt: m.createdAt || m.created_at || new Date().toISOString(),
+    }));
+  } catch (err) {
+    console.warn("Error fetching Main SMCF bridge messages:", err);
+    return [];
+  }
+}
+
+export async function getAdminEmailBroadcastHistory() {
+  try {
+    return await api.get("/communications/email-broadcast-history");
+  } catch (err) {
+    console.error("Error fetching broadcast history:", err);
+    return [];
+  }
+}
+
+export async function markAdminMemberMessageRead(messageId: string): Promise<void> {
+  try {
+    await api.patch(`/communications/member-messages/${messageId}/read`);
+  } catch (err) {
+    console.error("Error marking message as read:", err);
+    throw err;
+  }
+}
+
+export async function sendAdminEmailBroadcast(
+  payload: AdminEmailBroadcastPayload
+): Promise<AdminEmailBroadcastResponse> {
+  try {
+    return await api.post("/communications/send-email-broadcast", payload);
+  } catch (err) {
+    console.error("Error sending broadcast:", err);
+    throw err;
+  }
+}
