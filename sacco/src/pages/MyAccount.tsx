@@ -375,7 +375,12 @@ export default function MyAccount() {
 
   const handleExtProfileSave = async () => {
     if (!currentExt.name.trim()) { toast.error("Full name is required"); return; }
-    const contactValidation = profileSchema.safeParse({ phone: currentPhone, email: currentEmail });
+    const trimmedPhone = currentPhone.trim();
+    const normalizedEmail = currentEmail.trim().toLowerCase();
+    const contactValidation = profileSchema.safeParse({
+      phone: trimmedPhone,
+      email: normalizedEmail || "",
+    });
     if (!contactValidation.success) {
       const errs: Record<string, string> = {};
       contactValidation.error.issues.forEach((i) => { errs[String(i.path[0])] = i.message; });
@@ -386,11 +391,12 @@ export default function MyAccount() {
 
     setSavingExt(true);
     try {
-      const contactPayload: Record<string, string> = {
-        ...(currentPhone.trim() ? { phone: currentPhone.trim() } : {}),
-        ...(currentEmail.trim() ? { email: currentEmail.trim().toLowerCase() } : {}),
-      };
-      await api.put("/members/me", contactPayload);
+      if (trimmedPhone) {
+        await api.put("/members/me", { phone: trimmedPhone });
+      }
+      if (normalizedEmail) {
+        await api.put("/members/me", { email: normalizedEmail });
+      }
 
       const payload: Record<string, string> = {
         name: currentExt.name.trim(),
