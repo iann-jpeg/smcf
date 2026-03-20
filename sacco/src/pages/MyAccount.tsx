@@ -386,6 +386,12 @@ export default function MyAccount() {
 
     setSavingExt(true);
     try {
+      const contactPayload: Record<string, string> = {
+        ...(currentPhone.trim() ? { phone: currentPhone.trim() } : {}),
+        ...(currentEmail.trim() ? { email: currentEmail.trim().toLowerCase() } : {}),
+      };
+      await api.put("/members/me", contactPayload);
+
       const payload: Record<string, string> = {
         name: currentExt.name.trim(),
       };
@@ -395,8 +401,6 @@ export default function MyAccount() {
       if (currentExt.county.trim()) payload.county = currentExt.county.trim();
       if (currentExt.occupation.trim()) payload.occupation = currentExt.occupation.trim();
       if (currentExt.employer.trim()) payload.employer = currentExt.employer.trim();
-      if (currentPhone.trim()) payload.phone = currentPhone.trim();
-      if (currentEmail.trim()) payload.email = currentEmail.trim().toLowerCase();
 
       await api.put("/members/me/profile", payload);
       toast.success("Profile updated");
