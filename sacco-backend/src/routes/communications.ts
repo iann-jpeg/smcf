@@ -1,10 +1,10 @@
 import { Router, Request, Response } from "express";
-import { authMiddleware } from "../middleware/authMiddleware";
+import { protect } from "../middleware/auth";
 
 const router = Router();
 
 // POST /api/email/broadcast - Send email broadcast to members/staff
-router.post("/broadcast", authMiddleware, async (req: Request, res: Response) => {
+router.post("/broadcast", protect, async (req: Request, res: Response) => {
   try {
     const {
       subject,
@@ -55,7 +55,7 @@ router.post("/broadcast", authMiddleware, async (req: Request, res: Response) =>
 });
 
 // GET /api/communications/email-broadcast-history - Get broadcast history
-router.get("/email-broadcast-history", authMiddleware, async (req: Request, res: Response) => {
+router.get("/email-broadcast-history", protect, async (req: Request, res: Response) => {
   try {
     // TODO: Fetch from database
     // Mock data for now
@@ -70,7 +70,7 @@ router.get("/email-broadcast-history", authMiddleware, async (req: Request, res:
 });
 
 // GET /api/communications/member-messages - Get member messages
-router.get("/member-messages", authMiddleware, async (req: Request, res: Response) => {
+router.get("/member-messages", protect, async (req: Request, res: Response) => {
   try {
     // TODO: Fetch member messages from database
     // Mock data for now
@@ -85,7 +85,7 @@ router.get("/member-messages", authMiddleware, async (req: Request, res: Respons
 });
 
 // PATCH /api/communications/member-messages/:id/read - Mark message as read
-router.patch("/member-messages/:id/read", authMiddleware, async (req: Request, res: Response) => {
+router.patch("/member-messages/:id/read", protect, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     
