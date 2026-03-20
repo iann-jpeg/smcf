@@ -96,11 +96,13 @@ function base(doc: DbDocument): DbDocument {
 export function normalizeMember(m: DbDocument) {
   if (!m) return m;
   m = base(m);
+  const linkedUser = (m.userId && typeof m.userId === "object" ? m.userId : null) as any;
   return {
     ...m,
     id: m.id || String(m._id),
     member_id: m.memberId ?? m.member_id,
-    user_id: m.userId ? String(m.userId) : (m.user_id ?? null),
+    user_id: linkedUser ? String(linkedUser._id ?? linkedUser.id ?? "") : (m.userId ? String(m.userId) : (m.user_id ?? null)),
+    email: m.email ?? linkedUser?.email ?? null,
     loan_balance: m.loanBalance ?? m.loan_balance ?? 0,
     risk_score: m.riskScore ?? m.risk_score ?? null,
     join_date: m.joinDate ?? m.join_date,

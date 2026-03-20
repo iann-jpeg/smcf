@@ -15,14 +15,19 @@ router.put('/me/profile', protect, async (req: AuthRequest, res, next) => {
     const { name, nationalId, dateOfBirth, gender, county, occupation, employer, phone, email } = req.body;
     const update: Record<string, unknown> = {};
     if (name !== undefined && String(name).trim()) update.name = String(name).trim();
-    if (nationalId !== undefined) update.nationalId = nationalId || null;
-    if (dateOfBirth !== undefined) update.dateOfBirth = dateOfBirth ? new Date(String(dateOfBirth)) : null;
-    if (gender !== undefined) update.gender = ['male', 'female', 'other'].includes(gender) ? gender : null;
-    if (county !== undefined) update.county = county || null;
-    if (occupation !== undefined) update.occupation = occupation || null;
-    if (employer !== undefined) update.employer = employer || null;
-    if (phone !== undefined) update.phone = phone || null;
-    if (email !== undefined) update.email = email ? String(email).toLowerCase().trim() : null;
+    if (nationalId !== undefined && String(nationalId).trim()) update.nationalId = String(nationalId).trim();
+    if (dateOfBirth !== undefined && String(dateOfBirth).trim()) {
+      const parsed = new Date(String(dateOfBirth));
+      if (!Number.isNaN(parsed.getTime())) update.dateOfBirth = parsed;
+    }
+    if (gender !== undefined && ['male', 'female', 'other'].includes(String(gender))) {
+      update.gender = gender;
+    }
+    if (county !== undefined && String(county).trim()) update.county = String(county).trim();
+    if (occupation !== undefined && String(occupation).trim()) update.occupation = String(occupation).trim();
+    if (employer !== undefined && String(employer).trim()) update.employer = String(employer).trim();
+    if (phone !== undefined && String(phone).trim()) update.phone = String(phone).trim();
+    if (email !== undefined && String(email).trim()) update.email = String(email).toLowerCase().trim();
     const member = await Member.findOneAndUpdate(
       { userId: req.userId },
       update,
@@ -100,9 +105,26 @@ router.put('/me/photo', protect, async (req: AuthRequest, res, next) => {
 router.put('/me', protect, async (req: AuthRequest, res, next) => {
   try {
     const { phone, email } = req.body;
+    const update: Record<string, unknown> = {};
+    if (phone !== undefined && String(phone).trim()) {
+      update.phone = String(phone).trim();
+    }
+    if (email !== undefined && String(email).trim()) {
+      update.email = String(email).toLowerCase().trim();
+    }
+
+    const existingMember = await Member.findOne({ userId: req.userId });
+    if (!existingMember) {
+      return res.status(404).json({ success: false, message: 'Member profile not found' });
+    }
+
+    if (Object.keys(update).length === 0) {
+      return res.json({ success: true, data: existingMember });
+    }
+
     const member = await Member.findOneAndUpdate(
       { userId: req.userId },
-      { phone: phone || null, email: email || null },
+      update,
       { new: true, runValidators: true }
     );
     if (!member) return res.status(404).json({ success: false, message: 'Member profile not found' });
@@ -117,11 +139,23 @@ router.put('/me', protect, async (req: AuthRequest, res, next) => {
 // @access  Private
 router.get('/me', protect, async (req: AuthRequest, res, next) => {
   try {
-    const member = await Member.findOne({ userId: req.userId });
+    const member = await Member.findOne({ userId: req.userId }).populate('userId', 'email fullName');
     if (!member) {
       return res.status(404).json({ success: false, message: 'Member profile not found for this account' });
     }
-    res.json({ success: true, data: member });
+
+    const memberObj = member.toObject() as any;
+    const fallbackEmail =
+      typeof memberObj?.email === 'string' && memberObj.email.trim()
+        ? memberObj.email
+        : (memberObj?.userId && typeof memberObj.userId === 'object' ? memberObj.userId.email : null);
+
+    if (!memberObj.email && fallbackEmail) {
+      await Member.findByIdAndUpdate(member._id, { email: String(fallbackEmail).toLowerCase().trim() });
+      memberObj.email = String(fallbackEmail).toLowerCase().trim();
+    }
+
+    res.json({ success: true, data: memberObj });
   } catch (error) {
     next(error);
   }
@@ -136,10 +170,18 @@ router.get('/', protect, async (req, res, next) => {
       .populate('userId', 'email fullName')
       .sort({ createdAt: -1 });
 
+    const withFallbackEmail = members.map((m: any) => {
+      const obj = m.toObject ? m.toObject() : m;
+      if (!obj.email && obj.userId && typeof obj.userId === 'object' && obj.userId.email) {
+        obj.email = String(obj.userId.email).toLowerCase().trim();
+      }
+      return obj;
+    });
+
     res.json({
       success: true,
-      count: members.length,
-      data: members
+      count: withFallbackEmail.length,
+      data: withFallbackEmail
     });
   } catch (error) {
     next(error);
@@ -161,9 +203,14 @@ router.get('/:id', protect, async (req, res, next) => {
       });
     }
 
+    const obj: any = member.toObject ? member.toObject() : member;
+    if (!obj.email && obj.userId && typeof obj.userId === 'object' && obj.userId.email) {
+      obj.email = String(obj.userId.email).toLowerCase().trim();
+    }
+
     res.json({
       success: true,
-      data: member
+      data: obj
     });
   } catch (error) {
     next(error);
@@ -271,9 +318,17 @@ router.put(
         }
       }
 
+      const updateData: Record<string, unknown> = { userId: userId || null };
+      if (userId) {
+        const linkedUser = await User.findById(userId).select('email').lean();
+        if (linkedUser?.email) {
+          updateData.email = String(linkedUser.email).toLowerCase().trim();
+        }
+      }
+
       const member = await Member.findByIdAndUpdate(
         req.params.id,
-        { userId: userId || null },
+        updateData,
         { new: true }
       ).populate('userId', 'email fullName roles');
 
