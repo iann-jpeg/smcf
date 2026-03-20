@@ -293,6 +293,10 @@ export default function MyAccount() {
       });
       toast.success("Profile updated");
       queryClient.invalidateQueries({ queryKey: ["my-member"] });
+      queryClient.invalidateQueries({ queryKey: ["members"] });
+      if (member?.id) {
+        queryClient.invalidateQueries({ queryKey: ["members", member.id] });
+      }
     } catch (err: any) {
       toast.error(err.message || "Failed to update profile");
     } finally {
@@ -371,6 +375,15 @@ export default function MyAccount() {
 
   const handleExtProfileSave = async () => {
     if (!currentExt.name.trim()) { toast.error("Full name is required"); return; }
+    const contactValidation = profileSchema.safeParse({ phone: currentPhone, email: currentEmail });
+    if (!contactValidation.success) {
+      const errs: Record<string, string> = {};
+      contactValidation.error.issues.forEach((i) => { errs[String(i.path[0])] = i.message; });
+      setProfileErrors(errs);
+      return;
+    }
+    setProfileErrors({});
+
     setSavingExt(true);
     try {
       const payload: Record<string, string> = {
@@ -382,10 +395,16 @@ export default function MyAccount() {
       if (currentExt.county.trim()) payload.county = currentExt.county.trim();
       if (currentExt.occupation.trim()) payload.occupation = currentExt.occupation.trim();
       if (currentExt.employer.trim()) payload.employer = currentExt.employer.trim();
+      if (currentPhone.trim()) payload.phone = currentPhone.trim();
+      if (currentEmail.trim()) payload.email = currentEmail.trim().toLowerCase();
 
       await api.put("/members/me/profile", payload);
       toast.success("Profile updated");
       queryClient.invalidateQueries({ queryKey: ["my-member"] });
+      queryClient.invalidateQueries({ queryKey: ["members"] });
+      if (member?.id) {
+        queryClient.invalidateQueries({ queryKey: ["members", member.id] });
+      }
       setExtProfile(null); // reset so it re-initialises from fresh data
     } catch (err: any) {
       toast.error(err.message || "Failed to update profile");
