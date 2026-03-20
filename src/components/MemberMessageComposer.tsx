@@ -98,7 +98,7 @@ export default function MemberMessageComposer({ mode, source, title = "Send Mess
           <>
             <div className="space-y-1">
               <Label>Your Name</Label>
-              <Input value={senderName} onChange={(e) => setSenderName(e.target.value)} placeholder="e.g. Jane Doe" />
+              <Input value={senderName} onChange={(e) => setSenderName(e.target.value)} />
             </div>
             <div className="space-y-1">
               <Label>Contact (Phone or Email)</Label>

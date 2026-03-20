@@ -75,7 +75,7 @@ const io = new Server(httpServer, {
     origin: allowedOrigins,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-bridge-key"],
   },
   // Optimize for production (Render deployment)
   pingTimeout: 60000,
@@ -94,7 +94,7 @@ app.use(
     origin: allowedOrigins,
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-bridge-key"],
   })
 );
 app.use(express.json({ limit: '15mb' }));
