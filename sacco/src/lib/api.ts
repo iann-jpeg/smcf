@@ -35,6 +35,36 @@ interface DbDocument {
   [key: string]: unknown;
 }
 
+export interface NormalizedMember extends DbDocument {
+  id: string;
+  member_id: string;
+  user_id: string | null;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  shares: number;
+  savings: number;
+  status: string;
+  loan_balance: number;
+  risk_score: number | null;
+  join_date: unknown;
+  kyc_verified: boolean;
+  kyc_verified_at: unknown;
+  profile_photo: string | null;
+  national_id: string | null;
+  date_of_birth: unknown;
+  gender: string | null;
+  county: string | null;
+  occupation: string | null;
+  employer: string | null;
+  doc_id_copy: string | null;
+  doc_passport_photo: string | null;
+  doc_membership_form: string | null;
+  doc_kra_pin_certificate: string | null;
+  created_at: unknown;
+  updated_at: unknown;
+}
+
 async function handle<T>(res: Response): Promise<T> {
   if (res.status === 401) {
     // Token expired / invalid – clear session and redirect to login
@@ -93,36 +123,40 @@ function base(doc: DbDocument): DbDocument {
   return d;
 }
 
-export function normalizeMember(m: DbDocument) {
-  if (!m) return m;
-  m = base(m);
-  const linkedUser = (m.userId && typeof m.userId === "object" ? m.userId : null) as any;
+export function normalizeMember(m: DbDocument): NormalizedMember {
+  const raw = base(m) as any;
+  const linkedUser = (raw.userId && typeof raw.userId === "object" ? raw.userId : null) as any;
   return {
-    ...m,
-    id: m.id || String(m._id),
-    member_id: m.memberId ?? m.member_id,
-    user_id: linkedUser ? String(linkedUser._id ?? linkedUser.id ?? "") : (m.userId ? String(m.userId) : (m.user_id ?? null)),
-    email: linkedUser?.email ?? m.email ?? null,
-    loan_balance: m.loanBalance ?? m.loan_balance ?? 0,
-    risk_score: m.riskScore ?? m.risk_score ?? null,
-    join_date: m.joinDate ?? m.join_date,
-    kyc_verified: m.kycVerified ?? m.kyc_verified ?? false,
-    kyc_verified_at: m.kycVerifiedAt ?? m.kyc_verified_at ?? null,
-    profile_photo: m.profilePhoto ?? m.profile_photo ?? null,
+    ...raw,
+    id: raw.id || String(raw._id || ""),
+    member_id: String(raw.memberId ?? raw.member_id ?? ""),
+    user_id: linkedUser ? String(linkedUser._id ?? linkedUser.id ?? "") : (raw.userId ? String(raw.userId) : (raw.user_id ?? null)),
+    name: String(raw.name ?? ""),
+    email: (linkedUser?.email ?? raw.email ?? null) as string | null,
+    phone: (raw.phone ?? null) as string | null,
+    shares: Number(raw.shares ?? 0),
+    savings: Number(raw.savings ?? 0),
+    status: String(raw.status ?? "active"),
+    loan_balance: Number(raw.loanBalance ?? raw.loan_balance ?? 0),
+    risk_score: (raw.riskScore ?? raw.risk_score ?? null) as number | null,
+    join_date: raw.joinDate ?? raw.join_date,
+    kyc_verified: Boolean(raw.kycVerified ?? raw.kyc_verified ?? false),
+    kyc_verified_at: raw.kycVerifiedAt ?? raw.kyc_verified_at ?? null,
+    profile_photo: (raw.profilePhoto ?? raw.profile_photo ?? null) as string | null,
     // Extended profile
-    national_id: m.nationalId ?? m.national_id ?? null,
-    date_of_birth: m.dateOfBirth ?? m.date_of_birth ?? null,
-    gender: m.gender ?? null,
-    county: m.county ?? null,
-    occupation: m.occupation ?? null,
-    employer: m.employer ?? null,
+    national_id: (raw.nationalId ?? raw.national_id ?? null) as string | null,
+    date_of_birth: raw.dateOfBirth ?? raw.date_of_birth ?? null,
+    gender: (raw.gender ?? null) as string | null,
+    county: (raw.county ?? null) as string | null,
+    occupation: (raw.occupation ?? null) as string | null,
+    employer: (raw.employer ?? null) as string | null,
     // KYC documents
-    doc_id_copy: m.docIdCopy ?? m.doc_id_copy ?? null,
-    doc_passport_photo: m.docPassportPhoto ?? m.doc_passport_photo ?? null,
-    doc_membership_form: m.docMembershipForm ?? m.doc_membership_form ?? null,
-    doc_kra_pin_certificate: m.docKraPinCertificate ?? m.doc_kra_pin_certificate ?? null,
-    created_at: m.createdAt ?? m.created_at,
-    updated_at: m.updatedAt ?? m.updated_at,
+    doc_id_copy: (raw.docIdCopy ?? raw.doc_id_copy ?? null) as string | null,
+    doc_passport_photo: (raw.docPassportPhoto ?? raw.doc_passport_photo ?? null) as string | null,
+    doc_membership_form: (raw.docMembershipForm ?? raw.doc_membership_form ?? null) as string | null,
+    doc_kra_pin_certificate: (raw.docKraPinCertificate ?? raw.doc_kra_pin_certificate ?? null) as string | null,
+    created_at: raw.createdAt ?? raw.created_at,
+    updated_at: raw.updatedAt ?? raw.updated_at,
   };
 }
 
