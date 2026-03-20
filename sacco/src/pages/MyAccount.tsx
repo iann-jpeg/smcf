@@ -130,7 +130,13 @@ export default function MyAccount() {
     setProfileErrors({});
     setSaving(true);
     try {
-      await api.put("/members/me", { phone: currentPhone || null, email: currentEmail || null });
+      const normalizedEmail = String(currentEmail || "").trim().toLowerCase();
+      const trimmedPhone = String(currentPhone || "").trim();
+
+      await api.put("/members/me", {
+        ...(trimmedPhone ? { phone: trimmedPhone } : {}),
+        ...(normalizedEmail ? { email: normalizedEmail } : {}),
+      });
       toast.success("Profile updated");
       queryClient.invalidateQueries({ queryKey: ["my-member"] });
     } catch (err: any) {
@@ -213,15 +219,17 @@ export default function MyAccount() {
     if (!currentExt.name.trim()) { toast.error("Full name is required"); return; }
     setSavingExt(true);
     try {
-      await api.put("/members/me/profile", {
+      const payload: Record<string, string> = {
         name: currentExt.name.trim(),
-        nationalId: currentExt.nationalId || null,
-        dateOfBirth: currentExt.dateOfBirth || null,
-        gender: currentExt.gender || null,
-        county: currentExt.county || null,
-        occupation: currentExt.occupation || null,
-        employer: currentExt.employer || null,
-      });
+      };
+      if (currentExt.nationalId.trim()) payload.nationalId = currentExt.nationalId.trim();
+      if (currentExt.dateOfBirth) payload.dateOfBirth = currentExt.dateOfBirth;
+      if (currentExt.gender) payload.gender = currentExt.gender;
+      if (currentExt.county.trim()) payload.county = currentExt.county.trim();
+      if (currentExt.occupation.trim()) payload.occupation = currentExt.occupation.trim();
+      if (currentExt.employer.trim()) payload.employer = currentExt.employer.trim();
+
+      await api.put("/members/me/profile", payload);
       toast.success("Profile updated");
       queryClient.invalidateQueries({ queryKey: ["my-member"] });
       setExtProfile(null); // reset so it re-initialises from fresh data
