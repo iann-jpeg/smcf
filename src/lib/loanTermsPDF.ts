@@ -3,373 +3,251 @@
  * Kenyan-Compliant Legal Document
  */
 
-export const generateLoanTermsPDF = () => {
+import { jsPDF } from "jspdf";
+
+interface LoanTermsPDFOptions {
+  memberId?: string;
+  memberName?: string;
+}
+
+const sanitizeForFilename = (value: string): string =>
+  value
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-zA-Z0-9-_]/g, "")
+    .slice(0, 40);
+
+export const generateLoanTermsPDF = (options?: LoanTermsPDFOptions) => {
   const POLICY_VERSION = "SMCF-LOAN-POLICY-2026-01";
   const POLICY_DATE = "January 1, 2026";
+  const doc = new jsPDF({
+    orientation: "portrait",
+    unit: "pt",
+    format: "a4",
+  });
 
-  const htmlContent = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>SMCF Loan Terms & Conditions</title>
-  <style>
-    @page {
-      size: A4;
-      margin: 20mm;
-    }
-    
-    body {
-      font-family: 'Times New Roman', Times, serif;
-      line-height: 1.6;
-      color: #000;
-      font-size: 11pt;
-      margin: 0;
-      padding: 0;
-    }
-    
-    .header {
-      text-align: center;
-      border-bottom: 3px solid #2563eb;
-      padding-bottom: 15px;
-      margin-bottom: 25px;
-    }
-    
-    .header h1 {
-      font-size: 20pt;
-      margin: 0 0 5px 0;
-      color: #2563eb;
-      font-weight: bold;
-    }
-    
-    .header h2 {
-      font-size: 16pt;
-      margin: 5px 0;
-      color: #333;
-    }
-    
-    .header .subtitle {
-      font-size: 10pt;
-      color: #666;
-      margin-top: 8px;
-      font-style: italic;
-    }
-    
-    .policy-info {
-      background: #f3f4f6;
-      border: 2px solid #2563eb;
-      padding: 12px;
-      margin: 20px 0;
-      text-align: center;
-      border-radius: 5px;
-    }
-    
-    .policy-info strong {
-      color: #2563eb;
-      font-size: 12pt;
-    }
-    
-    .section {
-      margin: 25px 0;
-      page-break-inside: avoid;
-    }
-    
-    .section-title {
-      font-size: 13pt;
-      font-weight: bold;
-      color: #2563eb;
-      margin-bottom: 12px;
-      padding-bottom: 5px;
-      border-bottom: 2px solid #e5e7eb;
-    }
-    
-    .section p {
-      margin: 8px 0;
-      text-align: justify;
-    }
-    
-    .section ul {
-      margin: 10px 0;
-      padding-left: 30px;
-    }
-    
-    .section li {
-      margin: 6px 0;
-      text-align: justify;
-    }
-    
-    .nested-list {
-      margin-top: 8px;
-      padding-left: 25px;
-      list-style-type: circle;
-    }
-    
-    .warning-box {
-      background: #fef3c7;
-      border: 2px solid #f59e0b;
-      padding: 15px;
-      margin: 20px 0;
-      border-radius: 5px;
-      page-break-inside: avoid;
-    }
-    
-    .warning-box p {
-      margin: 5px 0;
-      font-weight: bold;
-      text-align: center;
-    }
-    
-    .warning-box .warning-text {
-      font-size: 14pt;
-      color: #d97706;
-    }
-    
-    .warning-box .warning-detail {
-      font-size: 9pt;
-      font-weight: normal;
-      color: #92400e;
-      margin-top: 10px;
-    }
-    
-    .highlight {
-      background: #fef3c7;
-      padding: 2px 6px;
-      font-weight: bold;
-      border-radius: 3px;
-    }
-    
-    .footer {
-      margin-top: 40px;
-      padding-top: 20px;
-      border-top: 2px solid #2563eb;
-      text-align: center;
-      font-size: 9pt;
-      color: #666;
-    }
-    
-    .footer p {
-      margin: 5px 0;
-    }
-    
-    .signature-section {
-      margin-top: 40px;
-      padding: 20px;
-      border: 2px solid #e5e7eb;
-      background: #f9fafb;
-      page-break-inside: avoid;
-    }
-    
-    .signature-section p {
-      margin: 10px 0;
-      font-size: 10pt;
-    }
-    
-    .signature-line {
-      margin-top: 30px;
-      border-top: 1px solid #000;
-      width: 250px;
-      padding-top: 5px;
-      font-size: 9pt;
-    }
-    
-    strong {
-      font-weight: bold;
-    }
-    
-    em {
-      font-style: italic;
-    }
-  </style>
-</head>
-<body>
-  <!-- Header -->
-  <div class="header">
-    <h1>SMART MONEY CASH FLOW (SMCF)</h1>
-    <h2>LOAN APPLICATION AGREEMENT & DECLARATION</h2>
-    <div class="subtitle">Governed by the Laws of Kenya</div>
-  </div>
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 48;
+  const contentWidth = pageWidth - margin * 2;
+  let y = margin;
 
-  <!-- Policy Version -->
-  <div class="policy-info">
-    <p><strong>Policy Version:</strong> ${POLICY_VERSION}</p>
-    <p><strong>Effective Date:</strong> ${POLICY_DATE}</p>
-  </div>
+  const ensurePageSpace = (requiredHeight = 16) => {
+    if (y + requiredHeight > pageHeight - margin - 36) {
+      doc.addPage();
+      y = margin;
+    }
+  };
 
-  <!-- Section 1: Legal Status -->
-  <div class="section">
-    <div class="section-title">1. Legal Status</div>
-    <p>
-      SMART MONEY CASH FLOW (SMCF) operates as a registered table banking / financial 
-      pooling organization within the Republic of Kenya.
-    </p>
-    <p>All loan agreements are governed by:</p>
-    <ul>
-      <li>The Laws of Kenya</li>
-      <li>The Law of Contract Act (Cap 23)</li>
-      <li>The Data Protection Act, 2019</li>
-      <li>Any applicable financial and civil recovery laws</li>
-    </ul>
-    <p class="highlight">
-      By proceeding, the Member enters into a legally binding agreement with SMCF.
-    </p>
-  </div>
+  const writeParagraph = (
+    text: string,
+    options?: { fontSize?: number; bold?: boolean; gapAfter?: number }
+  ) => {
+    const fontSize = options?.fontSize ?? 11;
+    const gapAfter = options?.gapAfter ?? 8;
+    doc.setFont("times", options?.bold ? "bold" : "normal");
+    doc.setFontSize(fontSize);
+    const lines = doc.splitTextToSize(text, contentWidth);
+    ensurePageSpace(lines.length * (fontSize + 2));
+    doc.text(lines, margin, y);
+    y += lines.length * (fontSize + 2) + gapAfter;
+  };
 
-  <!-- Section 2: Member Declaration -->
-  <div class="section">
-    <div class="section-title">2. Member Declaration</div>
-    <p>I, the undersigned Member, declare that:</p>
-    <ul>
-      <li>I am an active registered member of SMCF.</li>
-      <li>All information provided in this application is true and accurate.</li>
-      <li>I understand that providing false information constitutes fraud under Kenyan law.</li>
-      <li>I am applying voluntarily and without coercion.</li>
-    </ul>
-  </div>
+  const writeBullet = (text: string) => {
+    const bulletIndent = 14;
+    const textWidth = contentWidth - bulletIndent;
+    const lines = doc.splitTextToSize(text, textWidth);
+    ensurePageSpace(lines.length * 14);
+    doc.setFont("times", "normal");
+    doc.setFontSize(11);
+    doc.text("-", margin, y);
+    doc.text(lines, margin + bulletIndent, y);
+    y += lines.length * 14 + 4;
+  };
 
-  <!-- Section 3: Loan Approval & Disbursement -->
-  <div class="section">
-    <div class="section-title">3. Loan Approval & Disbursement</div>
-    <ul>
-      <li>Loan approval is not automatic.</li>
-      <li>Approval is subject to internal credit assessment and fund availability.</li>
-      <li>SMCF reserves absolute discretion to approve, reject, or vary loan terms.</li>
-      <li>No funds shall be disbursed until formal approval is granted.</li>
-    </ul>
-  </div>
+  doc.setFont("times", "bold");
+  doc.setFontSize(18);
+  doc.text("SMART MONEY CASH FLOW (SMCF)", pageWidth / 2, y, {
+    align: "center",
+  });
+  y += 24;
 
-  <!-- Section 4: Repayment Obligation -->
-  <div class="section">
-    <div class="section-title">4. Repayment Obligation</div>
-    <p>I agree that:</p>
-    <ul>
-      <li>The approved loan shall be repaid within the agreed timeline.</li>
-      <li>Interest and administrative fees shall apply as per SMCF loan policy.</li>
-      <li>Late payments attract penalties as determined by SMCF.</li>
-      <li>
-        <strong>In case of default, SMCF may:</strong>
-        <ul class="nested-list">
-          <li>Deduct from my savings or contributions</li>
-          <li>Engage guarantors</li>
-          <li>Initiate recovery proceedings</li>
-          <li>Report default internally</li>
-          <li>Institute civil recovery proceedings under Kenyan law</li>
-        </ul>
-      </li>
-    </ul>
-  </div>
+  doc.setFontSize(14);
+  doc.text("LOAN APPLICATION AGREEMENT AND DECLARATION", pageWidth / 2, y, {
+    align: "center",
+  });
+  y += 18;
 
-  <!-- Section 5: Default and Recovery -->
-  <div class="section">
-    <div class="section-title">5. Default and Recovery</div>
-    <p><strong>If I default:</strong></p>
-    <ul>
-      <li>SMCF may pursue recovery without further notice.</li>
-      <li>I shall bear recovery and legal costs incurred.</li>
-      <li>Guarantors may be held jointly and severally liable.</li>
-    </ul>
-  </div>
+  doc.setFont("times", "italic");
+  doc.setFontSize(10);
+  doc.text("Governed by the Laws of Kenya", pageWidth / 2, y, {
+    align: "center",
+  });
+  y += 20;
 
-  <!-- Section 6: Data Protection Compliance -->
-  <div class="section">
-    <div class="section-title">6. Data Protection Compliance</div>
-    <p>
-      In accordance with the <strong>Data Protection Act, 2019</strong>:
-    </p>
-    <ul>
-      <li>I consent to the collection and processing of my personal data.</li>
-      <li>My data may be used for credit assessment and recovery.</li>
-      <li>SMCF shall implement reasonable safeguards to protect my data.</li>
-    </ul>
-  </div>
+  doc.setDrawColor(37, 99, 235);
+  doc.setLineWidth(1.2);
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 16;
 
-  <!-- Section 7: Electronic Agreement -->
-  <div class="section">
-    <div class="section-title">7. Electronic Agreement</div>
-    <p>I acknowledge that:</p>
-    <ul>
-      <li>Clicking "I Agree" constitutes a legally binding electronic signature.</li>
-      <li>This agreement shall be admissible in any legal proceedings.</li>
-      <li>My agreement shall be recorded with timestamp and system logs.</li>
-    </ul>
-  </div>
+  writeParagraph(`Policy Version: ${POLICY_VERSION}`, {
+    fontSize: 11,
+    bold: true,
+    gapAfter: 4,
+  });
+  writeParagraph(`Effective Date: ${POLICY_DATE}`, {
+    fontSize: 11,
+    bold: true,
+    gapAfter: 12,
+  });
 
-  <!-- Section 8: Governing Law -->
-  <div class="section">
-    <div class="section-title">8. Governing Law</div>
-    <p>
-      This agreement shall be governed and interpreted under the <strong>Laws of Kenya</strong>.
-    </p>
-    <p>Disputes shall be resolved within Kenyan jurisdiction.</p>
-  </div>
+  writeParagraph("1. Legal Status", { fontSize: 13, bold: true, gapAfter: 6 });
+  writeParagraph(
+    "SMART MONEY CASH FLOW (SMCF) operates as a registered table banking and financial pooling organization within the Republic of Kenya."
+  );
+  writeParagraph("All loan agreements are governed by:", { gapAfter: 4 });
+  writeBullet("The Laws of Kenya");
+  writeBullet("The Law of Contract Act (Cap 23)");
+  writeBullet("The Data Protection Act, 2019");
+  writeBullet("Any applicable financial and civil recovery laws");
+  writeParagraph(
+    "By proceeding, the Member enters into a legally binding agreement with SMCF.",
+    { bold: true, gapAfter: 12 }
+  );
 
-  <!-- Warning Box -->
-  <div class="warning-box">
-    <p class="warning-text">⚠️ IMPORTANT LEGAL NOTICE ⚠️</p>
-    <p class="warning-detail">
-      By accepting these terms, you are entering into a legally binding contract.
-      Your acceptance will be recorded with your IP address, device information,
-      and timestamp for legal audit purposes as required under the Data Protection Act, 2019.
-    </p>
-  </div>
+  writeParagraph("2. Member Declaration", {
+    fontSize: 13,
+    bold: true,
+    gapAfter: 6,
+  });
+  writeParagraph("I, the undersigned Member, declare that:", { gapAfter: 4 });
+  writeBullet("I am an active registered member of SMCF.");
+  writeBullet("All information provided in this application is true and accurate.");
+  writeBullet("I understand that providing false information constitutes fraud under Kenyan law.");
+  writeBullet("I am applying voluntarily and without coercion.");
+  y += 6;
 
-  <!-- Signature Section -->
-  <div class="signature-section">
-    <p><strong>ACCEPTANCE & SIGNATURE</strong></p>
-    <p>
-      I have read, understood, and agree to be bound by the above terms and conditions.
-      I acknowledge that this agreement is governed by the Laws of Kenya and constitutes
-      a legally binding electronic signature.
-    </p>
-    
-    <div style="display: flex; justify-content: space-between; margin-top: 40px;">
-      <div>
-        <div class="signature-line">Member Name</div>
-      </div>
-      <div>
-        <div class="signature-line">Date</div>
-      </div>
-    </div>
-    
-    <div style="display: flex; justify-content: space-between; margin-top: 30px;">
-      <div>
-        <div class="signature-line">Member ID</div>
-      </div>
-      <div>
-        <div class="signature-line">Signature</div>
-      </div>
-    </div>
-  </div>
+  writeParagraph("3. Loan Approval and Disbursement", {
+    fontSize: 13,
+    bold: true,
+    gapAfter: 6,
+  });
+  writeBullet("Loan approval is not automatic.");
+  writeBullet("Approval is subject to internal credit assessment and fund availability.");
+  writeBullet("SMCF reserves discretion to approve, reject, or vary loan terms.");
+  writeBullet("No funds shall be disbursed until formal approval is granted.");
+  y += 6;
 
-  <!-- Footer -->
-  <div class="footer">
-    <p><strong>SMART MONEY CASH FLOW (SMCF)</strong></p>
-    <p>Digital Table Banking Platform | Registered in Kenya</p>
-    <p>Contact: +254 759 097 157 | Email: info@smcf.app</p>
-    <p style="margin-top: 15px;">
-      <em>This document is generated by the SMCF system and contains legally binding terms.</em>
-    </p>
-    <p>
-      Policy Version: ${POLICY_VERSION} | Effective Date: ${POLICY_DATE}
-    </p>
-  </div>
-</body>
-</html>
-  `.trim();
+  writeParagraph("4. Repayment Obligation", {
+    fontSize: 13,
+    bold: true,
+    gapAfter: 6,
+  });
+  writeParagraph("I agree that:", { gapAfter: 4 });
+  writeBullet("The approved loan shall be repaid within the agreed timeline.");
+  writeBullet("Interest and administrative fees shall apply as per SMCF loan policy.");
+  writeBullet("Late payments attract penalties as determined by SMCF.");
+  writeBullet("In case of default, SMCF may deduct from savings or contributions.");
+  writeBullet("SMCF may engage guarantors and initiate recovery proceedings.");
+  writeBullet("SMCF may institute civil recovery proceedings under Kenyan law.");
 
-  // Create a new window to print
-  const printWindow = window.open('', '_blank', 'width=800,height=600');
-  
-  if (printWindow) {
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-    
-    // Wait for content to load, then trigger print
-    printWindow.onload = () => {
-      setTimeout(() => {
-        printWindow.print();
-      }, 250);
-    };
-  } else {
-    alert('Please allow pop-ups to download the PDF document.');
+  writeParagraph("5. Default and Recovery", {
+    fontSize: 13,
+    bold: true,
+    gapAfter: 6,
+  });
+  writeBullet("SMCF may pursue recovery without further notice.");
+  writeBullet("The Member shall bear recovery and legal costs incurred.");
+  writeBullet("Guarantors may be held jointly and severally liable.");
+
+  writeParagraph("6. Data Protection Compliance", {
+    fontSize: 13,
+    bold: true,
+    gapAfter: 6,
+  });
+  writeParagraph("In accordance with the Data Protection Act, 2019:", {
+    gapAfter: 4,
+  });
+  writeBullet("The Member consents to collection and processing of personal data.");
+  writeBullet("Data may be used for credit assessment and recovery.");
+  writeBullet("SMCF shall implement reasonable safeguards to protect personal data.");
+
+  writeParagraph("7. Electronic Agreement", {
+    fontSize: 13,
+    bold: true,
+    gapAfter: 6,
+  });
+  writeBullet("Clicking I Agree constitutes a legally binding electronic signature.");
+  writeBullet("This agreement shall be admissible in legal proceedings.");
+  writeBullet("Agreement acceptance shall be recorded with timestamp and system logs.");
+
+  writeParagraph("8. Governing Law", { fontSize: 13, bold: true, gapAfter: 6 });
+  writeParagraph(
+    "This agreement shall be governed and interpreted under the Laws of Kenya. Disputes shall be resolved within Kenyan jurisdiction.",
+    { gapAfter: 10 }
+  );
+
+  doc.setFillColor(254, 243, 199);
+  ensurePageSpace(90);
+  doc.roundedRect(margin, y, contentWidth, 78, 4, 4, "F");
+  doc.setFont("times", "bold");
+  doc.setFontSize(11);
+  doc.text("IMPORTANT LEGAL NOTICE", margin + 10, y + 18);
+  doc.setFont("times", "normal");
+  doc.setFontSize(10);
+  const warningText = doc.splitTextToSize(
+    "By accepting these terms, you enter a legally binding contract. Acceptance may be recorded with IP address, device information, and timestamp for legal audit purposes.",
+    contentWidth - 20
+  );
+  doc.text(warningText, margin + 10, y + 36);
+  y += 92;
+
+  ensurePageSpace(120);
+  doc.setFont("times", "bold");
+  doc.setFontSize(12);
+  doc.text("ACCEPTANCE AND SIGNATURE", margin, y);
+  y += 18;
+  writeParagraph(
+    "I have read, understood, and agree to be bound by the above terms and conditions. I acknowledge that this agreement is governed by the Laws of Kenya and constitutes a legally binding electronic signature.",
+    { fontSize: 10, gapAfter: 24 }
+  );
+
+  doc.setFont("times", "normal");
+  doc.setFontSize(10);
+  doc.text("Member Name: ______________________________", margin, y);
+  doc.text("Date: __________________", pageWidth - margin - 180, y);
+  y += 26;
+  doc.text("Member ID: ________________________________", margin, y);
+  doc.text("Signature: ______________", pageWidth - margin - 180, y);
+
+  const totalPages = doc.getNumberOfPages();
+  const generatedDate = new Date().toLocaleDateString();
+  for (let page = 1; page <= totalPages; page += 1) {
+    doc.setPage(page);
+    doc.setDrawColor(220, 220, 220);
+    doc.setLineWidth(0.6);
+    doc.line(margin, pageHeight - 30, pageWidth - margin, pageHeight - 30);
+    doc.setFont("times", "normal");
+    doc.setFontSize(9);
+    doc.text(
+      `SMCF Loan Terms | ${POLICY_VERSION} | Generated ${generatedDate}`,
+      margin,
+      pageHeight - 16
+    );
+    doc.text(`Page ${page} of ${totalPages}`, pageWidth - margin, pageHeight - 16, {
+      align: "right",
+    });
   }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const memberIdPart = options?.memberId
+    ? sanitizeForFilename(options.memberId)
+    : "GENERAL";
+  const memberNamePart = options?.memberName
+    ? sanitizeForFilename(options.memberName)
+    : "Member";
+
+  doc.save(
+    `SMCF_Loan_Terms_${memberIdPart}_${memberNamePart}_${today}_${POLICY_VERSION}.pdf`
+  );
 };

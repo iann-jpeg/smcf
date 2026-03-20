@@ -265,6 +265,100 @@ export interface AdminEmailBroadcastResponse {
   };
 }
 
+let bridgeFeedRetryAfter = 0;
+
+export interface AdminCommsHealthStatus {
+  emailApi: {
+    ok: boolean;
+    status: number | null;
+    pathTried: string[];
+    message?: string;
+  };
+  bridgeApi: {
+    ok: boolean;
+    status: number | null;
+    url?: string;
+    configured: boolean;
+    message?: string;
+  };
+}
+
+export async function getAdminCommsHealthStatus(): Promise<AdminCommsHealthStatus> {
+  const emailPaths = [
+    "/communications/history",
+    "/communications/email-broadcast-history",
+  ];
+
+  let emailOk = false;
+  let emailStatus: number | null = null;
+  let emailMessage = "";
+
+  for (const path of emailPaths) {
+    try {
+      const res = await fetch(`${BASE}${path}`, { headers: authHeaders() });
+      emailStatus = res.status;
+      if (res.ok) {
+        emailOk = true;
+        emailMessage = "OK";
+        break;
+      }
+      emailMessage = `HTTP ${res.status}`;
+    } catch (err) {
+      emailMessage = err instanceof Error ? err.message : String(err);
+    }
+  }
+
+  const mainSmcfUrl =
+    (import.meta.env.VITE_MAIN_SMCF_API_URL as string) ||
+    (import.meta.env.VITE_SMCF_PAYMENT_URL as string);
+  const bridgeKey =
+    (import.meta.env.VITE_MAIN_SMCF_BRIDGE_KEY as string) ||
+    (import.meta.env.VITE_SMCF_API_KEY as string);
+
+  const bridgeConfigured = Boolean(mainSmcfUrl && bridgeKey);
+  let bridgeOk = false;
+  let bridgeStatus: number | null = null;
+  let bridgeMessage = bridgeConfigured ? "" : "Bridge env not configured";
+  let bridgeUrl = "";
+
+  if (bridgeConfigured) {
+    const bridgeBase = mainSmcfUrl.endsWith("/api")
+      ? mainSmcfUrl
+      : `${mainSmcfUrl.replace(/\/+$/, "")}/api`;
+    bridgeUrl = `${bridgeBase}/member-messages/bridge-feed`;
+
+    try {
+      const bridgeRes = await fetch(bridgeUrl, {
+        headers: {
+          "Content-Type": "application/json",
+          "x-bridge-key": bridgeKey,
+        },
+      });
+      bridgeStatus = bridgeRes.status;
+      bridgeOk = bridgeRes.ok;
+      bridgeMessage = bridgeRes.ok ? "OK" : `HTTP ${bridgeRes.status}`;
+    } catch (err) {
+      bridgeMessage = err instanceof Error ? err.message : String(err);
+    }
+  }
+
+  return {
+    emailApi: {
+      ok: emailOk,
+      status: emailStatus,
+      pathTried: emailPaths,
+      message: emailMessage || undefined,
+    },
+    bridgeApi: {
+      ok: bridgeOk,
+      status: bridgeStatus,
+      url: bridgeUrl || undefined,
+      configured: bridgeConfigured,
+      message: bridgeMessage || undefined,
+    },
+  };
+}
+
 export async function getAdminMemberMessages(): Promise<MemberMessageItem[]> {
   try {
     const res = await api.get<MemberMessageItem[]>("/communications/member-messages");
@@ -277,6 +371,11 @@ export async function getAdminMemberMessages(): Promise<MemberMessageItem[]> {
 
 export async function getMainSmcfBridgeMessages(): Promise<MemberMessageItem[]> {
   try {
+    const now = Date.now();
+    if (bridgeFeedRetryAfter > now) {
+      return [];
+    }
+
     // Try to get bridge messages from Main SMCF admin if env vars are configured
     const mainSmcfUrl = 
       (import.meta.env.VITE_MAIN_SMCF_API_URL as string) || 
@@ -300,8 +399,13 @@ export async function getMainSmcfBridgeMessages(): Promise<MemberMessageItem[]> 
 
     if (!res.ok) {
       console.warn("Bridge feed fetch failed:", res.status);
+      if (res.status >= 500) {
+        bridgeFeedRetryAfter = Date.now() + 60_000;
+      }
       return [];
     }
+
+    bridgeFeedRetryAfter = 0;
 
     const data = await res.json();
     const messages = Array.isArray(data) ? data : (data?.data ?? []);
@@ -322,13 +426,27 @@ export async function getMainSmcfBridgeMessages(): Promise<MemberMessageItem[]> 
 }
 
 export async function getAdminEmailBroadcastHistory(): Promise<any[]> {
-  try {
-    const result = await api.get("/communications/email-broadcast-history");
-    return Array.isArray(result) ? result : [];
-  } catch (err) {
-    console.error("Error fetching broadcast history:", err);
-    return [];
+  const candidatePaths = [
+    "/communications/history",
+    "/communications/email-broadcast-history",
+  ];
+
+  for (const path of candidatePaths) {
+    try {
+      const result = await api.get(path);
+      return Array.isArray(result) ? result : [];
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // Try next path only for 404/not-found style errors
+      if (!/404|not found/i.test(msg)) {
+        console.error("Error fetching broadcast history:", err);
+        return [];
+      }
+    }
   }
+
+  console.error("Error fetching broadcast history: no matching API route found");
+  return [];
 }
 
 export async function markAdminMemberMessageRead(messageId: string): Promise<void> {
@@ -343,10 +461,28 @@ export async function markAdminMemberMessageRead(messageId: string): Promise<voi
 export async function sendAdminEmailBroadcast(
   payload: AdminEmailBroadcastPayload
 ): Promise<AdminEmailBroadcastResponse> {
-  try {
-    return await api.post("/email/broadcast", payload);
-  } catch (err) {
-    console.error("Error sending broadcast:", err);
-    throw err;
+  const candidatePaths = [
+    "/communications/email-broadcast",
+    "/email/broadcast",
+  ];
+
+  let lastError: unknown;
+  for (const path of candidatePaths) {
+    try {
+      return await api.post(path, payload);
+    } catch (err) {
+      lastError = err;
+      const msg = err instanceof Error ? err.message : String(err);
+      // Try next path only for 404/not-found style errors
+      if (!/404|not found/i.test(msg)) {
+        console.error("Error sending broadcast:", err);
+        throw err;
+      }
+    }
   }
+
+  console.error("Error sending broadcast:", lastError);
+  throw (lastError instanceof Error
+    ? lastError
+    : new Error("No matching email broadcast API route found"));
 }

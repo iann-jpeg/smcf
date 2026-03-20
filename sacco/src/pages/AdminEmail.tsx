@@ -4,11 +4,13 @@ import { Navigate } from "react-router-dom";
 import { Mail, Send, TestTubeDiagonal, Loader2, MailOpen } from "lucide-react";
 import { toast } from "sonner";
 import {
+  getAdminCommsHealthStatus,
   getAdminMemberMessages,
   getMainSmcfBridgeMessages,
   getAdminEmailBroadcastHistory,
   markAdminMemberMessageRead,
   sendAdminEmailBroadcast,
+  type AdminCommsHealthStatus,
   type AdminEmailBroadcastResponse,
   type MemberMessageItem,
 } from "@/lib/api";
@@ -60,6 +62,17 @@ export default function AdminEmail() {
   const { data: history = [], isLoading: historyLoading, refetch: refetchHistory } = useQuery({
     queryKey: ["admin-email-history"],
     queryFn: getAdminEmailBroadcastHistory,
+  });
+
+  const {
+    data: commsHealth,
+    isLoading: commsHealthLoading,
+    refetch: refetchCommsHealth,
+  } = useQuery<AdminCommsHealthStatus>({
+    queryKey: ["admin-comms-health"],
+    queryFn: getAdminCommsHealthStatus,
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
   });
 
   const { data: memberMessages = [], isLoading: memberMessagesLoading, refetch: refetchMemberMessages } = useQuery({
@@ -182,6 +195,58 @@ export default function AdminEmail() {
         <h1 className="text-2xl font-heading font-bold">Admin Communications</h1>
         <p className="text-muted-foreground text-sm">Compose and deliver email to all user emails in the system (Users + Members, deduplicated).</p>
       </div>
+
+      <Alert>
+        <Mail className="h-4 w-4" />
+        <AlertTitle>Service Status</AlertTitle>
+        <AlertDescription>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="font-medium">Email API:</span>
+            {commsHealthLoading ? (
+              <Badge variant="secondary">Checking...</Badge>
+            ) : commsHealth?.emailApi.ok ? (
+              <Badge className="bg-emerald-600 text-white">Online</Badge>
+            ) : (
+              <Badge variant="destructive">
+                Offline{commsHealth?.emailApi.status ? ` (${commsHealth.emailApi.status})` : ""}
+              </Badge>
+            )}
+
+            <span className="ml-2 font-medium">Bridge API:</span>
+            {commsHealthLoading ? (
+              <Badge variant="secondary">Checking...</Badge>
+            ) : !commsHealth?.bridgeApi.configured ? (
+              <Badge variant="secondary">Not Configured</Badge>
+            ) : commsHealth?.bridgeApi.ok ? (
+              <Badge className="bg-emerald-600 text-white">Online</Badge>
+            ) : (
+              <Badge variant="destructive">
+                Offline{commsHealth?.bridgeApi.status ? ` (${commsHealth.bridgeApi.status})` : ""}
+              </Badge>
+            )}
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-6 px-2"
+              onClick={() => refetchCommsHealth()}
+            >
+              Refresh
+            </Button>
+          </div>
+          {!commsHealthLoading && commsHealth && (
+            <div className="mt-2 text-xs text-muted-foreground space-y-1">
+              {!commsHealth.emailApi.ok && (
+                <p>Email API detail: {commsHealth.emailApi.message || "No response"}</p>
+              )}
+              {commsHealth.bridgeApi.configured && !commsHealth.bridgeApi.ok && (
+                <p>Bridge API detail: {commsHealth.bridgeApi.message || "No response"}</p>
+              )}
+            </div>
+          )}
+        </AlertDescription>
+      </Alert>
 
       <Card>
         <CardHeader>

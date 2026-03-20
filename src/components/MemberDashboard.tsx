@@ -1535,7 +1535,18 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                   </div>
                 </div>
                 <Button
-                  onClick={generateLoanTermsPDF}
+                  onClick={() =>
+                    generateLoanTermsPDF({
+                      memberId:
+                        userData?.memberId ||
+                        userData?.member_id ||
+                        userData?._id ||
+                        userData?.id ||
+                        "member",
+                      memberName:
+                        userData?.name || userData?.username || "member",
+                    })
+                  }
                   variant="default"
                   size="sm"
                   className="whitespace-nowrap">
