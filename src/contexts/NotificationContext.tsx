@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useReducer, useCallback, useEffect, useRef } from 'react';
+import { toast } from 'sonner';
 import { 
   playNotificationSoundIfEnabled, 
   vibrateDevice, 
@@ -133,6 +134,25 @@ function getSoundType(notificationType: NotificationType): NotificationSoundType
   }
 }
 
+function showIntensityToast(type: NotificationType, title: string, message: string) {
+  if (type === 'error') {
+    toast.error(title, { description: message });
+    return;
+  }
+
+  if (type === 'warning') {
+    toast.warning(title, { description: message });
+    return;
+  }
+
+  if (type === 'success' || type === 'payment' || type === 'savings' || type === 'loan') {
+    toast.success(title, { description: message });
+    return;
+  }
+
+  toast.info(title, { description: message });
+}
+
 // Generate unique ID
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -220,6 +240,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       // Always play sound for all notifications (including offline mode)
       const soundType = getSoundType(notification.type);
       await playNotificationSoundIfEnabled(soundType);
+
+      // Show in-app toast so admins see activity immediately while working.
+      showIntensityToast(notification.type, notification.title, notification.message);
 
       // Vibrate on mobile (strong vibration pattern)
       vibrateDevice([200, 50, 200]);

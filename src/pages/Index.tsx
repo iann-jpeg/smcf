@@ -31,6 +31,7 @@ import {
 import { useEffect, useState } from "react";
 // Test components removed; render the real AdminDashboard
 import OrganizationDialog from "@/components/OrganizationDialog";
+import MemberMessageComposer from "@/components/MemberMessageComposer";
 import API_BASE from "@/lib/api";
 import { authService } from "@/lib/authService";
 
@@ -949,6 +950,10 @@ const Index = () => {
                 <p className="text-xs sm:text-sm text-muted-foreground mt-4 italic">
                   For registered members only. Use your SACCO credentials to log in.
                 </p>
+              </div>
+
+              <div className="mt-8">
+                <MemberMessageComposer mode="public" source="landing-page" title="Send a Message to Main SMCF Admin" compact />
               </div>
             </div>
           </Card>

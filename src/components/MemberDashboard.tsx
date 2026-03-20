@@ -7,6 +7,7 @@ import PaymentDialog from "@/components/PaymentDialog";
 import ProfilePictureUpload from "@/components/ProfilePictureUpload";
 import GuarantorRequests from "@/components/GuarantorRequests";
 import GuarantorProfile from "@/components/GuarantorProfile";
+import MemberMessageComposer from "@/components/MemberMessageComposer";
 import { StyledSMCF } from "@/components/StyledSMCF";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -1113,7 +1114,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
 
       <Tabs defaultValue={userData?.member_type === "wallet_only" ? "wallet" : "overview"} className="w-full">
         <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">
-          <TabsList className={`inline-flex w-auto min-w-max h-auto p-2 gap-1 ${userData?.member_type === "wallet_only" ? "md:grid md:w-full md:grid-cols-3" : "md:grid md:w-full md:grid-cols-7"}`}>
+          <TabsList className={`inline-flex w-auto min-w-max h-auto p-2 gap-1 ${userData?.member_type === "wallet_only" ? "md:grid md:w-full md:grid-cols-4" : "md:grid md:w-full md:grid-cols-8"}`}>
             {userData?.member_type !== "wallet_only" && (
               <TabsTrigger
                 value="overview"
@@ -1171,6 +1172,12 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                 Payouts
               </TabsTrigger>
             )}
+            <TabsTrigger
+              value="messages"
+              className="text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <Megaphone className="w-4 h-4 mr-1.5 inline" />
+              Messages
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -1882,6 +1889,10 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="messages" className="space-y-4">
+          <MemberMessageComposer mode="authenticated" source="member-dashboard" title="Message Main SMCF Admin" />
         </TabsContent>
       </Tabs>
 

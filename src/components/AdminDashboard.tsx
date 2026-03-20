@@ -76,6 +76,7 @@ import ProfileSettings from "./admin/ProfileSettings";
 import ReportsTab from "./admin/ReportsTab";
 import TrafficDashboard from "./admin/TrafficDashboard";
 import AdminGuarantorManagement from "./admin/AdminGuarantorManagement";
+import MemberMessagesTab from "./admin/MemberMessagesTab";
 
 
 interface AdminDashboardProps {
@@ -85,6 +86,39 @@ interface AdminDashboardProps {
   onLogout: () => void;
   refreshMembers?: () => void;
   cycleData?: any;
+}
+
+type ActivityLevel = "low" | "medium" | "high";
+const MAIN_ACTIVITY_FILTER_KEY = "smcf-main-admin-activity-level-filter";
+
+interface DashboardActivity {
+  id: string;
+  type: string;
+  icon: string;
+  title: string;
+  description: string;
+  data?: any;
+  timestamp: Date;
+  level: ActivityLevel;
+  read: boolean;
+}
+
+function getActivityLevel(activityType: string): ActivityLevel {
+  if (["late_fee", "withdrawal", "loan_request"].includes(activityType)) return "high";
+  if (["payment", "loan", "loan_payment", "disbursement"].includes(activityType)) return "medium";
+  return "low";
+}
+
+function getActivityLevelClasses(level: ActivityLevel): string {
+  if (level === "high") return "bg-red-500";
+  if (level === "medium") return "bg-amber-500";
+  return "bg-emerald-500";
+}
+
+function levelFilterChipClasses(active: boolean): string {
+  return active
+    ? "bg-primary text-primary-foreground"
+    : "bg-muted text-muted-foreground hover:bg-accent";
 }
 
 const AdminDashboard = ({
@@ -200,14 +234,42 @@ const AdminDashboard = ({
   const [allPayments, setAllPayments] = useState<any[]>([]);
   const [disbursements, setDisbursements] = useState<any[]>([]);
   // Admin activity feed state
-  const [activityFeed, setActivityFeed] = useState<any[]>([]);
+  const [activityFeed, setActivityFeed] = useState<DashboardActivity[]>([]);
+  const [activityLevelFilter, setActivityLevelFilter] = useState<ActivityLevel | "all">(() => {
+    if (typeof window === "undefined") return "all";
+    const stored = window.localStorage.getItem(MAIN_ACTIVITY_FILTER_KEY);
+    return stored === "low" || stored === "medium" || stored === "high" || stored === "all"
+      ? stored
+      : "all";
+  });
   // Helper to add activity to sidebar feed
-  const addActivity = (activity: any) => {
+  const addActivity = (activity: Omit<DashboardActivity, "id" | "timestamp" | "level" | "read">) => {
     setActivityFeed((prev) => [
-      { ...activity, timestamp: new Date() },
+      {
+        ...activity,
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        timestamp: new Date(),
+        level: getActivityLevel(activity.type),
+        read: false,
+      },
       ...prev.slice(0, 49), // keep max 50
     ]);
   };
+
+  const unreadActivityCount = activityFeed.filter((a) => !a.read).length;
+  const recentHeaderActivity = activityFeed.slice(0, 5);
+  const filteredRecentHeaderActivity = recentHeaderActivity.filter((item) =>
+    activityLevelFilter === "all" ? true : item.level === activityLevelFilter
+  );
+
+  const markHeaderActivitySeen = useCallback(() => {
+    setActivityFeed((prev) => prev.map((item) => ({ ...item, read: true })));
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(MAIN_ACTIVITY_FILTER_KEY, activityLevelFilter);
+  }, [activityLevelFilter]);
 
   const [currentCycle, setCurrentCycle] = useState<any>(null);
   const [cycleStats, setCycleStats] = useState<any>(null);
@@ -1865,6 +1927,83 @@ Thank you for your cooperation! 🙏`;
         </div>
       </div>
 
+      <div className="rounded-lg border bg-card px-3 py-2">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold">Live Activity</span>
+            <Badge variant={unreadActivityCount > 0 ? "destructive" : "secondary"}>
+              {unreadActivityCount} unread
+            </Badge>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-xs"
+            onClick={markHeaderActivitySeen}
+            disabled={unreadActivityCount === 0}
+          >
+            Mark seen
+          </Button>
+        </div>
+
+        <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground flex-wrap">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className={`h-6 px-2 text-[11px] ${levelFilterChipClasses(activityLevelFilter === "all")}`}
+            onClick={() => setActivityLevelFilter("all")}
+          >
+            All
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className={`h-6 px-2 text-[11px] ${levelFilterChipClasses(activityLevelFilter === "low")}`}
+            onClick={() => setActivityLevelFilter("low")}
+          >
+            <span className="h-2 w-2 rounded-full bg-emerald-500" /> Low
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className={`h-6 px-2 text-[11px] ${levelFilterChipClasses(activityLevelFilter === "medium")}`}
+            onClick={() => setActivityLevelFilter("medium")}
+          >
+            <span className="h-2 w-2 rounded-full bg-amber-500" /> Medium
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className={`h-6 px-2 text-[11px] ${levelFilterChipClasses(activityLevelFilter === "high")}`}
+            onClick={() => setActivityLevelFilter("high")}
+          >
+            <span className="h-2 w-2 rounded-full bg-red-500" /> High
+          </Button>
+        </div>
+
+        {filteredRecentHeaderActivity.length === 0 ? (
+          <p className="text-xs text-muted-foreground mt-2">No activity yet.</p>
+        ) : (
+          <div className="mt-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2">
+            {filteredRecentHeaderActivity.map((item) => (
+              <div key={item.id} className="rounded-md border bg-background/70 px-2 py-1.5">
+                <div className="flex items-center gap-2">
+                  <span className={`h-2.5 w-2.5 rounded-full ${getActivityLevelClasses(item.level)}`} />
+                  <span className="text-xs font-medium truncate">{item.icon} {item.title}</span>
+                  {!item.read && <span className="h-1.5 w-1.5 rounded-full bg-primary ml-auto" />}
+                </div>
+                <p className="text-[11px] text-muted-foreground truncate">{item.description}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* System Overview Dashboard */}
       <Card className="border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10">
         <CardHeader>
@@ -2567,12 +2706,12 @@ Thank you for your cooperation! 🙏`;
           {/* Top Savers List */}
           <div className="mt-6">
             <h4 className="text-sm font-semibold text-muted-foreground mb-3">
-              Top 5 Savers
+              Top 3 Savers
             </h4>
             <div className="space-y-2">
               {savingsData
                 .sort((a, b) => (b.totalDeposits || 0) - (a.totalDeposits || 0))
-                .slice(0, 15)
+                .slice(0, 3)
                 .map((member, index) => (
                   <div
                     key={member._id}
@@ -2776,7 +2915,7 @@ Thank you for your cooperation! 🙏`;
   return (
     <Tabs defaultValue="members" className="w-full">
         <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0 scrollbar-thin scrollbar-thumb-primary/30 scrollbar-track-transparent">
-          <TabsList className="flex w-max min-w-full space-x-2 md:grid md:w-full md:grid-cols-[repeat(13,minmax(0,1fr))] min-w-max bg-white/80 dark:bg-background/80 sticky top-0 z-10">
+          <TabsList className="flex w-max min-w-full space-x-2 md:grid md:w-full md:grid-cols-[repeat(14,minmax(0,1fr))] min-w-max bg-white/80 dark:bg-background/80 sticky top-0 z-10">
             <TabsTrigger
               value="members"
               className="text-xs sm:text-sm whitespace-nowrap">
@@ -2854,6 +2993,11 @@ Thank you for your cooperation! 🙏`;
               value="reports"
               className="text-xs sm:text-sm whitespace-nowrap">
               Reports
+            </TabsTrigger>
+            <TabsTrigger
+              value="member-messages"
+              className="text-xs sm:text-sm whitespace-nowrap">
+              Member Messages
             </TabsTrigger>
             <TabsTrigger
               value="guarantors"
@@ -4001,6 +4145,10 @@ Thank you for your cooperation! 🙏`;
 
         <TabsContent value="reports" className="space-y-6">
           <ReportsTab />
+        </TabsContent>
+
+        <TabsContent value="member-messages" className="space-y-6">
+          <MemberMessagesTab />
         </TabsContent>
 
         <TabsContent value="guarantors" className="space-y-6">

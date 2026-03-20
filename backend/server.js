@@ -36,6 +36,7 @@ import guarantorRoutes from "./routes/guarantors.js";
 import searchRoutes from "./routes/search.js";
 import dashboardRoutes from "./routes/dashboard.js";
 import saccoPaymentRoutes from "./routes/saccoPayments.js";
+import memberMessageRoutes from "./routes/memberMessages.js";
 
 // Import interest service
 import { startInterestCronJob } from "./services/interestService.js";
@@ -360,6 +361,7 @@ app.use("/api/analytics", analyticsRoutes);
 app.use("/api/reports", analyticsRoutes); // Alias to avoid ad blocker issues
 app.use("/api/search", searchRoutes);
 app.use("/api/sacco-payments", saccoPaymentRoutes); // SACCO portal payment bridge
+app.use("/api/member-messages", memberMessageRoutes);
 app.use("/api", dashboardRoutes); // Optimized dashboard endpoint
 
 // Health check endpoint
