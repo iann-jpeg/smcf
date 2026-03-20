@@ -29,6 +29,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { playNotificationSound } from "@/lib/sound";
 
+type RecipientDirectoryItem = {
+  id: string;
+  memberId: string;
+  memberCode: string;
+  name: string;
+  email: string;
+  source: "member-profile" | "signup-account";
+};
+
 export default function AdminEmail() {
   const { hasRole } = useAuth();
   const isAdmin = hasRole("admin");
@@ -71,16 +80,44 @@ export default function AdminEmail() {
     queryFn: async () => {
       const res = await api.get("/members");
       const arr = Array.isArray(res) ? res : (res as any)?.data ?? [];
-      return arr
-        .map(normalizeMember)
-        .map((m: any) => ({
-          id: String(m.id || m._id || ""),
-          name: String(m.name || "Unnamed Member"),
-          email: typeof m.email === "string" ? m.email.trim() : "",
-          memberId: String(m.member_id || m.memberId || ""),
-          status: String(m.status || ""),
-        }))
-        .filter((m: any) => m.id && m.email);
+      const items: RecipientDirectoryItem[] = [];
+      const seen = new Set<string>();
+
+      const pushEmail = (
+        memberDbId: string,
+        memberCode: string,
+        name: string,
+        emailValue: unknown,
+        source: RecipientDirectoryItem["source"]
+      ) => {
+        const email = typeof emailValue === "string" ? emailValue.trim().toLowerCase() : "";
+        if (!memberDbId || !email || !email.includes("@")) return;
+        const key = `${memberDbId}:${email}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        items.push({
+          id: key,
+          memberId: memberDbId,
+          memberCode,
+          name,
+          email,
+          source,
+        });
+      };
+
+      arr.forEach((raw: any) => {
+        const m = normalizeMember(raw);
+        const memberDbId = String(m.id || m._id || "").trim();
+        const memberCode = String(m.member_id || raw?.memberId || raw?.member_id || "").trim();
+        const name = String(raw?.name || raw?.fullName || raw?.full_name || "Unnamed Member").trim();
+
+        // Email captured on member profile
+        pushEmail(memberDbId, memberCode, name, raw?.email, "member-profile");
+        // Email used during account signup (populated via userId)
+        pushEmail(memberDbId, memberCode, name, raw?.userId?.email, "signup-account");
+      });
+
+      return items;
     },
     enabled: recipientMode === "manual",
   });
@@ -175,6 +212,18 @@ export default function AdminEmail() {
       .filter(Boolean);
   }, [recipientMode, recipientMembers, selectedMemberIds]);
 
+  const selectedSystemMemberIds = useMemo(() => {
+    if (recipientMode !== "manual") return [] as string[];
+    return Array.from(
+      new Set(
+        recipientMembers
+          .filter((m: any) => selectedMemberIds.has(m.id))
+          .map((m: any) => m.memberId)
+          .filter(Boolean)
+      )
+    );
+  }, [recipientMode, recipientMembers, selectedMemberIds]);
+
   const canSubmit = useMemo(() => {
     if (recipientMode === "manual") {
       return (
@@ -203,7 +252,7 @@ export default function AdminEmail() {
         templateMode,
         recipientMode,
         filters: recipientMode === "filters" ? filters : undefined,
-        selectedMemberIds: recipientMode === "manual" ? Array.from(selectedMemberIds) : undefined,
+        selectedMemberIds: recipientMode === "manual" ? selectedSystemMemberIds : undefined,
         manualEmails: recipientMode === "manual" ? selectedRecipientEmails : undefined,
       });
     },
@@ -384,7 +433,7 @@ export default function AdminEmail() {
           {recipientMode === "manual" && (
             <div className="space-y-3">
               <div className="space-y-2">
-                <Label htmlFor="recipient-search">Select Recipients (Member Emails)</Label>
+                <Label htmlFor="recipient-search">Select Recipients (All System Emails)</Label>
                 <Input
                   id="recipient-search"
                   value={recipientSearch}
@@ -403,7 +452,7 @@ export default function AdminEmail() {
                   }}
                   disabled={recipientsLoading || recipientMembers.length === 0}
                 >
-                  Select All Members
+                  Select All Emails
                 </Button>
                 <Button
                   type="button"
@@ -431,10 +480,10 @@ export default function AdminEmail() {
               <div className="border rounded-md p-3 max-h-64 overflow-y-auto space-y-2">
                 {recipientsLoading ? (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" /> Loading member emails...
+                    <Loader2 className="h-4 w-4 animate-spin" /> Loading all system emails...
                   </div>
                 ) : filteredRecipientMembers.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No members with email found.</p>
+                  <p className="text-sm text-muted-foreground">No system emails found.</p>
                 ) : (
                   filteredRecipientMembers.map((m: any) => (
                     <label key={m.id} className="flex items-start gap-2 text-sm">
@@ -455,9 +504,12 @@ export default function AdminEmail() {
                       <span className="leading-tight">
                         <span className="font-medium">{m.name}</span>
                         <span className="block text-xs text-muted-foreground">{m.email}</span>
-                        {m.memberId ? (
-                          <span className="block text-[11px] text-muted-foreground">ID: {m.memberId}</span>
+                        {m.memberCode ? (
+                          <span className="block text-[11px] text-muted-foreground">ID: {m.memberCode}</span>
                         ) : null}
+                        <span className="block text-[11px] text-muted-foreground/80">
+                          Source: {m.source === "signup-account" ? "Sign-up Account Email" : "Member Profile Email"}
+                        </span>
                       </span>
                     </label>
                   ))
