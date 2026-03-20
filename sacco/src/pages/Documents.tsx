@@ -549,14 +549,14 @@ export default function Documents() {
       </div>
 
       {/* Detail tabs */}
-      <Tabs defaultValue="loans">
-        <TabsList>
-          <TabsTrigger value="loans">Loan Agreements</TabsTrigger>
-          <TabsTrigger value="guarantors">Guarantor Agreements</TabsTrigger>
-          <TabsTrigger value="schedules">Repayment Schedules</TabsTrigger>
-          <TabsTrigger value="forms">Membership Forms</TabsTrigger>
-          {isAdmin && <TabsTrigger value="proposal">Project Proposal</TabsTrigger>}
-          <TabsTrigger value="admin-docs">SACCO Documents</TabsTrigger>
+      <Tabs defaultValue={isAdmin ? "admin-docs" : "loans"}>
+        <TabsList className="w-full overflow-x-auto whitespace-nowrap justify-start">
+          <TabsTrigger value="loans" className="shrink-0">Loan Agreements</TabsTrigger>
+          <TabsTrigger value="guarantors" className="shrink-0">Guarantor Agreements</TabsTrigger>
+          <TabsTrigger value="schedules" className="shrink-0">Repayment Schedules</TabsTrigger>
+          <TabsTrigger value="forms" className="shrink-0">Membership Forms</TabsTrigger>
+          {isAdmin && <TabsTrigger value="proposal" className="shrink-0">Project Proposal</TabsTrigger>}
+          <TabsTrigger value="admin-docs" className="shrink-0">SACCO Documents (15)</TabsTrigger>
         </TabsList>
 
         <TabsContent value="loans" className="mt-4">
@@ -686,7 +686,7 @@ export default function Documents() {
             <CardHeader>
               <CardTitle className="font-heading">SACCO Documents</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Branded policy and form templates available for members and admin to view and download.
+                15 branded policy and form templates available for members and admin to view and download.
               </p>
             </CardHeader>
             <CardContent>
