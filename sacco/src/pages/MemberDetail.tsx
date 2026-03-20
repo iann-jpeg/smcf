@@ -152,8 +152,24 @@ export default function MemberDetail() {
   }
 
   const risk = riskLabel(member.risk_score ?? 50);
-  const linkedUserId = member.user_id ? String(member.user_id) : null;
+  const linkedUserRaw = (member as any).user_id;
+  const linkedUserId =
+    typeof linkedUserRaw === "string"
+      ? linkedUserRaw
+      : linkedUserRaw && typeof linkedUserRaw === "object"
+        ? String(linkedUserRaw._id ?? linkedUserRaw.id ?? "")
+        : null;
+  const linkedUserEmailFromMember =
+    linkedUserRaw && typeof linkedUserRaw === "object" && typeof linkedUserRaw.email === "string"
+      ? linkedUserRaw.email
+      : null;
+  const linkedUserNameFromMember =
+    linkedUserRaw && typeof linkedUserRaw === "object"
+      ? (linkedUserRaw.fullName ?? linkedUserRaw.full_name ?? linkedUserRaw.name ?? null)
+      : null;
   const linkedUser = allUsers.find((u) => u._id === linkedUserId);
+  const linkedAccountEmail = linkedUser?.email ?? linkedUserEmailFromMember ?? linkedUserId;
+  const linkedAccountName = linkedUser?.fullName ?? linkedUserNameFromMember;
 
   return (
     <div className="space-y-6">
@@ -192,8 +208,8 @@ export default function MemberDetail() {
               <UserCheck className={`h-4 w-4 ${linkedUserId ? "text-green-600" : "text-amber-600"}`} />
               {linkedUserId ? (
                 <span>
-                  Linked to <strong>{linkedUser?.email ?? linkedUserId}</strong>
-                  {linkedUser?.fullName ? ` (${linkedUser.fullName})` : ""}
+                  Linked to <strong>{linkedAccountEmail}</strong>
+                  {linkedAccountName ? ` (${linkedAccountName})` : ""}
                   {" — "}member can sign in and view their account.
                 </span>
               ) : (
