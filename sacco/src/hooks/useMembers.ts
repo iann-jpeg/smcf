@@ -13,6 +13,8 @@ export function useMembers() {
       const arr = Array.isArray(res) ? res : (res as any).data ?? [];
       return arr.map(normalizeMember);
     },
+    refetchInterval: 15000,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -24,6 +26,8 @@ export function useMember(id: string) {
       return normalizeMember(res);
     },
     enabled: !!id,
+    refetchInterval: 15000,
+    refetchOnWindowFocus: true,
   });
 }
 
