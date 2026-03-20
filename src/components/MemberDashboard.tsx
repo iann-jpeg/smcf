@@ -51,19 +51,54 @@ import {
 } from "lucide-react";
 import { useEffect, useState, useRef, useCallback } from "react";
 
+interface User {
+  _id?: string;
+  id?: string;
+  uuid?: string;
+  memberId?: string;
+  member_id?: string;
+  username?: string;
+  name?: string;
+  phone?: string;
+  phoneNumber?: string;
+  role?: string;
+  position?: number;
+  next_payout_cycle?: number;
+  total_contributed?: number;
+  total_received?: number;
+  total_cycle_contribution?: number;
+  member_type?: string;
+  payment_status?: string;
+  [key: string]: any;
+}
+
+interface CycleData {
+  success?: boolean;
+  data?: {
+    cycle_number?: number;
+    days_left?: number;
+    start_date?: string;
+    next_recipient?: { _id?: string; name?: string };
+    next_recipient_name?: string;
+    total_members?: number;
+    [key: string]: any;
+  };
+  [key: string]: any;
+}
+
 interface MemberDashboardProps {
-  userData: any;
-  cycleData: any;
+  userData: User;
+  cycleData: CycleData;
 }
 
 const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
   const [showPayment, setShowPayment] = useState(false);
   const [showLoanRequest, setShowLoanRequest] = useState(false);
   const [showRepayment, setShowRepayment] = useState(false);
-  const [selectedLoan, setSelectedLoan] = useState<any>(null);
+  const [selectedLoan, setSelectedLoan] = useState<User | null>(null);
   const [selectedLoanLoading, setSelectedLoanLoading] = useState(false);
     // Fetch latest loan details from backend when opening repayment dialog
-    const openRepaymentDialog = async (loan: any) => {
+    const openRepaymentDialog = async (loan: User) => {
       console.log('🔵 Opening repayment dialog for loan:', loan._id);
       setSelectedLoanLoading(true);
       try {
@@ -114,9 +149,9 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
     }
   }, [showRepayment, userData?.phone]);
 
-  const [paymentHistory, setPaymentHistory] = useState([]);
-  const [memberLoans, setMemberLoans] = useState<any[]>([]);
-  const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [paymentHistory, setPaymentHistory] = useState<Array<{ cycle: number; amount: number; date: string; status: string; isAdvance: boolean; cyclesAhead: number }>>([]);
+  const [memberLoans, setMemberLoans] = useState<User[]>([]);
+  const [announcements, setAnnouncements] = useState<User[]>([]);
   const [pendingGuarantorRequests, setPendingGuarantorRequests] = useState(0);
   const [isTopSaver, setIsTopSaver] = useState(false);
   const [savingsBalance, setSavingsBalance] = useState(0);
@@ -219,9 +254,9 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
       // Filter member's loans
       const memberLoansList = Array.isArray(loansData)
         ? loansData.filter(
-            (loan) =>
-              loan.member_id?._id === userData._id ||
-              loan.member_id?._id === userData.id ||
+            (loan: User) =>
+              (loan.member_id as any)?._id === userData._id ||
+              (loan.member_id as any)?._id === userData.id ||
               loan.member_id === userData._id ||
               loan.member_id === userData.id
           )
@@ -245,11 +280,11 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         const totalDeposits = savingsSummaryData.data.totalDeposits || 0;
         if (totalDeposits > 0) {
           const topSaver = allSavingsData.data.reduce(
-            (top: any, member: any) =>
-              (member.totalDeposits || 0) > (top.totalDeposits || 0)
+            (top: User, member: User) =>
+              ((member.totalDeposits as number) || 0) > ((top.totalDeposits as number) || 0)
                 ? member
                 : top,
-            { totalDeposits: 0 }
+            { totalDeposits: 0 } as User
           );
 
           setIsTopSaver(topSaver._id === userData._id);
@@ -259,13 +294,13 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
       // Update announcements
       if (Array.isArray(announcementsData)) {
         console.log("📢 Fetched announcements:", announcementsData.length);
-        setAnnouncements(announcementsData);
+        setAnnouncements(announcementsData as User[]);
       } else if (
-        announcementsData?.success &&
-        Array.isArray(announcementsData.data)
+        (announcementsData as any)?.success &&
+        Array.isArray((announcementsData as any).data)
       ) {
-        console.log("📢 Fetched announcements:", announcementsData.data.length);
-        setAnnouncements(announcementsData.data);
+        console.log("📢 Fetched announcements:", (announcementsData as any).data.length);
+        setAnnouncements((announcementsData as any).data as User[]);
       } else {
         console.log(
           "📢 No announcements or unexpected format:",
@@ -273,12 +308,15 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         );
       }
 
+      // Use EXACT same calculation as AdminDashboard
+      const paymentsArray = Array.isArray(payments) ? payments : [];
+
       // Get total members count from cycle data or calculate from payments
       // Always use backend value if available, fallback to payments unique member count if not
       const totalMembersCount =
         (cycleData.success && cycleData.data?.total_members)
           ? cycleData.data.total_members
-          : Array.from(new Set(paymentsArray.map((p: any) => p.member_id?._id || p.member_id))).length;
+          : Array.from(new Set(paymentsArray.map((p: User) => (p.member_id as any)?._id || p.member_id))).length;
 
       console.log("👥 Total members count:", totalMembersCount);
       console.log(
@@ -293,18 +331,15 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
           ? cycleData.data.cycle_number
           : null;
 
-      // Use EXACT same calculation as AdminDashboard
-      const paymentsArray = Array.isArray(payments) ? payments : [];
-
       // Filter payments for CURRENT CYCLE ONLY (same as AdminDashboard)
       const currentCyclePayments = currentCycleNumber
         ? paymentsArray.filter(
-            (p: any) => p.cycle_number === currentCycleNumber
+            (p: User) => (p.cycle_number as number) === currentCycleNumber
           )
         : paymentsArray;
 
       const completedPayments = currentCyclePayments.filter(
-        (p: any) => p.status === "completed"
+        (p: User) => p.status === "completed"
       );
 
       console.log("🔢 Current cycle number:", currentCycleNumber);
@@ -314,13 +349,13 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
 
       // Calculate total collected from actual completed payments
       const totalCollected = completedPayments.reduce(
-        (sum: number, p: any) => sum + (p.amount || 0),
+        (sum: number, p: User) => sum + ((p.amount as number) || 0),
         0
       );
 
       // Count unique members who have paid (same as AdminDashboard)
       const paidMemberIds = new Set(
-        completedPayments.map((p: any) => p.member_id?._id || p.member_id)
+        completedPayments.map((p: User) => (p.member_id as any)?._id || p.member_id)
       );
       const uniquePaidMembers = paidMemberIds.size;
 
@@ -365,9 +400,9 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
       // Filter for this member's payments
       const memberPayments = Array.isArray(payments)
         ? payments.filter(
-            (p) =>
-              p.member_id?._id === userData._id ||
-              p.member_id?._id === userData.id ||
+            (p: User) =>
+              (p.member_id as any)?._id === userData._id ||
+              (p.member_id as any)?._id === userData.id ||
               p.member_id === userData._id ||
               p.member_id === userData.id
           )
@@ -376,13 +411,13 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
       // Update payment history silently only if changed
       setPaymentHistory((prev) => {
         const currentCycleNum = cycleData.data?.cycle_number || 1;
-        const newHistory = memberPayments.map((p) => ({
-          cycle: p.cycle_number,
-          amount: p.amount,
-          date: new Date(p.date).toLocaleDateString(),
-          status: p.status,
-          isAdvance: p.cycle_number > currentCycleNum, // Check if payment is for future cycle
-          cyclesAhead: p.cycle_number > currentCycleNum ? p.cycle_number - currentCycleNum : 0, // How many cycles ahead
+        const newHistory = memberPayments.map((p: User) => ({
+          cycle: (p.cycle_number as number) || 0,
+          amount: (p.amount as number) || 0,
+          date: new Date(p.date as string).toLocaleDateString(),
+          status: (p.status as string) || '',
+          isAdvance: (p.cycle_number as number) > currentCycleNum, // Check if payment is for future cycle
+          cyclesAhead: (p.cycle_number as number) > currentCycleNum ? (p.cycle_number as number) - currentCycleNum : 0, // How many cycles ahead
         }));
         if (JSON.stringify(prev) !== JSON.stringify(newHistory)) {
           return newHistory;
@@ -466,7 +501,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
       );
 
       // Listen for payment completion (new event name)
-      socket.on("payment:completed", (data: any) => {
+      socket.on("payment:completed", (data: User) => {
         console.log("💰 MemberDashboard received: payment:completed", data);
         console.log("   Current user ID:", userData._id, "or", userData.id);
         console.log("   Payment memberId:", data.memberId);
@@ -500,19 +535,19 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
       });
 
       // Listen for any new payment
-      socket.on("payment:new", (data: any) => {
+      socket.on("payment:new", (data: User) => {
         console.log("💰 MemberDashboard received: payment:new", data);
         fetchData(); // Refresh cycle stats
       });
 
       // Listen for cycle updates (new event name)
-      socket.on("cycle:updated", (data: any) => {
+      socket.on("cycle:updated", (data: User) => {
         console.log("🔄 MemberDashboard received: cycle:updated", data);
         fetchData(); // Refresh data immediately
       });
 
         // Listen for new disbursement events
-        socket.on("disbursement:new", (data: any) => {
+        socket.on("disbursement:new", (data: User) => {
           console.log("💸 MemberDashboard received: disbursement:new", data);
           toast({
             title: "New Disbursement Processed!",
@@ -522,13 +557,13 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         });
 
       // Listen for member additions/removals
-      socket.on("member:new", (data: any) => {
+      socket.on("member:new", (data: User) => {
         console.log("👤 MemberDashboard received: member:new", data);
         fetchData(); // Refresh to update total members count
       });
 
       // Listen for loan status updates
-      socket.on("loanStatusUpdated", (data: any) => {
+      socket.on("loanStatusUpdated", (data: User) => {
         if (data.memberId === userData._id || data.memberId === userData.id) {
           console.log("💰 Your loan status was updated:", data);
           const statusMessages: Record<string, string> = {
@@ -554,7 +589,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
       });
 
       // Listen for loan repayment updates
-      socket.on("loanPayment", (data: any) => {
+      socket.on("loanPayment", (data: User) => {
         console.log("💰 MemberDashboard received: loanPayment", data);
         console.log("   Current user ID:", userData._id, "or", userData.id);
         console.log("   Loan memberId:", data.memberId);
@@ -586,7 +621,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
       });
 
       // Listen for new announcements
-      socket.on("announcementCreated", (announcement: any) => {
+      socket.on("announcementCreated", (announcement: User) => {
         console.log("📢 New announcement received:", announcement);
 
         // Add the new announcement to the list
@@ -629,7 +664,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         socket.off("member:new");
       }
     };
-  }, [userData]);
+  }, [userData, fetchData, toast]);
 
   const handleMakePayment = () => {
     // Allow payment even if already paid - will be recorded for next cycle
@@ -2084,11 +2119,12 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                     size="sm"
                     onClick={() =>
                       setPartialPaymentAmount(
-                        (
+                        ((
                           selectedLoan?.current_remaining ||
                           selectedLoan?.amount_remaining ||
-                          selectedLoan?.total_repayable
-                        ).toString()
+                          selectedLoan?.total_repayable ||
+                          0
+                        ) as number).toString()
                       )
                     }
                     className="flex-1"
