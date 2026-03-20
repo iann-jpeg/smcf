@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FileText, FileCheck, FileClock, Download, Upload, Loader2, ClipboardList, CheckCircle2, Eye, RefreshCw, UserCheck, XCircle, ShieldAlert } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { downloadMembershipForm, downloadProjectProposal } from "@/lib/pdf-export";
+import { downloadBrandedPolicyDocument, downloadMembershipForm, downloadProjectProposal } from "@/lib/pdf-export";
 import { toast } from "sonner";
 
 type KycFieldKey =
@@ -35,6 +35,287 @@ type KycDocument = {
   dataUrl: string;
   updatedAt?: string | null;
 };
+
+type AdminPolicyTemplate = {
+  id: string;
+  title: string;
+  subtitle: string;
+  fileName: string;
+  lines: string[];
+};
+
+const ADMIN_POLICY_TEMPLATES: AdminPolicyTemplate[] = [
+  {
+    id: "share-capital-policy",
+    title: "Share Capital Policy",
+    subtitle: "Ownership, limits, and voting framework",
+    fileName: "SMCF_Share_Capital_Policy.pdf",
+    lines: [
+      "SMART MOVES CASHFLOW (SMCF)",
+      "SHARE CAPITAL POLICY",
+      "",
+      "Purpose:",
+      "This policy defines the structure, ownership, and management of share capital within SMART MOVES CASHFLOW (SMCF).",
+      "",
+      "1. Share Value",
+      "Each share shall have a fixed value of KES 1,000.",
+      "",
+      "2. Minimum Shareholding",
+      "Each member shall hold a minimum of 10 shares (KES 10,000).",
+      "",
+      "3. Maximum Shareholding",
+      "No member shall own more than 20% of total shares.",
+      "",
+      "4. Ownership",
+      "Shares represent ownership and determine dividend entitlement.",
+      "",
+      "5. Voting Rights",
+      "Each member shall have one vote only, regardless of shares owned.",
+      "",
+      "6. Share Records",
+      "All shares shall be recorded digitally and maintained permanently.",
+    ],
+  },
+  {
+    id: "dividend-policy",
+    title: "Dividend Distribution Policy",
+    subtitle: "Profit allocation and payout framework",
+    fileName: "SMCF_Dividend_Distribution_Policy.pdf",
+    lines: [
+      "SMART MOVES CASHFLOW (SMCF)",
+      "DIVIDEND POLICY",
+      "",
+      "1. Profit Allocation",
+      "70% -> Shareholders",
+      "20% -> Reserve Fund",
+      "10% -> Operations",
+      "",
+      "2. Calculation Formula",
+      "Dividend = (Member Shares / Total Shares) x Dividend Pool",
+      "",
+      "3. Payment",
+      "Dividends shall be credited to member wallets or paid via M-PESA.",
+      "",
+      "4. Frequency",
+      "Declared annually or as approved.",
+    ],
+  },
+  {
+    id: "share-purchase-policy",
+    title: "Share Purchase Policy",
+    subtitle: "Rules for buying shares",
+    fileName: "SMCF_Share_Purchase_Policy.pdf",
+    lines: [
+      "SHARE PURCHASE POLICY",
+      "",
+      "Members may purchase shares anytime",
+      "Payments via M-PESA or bank",
+      "Shares recorded instantly",
+      "Receipts generated automatically",
+    ],
+  },
+  {
+    id: "share-transfer-policy",
+    title: "Share Transfer Policy",
+    subtitle: "Internal transfer controls",
+    fileName: "SMCF_Share_Transfer_Policy.pdf",
+    lines: [
+      "SHARE TRANSFER POLICY",
+      "",
+      "Transfers allowed only between members",
+      "Requires committee approval",
+      "Must be recorded in system",
+      "No external transfers allowed",
+    ],
+  },
+  {
+    id: "member-exit-policy",
+    title: "Member Exit Policy",
+    subtitle: "Exit eligibility and settlement",
+    fileName: "SMCF_Member_Exit_Policy.pdf",
+    lines: [
+      "MEMBER EXIT POLICY",
+      "",
+      "Conditions:",
+      "All loans must be cleared",
+      "Shares evaluated",
+      "",
+      "Settlement:",
+      "Paid within 30-90 days",
+      "",
+      "Shares may be:",
+      "Bought by SACCO",
+      "Transferred",
+    ],
+  },
+  {
+    id: "reserve-fund-policy",
+    title: "Reserve Fund Policy",
+    subtitle: "Sources, usage, and controls",
+    fileName: "SMCF_Reserve_Fund_Policy.pdf",
+    lines: [
+      "RESERVE FUND POLICY",
+      "",
+      "Sources:",
+      "Loan penalties",
+      "Withdrawal penalties",
+      "% of profits",
+      "",
+      "Usage:",
+      "Cover loan defaults",
+      "Emergency support",
+      "Financial stability",
+      "",
+      "Control:",
+      "Admin + committee approval required",
+    ],
+  },
+  {
+    id: "shareholder-register",
+    title: "Shareholder Register",
+    subtitle: "Official register template",
+    fileName: "SMCF_Shareholder_Register.pdf",
+    lines: [
+      "SHAREHOLDER REGISTER",
+      "No    Name    ID    Phone    Shares    Value    Date Joined    Signature",
+    ],
+  },
+  {
+    id: "share-certificate",
+    title: "Share Certificate",
+    subtitle: "Issuance certificate template",
+    fileName: "SMCF_Share_Certificate_Template.pdf",
+    lines: [
+      "SHARE CERTIFICATE",
+      "",
+      "This certifies that:",
+      "Name: ____________________",
+      "Member ID: _______________",
+      "",
+      "Owns:",
+      "________ Shares",
+      "Valued at KES ________",
+      "",
+      "Issued by:",
+      "SMART MOVES CASHFLOW (SMCF)",
+      "",
+      "Date: __________",
+      "",
+      "Signature: __________",
+      "Stamp:",
+    ],
+  },
+  {
+    id: "dividend-statement",
+    title: "Dividend Statement",
+    subtitle: "Member dividend statement template",
+    fileName: "SMCF_Dividend_Statement_Template.pdf",
+    lines: [
+      "DIVIDEND STATEMENT",
+      "",
+      "Member: __________________",
+      "Shares: __________________",
+      "",
+      "Total Profit: __________",
+      "Dividend Pool: __________",
+      "",
+      "Dividend Earned: __________",
+      "",
+      "Date: __________",
+    ],
+  },
+  {
+    id: "share-summary-report",
+    title: "SACCO Share Summary Report",
+    subtitle: "High-level share capital summary",
+    fileName: "SMCF_Share_Summary_Report_Template.pdf",
+    lines: [
+      "SHARE SUMMARY REPORT",
+      "",
+      "Total Members: ______",
+      "",
+      "Total Shares: ______",
+      "",
+      "Share Value: ______",
+      "",
+      "Total Capital: ______",
+    ],
+  },
+  {
+    id: "annual-shareholder-report",
+    title: "Annual Shareholder Report",
+    subtitle: "Annual performance report structure",
+    fileName: "SMCF_Annual_Shareholder_Report_Template.pdf",
+    lines: [
+      "ANNUAL REPORT",
+      "Includes:",
+      "Member growth",
+      "Total savings",
+      "Loans issued",
+      "Dividends distributed",
+      "Reserve fund growth",
+    ],
+  },
+  {
+    id: "shareholder-onboarding-form",
+    title: "Shareholder Onboarding Form",
+    subtitle: "Registration form template",
+    fileName: "SMCF_Shareholder_Onboarding_Form_Template.pdf",
+    lines: [
+      "SHAREHOLDER REGISTRATION FORM",
+      "",
+      "Name: __________________",
+      "ID: __________________",
+      "Phone: ________________",
+      "",
+      "Shares Purchased: ______",
+      "",
+      "Signature: __________",
+    ],
+  },
+  {
+    id: "constitution-clause-shares",
+    title: "Constitution Clause (Shares)",
+    subtitle: "Official constitution text",
+    fileName: "SMCF_Constitution_Clause_Shares.pdf",
+    lines: [
+      "CONSTITUTION CLAUSE (SHARES)",
+      "Each member shall purchase a minimum of 10 shares valued at KES 1,000 each. Shares determine ownership and dividends but not voting rights.",
+    ],
+  },
+  {
+    id: "dividend-resolution-letter",
+    title: "Dividend Resolution Letter",
+    subtitle: "Resolution template for dividend declaration",
+    fileName: "SMCF_Dividend_Resolution_Letter_Template.pdf",
+    lines: [
+      "RESOLUTION",
+      "",
+      "We, the members of SMART MOVES CASHFLOW, resolve to distribute dividends as per approved policy.",
+      "",
+      "Chairperson: __________",
+      "Secretary: __________",
+    ],
+  },
+  {
+    id: "exit-settlement-letter",
+    title: "Exit Settlement Letter",
+    subtitle: "Member exit settlement template",
+    fileName: "SMCF_Exit_Settlement_Letter_Template.pdf",
+    lines: [
+      "EXIT LETTER",
+      "",
+      "This confirms that:",
+      "",
+      "Member: __________",
+      "",
+      "Has exited and is entitled to:",
+      "",
+      "Shares Value: ______",
+      "Final Settlement: ______",
+    ],
+  },
+];
 
 export default function Documents() {
   const { data: loans = [] } = useLoans();
@@ -275,6 +556,7 @@ export default function Documents() {
           <TabsTrigger value="schedules">Repayment Schedules</TabsTrigger>
           <TabsTrigger value="forms">Membership Forms</TabsTrigger>
           {isAdmin && <TabsTrigger value="proposal">Project Proposal</TabsTrigger>}
+          <TabsTrigger value="admin-docs">SACCO Documents</TabsTrigger>
         </TabsList>
 
         <TabsContent value="loans" className="mt-4">
@@ -398,6 +680,45 @@ export default function Documents() {
             </Card>
           </TabsContent>
         )}
+
+        <TabsContent value="admin-docs" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="font-heading">SACCO Documents</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Branded policy and form templates available for members and admin to view and download.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {ADMIN_POLICY_TEMPLATES.map((template) => (
+                  <Card key={template.id} className="border border-border/60">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base font-heading">{template.title}</CardTitle>
+                      <p className="text-xs text-muted-foreground">{template.subtitle}</p>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <Button
+                        className="w-full gap-2"
+                        variant="outline"
+                        onClick={() =>
+                          downloadBrandedPolicyDocument(
+                            template.title,
+                            template.fileName,
+                            template.lines
+                          )
+                        }
+                      >
+                        <Download className="h-4 w-4" />
+                        Download
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="forms" className="mt-4" onAnimationStart={isStaff ? loadSubmissions : undefined}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
