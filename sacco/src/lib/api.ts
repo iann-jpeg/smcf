@@ -387,7 +387,6 @@ export async function getMainSmcfBridgeMessages(): Promise<MemberMessageItem[]> 
       (import.meta.env.VITE_SMCF_API_KEY as string);
 
     if (!mainSmcfUrl || !bridgeKey) {
-      console.warn("Bridge config incomplete, skipping Main SMCF bridge feed");
       return [];
     }
 
@@ -400,7 +399,6 @@ export async function getMainSmcfBridgeMessages(): Promise<MemberMessageItem[]> 
     });
 
     if (!res.ok) {
-      console.warn("Bridge feed fetch failed:", res.status);
       if (res.status >= 500) {
         bridgeFeedRetryAfter = Date.now() + 60_000;
       }
@@ -421,8 +419,8 @@ export async function getMainSmcfBridgeMessages(): Promise<MemberMessageItem[]> 
       status: m.status || "new",
       createdAt: m.createdAt || m.created_at || new Date().toISOString(),
     }));
-  } catch (err) {
-    console.warn("Error fetching Main SMCF bridge messages:", err);
+  } catch {
+    bridgeFeedRetryAfter = Date.now() + 60_000;
     return [];
   }
 }

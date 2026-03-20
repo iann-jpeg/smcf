@@ -1,10 +1,13 @@
 let audioCtx: AudioContext | null = null;
 let initialized = false;
+let hasUserGesture = false;
 
 function getAudioContext(): AudioContext | null {
   if (typeof window === "undefined") return null;
   const Ctor = window.AudioContext || (window as any).webkitAudioContext;
   if (!Ctor) return null;
+  // Creating AudioContext before user gesture triggers autoplay policy warnings.
+  if (!hasUserGesture) return null;
   if (!audioCtx) audioCtx = new Ctor();
   return audioCtx;
 }
@@ -14,13 +17,14 @@ function ensureAudioReady() {
   initialized = true;
 
   const unlock = () => {
+    hasUserGesture = true;
     const ctx = getAudioContext();
     if (!ctx) return;
     if (ctx.state === "suspended") ctx.resume().catch(() => {});
   };
 
-  window.addEventListener("pointerdown", unlock, { passive: true });
-  window.addEventListener("keydown", unlock, { passive: true });
+  window.addEventListener("pointerdown", unlock, { passive: true, once: true });
+  window.addEventListener("keydown", unlock, { passive: true, once: true });
 }
 
 function scheduleTone(
@@ -50,6 +54,7 @@ function scheduleTone(
 
 export function playNotificationSound() {
   ensureAudioReady();
+  if (!hasUserGesture) return;
   const ctx = getAudioContext();
   if (!ctx) return;
 
@@ -60,6 +65,7 @@ export function playNotificationSound() {
 
 export function playAtmDepositSound() {
   ensureAudioReady();
+  if (!hasUserGesture) return;
   const ctx = getAudioContext();
   if (!ctx) return;
 
