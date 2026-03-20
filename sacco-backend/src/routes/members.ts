@@ -148,7 +148,8 @@ router.put('/me', protect, async (req: AuthRequest, res, next) => {
     }
 
     if (Object.keys(update).length === 0) {
-      return res.json({ success: true, data: existingMember });
+      const currentMember = await Member.findOne({ userId: req.userId }).populate('userId', 'email fullName');
+      return res.json({ success: true, data: currentMember ?? existingMember });
     }
 
     const member = await Member.findOneAndUpdate(
