@@ -30,6 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoRefresh } from "@/hooks/use-auto-refresh";
 import API_BASE from "@/lib/api";
@@ -1328,20 +1329,14 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                       %
                     </span>
                   </div>
-                  <div className="w-full bg-muted rounded-full h-3">
-                    <div
-                      className="bg-gradient-to-r from-financial-success to-financial-primary h-3 rounded-full transition-all duration-500"
-                      style={{
-                        width: `${
-                          currentCycleData?.totalMembers > 0
-                            ? (currentCycleData.paidMembers /
-                                currentCycleData.totalMembers) *
-                              100
-                            : 0
-                        }%`,
-                      }}
-                    />
-                  </div>
+                  <Progress
+                    className="h-3 [&>div]:bg-gradient-to-r [&>div]:from-financial-success [&>div]:to-financial-primary"
+                    value={
+                      currentCycleData?.totalMembers > 0
+                        ? (currentCycleData.paidMembers / currentCycleData.totalMembers) * 100
+                        : 0
+                    }
+                  />
                   <div className="flex justify-between mt-2">
                     <span className="text-xs text-muted-foreground">
                       {currentCycleData?.paidMembers || 0} of{" "}
@@ -1516,7 +1511,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         </TabsContent>
 
         <TabsContent value="wallet" className="space-y-4">
-          <ProfilePictureUpload userData={userData} />
+          <ProfilePictureUpload userData={{ ...userData, name: userData?.name || userData?.username || "Member" }} />
           <MemberWallet userData={userData} />
         </TabsContent>
 
@@ -1584,19 +1579,17 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                   {memberLoans.map((loan) => (
                     <Card
                       key={loan._id}
-                      className="border-l-4"
-                      style={{
-                        borderLeftColor:
-                          loan.status === "approved"
-                            ? "#10b981"
-                            : loan.status === "rejected"
-                            ? "#ef4444"
-                            : loan.status === "disbursed"
-                            ? "#3b82f6"
-                            : loan.status === "repaid"
-                            ? "#8b5cf6"
-                            : "#f59e0b",
-                      }}>
+                      className={`border-l-4 ${
+                        loan.status === "approved"
+                          ? "border-l-emerald-500"
+                          : loan.status === "rejected"
+                          ? "border-l-red-500"
+                          : loan.status === "disbursed"
+                          ? "border-l-blue-500"
+                          : loan.status === "repaid"
+                          ? "border-l-violet-500"
+                          : "border-l-amber-500"
+                      }`}>
                       <CardContent className="pt-4">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                           <div className="flex-1">
@@ -1726,19 +1719,15 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                                           Remaining: KES {(loan.current_remaining || loan.amount_remaining)?.toLocaleString()}
                                         </span>
                                       </div>
-                                      <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
-                                        <div
-                                          className="bg-green-600 h-2 rounded-full transition-all"
-                                          style={{
-                                            width: `${Math.min(
-                                              ((loan.amount_paid || 0) /
-                                                (loan.current_total_due || loan.total_repayable || loan.amount)) *
-                                                100,
-                                              100
-                                            )}%`,
-                                          }}
-                                        />
-                                      </div>
+                                      <Progress
+                                        className="h-2 mt-1 [&>div]:bg-green-600"
+                                        value={Math.min(
+                                          ((loan.amount_paid || 0) /
+                                            (loan.current_total_due || loan.total_repayable || loan.amount)) *
+                                            100,
+                                          100
+                                        )}
+                                      />
                                     </div>
                                   )}
                                   {/* Due Date */}
@@ -1863,7 +1852,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                     <div className="flex items-center justify-between p-3 border-t-2 border-b-2 border-primary bg-primary/10 rounded-lg mt-4">
                       <div className="font-semibold text-primary">Total</div>
                       <div className="font-bold text-primary">
-                        KES {paymentHistory.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0).toLocaleString()}
+                        KES {paymentHistory.reduce((sum, p) => sum + (Number(p.amount) || 0), 0).toLocaleString()}
                       </div>
                     </div>
                   )}
@@ -2059,20 +2048,15 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                     %
                   </span>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-3">
-                  <div
-                    className="bg-green-600 h-3 rounded-full transition-all"
-                    style={{
-                      width: `${Math.min(
-                        ((selectedLoan.amount_paid || 0) /
-                          (selectedLoan.total_repayable ||
-                            selectedLoan.amount)) *
-                          100,
-                        100
-                      )}%`,
-                    }}
-                  />
-                </div>
+                <Progress
+                  className="h-3 [&>div]:bg-green-600"
+                  value={Math.min(
+                    ((selectedLoan.amount_paid || 0) /
+                      (selectedLoan.total_repayable || selectedLoan.amount)) *
+                      100,
+                    100
+                  )}
+                />
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div>
                     <p className="text-muted-foreground">Paid</p>
