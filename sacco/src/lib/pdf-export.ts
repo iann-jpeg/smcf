@@ -1530,3 +1530,78 @@ export function downloadProjectProposal() {
   addPageFooters(doc, "SMCF SACCO — Project Proposal | Confidential");
   doc.save("SMCF_SACCO_Project_Proposal.pdf");
 }
+
+export function downloadBrandedPolicyDocument(
+  title: string,
+  fileName: string,
+  lines: string[]
+) {
+  const doc = new jsPDF();
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const L = 14;
+  const W = pageW - 28;
+
+  const drawHeader = () => {
+    doc.setFillColor(...NAVY);
+    doc.rect(0, 0, pageW, 28, "F");
+    doc.setFillColor(...GOLD);
+    doc.rect(0, 28, pageW, 2, "F");
+
+    doc.setFontSize(20);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(255, 255, 255);
+    doc.text(SACCO_NAME, L, 14);
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(200, 200, 220);
+    doc.text(SACCO_TAGLINE, L, 22);
+
+    doc.setFontSize(13);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...NAVY);
+    doc.text(title, L, 40);
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100);
+    doc.text(`Generated: ${DATE_FMT.format(new Date())}`, L, 47);
+    doc.setTextColor(0);
+  };
+
+  drawHeader();
+  let y = 58;
+
+  const ensureSpace = (needed = 8) => {
+    if (y + needed > pageH - 24) {
+      doc.addPage();
+      drawHeader();
+      y = 58;
+    }
+  };
+
+  lines.forEach((line) => {
+    if (line.trim() === "") {
+      y += 3;
+      return;
+    }
+
+    const isHeading =
+      /^[0-9]+\./.test(line) ||
+      /^[A-Z][A-Z\s()\-:]+$/.test(line) ||
+      line.endsWith(":");
+
+    doc.setFont("helvetica", isHeading ? "bold" : "normal");
+    doc.setFontSize(isHeading ? 10 : 9);
+    doc.setTextColor(isHeading ? NAVY[0] : 40, isHeading ? NAVY[1] : 40, isHeading ? NAVY[2] : 40);
+
+    const wrapped = doc.splitTextToSize(line, W);
+    ensureSpace(wrapped.length * 5 + 2);
+    doc.text(wrapped, L, y);
+    y += wrapped.length * 5 + (isHeading ? 1.5 : 0.8);
+  });
+
+  addPageFooters(doc, `SMCF SACCO — ${title}`);
+  doc.save(fileName);
+}
