@@ -240,11 +240,14 @@ export interface AdminEmailBroadcastPayload {
   dryRun?: boolean;
   isHtml?: boolean;
   templateMode?: "plain" | "branded";
+  recipientMode?: "filters" | "manual";
   filters?: {
     staffOnly?: boolean;
     activeMembersOnly?: boolean;
     verifiedUsersOnly?: boolean;
   };
+  selectedMemberIds?: string[];
+  manualEmails?: string[];
 }
 
 export interface AdminEmailBroadcastResponse {
@@ -341,7 +344,7 @@ export async function sendAdminEmailBroadcast(
   payload: AdminEmailBroadcastPayload
 ): Promise<AdminEmailBroadcastResponse> {
   try {
-    return await api.post("/communications/send-email-broadcast", payload);
+    return await api.post("/email/broadcast", payload);
   } catch (err) {
     console.error("Error sending broadcast:", err);
     throw err;

@@ -32,11 +32,14 @@ export default function AdminEmail() {
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [templateMode, setTemplateMode] = useState<"plain" | "branded">("plain");
+  const [recipientMode, setRecipientMode] = useState<"filters" | "manual">("filters");
   const [filters, setFilters] = useState({
     staffOnly: false,
     activeMembersOnly: false,
     verifiedUsersOnly: false,
   });
+  const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set());
+  const [manualEmails, setManualEmails] = useState("");
   const [lastResult, setLastResult] = useState<AdminEmailBroadcastResponse | null>(null);
   const seenMessageIdsRef = useRef<Set<string>>(new Set());
   const seededMessageIdsRef = useRef(false);
@@ -134,13 +137,20 @@ export default function AdminEmail() {
 
   const runBroadcast = useMutation({
     mutationFn: async ({ dryRun }: { dryRun: boolean }) => {
+      const emailList = recipientMode === "manual" 
+        ? manualEmails.split(/[,\n]/).map(e => e.trim()).filter(Boolean)
+        : [];
+      
       return sendAdminEmailBroadcast({
         subject: subject.trim(),
         message: message.trim(),
         dryRun,
         isHtml: false,
         templateMode,
-        filters,
+        recipientMode,
+        filters: recipientMode === "filters" ? filters : undefined,
+        selectedMemberIds: recipientMode === "manual" ? Array.from(selectedMemberIds) : undefined,
+        manualEmails: recipientMode === "manual" ? emailList : undefined,
       });
     },
     onSuccess: (payload, vars) => {
@@ -223,6 +233,21 @@ export default function AdminEmail() {
             </div>
 
             <div className="space-y-2">
+              <Label>Recipient Mode</Label>
+              <Select value={recipientMode} onValueChange={(v) => setRecipientMode(v as "filters" | "manual")}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="filters">Use Filters</SelectItem>
+                  <SelectItem value="manual">Select Specific Recipients</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {recipientMode === "filters" && (
+            <div className="space-y-2">
               <Label>Recipient Filters</Label>
               <div className="space-y-2 border rounded-md p-3">
                 <label className="flex items-center gap-2 text-sm">
@@ -248,7 +273,23 @@ export default function AdminEmail() {
                 </label>
               </div>
             </div>
-          </div>
+          )}
+
+          {recipientMode === "manual" && (
+            <div className="space-y-2">
+              <Label htmlFor="manual-emails">Recipients (Email or Member IDs)</Label>
+              <Textarea
+                id="manual-emails"
+                value={manualEmails}
+                onChange={(e) => setManualEmails(e.target.value)}
+                className="min-h-[120px]"
+                placeholder="Enter emails or member IDs separated by commas or newlines..."
+              />
+              <p className="text-xs text-muted-foreground">
+                Separate multiple recipients by comma or newline. Can be email addresses or member IDs.
+              </p>
+            </div>
+          )}
 
           <div className="flex flex-wrap gap-3">
             <Button

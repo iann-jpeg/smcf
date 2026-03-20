@@ -30,6 +30,7 @@ import userRoutes from './routes/users';
 import mpesaRoutes from './routes/mpesa';
 import configRoutes from './routes/config';
 import sharesRoutes from './routes/shares';
+import communicationsRoutes from './routes/communications';
 
 // Initialize app
 const app: Application = express();
@@ -115,6 +116,8 @@ app.use('/api/users', userRoutes);
 app.use('/api/mpesa', mpesaRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/shares', sharesRoutes);
+app.use('/api/communications', communicationsRoutes);
+app.use('/api/email', communicationsRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {
