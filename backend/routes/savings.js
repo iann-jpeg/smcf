@@ -1324,7 +1324,7 @@ router.get("/admin/fees/summary", protect, adminOnly, async (req, res) => {
   } catch (error) {
     console.error("Error fetching fee summary:", error);
 // Admin: Check matured deposits (can be run manually or via cron)
-router.post("/check-maturity", adminOnly, async (req, res) => {
+router.post("/check-maturity", protect, adminOnly, async (req, res) => {
   try {
     const result = await checkMaturedDeposits();
     res.json(result);
@@ -1335,7 +1335,7 @@ router.post("/check-maturity", adminOnly, async (req, res) => {
 });
 
 // Admin: Get maturity statistics
-router.get("/maturity-stats", adminOnly, async (req, res) => {
+router.get("/maturity-stats", protect, adminOnly, async (req, res) => {
   try {
     const stats = await getMaturityStats();
     res.json(stats);
@@ -1346,7 +1346,7 @@ router.get("/maturity-stats", adminOnly, async (req, res) => {
 });
 
 // Admin: Get all member savings with maturity info
-router.get("/admin/all-with-maturity", adminOnly, async (req, res) => {
+router.get("/admin/all-with-maturity", protect, adminOnly, async (req, res) => {
   try {
     const { maturity_status, member_id } = req.query;
 
@@ -1508,7 +1508,7 @@ router.post("/check-early-withdrawal", protect, async (req, res) => {
 });
 
 // Get early withdrawal settings (admin)
-router.get("/admin/early-withdrawal-settings", adminOnly, async (req, res) => {
+router.get("/admin/early-withdrawal-settings", protect, adminOnly, async (req, res) => {
   try {
     const settings = await getEarlyWithdrawalSettings();
     res.json({ success: true, data: settings });
@@ -1519,7 +1519,7 @@ router.get("/admin/early-withdrawal-settings", adminOnly, async (req, res) => {
 });
 
 // Update early withdrawal settings (admin)
-router.put("/admin/early-withdrawal-settings", adminOnly, async (req, res) => {
+router.put("/admin/early-withdrawal-settings", protect, adminOnly, async (req, res) => {
   try {
     const adminId = req.admin._id;
     const updates = req.body;
