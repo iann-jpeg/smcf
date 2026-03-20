@@ -8,10 +8,33 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { FileText, FileCheck, FileClock, Download, Upload, Loader2, ClipboardList, CheckCircle2, Eye, RefreshCw, UserCheck, XCircle, ShieldAlert } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { downloadMembershipForm, downloadProjectProposal } from "@/lib/pdf-export";
 import { toast } from "sonner";
+
+type KycFieldKey =
+  | "doc_id_copy"
+  | "doc_passport_photo"
+  | "doc_membership_form"
+  | "doc_kra_pin_certificate";
+
+const KYC_FIELD_LABELS: Record<KycFieldKey, string> = {
+  doc_id_copy: "National ID / Passport",
+  doc_passport_photo: "Passport Photo",
+  doc_membership_form: "Signed Membership Form",
+  doc_kra_pin_certificate: "KRA PIN Certificate",
+};
+
+type KycDocument = {
+  memberId: string;
+  memberName: string;
+  field: KycFieldKey;
+  label: string;
+  dataUrl: string;
+  updatedAt?: string | null;
+};
 
 export default function Documents() {
   const { data: loans = [] } = useLoans();
@@ -23,6 +46,8 @@ export default function Documents() {
 
   const [uploading, setUploading] = useState(false);
   const [uploaded, setUploaded] = useState(false);
+  const [kycSearch, setKycSearch] = useState("");
+  const [kycCategory, setKycCategory] = useState<KycFieldKey | "all">("all");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Admin: submitted membership forms ──────────────────────────────────
@@ -99,6 +124,46 @@ export default function Documents() {
 
   const activeLoans = loans.filter((l: any) => ["repaying", "disbursed", "approved"].includes(l.status));
 
+  const memberKycDocuments = useMemo<KycDocument[]>(() => {
+    const docs: KycDocument[] = [];
+    const kycFields = Object.keys(KYC_FIELD_LABELS) as KycFieldKey[];
+
+    (members as any[]).forEach((member) => {
+      const memberName = member?.name || member?.username || member?.email || "Unknown Member";
+      const memberId = member?.member_id || member?.memberId || member?.id || member?._id || "N/A";
+
+      kycFields.forEach((field) => {
+        const value = member?.[field];
+        if (typeof value === "string" && value.startsWith("data:")) {
+          docs.push({
+            memberId: String(memberId),
+            memberName,
+            field,
+            label: KYC_FIELD_LABELS[field],
+            dataUrl: value,
+            updatedAt: member?.updated_at || member?.updatedAt || null,
+          });
+        }
+      });
+    });
+
+    return docs;
+  }, [members]);
+
+  const filteredMemberKycDocuments = useMemo(() => {
+    const q = kycSearch.trim().toLowerCase();
+    if (!q && kycCategory === "all") return memberKycDocuments;
+    return memberKycDocuments.filter((doc) => {
+      const matchesCategory = kycCategory === "all" || doc.field === kycCategory;
+      if (!matchesCategory) return false;
+      return (
+        doc.memberName.toLowerCase().includes(q) ||
+        doc.memberId.toLowerCase().includes(q) ||
+        doc.label.toLowerCase().includes(q)
+      );
+    });
+  }, [memberKycDocuments, kycSearch, kycCategory]);
+
   const stats = useMemo(() => ({
     loanAgreements: loans.length,
     guarantorAgreements: guarantors.length,
@@ -151,6 +216,20 @@ export default function Documents() {
       // Reset input so the same file can be re-selected if needed
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
+  }
+
+  function openDataUrl(dataUrl: string) {
+    window.open(dataUrl, "_blank", "noopener,noreferrer");
+  }
+
+  function downloadDataUrl(dataUrl: string, filename = "document") {
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = filename;
+    a.rel = "noopener noreferrer";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   }
 
   return (
@@ -577,6 +656,129 @@ export default function Documents() {
                             </TableRow>
                           );
                         })}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* ── Staff: Member KYC Documents from My Account uploads ───────── */}
+          {isStaff && (
+            <div className="mt-8 space-y-4">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="h-5 w-5 text-blue-500" />
+                <h2 className="font-heading font-bold text-lg">Member KYC Documents</h2>
+                <Badge variant="secondary" className="ml-1">
+                  {filteredMemberKycDocuments.length} document{filteredMemberKycDocuments.length !== 1 ? "s" : ""}
+                </Badge>
+              </div>
+
+              <p className="text-sm text-muted-foreground">
+                Documents uploaded by members in My Account are listed here for review and retrieval.
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <Input
+                  className="md:col-span-2"
+                  placeholder="Search by member name, member ID, or document type"
+                  value={kycSearch}
+                  onChange={(e) => setKycSearch(e.target.value)}
+                />
+                <select
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  value={kycCategory}
+                  aria-label="Filter KYC documents by type"
+                  title="Filter KYC documents by type"
+                  onChange={(e) => setKycCategory(e.target.value as KycFieldKey | "all")}
+                >
+                  <option value="all">All Document Types</option>
+                  <option value="doc_id_copy">National ID / Passport</option>
+                  <option value="doc_passport_photo">Passport Photo</option>
+                  <option value="doc_membership_form">Signed Membership Form</option>
+                  <option value="doc_kra_pin_certificate">KRA PIN Certificate</option>
+                </select>
+              </div>
+
+              <Card>
+                <CardContent className="p-0">
+                  {filteredMemberKycDocuments.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
+                      <FileText className="h-10 w-10 opacity-30" />
+                      <p className="text-sm">
+                        {kycSearch.trim() || kycCategory !== "all"
+                          ? "No documents matched your search."
+                          : "No member KYC documents found yet."}
+                      </p>
+                      <p className="text-xs">
+                        {kycSearch.trim() || kycCategory !== "all"
+                          ? "Try a different name, member ID, or document type."
+                          : "Uploaded documents from My Account will appear here."}
+                      </p>
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Member</TableHead>
+                          <TableHead>Document Type</TableHead>
+                          <TableHead>Last Updated</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredMemberKycDocuments.map((doc, index) => (
+                          <TableRow key={`${doc.memberId}-${doc.field}-${index}`}>
+                            <TableCell>
+                              <div>
+                                <p className="font-medium text-sm">{doc.memberName}</p>
+                                <p className="text-xs text-muted-foreground font-mono">{doc.memberId}</p>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{doc.label}</Badge>
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {doc.updatedAt
+                                ? new Date(doc.updatedAt).toLocaleString("en-KE", {
+                                    year: "numeric",
+                                    month: "short",
+                                    day: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })
+                                : "N/A"}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 gap-1 text-xs"
+                                  onClick={() => openDataUrl(doc.dataUrl)}
+                                  title="View"
+                                >
+                                  <Eye className="h-3.5 w-3.5" />View
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 gap-1 text-xs"
+                                  onClick={() =>
+                                    downloadDataUrl(
+                                      doc.dataUrl,
+                                      `${doc.memberName.replace(/\s+/g, "_")}_${doc.field}`
+                                    )
+                                  }
+                                  title="Download"
+                                >
+                                  <Download className="h-3.5 w-3.5" />Download
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
                       </TableBody>
                     </Table>
                   )}
