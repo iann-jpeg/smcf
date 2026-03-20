@@ -299,29 +299,35 @@ router.post("/withdraw", protect, async (req, res) => {
     // Calculate available (unlocked) balance
     const availableBalance = currentBalance - totalLockedAmount;
 
-    // Check if member has enough unlocked balance for withdrawal amount + fee
-    if (availableBalance < totalDeduction) {
-      let errorMessage = `Insufficient unlocked balance. Withdrawal: KES ${amount}, Fee: KES ${withdrawalFee}, Total needed: KES ${totalDeduction}, Available balance: KES ${availableBalance}`;
-      
-      if (totalLockedAmount > 0 && earliestUnlockDate) {
-        errorMessage += ` | Locked funds: KES ${totalLockedAmount} (earliest unlock: ${earliestUnlockDate.toLocaleDateString()})`;
-      }
-      
-      return res.status(400).json({
-        success: false,
-        error: errorMessage,
-        lockedAmount: totalLockedAmount,
-        availableBalance: availableBalance,
-        earliestUnlockDate: earliestUnlockDate,
-      });
-    }
-
     // Check if member has enough total balance for withdrawal amount + fee
     if (currentBalance < totalDeduction) {
       return res.status(400).json({
         success: false,
         error: `Insufficient balance. Withdrawal: KES ${amount}, Fee: KES ${withdrawalFee}, Total needed: KES ${totalDeduction}, Your balance: KES ${currentBalance}`,
       });
+    }
+
+    // If withdrawal needs locked funds, ensure early withdrawal policy allows it.
+    if (availableBalance < totalDeduction) {
+      const settings = await getEarlyWithdrawalSettings();
+
+      if (!settings.enabled) {
+        let errorMessage = `Insufficient unlocked balance. Withdrawal: KES ${amount}, Fee: KES ${withdrawalFee}, Total needed: KES ${totalDeduction}, Available balance: KES ${availableBalance}`;
+
+        if (totalLockedAmount > 0 && earliestUnlockDate) {
+          errorMessage += ` | Locked funds: KES ${totalLockedAmount} (earliest unlock: ${earliestUnlockDate.toLocaleDateString()})`;
+        }
+
+        errorMessage += " | Early withdrawal is currently disabled by admin.";
+
+        return res.status(400).json({
+          success: false,
+          error: errorMessage,
+          lockedAmount: totalLockedAmount,
+          availableBalance: availableBalance,
+          earliestUnlockDate: earliestUnlockDate,
+        });
+      }
     }
 
     // Create withdrawal transaction (balance_after will be set when admin approves)
@@ -700,9 +706,12 @@ router.post("/admin/approve-withdrawal/:id", protect, adminOnly, async (req, res
       member_id: saving.member_id._id,
       transaction_type: "deposit",
       status: "completed",
-      maturity_status: "locked",
       unlock_date: { $gt: new Date() },
     }).sort({ created_at: 1 }); // FIFO
+
+    const totalLockedAmount = lockedDeposits.reduce((sum, dep) => sum + (dep.amount || 0), 0);
+    const unlockedBalanceAtApproval = Math.max(0, actualCurrentBalance - totalLockedAmount);
+    const amountSubjectToEarlyPenalty = Math.max(0, saving.amount - unlockedBalanceAtApproval);
 
     let earlyWithdrawalPenalty = 0;
     let penaltyPercentage = 0;
@@ -711,10 +720,10 @@ router.post("/admin/approve-withdrawal/:id", protect, adminOnly, async (req, res
     const affectedDeposits = [];
 
     // Calculate early withdrawal penalty if applicable
-    if (lockedDeposits.length > 0) {
+    if (lockedDeposits.length > 0 && amountSubjectToEarlyPenalty > 0) {
       const { calculateEarlyWithdrawalPenalty, addToReserveAccount } = await import("../services/earlyWithdrawalService.js");
       
-      let remainingAmount = saving.amount;
+      let remainingAmount = amountSubjectToEarlyPenalty;
 
       for (const deposit of lockedDeposits) {
         if (remainingAmount <= 0) break;
@@ -722,18 +731,20 @@ router.post("/admin/approve-withdrawal/:id", protect, adminOnly, async (req, res
         const amountFromThisDeposit = Math.min(remainingAmount, deposit.amount);
         const penaltyCalc = await calculateEarlyWithdrawalPenalty(deposit, amountFromThisDeposit);
 
-        if (penaltyCalc.allowed && penaltyCalc.penalty_amount > 0) {
-          isEarlyWithdrawal = true;
-          earlyWithdrawalPenalty += penaltyCalc.penalty_amount;
-          penaltyPercentage = Math.max(penaltyPercentage, penaltyCalc.penalty_percentage); // Use highest penalty rate
-          penaltyReason = penaltyCalc.reason;
+        if (penaltyCalc.allowed) {
+          if (penaltyCalc.penalty_amount > 0) {
+            isEarlyWithdrawal = true;
+            earlyWithdrawalPenalty += penaltyCalc.penalty_amount;
+            penaltyPercentage = Math.max(penaltyPercentage, penaltyCalc.penalty_percentage); // Use highest penalty rate
+            penaltyReason = penaltyCalc.reason;
 
-          // Track affected deposits
-          affectedDeposits.push({
-            deposit_id: deposit._id,
-            amount: amountFromThisDeposit,
-            penalty: penaltyCalc.penalty_amount,
-          });
+            // Track affected deposits
+            affectedDeposits.push({
+              deposit_id: deposit._id,
+              amount: amountFromThisDeposit,
+              penalty: penaltyCalc.penalty_amount,
+            });
+          }
 
           remainingAmount -= amountFromThisDeposit;
         }
@@ -1405,7 +1416,6 @@ router.post("/check-early-withdrawal", protect, async (req, res) => {
       member_id: memberId,
       transaction_type: "deposit",
       status: "completed",
-      maturity_status: "locked",
       unlock_date: { $gt: new Date() },
     }).sort({ created_at: 1 }); // Oldest first (FIFO)
 
@@ -1421,8 +1431,31 @@ router.post("/check-early-withdrawal", protect, async (req, res) => {
       });
     }
 
+    // Estimate unlocked amount first; only the remainder of requested amount can attract early-withdrawal penalties.
+    const latestCompletedTxn = await Saving.findOne({ member_id: memberId, status: "completed" }).sort({ created_at: -1 });
+    const currentBalance = latestCompletedTxn ? latestCompletedTxn.balance_after : 0;
+    const totalLockedAmount = lockedDeposits.reduce((sum, dep) => sum + (dep.amount || 0), 0);
+    const unlockedBalance = Math.max(0, currentBalance - totalLockedAmount);
+    const amountSubjectToPenalty = Math.max(0, amount - unlockedBalance);
+
+    if (amountSubjectToPenalty <= 0) {
+      const withdrawalFee = calculateWithdrawalFee(amount);
+      return res.json({
+        success: true,
+        early_withdrawal_allowed: true,
+        requested_amount: amount,
+        penalty_amount: 0,
+        withdrawal_fee: withdrawalFee,
+        net_amount: amount,
+        final_amount: amount - withdrawalFee,
+        affected_deposits: [],
+        credit_score_penalty: 0,
+        warning: "Withdrawal can be fulfilled from unlocked funds. No early withdrawal penalty will apply.",
+      });
+    }
+
     // Calculate which deposits would be affected
-    let remainingAmount = amount;
+    let remainingAmount = amountSubjectToPenalty;
     const affectedDeposits = [];
     let totalPenalty = 0;
 
