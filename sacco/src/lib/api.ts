@@ -318,9 +318,10 @@ export async function getMainSmcfBridgeMessages(): Promise<MemberMessageItem[]> 
   }
 }
 
-export async function getAdminEmailBroadcastHistory() {
+export async function getAdminEmailBroadcastHistory(): Promise<any[]> {
   try {
-    return await api.get("/communications/email-broadcast-history");
+    const result = await api.get("/communications/email-broadcast-history");
+    return Array.isArray(result) ? result : [];
   } catch (err) {
     console.error("Error fetching broadcast history:", err);
     return [];
