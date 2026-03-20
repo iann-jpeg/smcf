@@ -28,12 +28,31 @@ router.put('/me/profile', protect, async (req: AuthRequest, res, next) => {
     if (employer !== undefined && String(employer).trim()) update.employer = String(employer).trim();
     if (phone !== undefined && String(phone).trim()) update.phone = String(phone).trim();
     if (email !== undefined && String(email).trim()) update.email = String(email).toLowerCase().trim();
+
+    const existingMember = await Member.findOne({ userId: req.userId }).select('_id userId email');
+    if (!existingMember) return res.status(404).json({ success: false, message: 'Member profile not found' });
+
+    if (typeof update.email === 'string' && existingMember.userId) {
+      const duplicateUser = await User.findOne({
+        email: update.email,
+        _id: { $ne: existingMember.userId }
+      }).select('_id');
+      if (duplicateUser) {
+        return res.status(400).json({ success: false, message: 'Email is already used by another user account' });
+      }
+    }
+
     const member = await Member.findOneAndUpdate(
       { userId: req.userId },
       update,
       { new: true, runValidators: true }
     );
     if (!member) return res.status(404).json({ success: false, message: 'Member profile not found' });
+
+    if (typeof update.email === 'string' && existingMember.userId) {
+      await User.findByIdAndUpdate(existingMember.userId, { email: update.email });
+    }
+
     res.json({ success: true, data: member });
   } catch (error) {
     next(error);
@@ -113,9 +132,19 @@ router.put('/me', protect, async (req: AuthRequest, res, next) => {
       update.email = String(email).toLowerCase().trim();
     }
 
-    const existingMember = await Member.findOne({ userId: req.userId });
+    const existingMember = await Member.findOne({ userId: req.userId }).select('_id userId email');
     if (!existingMember) {
       return res.status(404).json({ success: false, message: 'Member profile not found' });
+    }
+
+    if (typeof update.email === 'string' && existingMember.userId) {
+      const duplicateUser = await User.findOne({
+        email: update.email,
+        _id: { $ne: existingMember.userId }
+      }).select('_id');
+      if (duplicateUser) {
+        return res.status(400).json({ success: false, message: 'Email is already used by another user account' });
+      }
     }
 
     if (Object.keys(update).length === 0) {
@@ -128,6 +157,11 @@ router.put('/me', protect, async (req: AuthRequest, res, next) => {
       { new: true, runValidators: true }
     );
     if (!member) return res.status(404).json({ success: false, message: 'Member profile not found' });
+
+    if (typeof update.email === 'string' && existingMember.userId) {
+      await User.findByIdAndUpdate(existingMember.userId, { email: update.email });
+    }
+
     res.json({ success: true, data: member });
   } catch (error) {
     next(error);
