@@ -1,27 +1,39 @@
 import { useAuditLogs } from "@/hooks/useAuditLogs";
 import { useMembers } from "@/hooks/useMembers";
+import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Shield, Eye } from "lucide-react";
 import { format } from "date-fns";
+import { Link } from "react-router-dom";
 
 export default function Compliance() {
   const { data: auditLogs = [], isLoading: logsLoading } = useAuditLogs();
   const { data: members = [] } = useMembers();
+  const { hasRole } = useAuth();
+  const isAdmin = hasRole("admin");
 
   const kycVerified = members.filter((m: any) => m.kyc_verified).length;
   const totalMembers = members.length;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Shield className="h-6 w-6 text-accent" />
-        <div>
-          <h1 className="text-2xl font-heading font-bold">Compliance & Audit</h1>
-          <p className="text-muted-foreground text-sm">Immutable audit trail &mdash; no deletions allowed</p>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <Shield className="h-6 w-6 text-accent" />
+          <div>
+            <h1 className="text-2xl font-heading font-bold">Compliance & Audit</h1>
+            <p className="text-muted-foreground text-sm">Immutable audit trail &mdash; no deletions allowed</p>
+          </div>
         </div>
+        {isAdmin && (
+          <Button asChild variant="outline" size="sm">
+            <Link to="/admin-email">Open Admin Communications</Link>
+          </Button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

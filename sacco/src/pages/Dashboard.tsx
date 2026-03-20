@@ -1,14 +1,15 @@
-import { Users, Wallet, Landmark, TrendingUp, AlertTriangle, ShieldCheck, Clock, Percent, Bell, CheckCircle, XCircle, Info } from "lucide-react";
+import { Users, Wallet, Landmark, TrendingUp, AlertTriangle, ShieldCheck, Clock, Percent, Bell, CheckCircle, XCircle, Info, Mail } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import { useDashboardStats } from "@/hooks/useDashboardStats";
 import { useNotifications, useMarkRead, useMarkAllRead } from "@/hooks/useNotifications";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useNavigate, Navigate } from "react-router-dom";
+import { useNavigate, Navigate, Link } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { Button } from "@/components/ui/button";
 
 function formatKES(amount: number) {
   if (amount >= 1_000_000) return `KES ${(amount / 1_000_000).toFixed(1)}M`;
@@ -20,7 +21,8 @@ const typeIcon = { approval: CheckCircle, rejection: XCircle, info: Info };
 const typeColor: Record<string, string> = { approval: "text-green-600", rejection: "text-destructive", info: "text-blue-500" };
 
 export default function Dashboard() {
-  const { isStaff, roles } = useAuth();
+  const { isStaff, roles, hasRole } = useAuth();
+  const isAdmin = hasRole("admin");
 
   // Redirect regular members to their self-service portal
   if (!isStaff && roles.length > 0) {
@@ -129,6 +131,28 @@ export default function Dashboard() {
             </button>
           </CardContent>
         </Card>
+
+        {/* Admin Communications */}
+        {isAdmin && (
+          <Card className="border-primary/20 bg-primary/5">
+            <CardHeader>
+              <CardTitle className="font-heading text-base flex items-center gap-2">
+                <Mail className="h-4 w-4 text-primary" />
+                Admin Communications
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Send broadcast emails to members and users, and review inbox activity.
+              </p>
+              <Button asChild size="sm" variant="default" className="w-full">
+                <Link to="/admin-email">
+                  Open Admin Communications →
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Notifications Widget */}
