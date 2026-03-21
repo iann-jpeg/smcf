@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "build:dev": "vite build --mode development",
-    "build:sacco": "npm --prefix sacco run build && mkdir -p dist/sacco && cp -r sacco/dist/* dist/sacco/",
+    "build:sacco": "npm --prefix sacco run build && node -e \"const fs=require('fs');fs.mkdirSync('dist/sacco',{recursive:true});fs.cpSync('sacco/dist','dist/sacco',{recursive:true,force:true});\"",
     "build:all": "npm run build && npm run build:sacco",
     "lint": "eslint .",
     "preview": "vite preview"
