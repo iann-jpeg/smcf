@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 
 function openDataUrl(dataUrl: string) {
@@ -247,6 +247,7 @@ export default function MyAccount() {
 
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get("tab") || "repayments";
+  const tabsContainerRef = useRef<HTMLDivElement>(null);
   const [extProfile, setExtProfile] = useState<{
     name: string; nationalId: string; dateOfBirth: string;
     gender: string; county: string; occupation: string; employer: string;
@@ -274,6 +275,21 @@ export default function MyAccount() {
   // Initialize form fields from member data
   const currentPhone = phone ?? member?.phone ?? "";
   const currentEmail = email ?? member?.email ?? "";
+
+  // Handle tab navigation with smooth scroll
+  useEffect(() => {
+    if (tabsContainerRef.current) {
+      // Scroll the tabs container into view with smooth behavior
+      const headerOffset = 80; // Account for any fixed headers
+      const elementPosition = tabsContainerRef.current.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: 'smooth'
+      });
+    }
+  }, [activeTab]);
 
   const handleProfileSave = async () => {
     const result = profileSchema.safeParse({ phone: currentPhone, email: currentEmail });
@@ -665,28 +681,41 @@ export default function MyAccount() {
       )}
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={(v) => setSearchParams({ tab: v }, { replace: true })} className="space-y-4">
-        <TabsList className="flex h-auto flex-wrap gap-1 rounded-xl border border-border bg-card p-1.5 shadow-sm">
+      <div ref={tabsContainerRef}>
+        <Tabs value={activeTab} onValueChange={(v) => setSearchParams({ tab: v }, { replace: true })} className="space-y-4">
+        <TabsList className="flex h-auto flex-wrap gap-1 rounded-xl border border-border bg-card p-1.5 shadow-sm w-full">
           <TabsTrigger
             value="repayments"
-            className="rounded-lg px-4 py-2 text-sm font-semibold text-foreground/60 transition-all hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+            className="rounded-lg px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-foreground/60 transition-all hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm flex-1 sm:flex-none"
           >
-            Repayments
+            <span className="hidden sm:inline">Repayments</span>
+            <span className="sm:hidden">Pay</span>
             {upcomingRepayments.length > 0 && (
               <Badge variant="outline" className="ml-2 text-[10px] border-current">{upcomingRepayments.length}</Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="loans" className="rounded-lg px-4 py-2 text-sm font-semibold text-foreground/60 transition-all hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">My Loans</TabsTrigger>
-          <TabsTrigger value="transactions" className="rounded-lg px-4 py-2 text-sm font-semibold text-foreground/60 transition-all hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">Transactions</TabsTrigger>
-          <TabsTrigger value="savings" className="rounded-lg px-4 py-2 text-sm font-semibold text-foreground/60 transition-all hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">Savings History</TabsTrigger>
-          <TabsTrigger value="growth" className="rounded-lg px-4 py-2 text-sm font-semibold text-foreground/60 transition-all hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">
-            <Sparkles className="mr-1 h-3.5 w-3.5" />
-            Growth
+          <TabsTrigger value="loans" className="rounded-lg px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-foreground/60 transition-all hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm flex-1 sm:flex-none">
+            <span className="hidden sm:inline">My Loans</span>
+            <span className="sm:hidden">Loans</span>
           </TabsTrigger>
-          <TabsTrigger value="guarantors" className="rounded-lg px-4 py-2 text-sm font-semibold text-foreground/60 transition-all hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">
+          <TabsTrigger value="transactions" className="rounded-lg px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-foreground/60 transition-all hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm flex-1 sm:flex-none">
+            <span className="hidden sm:inline">Transactions</span>
+            <span className="sm:hidden">Trans</span>
+          </TabsTrigger>
+          <TabsTrigger value="savings" className="rounded-lg px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-foreground/60 transition-all hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm flex-1 sm:flex-none">
+            <span className="hidden sm:inline">Savings History</span>
+            <span className="sm:hidden">Save</span>
+          </TabsTrigger>
+          <TabsTrigger value="growth" className="rounded-lg px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-foreground/60 transition-all hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm flex-1 sm:flex-none">
+            <Sparkles className="mr-1 h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Growth</span>
+            <span className="sm:hidden">Grow</span>
+          </TabsTrigger>
+          <TabsTrigger value="guarantors" className="rounded-lg px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-foreground/60 transition-all hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm flex-1 sm:flex-none">
             <Shield className="mr-1 h-3.5 w-3.5" />
-            Guarantor Requests
-            {pendingGuarantorCount > 0 && <Badge variant="outline" className="ml-2 text-[10px] border-current">{pendingGuarantorCount}</Badge>}
+            <span className="hidden sm:inline">Guarantor Requests</span>
+            <span className="sm:hidden">Guar</span>
+            {pendingGuarantorCount > 0 && <Badge variant="outline" className="ml-1 text-[10px] border-current">{pendingGuarantorCount}</Badge>}
           </TabsTrigger>
         </TabsList>
 
@@ -1415,7 +1444,8 @@ export default function MyAccount() {
             </CardContent>
           </Card>
         </TabsContent>
-      </Tabs>
+        </Tabs>
+      </div>
 
       {/* Financial Growth Intelligence Pop-up */}
       <GrowthInsightsPopup member={member} loans={loans} savingsHistory={savingsHistory} />
