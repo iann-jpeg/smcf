@@ -271,10 +271,10 @@ const ReportsTab = () => {
         fetch(`${API_BASE}/api/cycles`, { headers: { ...authService.getAuthHeaders() } }),
         fetch(`${API_BASE}/api/members`, { headers: { ...authService.getAuthHeaders() } }),
         fetch(`${API_BASE}/api/payments`, { headers: { ...authService.getAuthHeaders() } }),
-        fetch(`${API_BASE}/api/loans/admin/all`, { headers: { ...authService.getAuthHeaders() } }),
+        fetch(`${API_BASE}/api/loans`, { headers: { ...authService.getAuthHeaders() } }),
         fetch(`${API_BASE}/api/savings/admin/all`, { headers: { ...authService.getAuthHeaders() } }),
         fetch(`${API_BASE}/api/disbursements`, { headers: { ...authService.getAuthHeaders() } }),
-        fetch(`${API_BASE}/api/payments/fees/summary`, { headers: { ...authService.getAuthHeaders() } }),
+        fetch(`${API_BASE}/api/savings/admin/fees/summary`, { headers: { ...authService.getAuthHeaders() } }),
         fetch(`${API_BASE}/api/announcements`, { headers: { ...authService.getAuthHeaders() } }),
       ]);
 
@@ -291,7 +291,11 @@ const ReportsTab = () => {
       const allCycles = Array.isArray(cycles) ? cycles : [];
       const allMembers = Array.isArray(membersData) ? membersData : [];
       const allPayments = Array.isArray(paymentsData) ? paymentsData : [];
-      const allLoans = loansData.success && Array.isArray(loansData.data) ? loansData.data : [];
+      const allLoans = Array.isArray(loansData)
+        ? loansData
+        : loansData.success && Array.isArray(loansData.data)
+          ? loansData.data
+          : [];
       const allSavings = savingsData.success && Array.isArray(savingsData.data) ? savingsData.data : [];
       const allDisbursements = Array.isArray(disbursementsData) ? disbursementsData : [];
       const feesSummary = feesData.success ? feesData.data : null;

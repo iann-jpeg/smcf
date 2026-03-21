@@ -193,16 +193,20 @@ const AdminDashboard = ({
   // See line ~220 where pocket is calculated
 
 
-  console.log("AdminDashboard rendered with:", {
-    userData,
-    members: members?.length || 0,
-    announcements: announcements?.length || 0,
-    totalLoaned,
-    totalLoanRepaid,
-  });
+  if (import.meta.env.DEV) {
+    console.log("AdminDashboard rendered with:", {
+      userData,
+      members: members?.length || 0,
+      announcements: announcements?.length || 0,
+      totalLoaned,
+      totalLoanRepaid,
+    });
+  }
   // End of fallback render block
   if (!userData || !userData.cycleData) {
-    console.log("Missing userData or cycleData, rendering fallback");
+    if (import.meta.env.DEV) {
+      console.log("Missing userData or cycleData, rendering fallback");
+    }
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
@@ -1013,7 +1017,9 @@ const AdminDashboard = ({
         },
       });
       const data = await res.json();
-      console.log("📊 Current cycle data:", data);
+      if (import.meta.env.DEV) {
+        console.log("📊 Current cycle data:", data);
+      }
 
       // Extract the actual cycle data from the response
       const cycleData = data.success ? data.data : data;
@@ -3268,27 +3274,29 @@ Thank you for your cooperation! 🙏`;
                       const allCycles = Array.from(new Set(allPayments.map((p: any) => p.cycle_number).filter(Boolean))).sort((a, b) => a - b);
                       const paymentTypes = Array.from(new Set(allPayments.map((p: any) => p.type).filter(Boolean)));
                       
-                      console.log('💳 Payment Data State:', {
-                        totalPayments: allPayments.length,
-                        currentCycle: currentCycle?.cycle_number || 'NOT SET',
-                        paymentsWithCycles: paymentsWithCycles.length,
-                        completedPayments: completedPayments.length,
-                        allCycles: allCycles,
-                        paymentTypes: paymentTypes,
-                        maxCycle: allCycles.length > 0 ? Math.max(...allCycles) : 0,
-                        hasData: allPayments.length > 0 ? '✅ YES' : '❌ NO',
-                        samplePayments: allPayments.slice(0, 3).map((p: any) => ({
-                          member: p.member_id?.name || 'Unknown',
-                          amount: p.amount,
-                          type: p.type || 'NO TYPE',
-                          status: p.status,
-                          cycle: p.cycle_number
-                        }))
-                      });
+                      if (import.meta.env.DEV) {
+                        console.log('💳 Payment Data State:', {
+                          totalPayments: allPayments.length,
+                          currentCycle: currentCycle?.cycle_number || 'NOT SET',
+                          paymentsWithCycles: paymentsWithCycles.length,
+                          completedPayments: completedPayments.length,
+                          allCycles: allCycles,
+                          paymentTypes: paymentTypes,
+                          maxCycle: allCycles.length > 0 ? Math.max(...allCycles) : 0,
+                          hasData: allPayments.length > 0 ? 'YES' : 'NO',
+                          samplePayments: allPayments.slice(0, 3).map((p: any) => ({
+                            member: p.member_id?.name || 'Unknown',
+                            amount: p.amount,
+                            type: p.type || 'NO TYPE',
+                            status: p.status,
+                            cycle: p.cycle_number
+                          }))
+                        });
+                      }
                       
                       // Alert if no payment data
-                      if (allPayments.length === 0) {
-                        console.warn('⚠️ NO PAYMENT DATA LOADED - Advance badges will not show!');
+                      if (import.meta.env.DEV && allPayments.length === 0) {
+                        console.warn('NO PAYMENT DATA LOADED - Advance badges will not show!');
                       }
                       return null;
                     })()}
@@ -3313,7 +3321,7 @@ Thank you for your cooperation! 🙏`;
                       const cyclesPaid = cyclesPaidFor >= currCycle ? 1 : 0;
                       
                       // Debug logging for first 5 members to see calculations
-                      if (index < 5) {
+                      if (import.meta.env.DEV && index < 5) {
                         const expectedAmount = currCycle * CYCLE_AMOUNT;
                         const overpayment = totalPaid - expectedAmount;
                         console.log(`🔍 Cycle Payment Analysis for ${member.name} (#${member.position || index + 1}):`, {

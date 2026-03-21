@@ -30,34 +30,44 @@ const OnlineMembersCard = ({ currentUser }: OnlineMembersCardProps) => {
     const socket = (window as any).socket;
 
     if (!socket) {
-      console.warn("⚠️ Socket not available for OnlineMembersCard");
+      if (import.meta.env.DEV) {
+        console.warn("Socket not available for OnlineMembersCard");
+      }
       return;
     }
 
-    console.log("👂 OnlineMembersCard: Setting up socket listeners");
-    console.log("🔌 Socket connected:", socket.connected);
-    console.log("🆔 Socket ID:", socket.id);
+    if (import.meta.env.DEV) {
+      console.log("OnlineMembersCard: Setting up socket listeners");
+      console.log("Socket connected:", socket.connected);
+      console.log("Socket ID:", socket.id);
+    }
 
     // Listen for online users updates
     socket.on("users:online", (users: OnlineUser[]) => {
-      console.log("👥 OnlineMembersCard received users:online event:", users);
+      if (import.meta.env.DEV) {
+        console.log("OnlineMembersCard received users:online event:", users);
+      }
       setOnlineUsers(users);
     });
 
     // Request current online users on mount
     if (socket.connected) {
-      console.log("📡 Requesting current online users list");
+      if (import.meta.env.DEV) {
+        console.log("Requesting current online users list");
+      }
       socket.emit("request:online-users");
     }
 
     // Cleanup on unmount
     return () => {
       if (socket) {
-        console.log("🧹 OnlineMembersCard: Cleaning up socket listeners");
+        if (import.meta.env.DEV) {
+          console.log("OnlineMembersCard: Cleaning up socket listeners");
+        }
         socket.off("users:online");
       }
     };
-  }, [currentUser]);
+  }, []);
 
   const getInitials = (name: string) => {
     return name
