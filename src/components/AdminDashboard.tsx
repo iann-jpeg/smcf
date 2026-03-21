@@ -1,4 +1,4 @@
-import smcfLogo from "@/assets/newsmcflogo.png";
+﻿import smcfLogo from "@/assets/newsmcflogo.png";
 import AddMemberDialog from "@/components/AddMemberDialog";
 import AnnouncementDialog from "@/components/AnnouncementDialog";
 import { StyledSMCF } from "@/components/StyledSMCF";
@@ -121,6 +121,18 @@ function levelFilterChipClasses(active: boolean): string {
     : "bg-muted text-muted-foreground hover:bg-accent";
 }
 
+const devLog = (...args: any[]) => {
+  if (import.meta.env.DEV) {
+    console.log(...args);
+  }
+};
+
+const devWarn = (...args: any[]) => {
+  if (import.meta.env.DEV) {
+    console.warn(...args);
+  }
+};
+
 const AdminDashboard = ({
   userData,
   members,
@@ -194,7 +206,7 @@ const AdminDashboard = ({
 
 
   if (import.meta.env.DEV) {
-    console.log("AdminDashboard rendered with:", {
+    devLog("AdminDashboard rendered with:", {
       userData,
       members: members?.length || 0,
       announcements: announcements?.length || 0,
@@ -205,7 +217,7 @@ const AdminDashboard = ({
   // End of fallback render block
   if (!userData || !userData.cycleData) {
     if (import.meta.env.DEV) {
-      console.log("Missing userData or cycleData, rendering fallback");
+      devLog("Missing userData or cycleData, rendering fallback");
     }
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -641,7 +653,7 @@ const AdminDashboard = ({
     </div>
     
     <div class="amount-section">
-      <div class="checkmark">✓</div>
+      <div class="checkmark">âœ“</div>
       <div class="amount-label">Disbursed Amount</div>
       <div class="amount">${(
         disbursement.amount || 0
@@ -691,11 +703,11 @@ const AdminDashboard = ({
     <div class="footer">
       <div class="action-buttons">
         <div class="action-btn" onclick="window.print()">
-          <div class="icon">📄</div>
+          <div class="icon">ðŸ“„</div>
           <span>Download<br>Receipt</span>
         </div>
         <div class="action-btn" onclick="window.print()">
-          <div class="icon">🔄</div>
+          <div class="icon">ðŸ”„</div>
           <span>Share<br>Receipt</span>
         </div>
       </div>
@@ -1018,7 +1030,7 @@ const AdminDashboard = ({
       });
       const data = await res.json();
       if (import.meta.env.DEV) {
-        console.log("📊 Current cycle data:", data);
+        devLog("ðŸ“Š Current cycle data:", data);
       }
 
       // Extract the actual cycle data from the response
@@ -1097,7 +1109,7 @@ const AdminDashboard = ({
       });
 
       if (!res.ok) {
-        console.warn(
+        devWarn(
           `Fee summary endpoint returned ${res.status}, skipping...`
         );
         return;
@@ -1160,101 +1172,101 @@ const AdminDashboard = ({
     // Socket.IO real-time event listeners
     const socket = (window as any).socket;
     if (socket) {
-      console.log("👂 Admin Dashboard listening for real-time updates");
+      devLog("ðŸ‘‚ Admin Dashboard listening for real-time updates");
 
       // === FULL SYSTEM ACTIVITY FEED ===
       // Announcements
       socket.on("announcementCreated", (data: any) => {
-        addActivity({ type: "announcement", icon: "📢", title: "Announcement", description: data.title || data.message || "New announcement posted", data });
+        addActivity({ type: "announcement", icon: "ðŸ“¢", title: "Announcement", description: data.title || data.message || "New announcement posted", data });
       });
       socket.on("announcement:new", (data: any) => {
-        addActivity({ type: "announcement", icon: "📢", title: "Announcement", description: data.title || data.message || "New announcement posted", data });
+        addActivity({ type: "announcement", icon: "ðŸ“¢", title: "Announcement", description: data.title || data.message || "New announcement posted", data });
       });
       // Payments
       socket.on("payment:completed", (data: any) => {
-        addActivity({ type: "payment", icon: "💰", title: "Payment Completed", description: `${data.memberName || "A member"} paid KES ${data.amount?.toLocaleString() || "N/A"} (${data.type || "payment"})`, data });
+        addActivity({ type: "payment", icon: "ðŸ’°", title: "Payment Completed", description: `${data.memberName || "A member"} paid KES ${data.amount?.toLocaleString() || "N/A"} (${data.type || "payment"})`, data });
       });
       socket.on("paymentCompleted", (data: any) => {
-        addActivity({ type: "payment", icon: "💰", title: "Payment Received", description: `Payment of KES ${data.amount} received from member`, data });
+        addActivity({ type: "payment", icon: "ðŸ’°", title: "Payment Received", description: `Payment of KES ${data.amount} received from member`, data });
       });
       socket.on("payment:new", (data: any) => {
-        addActivity({ type: "payment", icon: "💳", title: "New Payment", description: `${data.memberName || "A member"} initiated a payment of KES ${data.amount?.toLocaleString() || "N/A"}`, data });
+        addActivity({ type: "payment", icon: "ðŸ’³", title: "New Payment", description: `${data.memberName || "A member"} initiated a payment of KES ${data.amount?.toLocaleString() || "N/A"}`, data });
       });
       socket.on("paymentFailed", (data: any) => {
-        addActivity({ type: "payment", icon: "❌", title: "Payment Failed", description: `Payment failed: ${data.reason || "Unknown reason"}`, data });
+        addActivity({ type: "payment", icon: "âŒ", title: "Payment Failed", description: `Payment failed: ${data.reason || "Unknown reason"}`, data });
       });
       // Savings
       socket.on("savingDeposit", (data: any) => {
-        addActivity({ type: "savings", icon: "💾", title: "Savings Deposit", description: `${data.memberName || "A member"} deposited KES ${data.amount?.toLocaleString() || "N/A"}`, data });
+        addActivity({ type: "savings", icon: "ðŸ’¾", title: "Savings Deposit", description: `${data.memberName || "A member"} deposited KES ${data.amount?.toLocaleString() || "N/A"}`, data });
       });
       socket.on("saving:new", (data: any) => {
-        addActivity({ type: "savings", icon: "💾", title: "New Saving Record", description: `${data.memberName || "A member"} - new saving record`, data });
+        addActivity({ type: "savings", icon: "ðŸ’¾", title: "New Saving Record", description: `${data.memberName || "A member"} - new saving record`, data });
       });
       socket.on("interestApplied", (data: any) => {
-        addActivity({ type: "interest", icon: "📈", title: "Interest Applied", description: `${data.memberName || "A member"} earned KES ${data.interestAmount?.toLocaleString() || "N/A"} in interest`, data });
+        addActivity({ type: "interest", icon: "ðŸ“ˆ", title: "Interest Applied", description: `${data.memberName || "A member"} earned KES ${data.interestAmount?.toLocaleString() || "N/A"} in interest`, data });
       });
       // Loans
       socket.on("loanStatusUpdated", (data: any) => {
-        addActivity({ type: "loan", icon: "📄", title: `Loan ${data.status?.charAt(0).toUpperCase() + data.status?.slice(1) || "Status"}`, description: `${data.memberName || "A member"}: ${data.status}`, data });
+        addActivity({ type: "loan", icon: "ðŸ“„", title: `Loan ${data.status?.charAt(0).toUpperCase() + data.status?.slice(1) || "Status"}`, description: `${data.memberName || "A member"}: ${data.status}`, data });
       });
       socket.on("loanPayment", (data: any) => {
-        addActivity({ type: "loan_payment", icon: "💳", title: "Loan Payment", description: `${data.memberName || "A member"} paid KES ${data.paymentAmount?.toLocaleString() || "N/A"}`, data });
+        addActivity({ type: "loan_payment", icon: "ðŸ’³", title: "Loan Payment", description: `${data.memberName || "A member"} paid KES ${data.paymentAmount?.toLocaleString() || "N/A"}`, data });
       });
       socket.on("loanLateFeeApplied", (data: any) => {
-        addActivity({ type: "late_fee", icon: "⚠️", title: "Late Fee Applied", description: `Late fee of KES ${data.feeAmount?.toLocaleString() || "N/A"} applied to ${data.memberName || "A member"}'s loan`, data });
+        addActivity({ type: "late_fee", icon: "âš ï¸", title: "Late Fee Applied", description: `Late fee of KES ${data.feeAmount?.toLocaleString() || "N/A"} applied to ${data.memberName || "A member"}'s loan`, data });
       });
       socket.on("loanRequested", (data: any) => {
-        addActivity({ type: "loan_request", icon: "📝", title: "New Loan Request", description: `${data.memberName || "A member"} requested a loan of KES ${data.amount?.toLocaleString() || "N/A"}`, data });
+        addActivity({ type: "loan_request", icon: "ðŸ“", title: "New Loan Request", description: `${data.memberName || "A member"} requested a loan of KES ${data.amount?.toLocaleString() || "N/A"}`, data });
       });
       // Disbursements
       socket.on("disbursementCompleted", (data: any) => {
-        addActivity({ type: "disbursement", icon: "💸", title: "Disbursement Completed", description: `KES ${data.amount?.toLocaleString() || data.amount} sent to ${data.memberName || "A member"}`, data });
+        addActivity({ type: "disbursement", icon: "ðŸ’¸", title: "Disbursement Completed", description: `KES ${data.amount?.toLocaleString() || data.amount} sent to ${data.memberName || "A member"}`, data });
       });
       // Cycles
       socket.on("cycle:updated", (data: any) => {
-        addActivity({ type: "cycle", icon: "🔄", title: "Cycle Updated", description: `Cycle ${data.cycleNumber || ""} updated`, data });
+        addActivity({ type: "cycle", icon: "ðŸ”„", title: "Cycle Updated", description: `Cycle ${data.cycleNumber || ""} updated`, data });
       });
       socket.on("cycleUpdated", (data: any) => {
-        addActivity({ type: "cycle", icon: "🔄", title: "Cycle Updated", description: `Cycle ${data.cycleNumber || ""} stats updated`, data });
+        addActivity({ type: "cycle", icon: "ðŸ”„", title: "Cycle Updated", description: `Cycle ${data.cycleNumber || ""} stats updated`, data });
       });
       socket.on("nextRecipientUpdated", (data: any) => {
-        addActivity({ type: "cycle", icon: "👤", title: "Next Recipient Set", description: `${data.recipientName || "A member"} is next for cycle disbursement`, data });
+        addActivity({ type: "cycle", icon: "ðŸ‘¤", title: "Next Recipient Set", description: `${data.recipientName || "A member"} is next for cycle disbursement`, data });
       });
       // Members
       socket.on("member:new", (data: any) => {
-        addActivity({ type: "member", icon: "🧑", title: "New Member Joined", description: `${data.name || "A new member"} joined the platform`, data });
+        addActivity({ type: "member", icon: "ðŸ§‘", title: "New Member Joined", description: `${data.name || "A new member"} joined the platform`, data });
       });
       socket.on("memberUpdated", (data: any) => {
-        addActivity({ type: "member", icon: "🧑", title: "Member Updated", description: `${data.memberName || "A member"}'s profile updated`, data });
+        addActivity({ type: "member", icon: "ðŸ§‘", title: "Member Updated", description: `${data.memberName || "A member"}'s profile updated`, data });
       });
       // Withdrawals
       socket.on("withdrawalRequested", (data: any) => {
-        addActivity({ type: "withdrawal", icon: "💸", title: "Withdrawal Requested", description: `${data.memberName || "A member"} requested withdrawal of KES ${data.amount?.toLocaleString() || "N/A"}`, data });
+        addActivity({ type: "withdrawal", icon: "ðŸ’¸", title: "Withdrawal Requested", description: `${data.memberName || "A member"} requested withdrawal of KES ${data.amount?.toLocaleString() || "N/A"}`, data });
       });
       socket.on("withdrawalProcessed", (data: any) => {
-        addActivity({ type: "withdrawal", icon: "💸", title: "Withdrawal Processed", description: `Withdrawal of KES ${data.amount?.toLocaleString() || "N/A"} processed for ${data.memberName || "A member"}`, data });
+        addActivity({ type: "withdrawal", icon: "ðŸ’¸", title: "Withdrawal Processed", description: `Withdrawal of KES ${data.amount?.toLocaleString() || "N/A"} processed for ${data.memberName || "A member"}`, data });
       });
 
       // Listen for member updates
       socket.on("memberUpdated", (data: any) => {
-        console.log("� Member updated:", data);
+        devLog("ï¿½ Member updated:", data);
         fetchAllData(); // Refresh data
       });
 
       // Listen for cycle updates (both formats)
       socket.on("cycleUpdated", (data: any) => {
-        console.log("🔄 Cycle updated:", data);
+        devLog("ðŸ”„ Cycle updated:", data);
         fetchAllData(); // Refresh data
       });
 
       socket.on("cycle:updated", (data: any) => {
-        console.log("🔄 Cycle updated (colon format):", data);
+        devLog("ðŸ”„ Cycle updated (colon format):", data);
         fetchAllData(); // Refresh data
       });
 
       // Listen for payment completion with colon format
       socket.on("payment:completed", (data: any) => {
-        console.log("💰 Payment completed (colon format):", data);
+        devLog("ðŸ’° Payment completed (colon format):", data);
         toast({
           title: "Payment Received!",
           description: `Payment confirmed from member`,
@@ -1264,7 +1276,7 @@ const AdminDashboard = ({
 
       // Listen for payment failures
       socket.on("paymentFailed", (data: any) => {
-        console.log("❌ Payment failed:", data);
+        devLog("âŒ Payment failed:", data);
         toast({
           title: "Payment Failed",
           description: `Payment from member failed: ${data.reason}`,
@@ -1274,7 +1286,7 @@ const AdminDashboard = ({
 
       // Listen for disbursement completion
       socket.on("disbursementCompleted", (data: any) => {
-        console.log("💸 Disbursement completed:", data);
+        devLog("ðŸ’¸ Disbursement completed:", data);
         toast({
           title: "Disbursement Successful!",
           description: `KES ${data.amount} sent to ${data.memberName}`,
@@ -1284,7 +1296,7 @@ const AdminDashboard = ({
 
       // Listen for next recipient updates
       socket.on("nextRecipientUpdated", (data: any) => {
-        console.log("➡️ Next recipient updated:", data);
+        devLog("âž¡ï¸ Next recipient updated:", data);
         toast({
           title: "Next Recipient Updated",
           description: `${
@@ -1298,7 +1310,7 @@ const AdminDashboard = ({
 
       // Listen for loan status updates (including repayments)
       socket.on("loanStatusUpdated", (data: any) => {
-        console.log("💰 Loan status updated:", data);
+        devLog("ðŸ’° Loan status updated:", data);
         const statusMessages: Record<string, string> = {
           approved: `Loan of KES ${data.amount.toLocaleString()} approved for ${
             data.memberName
@@ -1325,12 +1337,12 @@ const AdminDashboard = ({
 
       // Listen for loan repayment updates
       socket.on("loanPayment", (data: any) => {
-        console.log("💰 AdminDashboard received: loanPayment", data);
+        devLog("ðŸ’° AdminDashboard received: loanPayment", data);
         
         const isFullyPaid = data.isFullyPaid || data.remaining <= 0;
         
         toast({
-          title: isFullyPaid ? "Loan Fully Repaid! 🎉" : "Loan Payment Received!",
+          title: isFullyPaid ? "Loan Fully Repaid! ðŸŽ‰" : "Loan Payment Received!",
           description: isFullyPaid
             ? `${data.memberName} has fully repaid their loan (KES ${data.totalPaid.toLocaleString()})`
             : `${data.memberName} paid KES ${data.paymentAmount.toLocaleString()}. Remaining: KES ${data.remaining.toLocaleString()}`,
@@ -1389,37 +1401,37 @@ const AdminDashboard = ({
       .join("\n");
 
     // Group message for SMART MOVES CASH FLOW WhatsApp group
-    const groupMessage = `🔔 *SMCF Payment Reminder - Cycle #${cycleNumber}* 🔔
+    const groupMessage = `ðŸ”” *SMCF Payment Reminder - Cycle #${cycleNumber}* ðŸ””
 
-⏰ *${daysRemaining} ${
+â° *${daysRemaining} ${
       daysRemaining === 1 ? "day" : "days"
     } remaining* to send your contribution!
 
-💰 *Amount Due:* KES ${contributionAmount}
+ðŸ’° *Amount Due:* KES ${contributionAmount}
 
-📋 *Members who haven't paid yet:*
+ðŸ“‹ *Members who haven't paid yet:*
 ${unpaidList}
 
-⚠️ Please send your contribution before the deadline to avoid penalties.
+âš ï¸ Please send your contribution before the deadline to avoid penalties.
 
-Thank you for your cooperation! 🙏`;
+Thank you for your cooperation! ðŸ™`;
 
     // Individual DM message
     const individualMessage = (
       memberName: string
-    ) => `🔔 *SMCF Payment Reminder - Cycle #${cycleNumber}* 🔔
+    ) => `ðŸ”” *SMCF Payment Reminder - Cycle #${cycleNumber}* ðŸ””
 
 Hi ${memberName},
 
-⏰ You have *${daysRemaining} ${
+â° You have *${daysRemaining} ${
       daysRemaining === 1 ? "day" : "days"
     } remaining* to send your contribution!
 
-💰 *Amount Due:* KES ${contributionAmount}
+ðŸ’° *Amount Due:* KES ${contributionAmount}
 
-⚠️ Please send your contribution before the deadline to avoid penalties.
+âš ï¸ Please send your contribution before the deadline to avoid penalties.
 
-Thank you for your cooperation! 🙏`;
+Thank you for your cooperation! ðŸ™`;
 
     // Open group message first
     const groupNumber = "254759097157";
@@ -1862,7 +1874,7 @@ Thank you for your cooperation! 🙏`;
                 size="sm"
                 onClick={() => setShowAnalyticsDashboard(false)}
               >
-                ← Back to Dashboard
+                â† Back to Dashboard
               </Button>
               <div>
                 <h2 className="text-xl font-bold">Analytics & Traffic</h2>
@@ -3029,7 +3041,7 @@ Thank you for your cooperation! 🙏`;
                 {currentCycle?.cycle_number ||
                   currentCycle?.data?.cycle_number ||
                   userData?.cycleData?.currentCycle ||
-                  "—"}
+                  "â€”"}
               </CardTitle>
               <CardDescription>
                 Started:{" "}
@@ -3112,7 +3124,7 @@ Thank you for your cooperation! 🙏`;
                   onClick={async () => {
                     if (
                       !window.confirm(
-                        "⚠️ WARNING: This will DELETE all payments, disbursements, and cycles. Are you sure?"
+                        "âš ï¸ WARNING: This will DELETE all payments, disbursements, and cycles. Are you sure?"
                       )
                     ) {
                       return;
@@ -3275,7 +3287,7 @@ Thank you for your cooperation! 🙏`;
                       const paymentTypes = Array.from(new Set(allPayments.map((p: any) => p.type).filter(Boolean)));
                       
                       if (import.meta.env.DEV) {
-                        console.log('💳 Payment Data State:', {
+                        devLog('ðŸ’³ Payment Data State:', {
                           totalPayments: allPayments.length,
                           currentCycle: currentCycle?.cycle_number || 'NOT SET',
                           paymentsWithCycles: paymentsWithCycles.length,
@@ -3296,7 +3308,7 @@ Thank you for your cooperation! 🙏`;
                       
                       // Alert if no payment data
                       if (import.meta.env.DEV && allPayments.length === 0) {
-                        console.warn('NO PAYMENT DATA LOADED - Advance badges will not show!');
+                        devWarn('NO PAYMENT DATA LOADED - Advance badges will not show!');
                       }
                       return null;
                     })()}
@@ -3324,7 +3336,7 @@ Thank you for your cooperation! 🙏`;
                       if (import.meta.env.DEV && index < 5) {
                         const expectedAmount = currCycle * CYCLE_AMOUNT;
                         const overpayment = totalPaid - expectedAmount;
-                        console.log(`🔍 Cycle Payment Analysis for ${member.name} (#${member.position || index + 1}):`, {
+                        devLog(`ðŸ” Cycle Payment Analysis for ${member.name} (#${member.position || index + 1}):`, {
                           dataSource: 'member.total_cycle_contribution (STORED)',
                           currentCycle: `#${currCycle}`,
                           expectedByNow: `KES ${expectedAmount}`,
@@ -3332,9 +3344,9 @@ Thank you for your cooperation! 🙏`;
                           difference: overpayment > 0 ? `+KES ${overpayment} (OVERPAID)` : overpayment < 0 ? `-KES ${Math.abs(overpayment)} (UNDERPAID)` : 'EXACT',
                           cyclesPaidFor: `${cyclesPaidFor} cycles`,
                           advanceCycles: advanceCycles > 0 ? `+${advanceCycles} cycles ahead` : advanceCycles === 0 && cyclesPaidFor >= currCycle ? 'Current only' : 'Not paid',
-                          calculation: `${totalPaid} ÷ ${CYCLE_AMOUNT} = ${cyclesPaidFor} cycles paid | ${cyclesPaidFor} - ${currCycle} = ${advanceCycles} advance`,
+                          calculation: `${totalPaid} Ã· ${CYCLE_AMOUNT} = ${cyclesPaidFor} cycles paid | ${cyclesPaidFor} - ${currCycle} = ${advanceCycles} advance`,
                           noteForNextCycle: advanceCycles > 0 ? `At cycle #${currCycle + 1}, advance will be ${advanceCycles - 1}` : 'N/A',
-                          badge: advanceCycles > 0 ? '🔵 CYAN BADGE' : cyclesPaidFor >= currCycle ? '✅ GREEN BADGE' : '⏳ PENDING'
+                          badge: advanceCycles > 0 ? 'ðŸ”µ CYAN BADGE' : cyclesPaidFor >= currCycle ? 'âœ… GREEN BADGE' : 'â³ PENDING'
                         });
                       }
                       return (
@@ -3370,7 +3382,7 @@ Thank you for your cooperation! 🙏`;
                                   )}
                                 </div>
                                 <div className="text-xs text-muted-foreground">
-                                  {member.member_id} • {member.phone}
+                                  {member.member_id} â€¢ {member.phone}
                                 </div>
                               </div>
                             </div>
@@ -3448,7 +3460,7 @@ Thank you for your cooperation! 🙏`;
                                 onClick={() => moveMemberUp(member)}
                                 title={isReadOnly ? "Read-only access" : "Move up"}
                                 disabled={isReadOnly}>
-                                ↑
+                                â†‘
                               </Button>
                               <Button
                                 size="sm"
@@ -3456,7 +3468,7 @@ Thank you for your cooperation! 🙏`;
                                 onClick={() => moveMemberDown(member)}
                                 title={isReadOnly ? "Read-only access" : "Move down"}
                                 disabled={isReadOnly}>
-                                ↓
+                                â†“
                               </Button>
                               {member.member_type !== "wallet_only" && (
                                 <>
@@ -3740,7 +3752,7 @@ Thank you for your cooperation! 🙏`;
                           {payment.member_id?.name || payment.phone}
                         </div>
                         <div className="text-sm text-muted-foreground">
-                          {payment.mpesa_transaction_id || payment.phone} •
+                          {payment.mpesa_transaction_id || payment.phone} â€¢
                           Cycle #{payment.cycle_number}
                         </div>
                         <div className="text-xs text-muted-foreground">
@@ -4047,7 +4059,7 @@ Thank you for your cooperation! 🙏`;
                           {disbursement.recipient_id?.name || "Unknown"}
                         </div>
                         <div className="text-sm text-muted-foreground">
-                          Cycle #{disbursement.cycle_id?.cycle_number} •
+                          Cycle #{disbursement.cycle_id?.cycle_number} â€¢
                           {disbursement.mpesa_transaction_id ||
                             disbursement.phone ||
                             "Manual"}
@@ -4409,3 +4421,4 @@ Thank you for your cooperation! 🙏`;
 }
 
 export default AdminDashboard;
+

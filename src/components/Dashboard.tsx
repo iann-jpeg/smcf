@@ -1,4 +1,4 @@
-import AdminDashboard from "@/components/AdminDashboard";
+﻿import AdminDashboard from "@/components/AdminDashboard";
 
 import MemberDashboard from "@/components/MemberDashboard";
 import { LoadingScreen } from "@/components/LoadingScreen";
@@ -35,16 +35,16 @@ const socket = io(API_BASE, {
 
 // Log socket connection status
 socket.on("connect", () => {
-  console.log("✅ Socket.IO connected to backend:", API_BASE);
-  console.log("🔌 Socket ID:", socket.id);
+  devLog("âœ… Socket.IO connected to backend:", API_BASE);
+  devLog("ðŸ”Œ Socket ID:", socket.id);
 });
 
 socket.on("disconnect", (reason) => {
-  console.warn("⚠️ Socket.IO disconnected:", reason);
+  devWarn("âš ï¸ Socket.IO disconnected:", reason);
 });
 
 socket.on("connect_error", (error) => {
-  console.error("❌ Socket.IO connection error:", error.message);
+  console.error("âŒ Socket.IO connection error:", error.message);
 });
 
 interface DashboardProps {
@@ -52,6 +52,18 @@ interface DashboardProps {
   userData: any;
   onLogout: () => void;
 }
+
+const devLog = (...args: any[]) => {
+  if (import.meta.env.DEV) {
+    console.log(...args);
+  }
+};
+
+const devWarn = (...args: any[]) => {
+  if (import.meta.env.DEV) {
+    console.warn(...args);
+  }
+};
 
 const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
   const { toast } = useToast();
@@ -76,11 +88,11 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
   useEffect(() => {
         // Listen for member deletion and cycle update events for real-time refresh
         socket.on("member:deleted", (data) => {
-          console.log("👤 Dashboard received: member:deleted", data);
+          devLog("ðŸ‘¤ Dashboard received: member:deleted", data);
           fetchData();
         });
         socket.on("cycle:updated", (data) => {
-          console.log("🔄 Dashboard received: cycle:updated (member:deleted)", data);
+          devLog("ðŸ”„ Dashboard received: cycle:updated (member:deleted)", data);
           fetchData();
         });
     const initMobile = async () => {
@@ -113,7 +125,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
   // Fetch fresh cycle data and members count
   const fetchData = async () => {
     try {
-      console.log("🔄 Starting data fetch for userRole:", userRole);
+      devLog("ðŸ”„ Starting data fetch for userRole:", userRole);
 
       // Fetch cycle data and payments (members endpoint requires admin auth)
       const requests = [
@@ -128,7 +140,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
       const responses = await Promise.all(requests);
 
       if (!responses[0].ok || !responses[1].ok) {
-        console.error("❌ API request failed:", {
+        console.error("âŒ API request failed:", {
           cycleStatus: responses[0].status,
           paymentsStatus: responses[1].status,
         });
@@ -139,7 +151,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
       const cycleData = await responses[0].json();
       const paymentsResponse = await responses[1].json();
 
-      console.log("📊 Dashboard raw responses:", {
+      devLog("ðŸ“Š Dashboard raw responses:", {
         userRole,
         cycleSuccess: cycleData?.success,
         cycleDataExists: !!cycleData?.data,
@@ -161,7 +173,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
         ? paymentsData.filter((p: any) => p.cycle_number === currentCycleNumber)
         : paymentsData;
 
-      console.log("👥 Extracted data:", {
+      devLog("ðŸ‘¥ Extracted data:", {
         totalPayments: paymentsData.length,
         currentCycleNumber,
         currentCyclePayments: currentCyclePayments.length,
@@ -182,7 +194,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
         0
       );
 
-      console.log("💰 Payment calculation (CURRENT CYCLE ONLY):", {
+      devLog("ðŸ’° Payment calculation (CURRENT CYCLE ONLY):", {
         currentCycleNumber,
         totalPayments: paymentsData.length,
         currentCyclePayments: currentCyclePayments.length,
@@ -196,7 +208,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
       const paidMembersCount = uniquePaidMembers; // Use payment-based count
       const expectedAmount = totalMembersCount * 224;
 
-      console.log("📈 Calculated stats from PAYMENTS data:", {
+      devLog("ðŸ“ˆ Calculated stats from PAYMENTS data:", {
         totalMembersCount,
         paidMembersCount,
         percentage:
@@ -227,15 +239,15 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
             ? new Date(cycle.end_date).toLocaleDateString()
             : "Not Set",
         };
-        console.log(
-          "✅ Setting cycle data with real member counts:",
+        devLog(
+          "âœ… Setting cycle data with real member counts:",
           newCycleData
         );
         setCycleData(newCycleData);
       } else {
         // No active cycle - still use real member data
-        console.log("⚠️ No active cycle found in database");
-        console.log("📊 Using fallback with real member/payment data:", {
+        devLog("âš ï¸ No active cycle found in database");
+        devLog("ðŸ“Š Using fallback with real member/payment data:", {
           totalMembers: totalMembersCount,
           paidMembers: paidMembersCount,
           totalCollected,
@@ -252,8 +264,8 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
           cycleStartDate: new Date().toLocaleDateString(),
           paymentDeadline: "Not Set",
         };
-        console.log(
-          "✅ Setting fallback cycle data with real counts:",
+        devLog(
+          "âœ… Setting fallback cycle data with real counts:",
           newCycleData
         );
         setCycleData(newCycleData);
@@ -261,7 +273,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
 
       setIsLoadingData(false);
     } catch (err) {
-      console.error("❌ Failed to fetch data:", err);
+      console.error("âŒ Failed to fetch data:", err);
       setIsLoadingData(false);
     }
   };
@@ -275,7 +287,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
     // Fallback timeout - if data doesn't load within 5 seconds, stop showing loading state
     const timeout = setTimeout(() => {
       if (isLoadingData) {
-        console.warn("⚠️ Data fetch timeout - stopping loading state");
+        devWarn("âš ï¸ Data fetch timeout - stopping loading state");
         setIsLoadingData(false);
       }
     }, 5000);
@@ -297,7 +309,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
   };
 
   useEffect(() => {
-    console.log("🎧 Dashboard: Setting up Socket.IO listeners");
+    devLog("ðŸŽ§ Dashboard: Setting up Socket.IO listeners");
 
     // Notify server that user is online
     if (userData) {
@@ -306,15 +318,15 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
         username: userData.username || userData.name,
         role: userData.role,
       });
-      console.log(
-        "👤 Notified server: user is online",
+      devLog(
+        "ðŸ‘¤ Notified server: user is online",
         userData.username || userData.name
       );
     }
 
     // Handler for announcement notifications
     const handleNewAnnouncement = (announcement: any) => {
-      console.log("📢 Dashboard received: announcement", announcement);
+      devLog("ðŸ“¢ Dashboard received: announcement", announcement);
       setAnnouncements((prev: any) => [announcement, ...prev]);
       // Show notification with sound
       notifyAnnouncement(
@@ -325,7 +337,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
       // Mobile notification
       if (isNativeRef.current) {
         showMobileNotification({
-          title: "📢 New Announcement",
+          title: "ðŸ“¢ New Announcement",
           body: announcement.title || announcement.message || "New announcement posted",
           extra: { type: "announcement", id: announcement._id }
         });
@@ -337,7 +349,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
     socket.on("announcementCreated", handleNewAnnouncement);
     
     socket.on("member:new", (member) => {
-      console.log("👤 Dashboard received: member:new", member);
+      devLog("ðŸ‘¤ Dashboard received: member:new", member);
       setMembers((prev) => [member, ...prev]);
       // Show notification for new member (admin only)
       if (userRole === "admin") {
@@ -348,7 +360,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
         );
         if (isNativeRef.current) {
           showMobileNotification({
-            title: "👤 New Member",
+            title: "ðŸ‘¤ New Member",
             body: `${member.name || "A new member"} has joined the platform`,
             extra: { type: "member", id: member._id }
           });
@@ -356,7 +368,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
       }
     });
     socket.on("payment:completed", (data) => {
-      console.log("💰 Dashboard received: payment:completed", data);
+      devLog("ðŸ’° Dashboard received: payment:completed", data);
       fetchData(); // Refresh cycle stats
       // Show notification for payment
       const memberName = data.member?.name || data.memberName || "A member";
@@ -368,18 +380,18 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
       );
       if (isNativeRef.current) {
         showMobileNotification({
-          title: "💰 Payment Received",
+          title: "ðŸ’° Payment Received",
           body: `${memberName} made a contribution${amount ? ` of ${amount}` : ""}`,
           extra: { type: "payment", id: data._id }
         });
       }
     });
     socket.on("payment:new", (data) => {
-      console.log("💰 Dashboard received: payment:new", data);
+      devLog("ðŸ’° Dashboard received: payment:new", data);
       fetchData(); // Refresh cycle stats
     });
     socket.on("cycle:updated", (data) => {
-      console.log("🔄 Dashboard received: cycle:updated", data);
+      devLog("ðŸ”„ Dashboard received: cycle:updated", data);
       fetchData(); // Refresh cycle stats
       notifySuccess(
         "Cycle Updated",
@@ -390,7 +402,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
     
     // Savings events
     socket.on("savingDeposit", (data) => {
-      console.log("💵 Dashboard received: savingDeposit", data);
+      devLog("ðŸ’µ Dashboard received: savingDeposit", data);
       const memberName = data.member?.name || data.memberName || "A member";
       const amount = data.amount ? `KES ${data.amount.toLocaleString()}` : "";
       notifySavings(
@@ -400,7 +412,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
       );
       if (isNativeRef.current) {
         showMobileNotification({
-          title: "💵 Savings Deposit",
+          title: "ðŸ’µ Savings Deposit",
           body: `${memberName} deposited${amount ? ` ${amount}` : ""} to savings`,
           extra: { type: "savings", action: "deposit" }
         });
@@ -408,7 +420,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
     });
     
     socket.on("withdrawalRequest", (data) => {
-      console.log("📤 Dashboard received: withdrawalRequest", data);
+      devLog("ðŸ“¤ Dashboard received: withdrawalRequest", data);
       if (userRole === "admin") {
         const memberName = data.member?.name || data.memberName || "A member";
         const amount = data.amount ? `KES ${data.amount.toLocaleString()}` : "";
@@ -419,7 +431,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
         );
         if (isNativeRef.current) {
           showMobileNotification({
-            title: "📤 Withdrawal Request",
+            title: "ðŸ“¤ Withdrawal Request",
             body: `${memberName} requested${amount ? ` ${amount}` : ""} withdrawal`,
             extra: { type: "savings", action: "withdrawal" }
           });
@@ -428,7 +440,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
     });
     
     socket.on("withdrawalStatusUpdated", (data) => {
-      console.log("✅ Dashboard received: withdrawalStatusUpdated", data);
+      devLog("âœ… Dashboard received: withdrawalStatusUpdated", data);
       const status = data.status || "updated";
       notifySavings(
         "Withdrawal " + (status === "approved" ? "Approved" : status === "rejected" ? "Rejected" : "Updated"),
@@ -437,7 +449,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
       );
       if (isNativeRef.current) {
         showMobileNotification({
-          title: status === "approved" ? "✅ Withdrawal Approved" : status === "rejected" ? "❌ Withdrawal Rejected" : "📋 Withdrawal Updated",
+          title: status === "approved" ? "âœ… Withdrawal Approved" : status === "rejected" ? "âŒ Withdrawal Rejected" : "ðŸ“‹ Withdrawal Updated",
           body: `Your withdrawal request has been ${status}`,
           extra: { type: "savings", action: "withdrawal", status }
         });
@@ -446,7 +458,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
     
     // Loan events
     socket.on("loanRequest", (data) => {
-      console.log("💳 Dashboard received: loanRequest", data);
+      devLog("ðŸ’³ Dashboard received: loanRequest", data);
       if (userRole === "admin") {
         const memberName = data.member?.name || data.memberName || "A member";
         const amount = data.amount ? `KES ${data.amount.toLocaleString()}` : "";
@@ -457,7 +469,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
         );
         if (isNativeRef.current) {
           showMobileNotification({
-            title: "💳 Loan Request",
+            title: "ðŸ’³ Loan Request",
             body: `${memberName} requested a loan${amount ? ` of ${amount}` : ""}`,
             extra: { type: "loan", action: "request" }
           });
@@ -466,7 +478,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
     });
     
     socket.on("loanStatusUpdated", (data) => {
-      console.log("📋 Dashboard received: loanStatusUpdated", data);
+      devLog("ðŸ“‹ Dashboard received: loanStatusUpdated", data);
       const status = data.status || "updated";
       notifyLoan(
         "Loan " + (status === "approved" ? "Approved" : status === "rejected" ? "Rejected" : "Updated"),
@@ -475,7 +487,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
       );
       if (isNativeRef.current) {
         showMobileNotification({
-          title: status === "approved" ? "✅ Loan Approved" : status === "rejected" ? "❌ Loan Rejected" : "📋 Loan Updated",
+          title: status === "approved" ? "âœ… Loan Approved" : status === "rejected" ? "âŒ Loan Rejected" : "ðŸ“‹ Loan Updated",
           body: `Your loan application has been ${status}`,
           extra: { type: "loan", action: "status", status }
         });
@@ -483,7 +495,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
     });
     
     socket.on("loanLateFeeApplied", (data) => {
-      console.log("⚠️ Dashboard received: loanLateFeeApplied", data);
+      devLog("âš ï¸ Dashboard received: loanLateFeeApplied", data);
       notifyLoan(
         "Late Fee Applied",
         `A late fee has been applied to your loan`,
@@ -491,7 +503,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
       );
       if (isNativeRef.current) {
         showMobileNotification({
-          title: "⚠️ Late Fee Applied",
+          title: "âš ï¸ Late Fee Applied",
           body: "A late fee has been applied to your loan",
           extra: { type: "loan", action: "lateFee" }
         });
@@ -499,7 +511,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
     });
     
     socket.on("interestApplied", (data) => {
-      console.log("📈 Dashboard received: interestApplied", data);
+      devLog("ðŸ“ˆ Dashboard received: interestApplied", data);
       notifySavings(
         "Interest Applied",
         `Interest has been applied to your savings`,
@@ -509,7 +521,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
 
     // Listen for profile picture updates (for real-time updates across tabs/sessions)
     socket.on("member:updated", (data) => {
-      console.log("👤 Dashboard received: member:updated", data);
+      devLog("ðŸ‘¤ Dashboard received: member:updated", data);
       // If the updated member is the current user and profile_picture was updated
       if (userData && data.memberId === userData._id && data.profile_picture !== undefined) {
         // Update localStorage to ensure consistency
@@ -519,7 +531,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
             const user = JSON.parse(storedUser);
             user.profile_picture = data.profile_picture;
             localStorage.setItem("user", JSON.stringify(user));
-            console.log("✅ Profile picture updated in localStorage via Socket.IO");
+            devLog("âœ… Profile picture updated in localStorage via Socket.IO");
           } catch (error) {
             console.error("Error updating localStorage:", error);
           }
@@ -531,7 +543,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
     });
 
     return () => {
-      console.log("🧹 Dashboard: Cleaning up Socket.IO listeners");
+      devLog("ðŸ§¹ Dashboard: Cleaning up Socket.IO listeners");
       socket.off("announcement:new");
       socket.off("announcementCreated");
       socket.off("member:new");
@@ -580,7 +592,7 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
             </Badge>            <NotificationCenter />            <ThemeToggle />
             <Button
               onClick={() => {
-                console.log("504 Manual refresh triggered");
+                devLog("504 Manual refresh triggered");
                 setIsLoadingData(true);
                 window.location.reload();
               }}
@@ -735,3 +747,4 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
 };
 
 export default Dashboard;
+

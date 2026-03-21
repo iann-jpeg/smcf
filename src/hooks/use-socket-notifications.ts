@@ -1,8 +1,20 @@
-import { useEffect, useRef } from 'react';
+﻿import { useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useNotification } from './use-notification';
 import { authService } from '@/lib/authService';
 import API_BASE from '@/lib/api';
+
+const devLog = (...args: any[]) => {
+  if (import.meta.env.DEV) {
+    console.log(...args);
+  }
+};
+
+const devWarn = (...args: any[]) => {
+  if (import.meta.env.DEV) {
+    console.warn(...args);
+  }
+};
 
 /**
  * Global Socket Notification Hook
@@ -72,7 +84,7 @@ export function useSocketNotifications() {
     (window as any).socket = socket;
 
     socket.on('connect', () => {
-      console.log('🔌 Socket connected for notifications:', socket.id);
+      devLog('ðŸ”Œ Socket connected for notifications:', socket.id);
       
       // Register user as online
       socket.emit('user:online', {
@@ -83,24 +95,24 @@ export function useSocketNotifications() {
     });
 
     socket.on('disconnect', () => {
-      console.log('🔌 Socket disconnected');
+      devLog('ðŸ”Œ Socket disconnected');
     });
 
     // ==================== ANNOUNCEMENT EVENTS ====================
     // Announcements go to ALL users (both admin and members)
     socket.on('announcementCreated', (announcement: any) => {
-      console.log('📢 Announcement received:', announcement);
+      devLog('ðŸ“¢ Announcement received:', announcement);
       notifyAnnouncement(
-        '📢 New Announcement',
+        'ðŸ“¢ New Announcement',
         announcement.title || announcement.message || 'Check the announcements section',
         { announcement }
       );
     });
 
     socket.on('announcement:new', (announcement: any) => {
-      console.log('📢 Announcement received:', announcement);
+      devLog('ðŸ“¢ Announcement received:', announcement);
       notifyAnnouncement(
-        '📢 New Announcement',
+        'ðŸ“¢ New Announcement',
         announcement.title || announcement.message || 'Check the announcements section',
         { announcement }
       );
@@ -108,7 +120,7 @@ export function useSocketNotifications() {
 
     // ==================== PAYMENT EVENTS ====================
     socket.on('payment:completed', (data: any) => {
-      console.log('💰 Payment completed:', data);
+      devLog('ðŸ’° Payment completed:', data);
       
       const memberId = data.memberId;
       const payerId = data.payerId;
@@ -118,19 +130,19 @@ export function useSocketNotifications() {
       if (adminShow(() => {
         if (data.type === 'wallet_deposit') {
           notifySavings(
-            '💰 Wallet Deposit',
+            'ðŸ’° Wallet Deposit',
             `${memberName} deposited KES ${data.amount?.toLocaleString() || 'N/A'} to their wallet`,
             data
           );
         } else if (data.type === 'cycle_payment') {
           notifyPayment(
-            '💰 Cycle Payment',
+            'ðŸ’° Cycle Payment',
             `${memberName} made a cycle payment of KES ${data.amount?.toLocaleString() || 'N/A'}`,
             data
           );
         } else if (data.type === 'loan_repayment') {
           notifyLoan(
-            '💳 Loan Repayment',
+            'ðŸ’³ Loan Repayment',
             `${memberName} made a loan payment of KES ${data.amount?.toLocaleString() || 'N/A'}`,
             data
           );
@@ -146,13 +158,13 @@ export function useSocketNotifications() {
       if (data.type === 'wallet_deposit') {
         if (isAdmin) {
           notifySavings(
-            '💰 Wallet Deposit',
+            'ðŸ’° Wallet Deposit',
             `${memberName} deposited KES ${data.amount?.toLocaleString() || 'N/A'} to their wallet`,
             data
           );
         } else if (isForCurrentUser(memberId)) {
           notifySavings(
-            '💰 Wallet Deposit Received',
+            'ðŸ’° Wallet Deposit Received',
             `KES ${data.amount?.toLocaleString() || 'N/A'} has been deposited to your wallet`,
             data
           );
@@ -160,20 +172,20 @@ export function useSocketNotifications() {
       } else if (data.type === 'cycle_payment') {
         if (isAdmin) {
           notifyPayment(
-            '💰 Cycle Payment',
+            'ðŸ’° Cycle Payment',
             `${memberName} made a cycle payment of KES ${data.amount?.toLocaleString() || 'N/A'}`,
             data
           );
         } else {
           if (isForCurrentUser(payerId) && data.isQRPayment) {
             notifyPayment(
-              '✅ Payment Sent',
+              'âœ… Payment Sent',
               `Your payment of KES ${data.amount?.toLocaleString() || 'N/A'} was successful`,
               data
             );
           } else if (isForCurrentUser(memberId)) {
             notifyPayment(
-              '💰 Payment Received',
+              'ðŸ’° Payment Received',
               `Payment of KES ${data.amount?.toLocaleString() || 'N/A'} confirmed`,
               data
             );
@@ -182,13 +194,13 @@ export function useSocketNotifications() {
       } else if (data.type === 'loan_repayment') {
         if (isAdmin) {
           notifyLoan(
-            '💳 Loan Repayment',
+            'ðŸ’³ Loan Repayment',
             `${memberName} made a loan payment of KES ${data.amount?.toLocaleString() || 'N/A'}`,
             data
           );
         } else if (isForCurrentUser(memberId)) {
           notifyLoan(
-            '✅ Loan Payment Received',
+            'âœ… Loan Payment Received',
             `Your loan payment of KES ${data.amount?.toLocaleString() || 'N/A'} was successful`,
             data
           );
@@ -197,12 +209,12 @@ export function useSocketNotifications() {
     });
 
     socket.on('payment:new', (data: any) => {
-      console.log('💳 New payment:', data);
+      devLog('ðŸ’³ New payment:', data);
       // Admin gets notified of all new payments
       if (isAdmin) {
         const memberName = data.memberName || 'A member';
         notifyPayment(
-          '💳 New Payment',
+          'ðŸ’³ New Payment',
           `${memberName} initiated a payment of KES ${data.amount?.toLocaleString() || 'N/A'}`,
           data
         );
@@ -211,7 +223,7 @@ export function useSocketNotifications() {
 
     // ==================== SAVINGS EVENTS ====================
     socket.on('savingDeposit', (data: any) => {
-      console.log('💰 Saving deposit:', data);
+      devLog('ðŸ’° Saving deposit:', data);
       
       if (!shouldShowNotification(data.memberId)) return;
       
@@ -219,13 +231,13 @@ export function useSocketNotifications() {
       
       if (isAdmin) {
         notifySavings(
-          '💰 Savings Deposit',
+          'ðŸ’° Savings Deposit',
           `${memberName} deposited KES ${data.amount?.toLocaleString() || 'N/A'}. Balance: KES ${data.newBalance?.toLocaleString() || 'N/A'}`,
           data
         );
       } else {
         notifySavings(
-          '💰 Deposit Successful',
+          'ðŸ’° Deposit Successful',
           `KES ${data.amount?.toLocaleString() || 'N/A'} deposited. New balance: KES ${data.newBalance?.toLocaleString() || 'N/A'}`,
           data
         );
@@ -233,12 +245,12 @@ export function useSocketNotifications() {
     });
 
     socket.on('saving:new', (data: any) => {
-      console.log('💾 New saving record:', data);
+      devLog('ðŸ’¾ New saving record:', data);
       // Usually handled by savingDeposit event
     });
 
     socket.on('interestApplied', (data: any) => {
-      console.log('📈 Interest applied:', data);
+      devLog('ðŸ“ˆ Interest applied:', data);
       
       if (!shouldShowNotification(data.memberId)) return;
       
@@ -246,13 +258,13 @@ export function useSocketNotifications() {
       
       if (isAdmin) {
         notifySavings(
-          '📈 Interest Applied',
+          'ðŸ“ˆ Interest Applied',
           `${memberName} earned KES ${data.interestAmount?.toLocaleString() || 'N/A'} in interest`,
           data
         );
       } else {
         notifySavings(
-          '📈 Interest Earned!',
+          'ðŸ“ˆ Interest Earned!',
           `KES ${data.interestAmount?.toLocaleString() || 'N/A'} interest has been added to your savings`,
           data
         );
@@ -261,20 +273,20 @@ export function useSocketNotifications() {
 
     // ==================== LOAN EVENTS ====================
     socket.on('loanStatusUpdated', (data: any) => {
-      console.log('📋 Loan status updated:', data);
+      devLog('ðŸ“‹ Loan status updated:', data);
       
       if (!shouldShowNotification(data.memberId)) return;
       
       const memberName = data.memberName || 'A member';
       const statusEmojis: Record<string, string> = {
-        pending: '⏳',
-        approved: '✅',
-        rejected: '❌',
-        disbursed: '💸',
-        repaid: '🎉',
+        pending: 'â³',
+        approved: 'âœ…',
+        rejected: 'âŒ',
+        disbursed: 'ðŸ’¸',
+        repaid: 'ðŸŽ‰',
       };
       
-      const emoji = statusEmojis[data.status] || '📋';
+      const emoji = statusEmojis[data.status] || 'ðŸ“‹';
       const statusLabel = data.status.charAt(0).toUpperCase() + data.status.slice(1);
       
       if (adminShow(() => {
@@ -309,7 +321,7 @@ export function useSocketNotifications() {
     });
 
     socket.on('loanPayment', (data: any) => {
-      console.log('💳 Loan payment:', data);
+      devLog('ðŸ’³ Loan payment:', data);
       
       if (!shouldShowNotification(data.memberId)) return;
       
@@ -318,7 +330,7 @@ export function useSocketNotifications() {
       
       if (adminShow(() => {
         notifyLoan(
-          isFullyPaid ? '🎉 Loan Fully Repaid' : '💳 Loan Payment',
+          isFullyPaid ? 'ðŸŽ‰ Loan Fully Repaid' : 'ðŸ’³ Loan Payment',
           isFullyPaid
             ? `${memberName} has fully repaid their loan of KES ${data.totalPaid?.toLocaleString()}`
             : `${memberName} paid KES ${data.paymentAmount?.toLocaleString()}. Remaining: KES ${data.remaining?.toLocaleString()}`,
@@ -327,7 +339,7 @@ export function useSocketNotifications() {
       })) return;
       else {
         notifyLoan(
-          isFullyPaid ? '🎉 Loan Fully Repaid!' : '✅ Loan Payment Received',
+          isFullyPaid ? 'ðŸŽ‰ Loan Fully Repaid!' : 'âœ… Loan Payment Received',
           isFullyPaid
             ? `Congratulations! Your loan of KES ${data.totalPaid?.toLocaleString()} has been fully repaid.`
             : `Payment of KES ${data.paymentAmount?.toLocaleString()} received. Remaining: KES ${data.remaining?.toLocaleString()}`,
@@ -337,7 +349,7 @@ export function useSocketNotifications() {
     });
 
     socket.on('loanLateFeeApplied', (data: any) => {
-      console.log('⚠️ Late fee applied:', data);
+      devLog('âš ï¸ Late fee applied:', data);
       
       if (!shouldShowNotification(data.memberId)) return;
       
@@ -345,14 +357,14 @@ export function useSocketNotifications() {
       
       if (adminShow(() => {
         notifyWarning(
-          '⚠️ Late Fee Applied',
+          'âš ï¸ Late Fee Applied',
           `Late fee of KES ${data.feeAmount?.toLocaleString() || 'N/A'} applied to ${memberName}'s loan`,
           data
         );
       })) return;
       else {
         notifyWarning(
-          '⚠️ Late Fee Applied',
+          'âš ï¸ Late Fee Applied',
           `A late fee of KES ${data.feeAmount?.toLocaleString() || 'N/A'} has been added to your loan`,
           data
         );
@@ -361,12 +373,12 @@ export function useSocketNotifications() {
 
     // ==================== NEW LOAN REQUEST (Admin only) ====================
     socket.on('loanRequested', (data: any) => {
-      console.log('📝 New loan request:', data);
+      devLog('ðŸ“ New loan request:', data);
       
       if (isAdmin) {
         const memberName = data.memberName || 'A member';
         notifyLoan(
-          '📝 New Loan Request',
+          'ðŸ“ New Loan Request',
           `${memberName} requested a loan of KES ${data.amount?.toLocaleString() || 'N/A'}`,
           data
         );
@@ -375,7 +387,7 @@ export function useSocketNotifications() {
 
     // ==================== DISBURSEMENT EVENTS ====================
     socket.on('disbursementCompleted', (data: any) => {
-      console.log('💸 Disbursement completed:', data);
+      devLog('ðŸ’¸ Disbursement completed:', data);
       
       if (!shouldShowNotification(data.memberId)) return;
       
@@ -383,14 +395,14 @@ export function useSocketNotifications() {
       
       if (adminShow(() => {
         notifySuccess(
-          '💸 Disbursement Completed',
+          'ðŸ’¸ Disbursement Completed',
           `KES ${data.amount?.toLocaleString() || 'N/A'} disbursed to ${memberName}`,
           data
         );
       })) return;
       else {
         notifySuccess(
-          '💸 Disbursement Received!',
+          'ðŸ’¸ Disbursement Received!',
           `KES ${data.amount?.toLocaleString() || 'N/A'} has been sent to your M-Pesa`,
           data
         );
@@ -399,11 +411,11 @@ export function useSocketNotifications() {
 
     // ==================== CYCLE EVENTS ====================
     socket.on('cycle:updated', (data: any) => {
-      console.log('🔄 Cycle updated:', data);
+      devLog('ðŸ”„ Cycle updated:', data);
       // Only admin gets cycle update notifications
       if (isAdmin) {
         notifyInfo(
-          '🔄 Cycle Updated',
+          'ðŸ”„ Cycle Updated',
           `Cycle ${data.cycleNumber || ''} has been updated`,
           data
         );
@@ -411,11 +423,11 @@ export function useSocketNotifications() {
     });
 
     socket.on('cycleUpdated', (data: any) => {
-      console.log('🔄 Cycle updated:', data);
+      devLog('ðŸ”„ Cycle updated:', data);
       // Only admin gets cycle update notifications
       if (isAdmin && data.cycleNumber) {
         notifyInfo(
-          '🔄 Cycle Updated',
+          'ðŸ”„ Cycle Updated',
           `Cycle ${data.cycleNumber} stats updated`,
           data
         );
@@ -423,13 +435,13 @@ export function useSocketNotifications() {
     });
 
     socket.on('nextRecipientUpdated', (data: any) => {
-      console.log('👤 Next recipient updated:', data);
+      devLog('ðŸ‘¤ Next recipient updated:', data);
       
       // Admin sees all
       if (isAdmin) {
         const recipientName = data.recipientName || 'A member';
         notifyInfo(
-          '👤 Next Recipient Set',
+          'ðŸ‘¤ Next Recipient Set',
           `${recipientName} is next for cycle disbursement`,
           data
         );
@@ -438,7 +450,7 @@ export function useSocketNotifications() {
       // The member who is next gets notified
       if (isForCurrentUser(data.nextRecipientId)) {
         notifySuccess(
-          '🎉 You\'re Next!',
+          'ðŸŽ‰ You\'re Next!',
           'You are the next recipient for the cycle disbursement!',
           data
         );
@@ -447,10 +459,10 @@ export function useSocketNotifications() {
 
     // ==================== MEMBER EVENTS (Admin only) ====================
     socket.on('member:new', (data: any) => {
-      console.log('👤 New member:', data);
+      devLog('ðŸ‘¤ New member:', data);
       if (isAdmin) {
         notifySuccess(
-          '👤 New Member Joined',
+          'ðŸ‘¤ New Member Joined',
           `${data.name || 'A new member'} has joined SMCF`,
           data
         );
@@ -458,11 +470,11 @@ export function useSocketNotifications() {
     });
 
     socket.on('memberUpdated', (data: any) => {
-      console.log('👤 Member updated:', data);
+      devLog('ðŸ‘¤ Member updated:', data);
       if (isAdmin) {
         const memberName = data.memberName || 'A member';
         notifyInfo(
-          '👤 Member Updated',
+          'ðŸ‘¤ Member Updated',
           `${memberName}'s profile has been updated`,
           data
         );
@@ -471,12 +483,12 @@ export function useSocketNotifications() {
 
     // ==================== WITHDRAWAL EVENTS ====================
     socket.on('withdrawalRequested', (data: any) => {
-      console.log('💸 Withdrawal requested:', data);
+      devLog('ðŸ’¸ Withdrawal requested:', data);
       
       if (isAdmin) {
         const memberName = data.memberName || 'A member';
         notifyWarning(
-          '💸 Withdrawal Request',
+          'ðŸ’¸ Withdrawal Request',
           `${memberName} requested a withdrawal of KES ${data.amount?.toLocaleString() || 'N/A'}`,
           data
         );
@@ -484,7 +496,7 @@ export function useSocketNotifications() {
     });
 
     socket.on('withdrawalProcessed', (data: any) => {
-      console.log('💸 Withdrawal processed:', data);
+      devLog('ðŸ’¸ Withdrawal processed:', data);
       
       if (!shouldShowNotification(data.memberId)) return;
       
@@ -492,14 +504,14 @@ export function useSocketNotifications() {
       
       if (adminShow(() => {
         notifySuccess(
-          '💸 Withdrawal Processed',
+          'ðŸ’¸ Withdrawal Processed',
           `Withdrawal of KES ${data.amount?.toLocaleString() || 'N/A'} processed for ${memberName}`,
           data
         );
       })) return;
       else {
         notifySuccess(
-          '💸 Withdrawal Processed',
+          'ðŸ’¸ Withdrawal Processed',
           `Your withdrawal of KES ${data.amount?.toLocaleString() || 'N/A'} has been processed`,
           data
         );
@@ -535,3 +547,4 @@ export function useSocketNotifications() {
 
   return socketRef.current;
 }
+

@@ -1,4 +1,4 @@
-import MemberCycleChart from "@/components/analytics/MemberCycleChart";
+﻿import MemberCycleChart from "@/components/analytics/MemberCycleChart";
 import TopSaverBadge from "@/components/analytics/TopSaverBadge";
 import CycleQRPayment from "@/components/CycleQRPayment";
 import LoanRequestDialog from "@/components/LoanRequestDialog";
@@ -92,6 +92,18 @@ interface MemberDashboardProps {
   cycleData: CycleData;
 }
 
+const devLog = (...args: any[]) => {
+  if (import.meta.env.DEV) {
+    console.log(...args);
+  }
+};
+
+const devWarn = (...args: any[]) => {
+  if (import.meta.env.DEV) {
+    console.warn(...args);
+  }
+};
+
 const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
   const [showPayment, setShowPayment] = useState(false);
   const [showLoanRequest, setShowLoanRequest] = useState(false);
@@ -100,7 +112,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
   const [selectedLoanLoading, setSelectedLoanLoading] = useState(false);
     // Fetch latest loan details from backend when opening repayment dialog
     const openRepaymentDialog = async (loan: User) => {
-      console.log('🔵 Opening repayment dialog for loan:', loan._id);
+      devLog('ðŸ”µ Opening repayment dialog for loan:', loan._id);
       setSelectedLoanLoading(true);
       try {
         const res = await fetch(`${API_BASE}/api/loans/${loan._id}`, {
@@ -108,7 +120,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         });
         const data = await res.json();
         if (data.success && data.data) {
-          console.log('✅ Fetched latest loan data:', data.data);
+          devLog('âœ… Fetched latest loan data:', data.data);
           setSelectedLoan(data.data);
         } else {
           console.error('Failed to fetch loan details:', data.error);
@@ -130,7 +142,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
       }
       setSelectedLoanLoading(false);
       setShowRepayment(true);
-      console.log('🔵 Repayment dialog opened');
+      devLog('ðŸ”µ Repayment dialog opened');
     };
   const [isProcessingRepayment, setIsProcessingRepayment] = useState(false);
   const [repaymentState, setRepaymentState] = useState<
@@ -178,7 +190,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
   const fetchData = useCallback(async () => {
     // Safety check - ensure userData exists
     if (!userData || !userData._id) {
-      console.warn("MemberDashboard: userData is undefined or missing _id");
+      devWarn("MemberDashboard: userData is undefined or missing _id");
       return;
     }
 
@@ -228,15 +240,15 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
       try {
         if (announcementsRes.ok) {
           announcementsData = await announcementsRes.json();
-          console.log("📢 Announcements response:", announcementsData);
+          devLog("ðŸ“¢ Announcements response:", announcementsData);
         } else {
           console.error(
-            "❌ Announcements fetch failed:",
+            "âŒ Announcements fetch failed:",
             announcementsRes.status
           );
         }
       } catch (err) {
-        console.error("❌ Error parsing announcements:", err);
+        console.error("âŒ Error parsing announcements:", err);
       }
 
       const freshMemberData = await memberRes.json();
@@ -246,7 +258,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         if (guarantorRequestsRes.ok) {
           const guarantorData = await guarantorRequestsRes.json();
           setPendingGuarantorRequests(guarantorData.count || 0);
-          console.log(`📋 Found ${guarantorData.count || 0} pending guarantor requests`);
+          devLog(`ðŸ“‹ Found ${guarantorData.count || 0} pending guarantor requests`);
         }
       } catch (err) {
         console.error("Error fetching guarantor requests:", err);
@@ -294,17 +306,17 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
 
       // Update announcements
       if (Array.isArray(announcementsData)) {
-        console.log("📢 Fetched announcements:", announcementsData.length);
+        devLog("ðŸ“¢ Fetched announcements:", announcementsData.length);
         setAnnouncements(announcementsData as User[]);
       } else if (
         (announcementsData as any)?.success &&
         Array.isArray((announcementsData as any).data)
       ) {
-        console.log("📢 Fetched announcements:", (announcementsData as any).data.length);
+        devLog("ðŸ“¢ Fetched announcements:", (announcementsData as any).data.length);
         setAnnouncements((announcementsData as any).data as User[]);
       } else {
-        console.log(
-          "📢 No announcements or unexpected format:",
+        devLog(
+          "ðŸ“¢ No announcements or unexpected format:",
           announcementsData
         );
       }
@@ -319,9 +331,9 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
           ? cycleData.data.total_members
           : Array.from(new Set(paymentsArray.map((p: User) => (p.member_id as any)?._id || p.member_id))).length;
 
-      console.log("👥 Total members count:", totalMembersCount);
-      console.log(
-        "💰 Payments data:",
+      devLog("ðŸ‘¥ Total members count:", totalMembersCount);
+      devLog(
+        "ðŸ’° Payments data:",
         Array.isArray(payments) ? payments.length : 0,
         "payments"
       );
@@ -343,10 +355,10 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         (p: User) => p.status === "completed"
       );
 
-      console.log("🔢 Current cycle number:", currentCycleNumber);
-      console.log("💳 Total payments:", paymentsArray.length);
-      console.log("📍 Current cycle payments:", currentCyclePayments.length);
-      console.log("✅ Completed payments:", completedPayments.length);
+      devLog("ðŸ”¢ Current cycle number:", currentCycleNumber);
+      devLog("ðŸ’³ Total payments:", paymentsArray.length);
+      devLog("ðŸ“ Current cycle payments:", currentCyclePayments.length);
+      devLog("âœ… Completed payments:", completedPayments.length);
 
       // Calculate total collected from actual completed payments
       const totalCollected = completedPayments.reduce(
@@ -360,9 +372,9 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
       );
       const uniquePaidMembers = paidMemberIds.size;
 
-      console.log("💵 Total collected:", totalCollected);
-      console.log(
-        "✅ Unique paid members:",
+      devLog("ðŸ’µ Total collected:", totalCollected);
+      devLog(
+        "âœ… Unique paid members:",
         uniquePaidMembers,
         "out of",
         totalMembersCount
@@ -395,7 +407,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
             : "No Active Cycle",
       };
 
-      console.log("📊 Updated cycle data:", newData);
+      devLog("ðŸ“Š Updated cycle data:", newData);
       setCurrentCycleData(newData);
 
       // Filter for this member's payments
@@ -476,7 +488,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
   useEffect(() => {
     // Safety check - ensure userData exists
     if (!userData || !userData._id) {
-      console.warn("MemberDashboard: userData is undefined or missing _id");
+      devWarn("MemberDashboard: userData is undefined or missing _id");
       return;
     }
 
@@ -486,9 +498,9 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
     // Socket.IO real-time event listeners
     const socket = (window as any).socket;
     if (socket && userData) {
-      console.log("👂 Member Dashboard listening for real-time updates");
-      console.log("🔌 Socket connected:", socket.connected);
-      console.log("🆔 Socket ID:", socket.id);
+      devLog("ðŸ‘‚ Member Dashboard listening for real-time updates");
+      devLog("ðŸ”Œ Socket connected:", socket.connected);
+      devLog("ðŸ†” Socket ID:", socket.id);
 
       // Notify server that user is online
       socket.emit("user:online", {
@@ -496,18 +508,18 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         username: userData.username || userData.name,
         role: userData.role || "member",
       });
-      console.log(
-        "👤 Notified server: member is online",
+      devLog(
+        "ðŸ‘¤ Notified server: member is online",
         userData.username || userData.name
       );
 
       // Listen for payment completion (new event name)
       socket.on("payment:completed", (data: User) => {
-        console.log("💰 MemberDashboard received: payment:completed", data);
-        console.log("   Current user ID:", userData._id, "or", userData.id);
-        console.log("   Payment memberId:", data.memberId);
-        console.log("   Payment payerId:", data.payerId);
-        console.log("   Payment type:", data.type);
+        devLog("ðŸ’° MemberDashboard received: payment:completed", data);
+        devLog("   Current user ID:", userData._id, "or", userData.id);
+        devLog("   Payment memberId:", data.memberId);
+        devLog("   Payment payerId:", data.payerId);
+        devLog("   Payment type:", data.type);
         
         // For cycle payments, always refresh (affects cycle progress for everyone)
         if (data.type === "cycle_payment") {
@@ -537,19 +549,19 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
 
       // Listen for any new payment
       socket.on("payment:new", (data: User) => {
-        console.log("💰 MemberDashboard received: payment:new", data);
+        devLog("ðŸ’° MemberDashboard received: payment:new", data);
         fetchData(); // Refresh cycle stats
       });
 
       // Listen for cycle updates (new event name)
       socket.on("cycle:updated", (data: User) => {
-        console.log("🔄 MemberDashboard received: cycle:updated", data);
+        devLog("ðŸ”„ MemberDashboard received: cycle:updated", data);
         fetchData(); // Refresh data immediately
       });
 
         // Listen for new disbursement events
         socket.on("disbursement:new", (data: User) => {
-          console.log("💸 MemberDashboard received: disbursement:new", data);
+          devLog("ðŸ’¸ MemberDashboard received: disbursement:new", data);
           toast({
             title: "New Disbursement Processed!",
             description: `KES ${data.amount} disbursed to ${data.recipientName || 'member'}`,
@@ -559,14 +571,14 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
 
       // Listen for member additions/removals
       socket.on("member:new", (data: User) => {
-        console.log("👤 MemberDashboard received: member:new", data);
+        devLog("ðŸ‘¤ MemberDashboard received: member:new", data);
         fetchData(); // Refresh to update total members count
       });
 
       // Listen for loan status updates
       socket.on("loanStatusUpdated", (data: User) => {
         if (data.memberId === userData._id || data.memberId === userData.id) {
-          console.log("💰 Your loan status was updated:", data);
+          devLog("ðŸ’° Your loan status was updated:", data);
           const statusMessages: Record<string, string> = {
             approved: `Your loan of KES ${data.amount.toLocaleString()} has been approved!`,
             rejected: data.rejectionReason
@@ -591,9 +603,9 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
 
       // Listen for loan repayment updates
       socket.on("loanPayment", (data: User) => {
-        console.log("💰 MemberDashboard received: loanPayment", data);
-        console.log("   Current user ID:", userData._id, "or", userData.id);
-        console.log("   Loan memberId:", data.memberId);
+        devLog("ðŸ’° MemberDashboard received: loanPayment", data);
+        devLog("   Current user ID:", userData._id, "or", userData.id);
+        devLog("   Loan memberId:", data.memberId);
         
         if (data.memberId === userData._id?.toString() || data.memberId === userData.id?.toString()) {
           const isFullyPaid = data.isFullyPaid || data.remaining <= 0;
@@ -604,7 +616,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
           setRepaymentState("success");
           
           toast({
-            title: isFullyPaid ? "Loan Fully Repaid! 🎉" : "Loan Payment Received!",
+            title: isFullyPaid ? "Loan Fully Repaid! ðŸŽ‰" : "Loan Payment Received!",
             description: isFullyPaid
               ? `Congratulations! Your loan of KES ${data.totalPaid.toLocaleString()} has been fully repaid.`
               : `Payment of KES ${data.paymentAmount.toLocaleString()} received. Remaining: KES ${data.remaining.toLocaleString()}`,
@@ -623,23 +635,23 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
 
       // Listen for new announcements
       socket.on("announcementCreated", (announcement: User) => {
-        console.log("📢 New announcement received:", announcement);
+        devLog("ðŸ“¢ New announcement received:", announcement);
 
         // Add the new announcement to the list
         setAnnouncements((prev) => [announcement, ...prev]);
 
         // Show toast notification based on priority
         const priorityEmojis = {
-          high: "🔴",
-          medium: "🟡",
-          low: "🟢",
+          high: "ðŸ”´",
+          medium: "ðŸŸ¡",
+          low: "ðŸŸ¢",
         };
 
         toast({
           title: `${
             priorityEmojis[
               announcement.priority as keyof typeof priorityEmojis
-            ] || "📢"
+            ] || "ðŸ“¢"
           } New Announcement`,
           description:
             announcement.message.substring(0, 100) +
@@ -696,7 +708,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
 
     // Check if polling was stopped via Socket.IO
     if (!repaymentPollingActiveRef.current) {
-      console.log("⏹️ Loan repayment polling stopped (Socket.IO event received)");
+      devLog("â¹ï¸ Loan repayment polling stopped (Socket.IO event received)");
       return;
     }
 
@@ -736,7 +748,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
           selectedLoan.amount_remaining - parseFloat(partialPaymentAmount) <= 0;
 
         toast({
-          title: isFullyPaid ? "Loan Fully Repaid! 🎉" : "Payment Successful!",
+          title: isFullyPaid ? "Loan Fully Repaid! ðŸŽ‰" : "Payment Successful!",
           description: isFullyPaid
             ? "Congratulations! Your loan has been fully repaid."
             : `Payment of KES ${parseFloat(
@@ -769,7 +781,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
 
       // Check if polling still active before continuing
       if (!repaymentPollingActiveRef.current) {
-        console.log("⏹️ Loan repayment polling stopped during check");
+        devLog("â¹ï¸ Loan repayment polling stopped during check");
         return;
       }
 
@@ -796,13 +808,13 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
   };
 
   const handleLoanRepayment = async () => {
-    console.log('💰 handleLoanRepayment called');
-    console.log('Selected loan:', selectedLoan);
-    console.log('Payment amount:', partialPaymentAmount);
-    console.log('Repayment phone:', repaymentPhone);
+    devLog('ðŸ’° handleLoanRepayment called');
+    devLog('Selected loan:', selectedLoan);
+    devLog('Payment amount:', partialPaymentAmount);
+    devLog('Repayment phone:', repaymentPhone);
     
     if (!selectedLoan || !partialPaymentAmount) {
-      console.log('❌ Missing selectedLoan or partialPaymentAmount');
+      devLog('âŒ Missing selectedLoan or partialPaymentAmount');
       return;
     }
 
@@ -870,7 +882,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         setRepaymentState("processing");
 
         toast({
-          title: "STK Push Sent 📱",
+          title: "STK Push Sent ðŸ“±",
           description:
             data.message || "Please enter your M-Pesa PIN on your phone",
         });
@@ -997,7 +1009,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         const nextCycleAdvance = Math.max(0, advanceCycles - 1);
 
         // Debug logging
-        console.log('💎 Member Advance Payment Calculation:', {
+        devLog('ðŸ’Ž Member Advance Payment Calculation:', {
           currentCycle: currentCycleData?.currentCycle,
           expectedByNow,
           totalPaid,
@@ -1119,7 +1131,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
             </Button>
             {memberStats.hasPaidThisCycle && (
               <p className="text-xs text-center text-muted-foreground">
-                ✓ Already paid for Cycle #{currentCycleData?.currentCycle}.
+                âœ“ Already paid for Cycle #{currentCycleData?.currentCycle}.
                 Click to pay for future cycles.
               </p>
             )}
@@ -1138,7 +1150,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                 prompt to enter your PIN and pay to Till{" "}
                 <strong>6938069</strong>.
               </p>
-              <p>• You'll receive confirmation SMS and receipt</p>
+              <p>â€¢ You'll receive confirmation SMS and receipt</p>
             </div>
           </div>
         </CardContent>
@@ -1470,10 +1482,10 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                                 }
                                 className="text-xs">
                                 {announcement.priority === "high"
-                                  ? "🔴 Urgent"
+                                  ? "ðŸ”´ Urgent"
                                   : announcement.priority === "medium"
-                                  ? "🟡 Important"
-                                  : "🟢 Info"}
+                                  ? "ðŸŸ¡ Important"
+                                  : "ðŸŸ¢ Info"}
                               </Badge>
                               <span className="text-xs text-muted-foreground">
                                 {new Date(
@@ -1740,7 +1752,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                                 <Button
                                   type="button"
                                   onClick={() => {
-                                    console.log('🔴 Repay button clicked for loan:', loan._id, loan);
+                                    devLog('ðŸ”´ Repay button clicked for loan:', loan._id, loan);
                                     openRepaymentDialog(loan);
                                   }}
                                   variant={loan.is_overdue ? "destructive" : "mpesa"}
@@ -1910,14 +1922,14 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                 <div className="bg-muted/50 p-4 rounded-lg">
                   <h4 className="font-semibold mb-2">How Payouts Work</h4>
                   <ul className="text-sm text-muted-foreground space-y-1">
-                    <li>• Payouts are distributed based on member hierarchy</li>
+                    <li>â€¢ Payouts are distributed based on member hierarchy</li>
                     <li>
-                      • You receive the full collected amount when it's your
+                      â€¢ You receive the full collected amount when it's your
                       turn
                     </li>
-                    <li>• Payouts are sent directly to your M-Pesa number</li>
+                    <li>â€¢ Payouts are sent directly to your M-Pesa number</li>
                     <li>
-                      • You'll receive SMS confirmation when funds are sent
+                      â€¢ You'll receive SMS confirmation when funds are sent
                     </li>
                   </ul>
                 </div>
@@ -2179,10 +2191,10 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                 <p className="text-sm font-medium">Payment Details:</p>
                 <div className="text-sm space-y-1">
                   <p>
-                    • Till Number: <span className="font-bold">6938069</span>
+                    â€¢ Till Number: <span className="font-bold">6938069</span>
                   </p>
-                  <p>• You will receive an M-Pesa prompt</p>
-                  <p>• Enter your M-Pesa PIN to complete payment</p>
+                  <p>â€¢ You will receive an M-Pesa prompt</p>
+                  <p>â€¢ Enter your M-Pesa PIN to complete payment</p>
                 </div>
               </div>
 
@@ -2202,10 +2214,10 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
                   type="button"
                   variant="mpesa"
                   onClick={() => {
-                    console.log('💚 Pay button clicked in dialog');
-                    console.log('Amount:', partialPaymentAmount);
-                    console.log('Phone:', repaymentPhone);
-                    console.log('Is disabled:', isProcessingRepayment || !partialPaymentAmount || isNaN(parseFloat(partialPaymentAmount)) || parseFloat(partialPaymentAmount) <= 0);
+                    devLog('ðŸ’š Pay button clicked in dialog');
+                    devLog('Amount:', partialPaymentAmount);
+                    devLog('Phone:', repaymentPhone);
+                    devLog('Is disabled:', isProcessingRepayment || !partialPaymentAmount || isNaN(parseFloat(partialPaymentAmount)) || parseFloat(partialPaymentAmount) <= 0);
                     handleLoanRepayment();
                   }}
                   disabled={
@@ -2243,3 +2255,4 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
 
 export default MemberDashboard;
 // ...end of file...
+
