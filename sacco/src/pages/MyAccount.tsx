@@ -29,7 +29,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { StatCard } from "@/components/StatCard";
-import { Wallet, Landmark, TrendingUp, CreditCard, CalendarCheck, PlusCircle, User, Download, Bell, CheckCheck, Save, Lock, FileText, CalendarIcon, Sparkles, Shield, ShieldCheck, ShieldX, Clock, ArrowRightLeft, Camera, Upload, Eye, Trash2, AlertCircle } from "lucide-react";
+import { Wallet, Landmark, TrendingUp, CreditCard, CalendarCheck, PlusCircle, User, Download, Bell, CheckCheck, Save, Lock, FileText, CalendarIcon, Sparkles, Shield, ShieldCheck, ShieldX, Clock, ArrowRightLeft, Camera, Upload, Eye, Trash2, AlertCircle, Loader2, Smartphone } from "lucide-react";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { Separator } from "@/components/ui/separator";
 import { exportMyTransactions, exportMyRepayments, exportMyLoans, exportMyStatement, downloadMembershipForm } from "@/lib/pdf-export";
@@ -90,6 +90,10 @@ export default function MyAccount() {
   const [shareTransferOpen, setShareTransferOpen] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const regFeePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const regFeeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [regFeeProcessing, setRegFeeProcessing] = useState(false);
+  const [regFeeCheckoutId, setRegFeeCheckoutId] = useState<string | null>(null);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get("tab") || "repayments";
@@ -118,6 +122,17 @@ export default function MyAccount() {
   const [passwordError, setPasswordError] = useState("");
   const [declineNote, setDeclineNote] = useState<Record<string, string>>({});
 
+  const stopRegFeePolling = () => {
+    if (regFeePollRef.current) {
+      clearInterval(regFeePollRef.current);
+      regFeePollRef.current = null;
+    }
+    if (regFeeTimeoutRef.current) {
+      clearTimeout(regFeeTimeoutRef.current);
+      regFeeTimeoutRef.current = null;
+    }
+  };
+
   // Initialize form fields from member data
   const currentPhone = phone ?? member?.phone ?? "";
   const currentEmail = email ?? member?.email ?? "";
@@ -136,6 +151,70 @@ export default function MyAccount() {
       });
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    return () => {
+      stopRegFeePolling();
+    };
+  }, []);
+
+  const registrationFeePaid = Boolean((member as any)?.registration_fee_paid);
+  const registrationFeeAmount = Number((member as any)?.registration_fee_amount ?? 100);
+  const registrationFeeMpesaCode = (member as any)?.registration_fee_mpesa_code as string | null;
+  const registrationFeeDate = (member as any)?.registration_fee_date as string | null;
+
+  const handleRegistrationFeePayment = async () => {
+    if (!member?.id) return;
+    if (registrationFeePaid) return;
+
+    setRegFeeProcessing(true);
+    try {
+      const response = await api.post('/mpesa/registration-fee/initiate', {
+        memberId: member.id,
+        phone: member.phone || currentPhone || undefined,
+      }) as any;
+
+      const checkoutId = String(response?.checkoutRequestId || response?.data?.checkoutRequestId || '');
+      if (!checkoutId) {
+        throw new Error('Could not start registration fee payment. Try again.');
+      }
+
+      setRegFeeCheckoutId(checkoutId);
+
+      regFeePollRef.current = setInterval(async () => {
+        try {
+          const status = await api.get(`/mpesa/status/${checkoutId}`) as any;
+          const state = status?.status || status?.data?.status;
+          if (state === 'success') {
+            stopRegFeePolling();
+            setRegFeeProcessing(false);
+            toast.success('Registration fee payment verified successfully');
+            queryClient.invalidateQueries({ queryKey: ['my-member'] });
+            queryClient.invalidateQueries({ queryKey: ['members'] });
+            queryClient.invalidateQueries({ queryKey: ['my-transactions'] });
+            queryClient.invalidateQueries({ queryKey: ['transactions'] });
+            return;
+          }
+          if (state === 'failed') {
+            stopRegFeePolling();
+            setRegFeeProcessing(false);
+            toast.error(status?.resultDesc || status?.data?.resultDesc || 'Registration fee payment failed');
+          }
+        } catch {
+          // keep polling on transient errors
+        }
+      }, 3000);
+
+      regFeeTimeoutRef.current = setTimeout(() => {
+        stopRegFeePolling();
+        setRegFeeProcessing(false);
+        toast.error('Payment verification timed out. If you completed payment, refresh shortly.');
+      }, 2 * 60 * 1000);
+    } catch (err: any) {
+      setRegFeeProcessing(false);
+      toast.error(err.message || 'Failed to initiate registration fee payment');
+    }
+  };
 
   const handleProfileSave = async () => {
     const result = profileSchema.safeParse({ phone: currentPhone, email: currentEmail });
@@ -345,6 +424,11 @@ export default function MyAccount() {
             <p className="text-muted-foreground text-sm">
               Welcome, {member.name} · {member.member_id}
             </p>
+            {registrationFeePaid && (
+              <Badge className="mt-1 bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-100">
+                Verified Member
+              </Badge>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
@@ -455,6 +539,50 @@ export default function MyAccount() {
           subtitle={pendingLoans.length > 0 ? `${pendingLoans.length} pending` : undefined}
         />
       </div>
+
+      <Card className={registrationFeePaid ? 'border-emerald-200 bg-emerald-50/40' : 'border-amber-200 bg-amber-50/40'}>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-heading flex items-center gap-2">
+            <ShieldCheck className={registrationFeePaid ? 'h-4 w-4 text-emerald-600' : 'h-4 w-4 text-amber-600'} />
+            Registration Fee
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Amount</span>
+            <span className="font-semibold">KES {registrationFeeAmount.toLocaleString()}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Status</span>
+            <Badge variant={registrationFeePaid ? 'default' : 'outline'}>
+              {registrationFeePaid ? 'Paid' : 'Not Paid'}
+            </Badge>
+          </div>
+          {registrationFeePaid && registrationFeeMpesaCode && (
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">M-Pesa Code</span>
+              <span className="font-mono text-xs">{registrationFeeMpesaCode}</span>
+            </div>
+          )}
+          {registrationFeePaid && registrationFeeDate && (
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Paid On</span>
+              <span>{new Date(registrationFeeDate).toLocaleString()}</span>
+            </div>
+          )}
+          {!registrationFeePaid && (
+            <div className="pt-2 space-y-2">
+              <Button onClick={handleRegistrationFeePayment} disabled={regFeeProcessing} className="gap-2">
+                {regFeeProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Smartphone className="h-4 w-4" />}
+                {regFeeProcessing ? 'Processing payment...' : 'Pay Now'}
+              </Button>
+              {regFeeProcessing && regFeeCheckoutId && (
+                <p className="text-xs text-muted-foreground">Checkout ID: {regFeeCheckoutId}</p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Alert for overdue */}
       {overdueRepayments.length > 0 && (

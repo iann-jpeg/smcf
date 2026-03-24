@@ -20,6 +20,7 @@ const Guarantors       = lazy(() => import("./pages/Guarantors"));
 const Reports          = lazy(() => import("./pages/Reports"));
 const Compliance       = lazy(() => import("./pages/Compliance"));
 const Documents        = lazy(() => import("./pages/Documents"));
+const RegistrationFee  = lazy(() => import("./pages/RegistrationFee"));
 const SettingsPage     = lazy(() => import("./pages/SettingsPage"));
 const AdminEmail       = lazy(() => import("./pages/AdminEmail"));
 const MemberDetail     = lazy(() => import("./pages/MemberDetail"));
@@ -107,6 +108,7 @@ function ProtectedRoutes() {
           <Route path="/reports" element={<Reports />} />
           <Route path="/compliance" element={<Compliance />} />
           <Route path="/documents" element={<Documents />} />
+          <Route path="/registration-fee" element={<RegistrationFee />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/admin-email" element={<AdminEmail />} />
           <Route path="/notifications" element={<Notifications />} />

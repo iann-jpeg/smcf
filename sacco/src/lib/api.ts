@@ -61,6 +61,13 @@ export interface NormalizedMember extends DbDocument {
   doc_passport_photo: string | null;
   doc_membership_form: string | null;
   doc_kra_pin_certificate: string | null;
+  registration_fee_paid: boolean;
+  registration_fee_amount: number;
+  registration_fee_mpesa_code: string | null;
+  registration_fee_date: unknown;
+  registration_fee_phone: string | null;
+  registration_fee_transaction_id: string | null;
+  registration_fee_pending_checkout_id: string | null;
   created_at: unknown;
   updated_at: unknown;
 }
@@ -113,6 +120,71 @@ export const api = {
   },
 };
 
+export interface RegistrationFeeStatus {
+  registrationFeePaid: boolean;
+  registrationFeeAmount: number;
+  registrationFeeMpesaCode: string | null;
+  registrationFeeDate: string | null;
+  registrationFeePhone: string | null;
+  registrationFeeTransactionId: string | null;
+  registrationFeePendingCheckoutId: string | null;
+}
+
+export interface RegistrationFeeAdminMember {
+  id: string;
+  memberId: string;
+  name: string;
+  phone: string | null;
+  registrationFeePaid: boolean;
+  registrationFeeAmount: number;
+  registrationFeeMpesaCode: string | null;
+  registrationFeeDate: string | null;
+}
+
+export interface RegistrationFeeAdminResponse {
+  members: RegistrationFeeAdminMember[];
+  summary: {
+    totalMembers: number;
+    paid: number;
+    pending: number;
+  };
+}
+
+export async function getMyRegistrationFeeStatus(): Promise<RegistrationFeeStatus> {
+  const res = await api.get('/members/me/registration-fee-status');
+  return res as RegistrationFeeStatus;
+}
+
+export async function initiateRegistrationFeePayment(payload: {
+  memberId: string;
+  phone?: string | null;
+}): Promise<{ checkoutRequestId: string }> {
+  const res = await api.post('/mpesa/registration-fee/initiate', payload);
+  const checkoutRequestId = (res as any)?.checkoutRequestId || (res as any)?.data?.checkoutRequestId;
+  return { checkoutRequestId: String(checkoutRequestId || '') };
+}
+
+export async function getRegistrationFeeMembers(params?: {
+  status?: 'all' | 'paid' | 'pending';
+  search?: string;
+}): Promise<RegistrationFeeAdminResponse> {
+  const query = new URLSearchParams();
+  if (params?.status && params.status !== 'all') query.set('status', params.status);
+  if (params?.search) query.set('search', params.search);
+  const q = query.toString();
+  const res = await api.get(`/members/registration-fee${q ? `?${q}` : ''}`);
+  return res as RegistrationFeeAdminResponse;
+}
+
+export async function reconcileRegistrationFeeManual(payload: {
+  phone: string;
+  mpesaRef: string;
+  amount: number;
+}): Promise<{ memberId: string; mpesaRef: string }> {
+  const res = await api.post('/mpesa/registration-fee/reconcile-manual', payload);
+  return res as { memberId: string; mpesaRef: string };
+}
+
 // ─── Data normalisers (MongoDB camelCase → UI snake_case) ─────────────────────
 
 /** MongoDB doc helper: turns _id to id */
@@ -155,6 +227,13 @@ export function normalizeMember(m: DbDocument): NormalizedMember {
     doc_passport_photo: (raw.docPassportPhoto ?? raw.doc_passport_photo ?? null) as string | null,
     doc_membership_form: (raw.docMembershipForm ?? raw.doc_membership_form ?? null) as string | null,
     doc_kra_pin_certificate: (raw.docKraPinCertificate ?? raw.doc_kra_pin_certificate ?? null) as string | null,
+    registration_fee_paid: Boolean(raw.registrationFeePaid ?? raw.registration_fee_paid ?? false),
+    registration_fee_amount: Number(raw.registrationFeeAmount ?? raw.registration_fee_amount ?? 100),
+    registration_fee_mpesa_code: (raw.registrationFeeMpesaCode ?? raw.registration_fee_mpesa_code ?? null) as string | null,
+    registration_fee_date: raw.registrationFeeDate ?? raw.registration_fee_date ?? null,
+    registration_fee_phone: (raw.registrationFeePhone ?? raw.registration_fee_phone ?? null) as string | null,
+    registration_fee_transaction_id: (raw.registrationFeeTransactionId ?? raw.registration_fee_transaction_id ?? null) as string | null,
+    registration_fee_pending_checkout_id: (raw.registrationFeePendingCheckoutId ?? raw.registration_fee_pending_checkout_id ?? null) as string | null,
     created_at: raw.createdAt ?? raw.created_at,
     updated_at: raw.updatedAt ?? raw.updated_at,
   };
