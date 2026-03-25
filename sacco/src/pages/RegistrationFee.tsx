@@ -85,18 +85,18 @@ export default function RegistrationFee() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-600" /> Paid</CardTitle>
+            <CardTitle className="text-sm flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-green-700" /> Paid</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-emerald-700">{summary.paid}</p>
+            <p className="text-2xl font-bold text-green-700">{summary.paid}</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2"><Clock3 className="h-4 w-4 text-amber-600" /> Pending</CardTitle>
+            <CardTitle className="text-sm flex items-center gap-2"><Clock3 className="h-4 w-4 text-green-600" /> Pending</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-amber-700">{summary.pending}</p>
+            <p className="text-2xl font-bold text-green-600">{summary.pending}</p>
           </CardContent>
         </Card>
       </div>

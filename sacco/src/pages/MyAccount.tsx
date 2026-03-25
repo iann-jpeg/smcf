@@ -540,10 +540,10 @@ export default function MyAccount() {
         />
       </div>
 
-      <Card className={registrationFeePaid ? 'border-emerald-200 bg-emerald-50/40' : 'border-amber-200 bg-amber-50/40'}>
+      <Card className={registrationFeePaid ? 'border-green-200 bg-green-50/40' : 'border-green-200 bg-green-50/40'}>
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-heading flex items-center gap-2">
-            <ShieldCheck className={registrationFeePaid ? 'h-4 w-4 text-emerald-600' : 'h-4 w-4 text-amber-600'} />
+            <ShieldCheck className={registrationFeePaid ? 'h-4 w-4 text-green-700' : 'h-4 w-4 text-green-600'} />
             Registration Fee
           </CardTitle>
         </CardHeader>
