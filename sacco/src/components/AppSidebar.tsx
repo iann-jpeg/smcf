@@ -6,7 +6,7 @@ import { NavLink } from "@/components/NavLink";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
-  SidebarHeader, SidebarFooter,
+  SidebarHeader, SidebarFooter, useSidebar,
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -37,8 +37,13 @@ const adminNav = [
 
 export function AppSidebar() {
   const { user, roles, isStaff } = useAuth();
+  const { setOpenMobile } = useSidebar();
   const initials = user?.email?.slice(0, 2).toUpperCase() ?? "??";
   const displayRole = roles.length > 0 ? roles[0].replace("_", " ") : "member";
+
+  const handleNavClick = () => {
+    setOpenMobile(false);
+  };
 
   return (
     <Sidebar>
@@ -64,7 +69,7 @@ export function AppSidebar() {
               {memberNav.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
-                    <NavLink to={item.url} className="hover:bg-sidebar-accent" activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold">
+                    <NavLink to={item.url} onClick={handleNavClick} className="hover:bg-sidebar-accent" activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold">
                       <item.icon className="mr-3 h-4 w-4" />
                       <span>{item.title}</span>
                     </NavLink>
@@ -85,7 +90,7 @@ export function AppSidebar() {
                 {staffNav.map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild>
-                      <NavLink to={item.url} end={item.url === "/"} className="hover:bg-sidebar-accent" activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold">
+                      <NavLink to={item.url} onClick={handleNavClick} end={item.url === "/"} className="hover:bg-sidebar-accent" activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold">
                         <item.icon className="mr-3 h-4 w-4" />
                         <span>{item.title}</span>
                       </NavLink>
@@ -106,7 +111,7 @@ export function AppSidebar() {
                 {adminNav.map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild>
-                      <NavLink to={item.url} className="hover:bg-sidebar-accent" activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold">
+                      <NavLink to={item.url} onClick={handleNavClick} className="hover:bg-sidebar-accent" activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold">
                         <item.icon className="mr-3 h-4 w-4" />
                         <span>{item.title}</span>
                       </NavLink>
