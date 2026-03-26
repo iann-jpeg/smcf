@@ -536,6 +536,7 @@ export default function MyAccount() {
           title="Active Loans"
           value={activeLoans.length.toString()}
           icon={CreditCard}
+          variant="destructive"
           subtitle={pendingLoans.length > 0 ? `${pendingLoans.length} pending` : undefined}
         />
       </div>
