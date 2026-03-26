@@ -4,8 +4,8 @@
 
 import { playNotificationSound } from './notificationSounds';
 
-// VAPID public key for push notifications (you should generate your own)
-const VAPID_PUBLIC_KEY = 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U';
+// VAPID public key for push notifications (from environment variable)
+const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || 'BISgKVrTV-OdFzVEaxt4ugMbIk-dbEQW22ESUfqQomeZURsV5fIq3CToWmjb-j2jW4f5dgL3VHdGLkmTxTlwoUU';
 
 let serviceWorkerRegistration: ServiceWorkerRegistration | null = null;
 let pushSubscription: PushSubscription | null = null;
