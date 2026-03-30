@@ -75,10 +75,7 @@ export default function ResetPassword() {
   if (!token) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-background">
-        <div
-          className="absolute inset-0 opacity-10 bg-cover bg-center auth-bg-image"
-          style={{ backgroundImage: "url('/sacco/placeholder.svg')" }}
-        />
+        <div className="absolute inset-0 opacity-10 bg-cover bg-center auth-bg-image" />
         <Card className="w-full max-w-md relative z-10">
           <CardHeader className="text-center space-y-4">
             <img
@@ -118,10 +115,7 @@ export default function ResetPassword() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-background">
-      <div
-        className="absolute inset-0 opacity-10 bg-cover bg-center auth-bg-image"
-        style={{ backgroundImage: "url('/sacco/placeholder.svg')" }}
-      />
+      <div className="absolute inset-0 opacity-10 bg-cover bg-center auth-bg-image" />
       <Card className="w-full max-w-md relative z-10">
         <CardHeader className="text-center space-y-4">
           <img

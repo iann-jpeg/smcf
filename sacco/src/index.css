@@ -145,4 +145,8 @@
   .navy-gradient {
     background: var(--gradient-navy);
   }
+
+  .auth-bg-image {
+    background-image: url('/sacco/placeholder.svg');
+  }
 }

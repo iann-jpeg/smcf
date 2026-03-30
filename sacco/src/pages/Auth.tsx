@@ -209,10 +209,7 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-background">
-      <div
-        className="absolute inset-0 opacity-10 bg-cover bg-center"
-        style={{ backgroundImage: "url('/sacco/placeholder.svg')" }}
-      />
+      <div className="absolute inset-0 opacity-10 bg-cover bg-center auth-bg-image" />
       
       {/* Main Auth Card */}
       <Card className="w-full max-w-md relative z-10">
