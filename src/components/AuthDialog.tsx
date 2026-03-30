@@ -280,14 +280,6 @@ const AuthDialog = ({ open, onOpenChange, onLogin }: AuthDialogProps) => {
                     </Button>
 
                     <div className="text-center space-y-2">
-                      <Button
-                        type="button"
-                        variant="link"
-                        className="text-xs"
-                        onClick={() => setForgotMode(true)}
-                      >
-                        Forgot your password?
-                      </Button>
                       <p className="text-xs text-muted-foreground">
                         Contact admin if you don't have an account: <span className="font-semibold text-foreground">+254 759 097157</span>
                       </p>
