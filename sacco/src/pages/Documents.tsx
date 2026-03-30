@@ -342,7 +342,7 @@ const ADMIN_POLICY_TEMPLATES: AdminPolicyTemplate[] = [
       "**[LANDLORD FULL NAME]**",
       "ID No: __________________________",
       "Address: __________________________",
-      "(Hereinafter referred to as “the Property Owner")",
+      "(Hereinafter referred to as \"the Property Owner\")",
       "",
       "---",
       "",
