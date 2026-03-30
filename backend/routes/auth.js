@@ -199,6 +199,50 @@ router.post("/login", async (req, res) => {
   }
 });
 
+// Forgot password (member or admin) - no OTP for now, simple verification by phone
+router.post("/forgot-password", async (req, res) => {
+  try {
+    const { phone, newPassword } = req.body;
+
+    if (!phone || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        error: "Phone and new password are required",
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        error: "Password must be at least 6 characters long",
+      });
+    }
+
+    // check for member first
+    let user = await Member.findOne({ phone }).select("+password");
+
+    if (!user) {
+      // check admin fallback
+      user = await Admin.findOne({ phone }).select("+password");
+    }
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: "No account found for this phone number",
+      });
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+    res.json({ success: true, message: "Password updated successfully" });
+  } catch (error) {
+    console.error("Forgot password error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Create initial admin (one-time setup)
 router.post("/setup-admin", async (req, res) => {
   try {
