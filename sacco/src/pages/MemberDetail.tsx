@@ -235,7 +235,20 @@ export default function MemberDetail() {
 
       {/* ── Stats ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <StatCard title="Share Capital" value={`KES ${Number(member.shares).toLocaleString()}`} icon={Landmark} variant="accent" />
+        <StatCard
+          title="Share Capital"
+          value={`KES ${Number(member.shares).toLocaleString()}`}
+          subtitle={`Units: ${(Number(member.shares) / 100).toLocaleString()} @ KES 100/unit`}
+          icon={Landmark}
+          variant="accent"
+        />
+        <StatCard
+          title="Share Units"
+          value={`${(Number(member.shares) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} units`}
+          subtitle="1 unit = KES 100"
+          icon={Landmark}
+          variant="accent"
+        />
         <StatCard title="Savings" value={`KES ${Number(member.savings).toLocaleString()}`} icon={Wallet} variant="success" />
         <StatCard title="Loan Balance" value={`KES ${Number(member.loan_balance).toLocaleString()}`} icon={TrendingUp} variant={Number(member.loan_balance) > 0 ? "warning" : "default"} />
       </div>

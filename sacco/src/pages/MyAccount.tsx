@@ -512,16 +512,27 @@ export default function MyAccount() {
       </div>
 
       {/* Account Summary Cards */}
+      {/**
+       * Share capital and units calculation
+       * Share unit price is the same as in ShareSubscriptionDialog (KES 100). */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Share Capital"
-          value={`KES ${Number(member.shares).toLocaleString()}`}
+          value={`KES ${Number(member?.shares ?? 0).toLocaleString()}`}
+          subtitle={`Units: ${(Number(member?.shares ?? 0) / 100).toLocaleString()} @ KES 100/unit`}
+          icon={Landmark}
+          variant="accent"
+        />
+        <StatCard
+          title="Share Units"
+          value={`${(Number(member?.shares ?? 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} units`}
+          subtitle="Minimum 1 unit = KES 100"
           icon={Landmark}
           variant="accent"
         />
         <StatCard
           title="Savings"
-          value={`KES ${Number(member.savings).toLocaleString()}`}
+          value={`KES ${Number(member?.savings ?? 0).toLocaleString()}`}
           icon={Wallet}
           variant="success"
           subtitle="Tap to deposit"
