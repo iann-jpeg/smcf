@@ -97,6 +97,8 @@ router.post("/start", protect, adminOnly, async (req, res) => {
     const currentCycle = await Cycle.findOne({ status: "active" });
     if (currentCycle) {
       currentCycle.status = "completed";
+      currentCycle.next_recipient = null;
+      currentCycle.recipient_paid = true;
       await currentCycle.save();
     }
 
@@ -108,10 +110,12 @@ router.post("/start", protect, adminOnly, async (req, res) => {
     } else if (member_number) {
       recipient = await Member.findOne({ member_id: member_number });
     } else {
-      // Determine next recipient automatically
-      const lastRecipientPosition = currentCycle?.next_recipient
-        ? (await Member.findById(currentCycle.next_recipient))?.position || 0
-        : 0;
+      // Determine next recipient automatically from last paid (or planned) member
+      const lastPaidMemberId = currentCycle?.recipient_id || currentCycle?.next_recipient;
+      const lastPaidMember = lastPaidMemberId
+        ? await Member.findById(lastPaidMemberId)
+        : null;
+      const lastRecipientPosition = lastPaidMember?.position || 0;
 
       const nextRecipient = await Member.findOne({
         position: { $gt: lastRecipientPosition },

@@ -31,6 +31,10 @@ const cycleSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  recipient_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Member",
+  },
   next_recipient: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Member",
