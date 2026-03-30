@@ -209,7 +209,10 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-background">
-      <div className="absolute inset-0 opacity-10 bg-cover bg-center auth-bg-image" />
+      <div
+        className="absolute inset-0 opacity-10 bg-cover bg-center"
+        style={{ backgroundImage: "url('/sacco/placeholder.svg')" }}
+      />
       
       {/* Main Auth Card */}
       <Card className="w-full max-w-md relative z-10">
@@ -245,6 +248,15 @@ export default function Auth() {
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Sign In
+                </Button>
+
+                <Button 
+                  type="button" 
+                  variant="link" 
+                  className="w-full text-sm"
+                  onClick={() => navigate("/forgot-password")}
+                >
+                  Forgot your password?
                 </Button>
               </form>
             </TabsContent>
