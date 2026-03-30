@@ -1,4 +1,4 @@
-import { useMembers, useDeleteMember, useCreateMember } from "@/hooks/useMembers";
+import { useMembers, useDeleteMember, useCreateMember, useUpdateMember } from "@/hooks/useMembers";
 import { useAuth } from "@/hooks/useAuth";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { Badge } from "@/components/ui/badge";
@@ -94,6 +94,8 @@ function buildMemberReport(member: any) {
 export default function Members() {
   const [search, setSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
+  const [passwordResetTarget, setPasswordResetTarget] = useState<any>(null);
+  const [newPassword, setNewPassword] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState({
     name: "", email: "", phone: "", shares: "", savings: "", status: "active",
@@ -105,6 +107,7 @@ export default function Members() {
   const { data: members = [], isLoading } = useMembers();
   const deleteMember = useDeleteMember();
   const createMember = useCreateMember();
+  const updateMember = useUpdateMember();
 
   // Auto-generate suggested member ID
   // Fix: read only the last 3 chars as the sequence to avoid compounding corrupted prefixes
@@ -336,7 +339,18 @@ export default function Members() {
                       <Badge variant={statusVariant(m.status)}>{m.status}</Badge>
                     </TableCell>
                     {isAdmin && (
-                      <TableCell onClick={(e) => e.stopPropagation()}>
+                      <TableCell onClick={(e) => e.stopPropagation()} className="flex gap-1 justify-end">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-amber-600 hover:bg-amber-100"
+                          onClick={() => {
+                            setNewPassword("");
+                            setPasswordResetTarget(m);
+                          }}
+                        >
+                          <ShieldCheck className="h-3.5 w-3.5" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -377,6 +391,53 @@ export default function Members() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={!!passwordResetTarget} onOpenChange={(open) => { if (!open) setPasswordResetTarget(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reset Password</DialogTitle>
+            <DialogDescription>
+              Set a new password for <strong>{passwordResetTarget?.name}</strong> ({passwordResetTarget?.member_id}).
+              This password takes effect immediately after saving and can be used for login.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid grid-cols-4 items-center gap-3">
+              <Label htmlFor="newPassword" className="text-right text-sm">New Password</Label>
+              <Input
+                id="newPassword"
+                className="col-span-3"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Enter strong password"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPasswordResetTarget(null)}>Cancel</Button>
+            <Button
+              onClick={async () => {
+                if (!newPassword.trim()) {
+                  toast.error("Please enter a new password");
+                  return;
+                }
+                try {
+                  await updateMember.mutateAsync({ id: passwordResetTarget.id, password: newPassword });
+                  toast.success("Password reset successfully");
+                  setPasswordResetTarget(null);
+                  setNewPassword("");
+                } catch (err: any) {
+                  toast.error(err.message || "Could not reset password");
+                }
+              }}
+              disabled={updateMember.isPending}
+            >
+              {updateMember.isPending ? "Updating…" : "Set New Password"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Member Dialog */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
