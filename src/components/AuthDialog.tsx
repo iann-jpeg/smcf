@@ -34,7 +34,12 @@ const AuthDialog = ({ open, onOpenChange, onLogin }: AuthDialogProps) => {
     phone: "",
     password: "",
   });
+  const [forgotData, setForgotData] = useState({
+    phone: "",
+    newPassword: "",
+  });
   const [showPassword, setShowPassword] = useState(false);
+  const [forgotMode, setForgotMode] = useState(false);
   const { toast } = useToast();
 
   const handleLogin = (role: "admin" | "member") => {
@@ -89,6 +94,59 @@ const AuthDialog = ({ open, onOpenChange, onLogin }: AuthDialogProps) => {
 
   const resetForm = () => {
     setLoginData({ phone: "", password: "" });
+    setForgotData({ phone: "", newPassword: "" });
+    setForgotMode(false);
+  };
+
+  const handleForgotPassword = () => {
+    if (!forgotData.phone || !forgotData.newPassword) {
+      toast({
+        title: "Missing data",
+        description: "Please enter phone number and new password",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (forgotData.newPassword.length < 6) {
+      toast({
+        title: "Weak password",
+        description: "New password must be at least 6 characters long",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    fetch(`${API_BASE}/api/auth/forgot-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        phone: forgotData.phone,
+        newPassword: forgotData.newPassword,
+      }),
+    })
+      .then(async (r) => {
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          throw new Error(err.error || "Reset failed");
+        }
+        return r.json();
+      })
+      .then(() => {
+        toast({
+          title: "Password reset",
+          description: "Password has been updated. Please login with new password.",
+        });
+        setForgotMode(false);
+        setForgotData({ phone: "", newPassword: "" });
+      })
+      .catch((err) => {
+        toast({
+          title: "Reset failed",
+          description: err.message || "Could not reset password",
+          variant: "destructive",
+        });
+      });
   };
 
   return (
@@ -172,17 +230,70 @@ const AuthDialog = ({ open, onOpenChange, onLogin }: AuthDialogProps) => {
                   </div>
                 </div>
 
-                <Button
-                  className="w-full"
-                  onClick={() => handleLogin("member")}
-                  variant="financial">
-                  <Phone className="w-4 h-4 mr-2" />
-                  Login as Member
-                </Button>
+                {forgotMode ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="forgot-phone">Phone Number</Label>
+                      <Input
+                        id="forgot-phone"
+                        placeholder="254722123456"
+                        value={forgotData.phone}
+                        onChange={(e) =>
+                          setForgotData((prev) => ({
+                            ...prev,
+                            phone: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="forgot-new-password">New Password</Label>
+                      <Input
+                        id="forgot-new-password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Enter new password"
+                        value={forgotData.newPassword}
+                        onChange={(e) =>
+                          setForgotData((prev) => ({
+                            ...prev,
+                            newPassword: e.target.value,
+                          }))
+                        }
+                        onKeyDown={(e) => e.key === "Enter" && handleForgotPassword()}
+                      />
+                    </div>
+                    <Button className="w-full" onClick={handleForgotPassword} variant="primary">
+                      Reset Password
+                    </Button>
+                    <Button className="w-full" variant="ghost" onClick={() => setForgotMode(false)}>
+                      Back to login
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      className="w-full"
+                      onClick={() => handleLogin("member")}
+                      variant="financial">
+                      <Phone className="w-4 h-4 mr-2" />
+                      Login as Member
+                    </Button>
 
-                <div className="text-xs text-muted-foreground text-center">
-                  Contact admin if you don't have an account: <span className="font-semibold text-foreground">+254 759 097157</span>
-                </div>
+                    <div className="text-center space-y-2">
+                      <Button
+                        type="button"
+                        variant="link"
+                        className="text-xs"
+                        onClick={() => setForgotMode(true)}
+                      >
+                        Forgot your password?
+                      </Button>
+                      <p className="text-xs text-muted-foreground">
+                        Contact admin if you don't have an account: <span className="font-semibold text-foreground">+254 759 097157</span>
+                      </p>
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
