@@ -247,14 +247,6 @@ export default function Auth() {
                   Sign In
                 </Button>
 
-                <Button 
-                  type="button" 
-                  variant="link" 
-                  className="w-full text-sm"
-                  onClick={() => navigate("/forgot-password")}
-                >
-                  Forgot your password?
-                </Button>
               </form>
             </TabsContent>
 

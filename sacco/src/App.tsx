@@ -30,7 +30,6 @@ const LoanApprovals    = lazy(() => import("./pages/LoanApprovals"));
 const LoanSimulator    = lazy(() => import("./pages/LoanSimulator"));
 const Notifications    = lazy(() => import("./pages/Notifications"));
 const Auth             = lazy(() => import("./pages/Auth"));
-const ForgotPassword   = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword    = lazy(() => import("./pages/ResetPassword"));
 const MyAccount        = lazy(() => import("./pages/MyAccount"));
 const NotFound         = lazy(() => import("./pages/NotFound"));
@@ -150,11 +149,6 @@ const App = () => (
           <BrowserRouter basename={routerBasename}>
             <Routes>
               <Route path="/auth" element={<AuthRoute />} />
-              <Route path="/forgot-password" element={
-                <Suspense fallback={<PageLoader />}>
-                  <ForgotPassword />
-                </Suspense>
-              } />
               <Route path="/reset-password" element={
                 <Suspense fallback={<PageLoader />}>
                   <ResetPassword />

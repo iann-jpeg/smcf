@@ -101,10 +101,9 @@ export default function ResetPassword() {
               <div className="space-y-2">
                 <h3 className="font-semibold text-red-900">Invalid Reset Link</h3>
                 <p className="text-sm text-muted-foreground">
-                  The password reset link is missing or invalid. Please request a new one.
+                  The password reset link is missing or invalid.
                 </p>
               </div>
-              <Button className="w-full" onClick={() => navigate("/forgot-password")}>Request New Reset Link</Button>
               <Button type="button" variant="outline" className="w-full" onClick={() => navigate("/auth")}>Back to Login</Button>
             </div>
           </CardContent>
