@@ -109,6 +109,10 @@ app.use((req, res, next) => {
 // Track MongoDB connection state
 let isDbConnected = false;
 
+// Prevent queues from building up when DB is unavailable
+mongoose.set('strictQuery', true);
+mongoose.set('bufferCommands', false); // throw immediately when disconnected
+
 const mongooseOptions = {
   serverSelectionTimeoutMS: 30000, // 30 seconds per attempt
   socketTimeoutMS: 120000,
@@ -120,6 +124,8 @@ const mongooseOptions = {
   retryWrites: true,
   retryReads: true,
   compressors: ['zlib'],
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
 };
 
 // Database connection with unlimited background retries — never crashes the server
