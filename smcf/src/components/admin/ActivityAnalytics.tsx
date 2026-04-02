@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import { Activity, TrendingUp } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -124,10 +125,7 @@ export default function ActivityAnalytics({ data }: ActivityAnalyticsProps) {
                     <span className="text-muted-foreground">{activity.count} ({percentage}%)</span>
                   </div>
                   <div className="w-full bg-muted rounded-full h-2">
-                    <div
-                      className="bg-primary h-2 rounded-full transition-all"
-                      style={{ width: `${percentage}%` }}
-                    />
+                    <Progress value={Number(percentage)} className="h-2" />
                   </div>
                 </div>
               );

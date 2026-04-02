@@ -15,6 +15,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import API_BASE from "@/lib/api";
@@ -26,6 +36,7 @@ import {
   Clock,
   DollarSign,
   Download,
+  Edit3,
   FileSpreadsheet,
   Loader2,
   PiggyBank,
@@ -46,6 +57,16 @@ const AdminSavingsTab = ({ isReadOnly = false }: AdminSavingsTabProps) => {
   const [pendingWithdrawals, setPendingWithdrawals] = useState<any[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isApplyingInterest, setIsApplyingInterest] = useState(false);
+  const [editingMember, setEditingMember] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState({
+    currentBalance: 0,
+    totalDeposits: 0,
+    totalWithdrawals: 0,
+    totalInterestEarned: 0,
+    totalTransactionFees: 0,
+    totalLockedSavings: 0,
+  });
+  const [isSavingOverride, setIsSavingOverride] = useState(false);
   const { toast } = useToast();
 
   const fetchSavingsData = async () => {
@@ -228,6 +249,83 @@ const AdminSavingsTab = ({ isReadOnly = false }: AdminSavingsTabProps) => {
       });
     } finally {
       setIsApplyingInterest(false);
+    }
+  };
+
+  const openEditDialog = (member: any) => {
+    setEditingMember(member);
+    setEditForm({
+      currentBalance: Number(member.currentBalance || 0),
+      totalDeposits: Number(member.totalDeposits || 0),
+      totalWithdrawals: Number(member.totalWithdrawals || 0),
+      totalInterestEarned: Number(member.totalInterestEarned || 0),
+      totalTransactionFees: Number(member.totalTransactionFees || 0),
+      totalLockedSavings: Number(member.totalLockedSavings || 0),
+    });
+  };
+
+  const handleSaveOverride = async () => {
+    if (!editingMember) return;
+    setIsSavingOverride(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/savings/admin/override/${editingMember._id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...authService.getAuthHeaders(),
+        },
+        body: JSON.stringify(editForm),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || "Failed to update savings override");
+      }
+      toast({
+        title: "Savings updated",
+        description: `Overrides saved for ${editingMember.name}`,
+      });
+      setEditingMember(null);
+      fetchSavingsData();
+    } catch (error: any) {
+      toast({
+        title: "Update failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingOverride(false);
+    }
+  };
+
+  const handleClearOverride = async () => {
+    if (!editingMember) return;
+    setIsSavingOverride(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/savings/admin/override/${editingMember._id}/clear`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...authService.getAuthHeaders(),
+        },
+      });
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || "Failed to clear override");
+      }
+      toast({
+        title: "Override cleared",
+        description: `Live totals restored for ${editingMember.name}`,
+      });
+      setEditingMember(null);
+      fetchSavingsData();
+    } catch (error: any) {
+      toast({
+        title: "Clear failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingOverride(false);
     }
   };
 
@@ -527,6 +625,81 @@ const AdminSavingsTab = ({ isReadOnly = false }: AdminSavingsTabProps) => {
         </CardHeader>
       </Card>
 
+      {editingMember && (
+        <Dialog open={!!editingMember} onOpenChange={(open) => !open && setEditingMember(null)}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Edit Savings for {editingMember.name}</DialogTitle>
+              <DialogDescription>
+                These values will override savings totals shown across the system.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Current Balance</Label>
+                <Input
+                  type="number"
+                  value={editForm.currentBalance}
+                  onChange={(e) => setEditForm({ ...editForm, currentBalance: Number(e.target.value || 0) })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Total Deposits</Label>
+                <Input
+                  type="number"
+                  value={editForm.totalDeposits}
+                  onChange={(e) => setEditForm({ ...editForm, totalDeposits: Number(e.target.value || 0) })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Total Withdrawals</Label>
+                <Input
+                  type="number"
+                  value={editForm.totalWithdrawals}
+                  onChange={(e) => setEditForm({ ...editForm, totalWithdrawals: Number(e.target.value || 0) })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Interest Earned</Label>
+                <Input
+                  type="number"
+                  value={editForm.totalInterestEarned}
+                  onChange={(e) => setEditForm({ ...editForm, totalInterestEarned: Number(e.target.value || 0) })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Transaction Fees</Label>
+                <Input
+                  type="number"
+                  value={editForm.totalTransactionFees}
+                  onChange={(e) => setEditForm({ ...editForm, totalTransactionFees: Number(e.target.value || 0) })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Locked Savings</Label>
+                <Input
+                  type="number"
+                  value={editForm.totalLockedSavings}
+                  onChange={(e) => setEditForm({ ...editForm, totalLockedSavings: Number(e.target.value || 0) })}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditingMember(null)}>
+                Cancel
+              </Button>
+              <Button variant="ghost" onClick={handleClearOverride} disabled={isSavingOverride}>
+                Clear Override
+              </Button>
+              <Button onClick={handleSaveOverride} disabled={isSavingOverride}>
+                {isSavingOverride ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {/* Tabs */}
       <Card>
         <CardHeader>
@@ -591,6 +764,7 @@ const AdminSavingsTab = ({ isReadOnly = false }: AdminSavingsTabProps) => {
                       <TableHead>Transaction Fees</TableHead>
                       <TableHead>Net Savings</TableHead>
                       <TableHead>Last Transaction</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -605,6 +779,9 @@ const AdminSavingsTab = ({ isReadOnly = false }: AdminSavingsTabProps) => {
                                   isTopSaver={true} 
                                   currentBalance={member.totalDeposits}
                                 />
+                              )}
+                              {member.overrideApplied && (
+                                <Badge variant="outline">Override</Badge>
                               )}
                             </div>
                             <div className="text-sm text-muted-foreground">
@@ -699,6 +876,17 @@ const AdminSavingsTab = ({ isReadOnly = false }: AdminSavingsTabProps) => {
                             </div>
                           )}
                         </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openEditDialog(member)}
+                            disabled={isReadOnly}
+                            title={isReadOnly ? "Read-only access" : "Edit savings"}
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                     {/* Grand Total Row */}
@@ -729,6 +917,7 @@ const AdminSavingsTab = ({ isReadOnly = false }: AdminSavingsTabProps) => {
                         <TableCell className="font-bold">
                           KES {membersWithSavings.reduce((sum, m) => sum + ((m.totalDeposits || 0) - (m.totalWithdrawals || 0)), 0).toLocaleString()}
                         </TableCell>
+                        <TableCell />
                         <TableCell />
                       </TableRow>
                     )}

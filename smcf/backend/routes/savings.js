@@ -757,6 +757,40 @@ router.put("/admin/override/:memberId", protect, adminOnly, async (req, res) => 
   }
 });
 
+// Clear admin savings override for a member
+router.put("/admin/override/:memberId/clear", protect, adminOnly, async (req, res) => {
+  try {
+    const member = await Member.findById(req.params.memberId);
+    if (!member) {
+      return res.status(404).json({ success: false, error: "Member not found" });
+    }
+
+    member.savings_override = {
+      is_enabled: false,
+      current_balance: 0,
+      total_deposits: 0,
+      total_withdrawals: 0,
+      total_interest_earned: 0,
+      total_transaction_fees: 0,
+      total_locked_savings: 0,
+      last_transaction: null,
+      updated_at: new Date(),
+    };
+
+    await member.save();
+
+    if (req.app.get("io")) {
+      req.app.get("io").emit("saving:new", { memberId: member._id });
+      req.app.get("io").emit("memberUpdated", member);
+    }
+
+    res.json({ success: true, data: member });
+  } catch (error) {
+    console.error("Error clearing savings override:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Approve withdrawal (admin only)
 router.post("/admin/approve-withdrawal/:id", protect, adminOnly, async (req, res) => {
   try {

@@ -1,17 +1,12 @@
 {
-  "buildCommand": "npm run build:all",
-  "outputDirectory": "dist",
-  "devCommand": "npm run dev",
-  "installCommand": "npm ci --no-audit --no-fund && npm ci --prefix sacco --no-audit --no-fund",
-  "framework": "vite",
-  "rewrites": [
-    {
-      "source": "/sacco/:path*",
-      "destination": "/sacco/index.html"
+  "experimentalServices": {
+    "frontend": {
+      "routePrefix": "/",
+      "framework": "vite"
     },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
+    "backend": {
+      "entrypoint": "backend",
+      "routePrefix": "/_/backend"
     }
-  ]
+  }
 }

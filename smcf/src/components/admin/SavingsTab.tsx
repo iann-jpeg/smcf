@@ -297,6 +297,38 @@ const AdminSavingsTab = ({ isReadOnly = false }: AdminSavingsTabProps) => {
     }
   };
 
+  const handleClearOverride = async () => {
+    if (!editingMember) return;
+    setIsSavingOverride(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/savings/admin/override/${editingMember._id}/clear`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...authService.getAuthHeaders(),
+        },
+      });
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || "Failed to clear override");
+      }
+      toast({
+        title: "Override cleared",
+        description: `Live totals restored for ${editingMember.name}`,
+      });
+      setEditingMember(null);
+      fetchSavingsData();
+    } catch (error: any) {
+      toast({
+        title: "Clear failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingOverride(false);
+    }
+  };
+
   const generateSavingsPDF = () => {
     const totalSavings = membersWithSavings.reduce((sum, m) => sum + (m.currentBalance || 0), 0);
     const totalDeposits = membersWithSavings.reduce((sum, m) => sum + (m.totalDeposits || 0), 0);
@@ -655,6 +687,9 @@ const AdminSavingsTab = ({ isReadOnly = false }: AdminSavingsTabProps) => {
             <DialogFooter>
               <Button variant="outline" onClick={() => setEditingMember(null)}>
                 Cancel
+              </Button>
+              <Button variant="ghost" onClick={handleClearOverride} disabled={isSavingOverride}>
+                Clear Override
               </Button>
               <Button onClick={handleSaveOverride} disabled={isSavingOverride}>
                 {isSavingOverride ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
