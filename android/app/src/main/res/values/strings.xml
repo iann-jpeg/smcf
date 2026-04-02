@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SMCF</string>
+    <string name="title_activity_main">SMCF</string>
+    <string name="package_name">com.smcf.app</string>
+    <string name="custom_url_scheme">com.smcf.app</string>
+</resources>

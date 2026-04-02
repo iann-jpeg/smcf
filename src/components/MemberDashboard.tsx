@@ -1,0 +1,2258 @@
+﻿import MemberCycleChart from "@/components/analytics/MemberCycleChart";
+import TopSaverBadge from "@/components/analytics/TopSaverBadge";
+import CycleQRPayment from "@/components/CycleQRPayment";
+import LoanRequestDialog from "@/components/LoanRequestDialog";
+import MemberWallet from "@/components/MemberWallet";
+import PaymentDialog from "@/components/PaymentDialog";
+import ProfilePictureUpload from "@/components/ProfilePictureUpload";
+import GuarantorRequests from "@/components/GuarantorRequests";
+import GuarantorProfile from "@/components/GuarantorProfile";
+import MemberMessageComposer from "@/components/MemberMessageComposer";
+import { StyledSMCF } from "@/components/StyledSMCF";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
+import { useToast } from "@/hooks/use-toast";
+import { useAutoRefresh } from "@/hooks/use-auto-refresh";
+import API_BASE from "@/lib/api";
+import { authService } from "@/lib/authService";
+import { generateLoanTermsPDF } from "@/lib/loanTermsPDF";
+import {
+  AlertCircle,
+  Calendar,
+  CheckCircle,
+  Download,
+  FileText,
+  Megaphone,
+  Phone,
+  Receipt,
+  Shield,
+  Trash2,
+  TrendingUp,
+  Wallet,
+} from "lucide-react";
+import { useEffect, useState, useRef, useCallback } from "react";
+
+interface User {
+  _id?: string;
+  id?: string;
+  uuid?: string;
+  memberId?: string;
+  member_id?: string;
+  username?: string;
+  name?: string;
+  phone?: string;
+  phoneNumber?: string;
+  role?: string;
+  position?: number;
+  next_payout_cycle?: number;
+  total_contributed?: number;
+  total_received?: number;
+  total_cycle_contribution?: number;
+  member_type?: string;
+  payment_status?: string;
+  [key: string]: any;
+}
+
+interface CycleData {
+  success?: boolean;
+  data?: {
+    cycle_number?: number;
+    days_left?: number;
+    start_date?: string;
+    next_recipient?: { _id?: string; name?: string };
+    next_recipient_name?: string;
+    total_members?: number;
+    [key: string]: any;
+  };
+  [key: string]: any;
+}
+
+interface MemberDashboardProps {
+  userData: User;
+  cycleData: CycleData;
+}
+
+const devLog = (...args: any[]) => {
+  if (import.meta.env.DEV) {
+    console.log(...args);
+  }
+};
+
+const devWarn = (...args: any[]) => {
+  if (import.meta.env.DEV) {
+    console.warn(...args);
+  }
+};
+
+const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
+  const [showPayment, setShowPayment] = useState(false);
+  const [showLoanRequest, setShowLoanRequest] = useState(false);
+  const [showRepayment, setShowRepayment] = useState(false);
+  const [selectedLoan, setSelectedLoan] = useState<User | null>(null);
+  const [selectedLoanLoading, setSelectedLoanLoading] = useState(false);
+    // Fetch latest loan details from backend when opening repayment dialog
+    const openRepaymentDialog = async (loan: User) => {
+      devLog('ðŸ”µ Opening repayment dialog for loan:', loan._id);
+      setSelectedLoanLoading(true);
+      try {
+        const res = await fetch(`${API_BASE}/api/loans/${loan._id}`, {
+          headers: { ...authService.getAuthHeaders() },
+        });
+        const data = await res.json();
+        if (data.success && data.data) {
+          devLog('âœ… Fetched latest loan data:', data.data);
+          setSelectedLoan(data.data);
+        } else {
+          console.error('Failed to fetch loan details:', data.error);
+          setSelectedLoan(loan); // fallback
+          toast({
+            title: "Warning",
+            description: "Using cached loan data. Some information may be outdated.",
+            variant: "default",
+          });
+        }
+      } catch (e) {
+        console.error('Error fetching loan:', e);
+        setSelectedLoan(loan);
+        toast({
+          title: "Warning",
+          description: "Could not fetch latest loan details. Using cached data.",
+          variant: "default",
+        });
+      }
+      setSelectedLoanLoading(false);
+      setShowRepayment(true);
+      devLog('ðŸ”µ Repayment dialog opened');
+    };
+  const [isProcessingRepayment, setIsProcessingRepayment] = useState(false);
+  const [repaymentState, setRepaymentState] = useState<
+    "idle" | "confirm" | "processing" | "waiting" | "success" | "failed"
+  >("idle");
+  const [checkoutRequestID, setCheckoutRequestID] = useState("");
+  const [partialPaymentAmount, setPartialPaymentAmount] = useState("");
+  const [repaymentPhone, setRepaymentPhone] = useState("");
+  const { toast } = useToast();
+  const repaymentPollingActiveRef = useRef(false);
+
+  // Initialize repayment phone when repayment dialog opens
+  useEffect(() => {
+    if (showRepayment) {
+      const defaultPhone = userData?.phone || authService.getUser()?.phone || "";
+      setRepaymentPhone(defaultPhone);
+    }
+  }, [showRepayment, userData?.phone]);
+
+  const [paymentHistory, setPaymentHistory] = useState<Array<{ cycle: number; amount: number; date: string; status: string; isAdvance: boolean; cyclesAhead: number }>>([]);
+  const [memberLoans, setMemberLoans] = useState<User[]>([]);
+  const [announcements, setAnnouncements] = useState<User[]>([]);
+  const [pendingGuarantorRequests, setPendingGuarantorRequests] = useState(0);
+  const [isTopSaver, setIsTopSaver] = useState(false);
+  const [savingsBalance, setSavingsBalance] = useState(0);
+  const [currentCycleData, setCurrentCycleData] = useState({
+    currentCycle: 0,
+    daysLeft: 0,
+    paidMembers: 0,
+    totalMembers: 0,
+    collectedAmount: 0,
+    totalAmount: 0,
+    cycleStartDate: new Date().toLocaleDateString(),
+    nextRecipient: "Loading...",
+  });
+  const [memberStats, setMemberStats] = useState({
+    hasPaidThisCycle: false,
+    nextPayoutCycle: userData?.next_payout_cycle || userData?.position || 0,
+    totalContributed: userData?.total_contributed || 0,
+    totalReceived: userData?.total_received || 0,
+    memberPosition: userData?.position || 0,
+  });
+
+  // Define fetchData function with useCallback so it can be used with auto-refresh
+  const fetchData = useCallback(async () => {
+    // Safety check - ensure userData exists
+    if (!userData || !userData._id) {
+      devWarn("MemberDashboard: userData is undefined or missing _id");
+      return;
+    }
+
+    try {
+      // Fetch all data in parallel including fresh member data
+      const [
+        cycleRes,
+        paymentsRes,
+        loansRes,
+        announcementsRes,
+        memberRes,
+        savingsSummaryRes,
+        allSavingsRes,
+        guarantorRequestsRes,
+      ] = await Promise.all([
+        fetch(`${API_BASE}/api/cycles/current`, {
+          headers: { ...authService.getAuthHeaders() },
+        }),
+        fetch(`${API_BASE}/api/payments`, {
+          headers: { ...authService.getAuthHeaders() },
+        }),
+        fetch(`${API_BASE}/api/loans`, {
+          headers: { ...authService.getAuthHeaders() },
+        }),
+        fetch(`${API_BASE}/api/announcements`, {
+          headers: { ...authService.getAuthHeaders() },
+        }),
+        fetch(`${API_BASE}/api/members/${userData._id}`, {
+          headers: { ...authService.getAuthHeaders() },
+        }),
+        fetch(`${API_BASE}/api/savings/summary`, {
+          headers: { ...authService.getAuthHeaders() },
+        }),
+        fetch(`${API_BASE}/api/savings/admin/all`, {
+          headers: { ...authService.getAuthHeaders() },
+        }),
+        fetch(`${API_BASE}/api/guarantors/my-guarantor-requests`, {
+          headers: { ...authService.getAuthHeaders() },
+        }),
+      ]);
+
+      const cycleData = await cycleRes.json();
+      const payments = await paymentsRes.json();
+      const loansData = await loansRes.json();
+
+      let announcementsData: any = [];
+      try {
+        if (announcementsRes.ok) {
+          announcementsData = await announcementsRes.json();
+          devLog("ðŸ“¢ Announcements response:", announcementsData);
+        } else {
+          console.error(
+            "âŒ Announcements fetch failed:",
+            announcementsRes.status
+          );
+        }
+      } catch (err) {
+        console.error("âŒ Error parsing announcements:", err);
+      }
+
+      const freshMemberData = await memberRes.json();
+
+      // Get pending guarantor requests count
+      try {
+        if (guarantorRequestsRes.ok) {
+          const guarantorData = await guarantorRequestsRes.json();
+          setPendingGuarantorRequests(guarantorData.count || 0);
+          devLog(`ðŸ“‹ Found ${guarantorData.count || 0} pending guarantor requests`);
+        }
+      } catch (err) {
+        console.error("Error fetching guarantor requests:", err);
+      }
+
+      // Filter member's loans
+      const memberLoansList = Array.isArray(loansData)
+        ? loansData.filter(
+            (loan: User) =>
+              (loan.member_id as any)?._id === userData._id ||
+              (loan.member_id as any)?._id === userData.id ||
+              loan.member_id === userData._id ||
+              loan.member_id === userData.id
+          )
+        : [];
+
+      setMemberLoans(memberLoansList);
+
+      // Check if member is top saver
+      const savingsSummaryData = await savingsSummaryRes.json();
+      const allSavingsData = await allSavingsRes.json();
+
+      if (
+        savingsSummaryData.success &&
+        allSavingsData.success &&
+        allSavingsData.data
+      ) {
+        const currentBalance = savingsSummaryData.data.currentBalance || 0;
+        setSavingsBalance(currentBalance);
+
+        // Determine top saver based on total deposits
+        const totalDeposits = savingsSummaryData.data.totalDeposits || 0;
+        if (totalDeposits > 0) {
+          const topSaver = allSavingsData.data.reduce(
+            (top: User, member: User) =>
+              ((member.totalDeposits as number) || 0) > ((top.totalDeposits as number) || 0)
+                ? member
+                : top,
+            { totalDeposits: 0 } as User
+          );
+
+          setIsTopSaver(topSaver._id === userData._id);
+        }
+      }
+
+      // Update announcements
+      if (Array.isArray(announcementsData)) {
+        devLog("ðŸ“¢ Fetched announcements:", announcementsData.length);
+        setAnnouncements(announcementsData as User[]);
+      } else if (
+        (announcementsData as any)?.success &&
+        Array.isArray((announcementsData as any).data)
+      ) {
+        devLog("ðŸ“¢ Fetched announcements:", (announcementsData as any).data.length);
+        setAnnouncements((announcementsData as any).data as User[]);
+      } else {
+        devLog(
+          "ðŸ“¢ No announcements or unexpected format:",
+          announcementsData
+        );
+      }
+
+      // Use EXACT same calculation as AdminDashboard
+      const paymentsArray = Array.isArray(payments) ? payments : [];
+
+      // Get total members count from cycle data or calculate from payments
+      // Always use backend value if available, fallback to payments unique member count if not
+      const totalMembersCount =
+        (cycleData.success && cycleData.data?.total_members)
+          ? cycleData.data.total_members
+          : Array.from(new Set(paymentsArray.map((p: User) => (p.member_id as any)?._id || p.member_id))).length;
+
+      devLog("ðŸ‘¥ Total members count:", totalMembersCount);
+      devLog(
+        "ðŸ’° Payments data:",
+        Array.isArray(payments) ? payments.length : 0,
+        "payments"
+      );
+
+      // Get current cycle number
+      const currentCycleNumber =
+        cycleData.success && cycleData.data
+          ? cycleData.data.cycle_number
+          : null;
+
+      // Filter payments for CURRENT CYCLE ONLY (same as AdminDashboard)
+      const currentCyclePayments = currentCycleNumber
+        ? paymentsArray.filter(
+            (p: User) => (p.cycle_number as number) === currentCycleNumber
+          )
+        : paymentsArray;
+
+      const completedPayments = currentCyclePayments.filter(
+        (p: User) => p.status === "completed"
+      );
+
+      devLog("ðŸ”¢ Current cycle number:", currentCycleNumber);
+      devLog("ðŸ’³ Total payments:", paymentsArray.length);
+      devLog("ðŸ“ Current cycle payments:", currentCyclePayments.length);
+      devLog("âœ… Completed payments:", completedPayments.length);
+
+      // Calculate total collected from actual completed payments
+      const totalCollected = completedPayments.reduce(
+        (sum: number, p: User) => sum + ((p.amount as number) || 0),
+        0
+      );
+
+      // Count unique members who have paid (same as AdminDashboard)
+      const paidMemberIds = new Set(
+        completedPayments.map((p: User) => (p.member_id as any)?._id || p.member_id)
+      );
+      const uniquePaidMembers = paidMemberIds.size;
+
+      devLog("ðŸ’µ Total collected:", totalCollected);
+      devLog(
+        "âœ… Unique paid members:",
+        uniquePaidMembers,
+        "out of",
+        totalMembersCount
+      );
+
+      // Use the same logic as AdminDashboard for totalAmount (cycle payment is 200 per member)
+      const cycleContribution = 200;
+      const newData = {
+        currentCycle:
+          cycleData.success && cycleData.data
+            ? cycleData.data.cycle_number || 1
+            : 1,
+        daysLeft:
+          cycleData.success && cycleData.data
+            ? cycleData.data.days_left || 0
+            : 0,
+        paidMembers: uniquePaidMembers, // Always use calculated count from actual payments
+        totalMembers: totalMembersCount || 0,
+        collectedAmount: totalCollected, // Use calculated from actual payments
+        totalAmount: 5400, // Always show KES 5,400 as expected amount
+        cycleStartDate:
+          cycleData.success && cycleData.data && cycleData.data.start_date
+            ? new Date(cycleData.data.start_date).toLocaleDateString()
+            : new Date().toLocaleDateString(),
+        nextRecipient:
+          cycleData.success && cycleData.data
+            ? cycleData.data.next_recipient?.name ||
+              cycleData.data.next_recipient_name ||
+              "No recipient assigned"
+            : "No Active Cycle",
+      };
+
+      devLog("ðŸ“Š Updated cycle data:", newData);
+      setCurrentCycleData(newData);
+
+      // Filter for this member's payments
+      const memberPayments = Array.isArray(payments)
+        ? payments.filter(
+            (p: User) =>
+              (p.member_id as any)?._id === userData._id ||
+              (p.member_id as any)?._id === userData.id ||
+              p.member_id === userData._id ||
+              p.member_id === userData.id
+          )
+        : [];
+
+      // Update payment history silently only if changed
+      setPaymentHistory((prev) => {
+        const currentCycleNum = cycleData.data?.cycle_number || 1;
+        const newHistory = memberPayments.map((p: User) => ({
+          cycle: (p.cycle_number as number) || 0,
+          amount: (p.amount as number) || 0,
+          date: new Date(p.date as string).toLocaleDateString(),
+          status: (p.status as string) || '',
+          isAdvance: (p.cycle_number as number) > currentCycleNum, // Check if payment is for future cycle
+          cyclesAhead: (p.cycle_number as number) > currentCycleNum ? (p.cycle_number as number) - currentCycleNum : 0, // How many cycles ahead
+        }));
+        if (JSON.stringify(prev) !== JSON.stringify(newHistory)) {
+          return newHistory;
+        }
+        return prev;
+      });
+
+      // Check if paid this cycle using payment_status from fresh member data
+      const hasPaid = freshMemberData.success
+        ? freshMemberData.data.payment_status === "paid"
+        : memberPayments.some(
+            (p) =>
+              p.cycle_number === cycleData.data?.cycle_number &&
+              p.status === "completed"
+          );
+
+      // Update stats using fresh member data
+      setMemberStats((prev) => {
+        const newStats = {
+          hasPaidThisCycle: hasPaid,
+          // nextPayoutCycle = the member's position (they get paid on the cycle matching their position)
+          nextPayoutCycle: freshMemberData.success
+            ? freshMemberData.data.next_payout_cycle || freshMemberData.data.position || 0
+            : prev.nextPayoutCycle,
+          totalContributed: freshMemberData.success
+            ? freshMemberData.data.total_contributed || 0
+            : prev.totalContributed,
+          totalReceived: freshMemberData.success
+            ? freshMemberData.data.total_received || 0
+            : prev.totalReceived,
+          memberPosition: freshMemberData.success
+            ? freshMemberData.data.position || 0
+            : prev.memberPosition,
+        };
+        if (JSON.stringify(prev) !== JSON.stringify(newStats)) {
+          return newStats;
+        }
+        return prev;
+      });
+    } catch (error) {
+      console.error("Error fetching member data:", error);
+    }
+  }, [userData]);
+
+  // Auto-refresh when user opens the app, switches back to tab, or device comes online
+  useAutoRefresh({
+    onRefresh: fetchData,
+    refreshOnVisible: true,
+    refreshOnFocus: true,
+    refreshOnOnline: true,
+    debounceMs: 3000, // Minimum 3 seconds between auto-refreshes
+  });
+
+  // Silent background data fetch without UI flicker
+  useEffect(() => {
+    // Safety check - ensure userData exists
+    if (!userData || !userData._id) {
+      devWarn("MemberDashboard: userData is undefined or missing _id");
+      return;
+    }
+
+    // Silent background refresh every 15 seconds (reduced from 10s for better performance)
+    const interval = setInterval(fetchData, 15000);
+
+    // Socket.IO real-time event listeners
+    const socket = (window as any).socket;
+    if (socket && userData) {
+      devLog("ðŸ‘‚ Member Dashboard listening for real-time updates");
+      devLog("ðŸ”Œ Socket connected:", socket.connected);
+      devLog("ðŸ†” Socket ID:", socket.id);
+
+      // Notify server that user is online
+      socket.emit("user:online", {
+        userId: userData._id || userData.id,
+        username: userData.username || userData.name,
+        role: userData.role || "member",
+      });
+      devLog(
+        "ðŸ‘¤ Notified server: member is online",
+        userData.username || userData.name
+      );
+
+      // Listen for payment completion (new event name)
+      socket.on("payment:completed", (data: User) => {
+        devLog("ðŸ’° MemberDashboard received: payment:completed", data);
+        devLog("   Current user ID:", userData._id, "or", userData.id);
+        devLog("   Payment memberId:", data.memberId);
+        devLog("   Payment payerId:", data.payerId);
+        devLog("   Payment type:", data.type);
+        
+        // For cycle payments, always refresh (affects cycle progress for everyone)
+        if (data.type === "cycle_payment") {
+          // Check if this user is directly involved
+          const isRecipient = data.memberId === userData._id?.toString() || 
+                             data.memberId === userData.id?.toString();
+          const isPayer = data.payerId === userData._id?.toString() ||
+                         data.payerId === userData.id?.toString();
+          
+          // Show toast only if user is directly involved
+          if (isPayer && data.isQRPayment) {
+            toast({
+              title: "Payment Sent!",
+              description: `Payment of KES ${data.amount} sent successfully`,
+            });
+          } else if (isRecipient || isPayer) {
+            toast({
+              title: "Payment Confirmed!",
+              description: `Payment of KES ${data.amount} has been confirmed`,
+            });
+          }
+          
+          // Always refresh data for cycle payments (updates cycle progress for all members)
+          fetchData();
+        }
+      });
+
+      // Listen for any new payment
+      socket.on("payment:new", (data: User) => {
+        devLog("ðŸ’° MemberDashboard received: payment:new", data);
+        fetchData(); // Refresh cycle stats
+      });
+
+      // Listen for cycle updates (new event name)
+      socket.on("cycle:updated", (data: User) => {
+        devLog("ðŸ”„ MemberDashboard received: cycle:updated", data);
+        fetchData(); // Refresh data immediately
+      });
+
+        // Listen for new disbursement events
+        socket.on("disbursement:new", (data: User) => {
+          devLog("ðŸ’¸ MemberDashboard received: disbursement:new", data);
+          toast({
+            title: "New Disbursement Processed!",
+            description: `KES ${data.amount} disbursed to ${data.recipientName || 'member'}`,
+          });
+          fetchData(); // Refresh disbursement history and cycle status
+        });
+
+      // Listen for member additions/removals
+      socket.on("member:new", (data: User) => {
+        devLog("ðŸ‘¤ MemberDashboard received: member:new", data);
+        fetchData(); // Refresh to update total members count
+      });
+
+      // Listen for loan status updates
+      socket.on("loanStatusUpdated", (data: User) => {
+        if (data.memberId === userData._id || data.memberId === userData.id) {
+          devLog("ðŸ’° Your loan status was updated:", data);
+          const statusMessages: Record<string, string> = {
+            approved: `Your loan of KES ${data.amount.toLocaleString()} has been approved!`,
+            rejected: data.rejectionReason
+              ? `Your loan request was rejected. Reason: ${data.rejectionReason}`
+              : `Your loan request for KES ${data.amount.toLocaleString()} was rejected`,
+            disbursed: `Your loan of KES ${data.amount.toLocaleString()} has been disbursed to your M-Pesa!`,
+            repaid: `Your loan of KES ${data.amount.toLocaleString()} is marked as repaid. Thank you!`,
+          };
+
+          toast({
+            title: `Loan ${
+              data.status.charAt(0).toUpperCase() + data.status.slice(1)
+            }`,
+            description:
+              statusMessages[data.status] || `Loan status: ${data.status}`,
+            variant: data.status === "rejected" ? "destructive" : "default",
+            duration: data.status === "rejected" ? 8000 : 5000, // Show rejection longer
+          });
+          fetchData(); // Refresh data immediately
+        }
+      });
+
+      // Listen for loan repayment updates
+      socket.on("loanPayment", (data: User) => {
+        devLog("ðŸ’° MemberDashboard received: loanPayment", data);
+        devLog("   Current user ID:", userData._id, "or", userData.id);
+        devLog("   Loan memberId:", data.memberId);
+        
+        if (data.memberId === userData._id?.toString() || data.memberId === userData.id?.toString()) {
+          const isFullyPaid = data.isFullyPaid || data.remaining <= 0;
+          
+          // Stop polling immediately
+          repaymentPollingActiveRef.current = false;
+          setIsProcessingRepayment(false);
+          setRepaymentState("success");
+          
+          toast({
+            title: isFullyPaid ? "Loan Fully Repaid! ðŸŽ‰" : "Loan Payment Received!",
+            description: isFullyPaid
+              ? `Congratulations! Your loan of KES ${data.totalPaid.toLocaleString()} has been fully repaid.`
+              : `Payment of KES ${data.paymentAmount.toLocaleString()} received. Remaining: KES ${data.remaining.toLocaleString()}`,
+          });
+          
+          // Refresh loan data immediately, then close dialog
+          setTimeout(() => {
+            setShowRepayment(false);
+            setSelectedLoan(null);
+            setPartialPaymentAmount("");
+            setRepaymentState("idle");
+            fetchData();
+          }, 2000);
+        }
+      });
+
+      // Listen for new announcements
+      socket.on("announcementCreated", (announcement: User) => {
+        devLog("ðŸ“¢ New announcement received:", announcement);
+
+        // Add the new announcement to the list
+        setAnnouncements((prev) => [announcement, ...prev]);
+
+        // Show toast notification based on priority
+        const priorityEmojis = {
+          high: "ðŸ”´",
+          medium: "ðŸŸ¡",
+          low: "ðŸŸ¢",
+        };
+
+        toast({
+          title: `${
+            priorityEmojis[
+              announcement.priority as keyof typeof priorityEmojis
+            ] || "ðŸ“¢"
+          } New Announcement`,
+          description:
+            announcement.message.substring(0, 100) +
+            (announcement.message.length > 100 ? "..." : ""),
+          variant: announcement.priority === "high" ? "destructive" : "default",
+          duration: announcement.priority === "high" ? 10000 : 6000,
+        });
+      });
+    }
+
+    return () => {
+      clearInterval(interval);
+
+      // Cleanup Socket.IO listeners
+      if (socket) {
+        socket.off("payment:completed");
+        socket.off("payment:new");
+        socket.off("cycle:updated");
+          socket.off("disbursement:new");
+        socket.off("loanStatusUpdated");
+        socket.off("loanPayment");
+        socket.off("announcementCreated");
+        socket.off("member:new");
+      }
+    };
+  }, [userData, fetchData, toast]);
+
+  const handleMakePayment = () => {
+    // Allow payment even if already paid - will be recorded for next cycle
+    setShowPayment(true);
+  };
+
+  const handlePaymentSuccess = () => {
+    // Refresh data after payment
+    setMemberStats((prev) => ({ ...prev, hasPaidThisCycle: true }));
+    toast({
+      title: "Payment Successful",
+      description: "Your KES 200 contribution has been received",
+    });
+    setShowPayment(false);
+
+    // Trigger immediate refresh
+    setTimeout(() => {
+      window.location.reload();
+    }, 1500);
+  };
+
+  // Poll loan repayment status
+  const pollRepaymentStatus = async (
+    requestID: string,
+    retryCount = 0
+  ): Promise<void> => {
+    const maxRetries = 40; // 40 retries with adaptive intervals
+
+    // Check if polling was stopped via Socket.IO
+    if (!repaymentPollingActiveRef.current) {
+      devLog("â¹ï¸ Loan repayment polling stopped (Socket.IO event received)");
+      return;
+    }
+
+    if (retryCount >= maxRetries) {
+      repaymentPollingActiveRef.current = false;
+      setRepaymentState("failed");
+      setIsProcessingRepayment(false);
+      toast({
+        title: "Payment Timeout",
+        description:
+          "Payment verification timed out. Please check your transaction history.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/api/lipia/query-status`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...authService.getAuthHeaders(),
+        },
+        body: JSON.stringify({ checkoutRequestID: requestID }),
+      });
+
+      const data = await response.json();
+
+      // Check for success
+      if (data.ResultCode === "0" || data.MpesaReceiptNumber) {
+        repaymentPollingActiveRef.current = false;
+        setRepaymentState("success");
+        setIsProcessingRepayment(false);
+
+        const isFullyPaid =
+          selectedLoan &&
+          selectedLoan.amount_remaining - parseFloat(partialPaymentAmount) <= 0;
+
+        toast({
+          title: isFullyPaid ? "Loan Fully Repaid! ðŸŽ‰" : "Payment Successful!",
+          description: isFullyPaid
+            ? "Congratulations! Your loan has been fully repaid."
+            : `Payment of KES ${parseFloat(
+                partialPaymentAmount
+              ).toLocaleString()} recorded successfully.`,
+        });
+
+        setTimeout(() => {
+          setShowRepayment(false);
+          setSelectedLoan(null);
+          setPartialPaymentAmount("");
+          setRepaymentState("idle");
+          fetchData(); // Refresh data
+        }, 2000);
+        return;
+      }
+
+      // If status is explicitly failed
+      if (data.status === "failed") {
+        repaymentPollingActiveRef.current = false;
+        setRepaymentState("failed");
+        setIsProcessingRepayment(false);
+        toast({
+          title: "Payment Failed",
+          description: data.ResultDescription || "Payment was not completed",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Check if polling still active before continuing
+      if (!repaymentPollingActiveRef.current) {
+        devLog("â¹ï¸ Loan repayment polling stopped during check");
+        return;
+      }
+
+      // Adaptive polling intervals (1s -> 2s -> 3s)
+      const interval = retryCount < 15 ? 1000 : retryCount < 30 ? 2000 : 3000;
+
+      // Continue polling
+      setTimeout(() => {
+        pollRepaymentStatus(requestID, retryCount + 1);
+      }, interval);
+    } catch (error) {
+      console.error("Repayment status check error:", error);
+      
+      // Check if polling still active
+      if (!repaymentPollingActiveRef.current) {
+        return;
+      }
+      
+      const interval = retryCount < 15 ? 1000 : retryCount < 30 ? 2000 : 3000;
+      setTimeout(() => {
+        pollRepaymentStatus(requestID, retryCount + 1);
+      }, interval);
+    }
+  };
+
+  const handleLoanRepayment = async () => {
+    devLog('ðŸ’° handleLoanRepayment called');
+    devLog('Selected loan:', selectedLoan);
+    devLog('Payment amount:', partialPaymentAmount);
+    devLog('Repayment phone:', repaymentPhone);
+    
+    if (!selectedLoan || !partialPaymentAmount) {
+      devLog('âŒ Missing selectedLoan or partialPaymentAmount');
+      return;
+    }
+
+    const paymentAmount = parseFloat(partialPaymentAmount);
+    if (isNaN(paymentAmount) || paymentAmount <= 0) {
+      toast({
+        title: "Invalid Amount",
+        description: "Please enter a valid payment amount",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!repaymentPhone || repaymentPhone.length < 10) {
+      toast({
+        title: "Invalid Phone Number",
+        description: "Please enter a valid phone number",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const maxPayable =
+      selectedLoan.amount_remaining ||
+      selectedLoan.total_repayable ||
+      selectedLoan.amount;
+    if (paymentAmount > maxPayable) {
+      toast({
+        title: "Amount Too High",
+        description: `Maximum payable amount is KES ${maxPayable.toLocaleString()}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsProcessingRepayment(true);
+    setRepaymentState("confirm");
+
+    try {
+      // Initiate STK Push for loan repayment
+      const response = await fetch(
+        `${API_BASE}/api/loans/${selectedLoan._id}/repay`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...authService.getAuthHeaders(),
+          },
+          body: JSON.stringify({
+            amount: paymentAmount,
+            phone: repaymentPhone, // Use the editable phone number
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || "Failed to initiate payment");
+      }
+
+      if (data.CheckoutRequestID) {
+        // STK Push sent successfully
+        setCheckoutRequestID(data.CheckoutRequestID);
+        setRepaymentState("processing");
+
+        toast({
+          title: "STK Push Sent ðŸ“±",
+          description:
+            data.message || "Please enter your M-Pesa PIN on your phone",
+        });
+
+        // Start polling for payment status with ref control
+        repaymentPollingActiveRef.current = true;
+        pollRepaymentStatus(data.CheckoutRequestID);
+      } else {
+        throw new Error("Payment initiation failed");
+      }
+    } catch (error: any) {
+      console.error("Repayment error:", error);
+      repaymentPollingActiveRef.current = false;
+      setRepaymentState("failed");
+      toast({
+        title: "Payment Failed",
+        description: error.message || "Failed to process loan payment",
+        variant: "destructive",
+      });
+      setIsProcessingRepayment(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4 md:space-y-6 p-2 sm:p-4 md:p-0">
+      {/* Top Saver Badge */}
+      {isTopSaver && (
+        <Card className="bg-gradient-to-r from-yellow-50 to-yellow-100 dark:from-yellow-950 dark:to-yellow-900 border-yellow-300">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <TopSaverBadge
+                isTopSaver={true}
+                currentBalance={savingsBalance}
+                className="text-sm sm:text-base"
+              />
+              <div>
+                <p className="font-semibold text-yellow-900 dark:text-yellow-100 text-xs sm:text-base">
+                  Congratulations! You're the Top Saver!
+                </p>
+                <p className="text-xs sm:text-sm text-yellow-700 dark:text-yellow-300">
+                  You have the highest savings balance among all members
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Top Saver Badge */}
+      {isTopSaver && (
+        <Card className="bg-gradient-to-r from-yellow-50 to-yellow-100 dark:from-yellow-950 dark:to-yellow-900 border-yellow-300">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <TopSaverBadge
+                isTopSaver={true}
+                currentBalance={savingsBalance}
+                className="text-sm sm:text-base"
+              />
+              <div>
+                <p className="font-semibold text-yellow-900 dark:text-yellow-100 text-xs sm:text-base">
+                  Congratulations! You're the Top Saver!
+                </p>
+                <p className="text-xs sm:text-sm text-yellow-700 dark:text-yellow-300">
+                  You have the highest savings balance among all members
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Payment Status Alert - Hidden for wallet-only members */}
+      {userData?.member_type !== "wallet_only" && (
+        <Card
+          className={`border-l-4 ${
+            memberStats.hasPaidThisCycle
+              ? "border-l-financial-success bg-financial-success/5"
+              : "border-l-financial-warning bg-financial-warning/5"
+          }`}>
+          <CardContent className="pt-4 sm:pt-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3">
+            <div className="flex items-center gap-1 sm:gap-2 md:gap-3">
+              {memberStats.hasPaidThisCycle ? (
+                <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-financial-success flex-shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 md:w-5 md:h-5 text-financial-warning flex-shrink-0" />
+              )}
+              <div>
+                <h3 className="text-xs sm:text-sm md:text-base font-semibold">
+                  {memberStats.hasPaidThisCycle
+                    ? "Payment Complete"
+                    : "Payment Required"}
+                </h3>
+                <p className="text-xs sm:text-sm md:text-base text-muted-foreground">
+                  {memberStats.hasPaidThisCycle
+                    ? `You've contributed KES 224 for cycle #${currentCycleData?.currentCycle}`
+                    : `KES 224 payment due in ${
+                        currentCycleData?.daysLeft || 0
+                      } days`}
+                </p>
+              </div>
+            </div>
+            <Button
+              onClick={handleMakePayment}
+              variant={memberStats.hasPaidThisCycle ? "default" : "mpesa"}
+              size="sm"
+              className="w-full sm:w-auto text-xs sm:text-sm md:text-base">
+              <Phone className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
+              {memberStats.hasPaidThisCycle
+                ? "Pay for Next Cycle"
+                : "Pay via M-Pesa"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+      )}
+
+      {/* Advance Payment Status - Hidden for wallet-only members */}
+      {userData?.member_type !== "wallet_only" && (() => {
+        const expectedByNow = (currentCycleData?.currentCycle || 1) * 200;
+        const totalPaid = userData?.total_cycle_contribution || 0;
+        const cyclesPaidFor = Math.floor(totalPaid / 200);
+        const advanceCycles = cyclesPaidFor - (currentCycleData?.currentCycle || 1);
+        const nextCycleAdvance = Math.max(0, advanceCycles - 1);
+
+        // Debug logging
+        devLog('ðŸ’Ž Member Advance Payment Calculation:', {
+          currentCycle: currentCycleData?.currentCycle,
+          expectedByNow,
+          totalPaid,
+          cyclesPaidFor,
+          advanceCycles,
+          nextCycleAdvance
+        });
+
+        return advanceCycles > 0 ? (
+          <Card className="border-l-4 border-l-cyan-500 bg-cyan-50/50">
+            <CardContent className="pt-4 sm:pt-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3">
+                <div className="flex items-center gap-1 sm:gap-2 md:gap-3">
+                  <TrendingUp className="w-4 h-4 md:w-5 md:h-5 text-cyan-600 flex-shrink-0" />
+                  <div>
+                    <h3 className="text-xs sm:text-sm md:text-base font-semibold text-cyan-900">
+                      Advance Payment
+                    </h3>
+                    <p className="text-xs sm:text-sm text-cyan-700">
+                      You've paid ahead for future cycles
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <Badge className="bg-cyan-500 text-white hover:bg-cyan-600 text-xs sm:text-sm px-2 sm:px-3 py-1">
+                    +{advanceCycles} {advanceCycles === 1 ? 'cycle' : 'cycles'} ahead
+                  </Badge>
+                  {nextCycleAdvance > 0 && (
+                    <span className="text-[10px] sm:text-xs text-cyan-600">
+                      Will reduce to +{nextCycleAdvance} next cycle
+                    </span>
+                  )}
+                  {nextCycleAdvance === 0 && (
+                    <span className="text-[10px] sm:text-xs text-cyan-600">
+                      Current by next cycle
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="mt-3 pt-3 border-t border-cyan-200">
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground">Expected</p>
+                    <p className="text-xs sm:text-sm font-semibold">KES {expectedByNow.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground">You Paid</p>
+                    <p className="text-xs sm:text-sm font-semibold text-cyan-600">KES {totalPaid.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground">Extra</p>
+                    <p className="text-xs sm:text-sm font-semibold text-cyan-600">KES {(totalPaid - expectedByNow).toLocaleString()}</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null;
+      })()}
+
+      {/* M-Pesa Payment Section - Hidden for wallet-only members */}
+      {userData?.member_type !== "wallet_only" && (
+        <Card className="border-mpesa-green bg-gradient-to-br from-mpesa-green/5 to-mpesa-green/10">
+        <CardHeader className="text-center">
+          <CardTitle className="flex items-center justify-center gap-2 text-mpesa-green">
+            <Phone className="w-6 h-6" />
+            Make Your KES 224 Contribution
+          </CardTitle>
+          <CardDescription className="text-lg">
+            Pay securely via M-Pesa STK Push directly to the organization Till
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="bg-white/50 p-4 rounded-lg space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">Amount:</span>
+              <span className="text-2xl font-bold text-mpesa-green">
+                KES 224
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">Destination:</span>
+              <span className="font-medium">
+                <StyledSMCF className="inline" /> Group Till: <span className="font-bold">6938069</span>
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">Your Number:</span>
+              <span className="font-medium">
+                {userData?.phoneNumber || userData?.phone || "N/A"}
+              </span>
+            </div>
+          </div>
+
+          <div className="text-center space-y-4">
+            <CycleQRPayment
+              onPaymentSuccess={fetchData}
+              contributionAmount={200}
+            />
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-white px-2 text-muted-foreground">Or</span>
+              </div>
+            </div>
+
+            <Button
+              onClick={handleMakePayment}
+              variant="mpesa"
+              size="lg"
+              className="w-full text-lg font-semibold">
+              <Phone className="w-5 h-5 mr-2" />
+              {memberStats.hasPaidThisCycle
+                ? "Paid for This Cycle"
+                : "Send M-Pesa Payment"}
+            </Button>
+            {memberStats.hasPaidThisCycle && (
+              <p className="text-xs text-center text-muted-foreground">
+                âœ“ Already paid for Cycle #{currentCycleData?.currentCycle}.
+                Click to pay for future cycles.
+              </p>
+            )}
+            <div className="mt-3">
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => setShowLoanRequest(true)}>
+                Request a Loan
+              </Button>
+            </div>
+
+            <div className="text-xs text-muted-foreground space-y-1">
+              <p>
+                <strong>Direct STK Push:</strong> You will receive an M-Pesa
+                prompt to enter your PIN and pay to Till{" "}
+                <strong>6938069</strong>.
+              </p>
+              <p>â€¢ You'll receive confirmation SMS and receipt</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+      )}
+
+      {/* Cycle Trend Chart - Hidden for wallet-only members */}
+      {userData?.member_type !== "wallet_only" && <MemberCycleChart />}
+
+      <Tabs defaultValue={userData?.member_type === "wallet_only" ? "wallet" : "overview"} className="w-full">
+        <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">
+          <TabsList className={`inline-flex w-auto min-w-max h-auto p-2 gap-1 ${userData?.member_type === "wallet_only" ? "md:grid md:w-full md:grid-cols-4" : "md:grid md:w-full md:grid-cols-8"}`}>
+            {userData?.member_type !== "wallet_only" && (
+              <TabsTrigger
+                value="overview"
+                className="text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                Overview
+              </TabsTrigger>
+            )}
+            {userData?.member_type !== "wallet_only" && (
+              <TabsTrigger
+                value="announcements"
+                className="text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <Megaphone className="w-4 h-4 mr-1.5 inline" />
+                Announcements
+              </TabsTrigger>
+            )}
+            <TabsTrigger
+              value="wallet"
+              className="text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <Wallet className="w-4 h-4 mr-1.5 inline" />
+              Wallet
+            </TabsTrigger>
+            <TabsTrigger
+              value="loans"
+              className="text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <FileText className="w-4 h-4 mr-1.5 inline" />
+              My Loans
+            </TabsTrigger>
+            <TabsTrigger
+              value="guarantor"
+              className="text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground relative">
+              <Shield className="w-4 h-4 mr-1.5 inline" />
+              Guarantor
+              {pendingGuarantorRequests > 0 && (
+                <Badge 
+                  variant="destructive" 
+                  className="ml-1.5 px-1.5 py-0.5 text-xs h-5 min-w-5">
+                  {pendingGuarantorRequests}
+                </Badge>
+              )}
+            </TabsTrigger>
+            {userData?.member_type !== "wallet_only" && (
+              <TabsTrigger
+                value="history"
+                className="text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <Receipt className="w-4 h-4 mr-1.5 inline" />
+                <span className="hidden sm:inline">Payment History</span>
+                <span className="sm:hidden">History</span>
+              </TabsTrigger>
+            )}
+            {userData?.member_type !== "wallet_only" && (
+              <TabsTrigger
+                value="payouts"
+                className="text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <TrendingUp className="w-4 h-4 mr-1.5 inline" />
+                Payouts
+              </TabsTrigger>
+            )}
+            <TabsTrigger
+              value="messages"
+              className="text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <Megaphone className="w-4 h-4 mr-1.5 inline" />
+              Messages
+            </TabsTrigger>
+          </TabsList>
+        </div>
+
+        <TabsContent value="overview" className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Member Stats */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5" />
+                  Member Statistics
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Member ID:</span>
+                  <Badge variant="secondary">
+                    {userData?.memberId || userData?.member_id || "N/A"}
+                  </Badge>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">
+                    Position in Queue:
+                  </span>
+                  <span className="font-semibold">
+                    #{memberStats.memberPosition || 0}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">
+                    Total Contributed:
+                  </span>
+                  <span className="font-semibold text-financial-success">
+                    KES {memberStats.totalContributed.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Total Received:</span>
+                  <span className="font-semibold text-accent">
+                    KES {memberStats.totalReceived.toLocaleString()}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Next Payout */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Wallet className="w-5 h-5" />
+                  Next Payout
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-accent mb-2">
+                    Position #{memberStats.memberPosition}
+                  </div>
+                  <p className="text-muted-foreground">
+                    Your position in the payout queue
+                  </p>
+                </div>
+                <div className="bg-muted/50 p-4 rounded-lg">
+                  <div className="flex justify-between mb-2">
+                    <span className="text-sm text-muted-foreground">
+                      Expected Amount:
+                    </span>
+                    <span className="font-semibold">
+                      KES {currentCycleData?.totalAmount?.toLocaleString() || 0}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">
+                      Current Cycle:
+                    </span>
+                    <span className="font-semibold">
+                      #{currentCycleData?.currentCycle || 1}
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Current Cycle Status */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="w-5 h-5" />
+                Current Cycle Status
+              </CardTitle>
+              <CardDescription>
+                Cycle #{currentCycleData?.currentCycle || 1} - Started{" "}
+                {currentCycleData?.cycleStartDate || "N/A"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                {/* Collection Progress Bar */}
+                <div>
+                  <div className="flex justify-between mb-2">
+                    <span className="text-sm font-medium">
+                      Collection Progress
+                    </span>
+                    <span className="text-sm font-semibold text-primary">
+                      {currentCycleData?.totalMembers > 0
+                        ? Math.round(
+                            (currentCycleData.paidMembers /
+                              currentCycleData.totalMembers) *
+                              100
+                          )
+                        : 0}
+                      %
+                    </span>
+                  </div>
+                  <Progress
+                    className="h-3 [&>div]:bg-gradient-to-r [&>div]:from-financial-success [&>div]:to-financial-primary"
+                    value={
+                      currentCycleData?.totalMembers > 0
+                        ? (currentCycleData.paidMembers / currentCycleData.totalMembers) * 100
+                        : 0
+                    }
+                  />
+                  <div className="flex justify-between mt-2">
+                    <span className="text-xs text-muted-foreground">
+                      {currentCycleData?.paidMembers || 0} of{" "}
+                      {currentCycleData?.totalMembers || 0} members paid
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      KES{" "}
+                      {currentCycleData?.collectedAmount?.toLocaleString() || 0}{" "}
+                      / {currentCycleData?.totalAmount?.toLocaleString() || 0}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Stats Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="text-center p-4 bg-primary/5 rounded-lg">
+                    <div className="text-2xl font-bold text-primary mb-1">
+                      {currentCycleData?.paidMembers || 0}/
+                      {currentCycleData?.totalMembers || 0}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Members Paid
+                    </div>
+                  </div>
+                  <div className="text-center p-4 bg-financial-success/5 rounded-lg">
+                    <div className="text-2xl font-bold text-financial-success mb-1">
+                      KES {currentCycleData?.collectedAmount?.toLocaleString() || 0}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Amount Collected (KES 200/member)
+                    </div>
+                  </div>
+                  <div className="text-center p-4 bg-financial-warning/5 rounded-lg">
+                    <div className="text-2xl font-bold text-financial-warning mb-1">
+                      {currentCycleData?.daysLeft || 0}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Days Remaining
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="announcements" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Megaphone className="w-5 h-5" />
+                    Announcements & Reminders
+                  </CardTitle>
+                  <CardDescription>
+                    Important updates and messages from the admin
+                  </CardDescription>
+                </div>
+                {announcements.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (
+                        confirm(
+                          "Are you sure you want to clear all announcements? This will only clear them from your view."
+                        )
+                      ) {
+                        setAnnouncements([]);
+                        toast({
+                          title: "Announcements Cleared",
+                          description:
+                            "All announcements have been cleared from your view",
+                        });
+                      }
+                    }}>
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Clear All
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {announcements.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Megaphone className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p>No announcements at this time</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {announcements.map((announcement) => (
+                    <Card
+                      key={announcement._id}
+                      className={`border-l-4 ${
+                        announcement.priority === "high"
+                          ? "border-l-red-500 bg-red-50/50"
+                          : announcement.priority === "medium"
+                          ? "border-l-amber-500 bg-amber-50/50"
+                          : "border-l-blue-500 bg-blue-50/50"
+                      }`}>
+                      <CardContent className="pt-4 pb-4">
+                        <div className="flex items-start gap-3">
+                          <div
+                            className={`p-2 rounded-full ${
+                              announcement.priority === "high"
+                                ? "bg-red-100"
+                                : announcement.priority === "medium"
+                                ? "bg-amber-100"
+                                : "bg-blue-100"
+                            }`}>
+                            <Megaphone
+                              className={`w-4 h-4 ${
+                                announcement.priority === "high"
+                                  ? "text-red-600"
+                                  : announcement.priority === "medium"
+                                  ? "text-amber-600"
+                                  : "text-blue-600"
+                              }`}
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Badge
+                                variant={
+                                  announcement.priority === "high"
+                                    ? "destructive"
+                                    : announcement.priority === "medium"
+                                    ? "default"
+                                    : "secondary"
+                                }
+                                className="text-xs">
+                                {announcement.priority === "high"
+                                  ? "ðŸ”´ Urgent"
+                                  : announcement.priority === "medium"
+                                  ? "ðŸŸ¡ Important"
+                                  : "ðŸŸ¢ Info"}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(
+                                  announcement.created_at
+                                ).toLocaleDateString("en-US", {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </span>
+                            </div>
+                            <p className="text-sm sm:text-base text-gray-700 whitespace-pre-wrap">
+                              {announcement.message}
+                            </p>
+                            {(announcement.created_by ||
+                              announcement.sent_by) && (
+                              <p className="text-xs text-muted-foreground mt-2">
+                                Sent by:{" "}
+                                {announcement.created_by?.name ||
+                                  announcement.sent_by?.name ||
+                                  "Admin"}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="wallet" className="space-y-4">
+          <ProfilePictureUpload userData={{ ...userData, name: userData?.name || userData?.username || "Member" }} />
+          <MemberWallet userData={userData} />
+        </TabsContent>
+
+        <TabsContent value="loans" className="space-y-4">
+          {/* Loan Policy Download */}
+          <Card className="bg-primary/5 border-primary/20">
+            <CardContent className="pt-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <FileText className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="font-semibold text-sm mb-1">Loan Terms & Conditions</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Download the official SMCF loan policy document (Kenyan-Compliant)
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  onClick={() =>
+                    generateLoanTermsPDF({
+                      memberId:
+                        userData?.memberId ||
+                        userData?.member_id ||
+                        userData?._id ||
+                        userData?.id ||
+                        "member",
+                      memberName:
+                        userData?.name || userData?.username || "member",
+                    })
+                  }
+                  variant="default"
+                  size="sm"
+                  className="whitespace-nowrap">
+                  <Download className="w-4 h-4 mr-2" />
+                  Download Policy PDF
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="w-5 h-5" />
+                My Loan Applications
+              </CardTitle>
+              <CardDescription>
+                Track your loan requests and their status
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {memberLoans.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <TrendingUp className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p>You haven't requested any loans yet</p>
+                  <Button
+                    onClick={() => setShowLoanRequest(true)}
+                    variant="outline"
+                    className="mt-4">
+                    Request Your First Loan
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {memberLoans.map((loan) => (
+                    <Card
+                      key={loan._id}
+                      className={`border-l-4 ${
+                        loan.status === "approved"
+                          ? "border-l-emerald-500"
+                          : loan.status === "rejected"
+                          ? "border-l-red-500"
+                          : loan.status === "disbursed"
+                          ? "border-l-blue-500"
+                          : loan.status === "repaid"
+                          ? "border-l-violet-500"
+                          : "border-l-amber-500"
+                      }`}>
+                      <CardContent className="pt-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <h4 className="font-semibold text-base sm:text-lg">
+                                KES {loan.amount.toLocaleString()}
+                              </h4>
+                              <Badge
+                                variant={
+                                  loan.status === "approved" ||
+                                  loan.status === "disbursed"
+                                    ? "default"
+                                    : loan.status === "rejected"
+                                    ? "destructive"
+                                    : "secondary"
+                                }
+                                className="text-xs">
+                                {loan.status.charAt(0).toUpperCase() +
+                                  loan.status.slice(1)}
+                              </Badge>
+                            </div>
+                            <div className="space-y-1 text-sm text-muted-foreground">
+                              <p>
+                                <span className="font-medium">Purpose:</span>{" "}
+                                {loan.purpose}
+                              </p>
+                              <p>
+                                <span className="font-medium">
+                                  Interest Rate:
+                                </span>{" "}
+                                {loan.interest_rate}%
+                              </p>
+                              <p>
+                                <span className="font-medium">
+                                  Requested on:
+                                </span>{" "}
+                                {loan.created_at
+                                  ? new Date(
+                                      loan.created_at
+                                    ).toLocaleDateString()
+                                  : "N/A"}
+                              </p>
+                              {loan.approval_date && (
+                                <p>
+                                  <span className="font-medium">
+                                    {loan.status === "rejected"
+                                      ? "Rejected on"
+                                      : "Approved on"}
+                                    :
+                                  </span>{" "}
+                                  {loan.approval_date
+                                    ? new Date(
+                                        loan.approval_date
+                                      ).toLocaleDateString()
+                                    : "N/A"}
+                                </p>
+                              )}
+                              {loan.disbursement_date && (
+                                <p>
+                                  <span className="font-medium">
+                                    Disbursed on:
+                                  </span>{" "}
+                                  {loan.disbursement_date
+                                    ? new Date(
+                                        loan.disbursement_date
+                                      ).toLocaleDateString()
+                                    : "N/A"}
+                                </p>
+                              )}
+                              {loan.rejection_reason && (
+                                <div className="mt-2 p-2 bg-destructive/10 border border-destructive/20 rounded">
+                                  <p className="text-destructive font-medium text-xs">
+                                    Rejection Reason:
+                                  </p>
+                                  <p className="text-destructive text-xs">
+                                    {loan.rejection_reason}
+                                  </p>
+                                </div>
+                              )}
+                              {loan.notes && (
+                                <div className="mt-2 p-2 bg-muted rounded">
+                                  <p className="font-medium text-xs">Notes:</p>
+                                  <p className="text-xs">{loan.notes}</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Repayment Button for Disbursed Loans */}
+                          {loan.status === "disbursed" && (
+                            <div className="mt-3 pt-3 border-t">
+                              {/* Overdue Warning */}
+                              {loan.is_overdue && (
+                                <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded-lg">
+                                  <div className="flex items-center gap-2 text-red-600 font-medium text-sm">
+                                    <AlertCircle className="w-4 h-4" />
+                                    Loan is {loan.days_overdue} days overdue!
+                                  </div>
+                                  {(loan.total_late_fees || 0) > 0 && (
+                                    <p className="text-xs text-red-600 mt-1">
+                                      Late fees accrued: KES {loan.total_late_fees?.toLocaleString()}
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                                <div className="text-sm">
+                                  <p className="text-muted-foreground">
+                                    Total Due:
+                                  </p>
+                                  <p className="text-lg font-bold text-mpesa-green">
+                                    KES {(loan.current_total_due || loan.total_repayable || loan.amount * 1.1).toLocaleString()}
+                                  </p>
+                                  <div className="text-xs text-muted-foreground space-y-0.5">
+                                    <p>Principal: KES {loan.amount.toLocaleString()}</p>
+                                    <p>Interest ({loan.interest_rate || 10}%): KES {((loan.amount * (loan.interest_rate || 10)) / 100).toLocaleString()}</p>
+                                    {(loan.total_late_fees || 0) > 0 && (
+                                      <p className="text-red-600">Late Fees: KES {loan.total_late_fees?.toLocaleString()}</p>
+                                    )}
+                                  </div>
+                                  {/* Payment Progress */}
+                                  {(loan.amount_paid || 0) > 0 && (
+                                    <div className="mt-2">
+                                      <div className="flex justify-between text-xs">
+                                        <span className="text-green-600">Paid: KES {loan.amount_paid?.toLocaleString()}</span>
+                                        <span className="text-orange-600">
+                                          Remaining: KES {(loan.current_remaining || loan.amount_remaining)?.toLocaleString()}
+                                        </span>
+                                      </div>
+                                      <Progress
+                                        className="h-2 mt-1 [&>div]:bg-green-600"
+                                        value={Math.min(
+                                          ((loan.amount_paid || 0) /
+                                            (loan.current_total_due || loan.total_repayable || loan.amount)) *
+                                            100,
+                                          100
+                                        )}
+                                      />
+                                    </div>
+                                  )}
+                                  {/* Due Date */}
+                                  {loan.due_date && (
+                                    <p className={`text-xs mt-1 ${loan.is_overdue ? 'text-red-600 font-medium' : 'text-muted-foreground'}`}>
+                                      Due: {new Date(loan.due_date).toLocaleDateString()}
+                                    </p>
+                                  )}
+                                </div>
+                                <Button
+                                  type="button"
+                                  onClick={() => {
+                                    devLog('ðŸ”´ Repay button clicked for loan:', loan._id, loan);
+                                    openRepaymentDialog(loan);
+                                  }}
+                                  variant={loan.is_overdue ? "destructive" : "mpesa"}
+                                  size="sm"
+                                  className="w-full sm:w-auto"
+                                  disabled={selectedLoanLoading}
+                                >
+                                  <Phone className="w-4 h-4 mr-2" />
+                                  {loan.is_overdue ? "Pay Now (Overdue)" : "Repay via M-Pesa"}
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="guarantor" className="space-y-4">
+          <GuarantorRequests />
+          <GuarantorProfile />
+        </TabsContent>
+
+        <TabsContent value="history" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Receipt className="w-5 h-5" />
+                    Payment History
+                  </CardTitle>
+                  <CardDescription>
+                    Your contribution history for all cycles
+                  </CardDescription>
+                </div>
+                {paymentHistory.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (
+                        confirm(
+                          "Are you sure you want to clear your payment history view? This will only clear it from your view."
+                        )
+                      ) {
+                        setPaymentHistory([]);
+                        toast({
+                          title: "Payment History Cleared",
+                          description:
+                            "Payment history has been cleared from your view",
+                        });
+                      }
+                    }}>
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Clear All
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+                <div className="space-y-3">
+                  {paymentHistory.map((payment, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between p-3 border rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <CheckCircle className="w-5 h-5 text-financial-success" />
+                        <div>
+                          <div className="font-medium">
+                            Cycle #{payment.cycle}
+                            {payment.isAdvance && (
+                              <span className="ml-2 text-xs text-cyan-600 font-semibold">
+                                (Advance: +{payment.cyclesAhead} cycle{payment.cyclesAhead > 1 ? "s" : ""})
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {payment.date}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-semibold text-financial-success">
+                          KES {payment.amount}
+                        </div>
+                        <Badge 
+                          variant={payment.status === "completed" || payment.status === "Paid" ? "default" : "secondary"} 
+                          className={`text-xs ${
+                            payment.isAdvance 
+                              ? "bg-cyan-100 text-cyan-700 border-cyan-300" 
+                              : payment.status === "completed" || payment.status === "Paid"
+                              ? "bg-green-100 text-green-700 border-green-300"
+                              : ""
+                          }`}>
+                          {payment.status === "completed" ? "Paid" : payment.status}
+                          {payment.isAdvance && " (Advance)"}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                  {/* Total Row */}
+                  {paymentHistory.length > 0 && (
+                    <div className="flex items-center justify-between p-3 border-t-2 border-b-2 border-primary bg-primary/10 rounded-lg mt-4">
+                      <div className="font-semibold text-primary">Total</div>
+                      <div className="font-bold text-primary">
+                        KES {paymentHistory.reduce((sum, p) => sum + (Number(p.amount) || 0), 0).toLocaleString()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="payouts" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Wallet className="w-5 h-5" />
+                Payout Information
+              </CardTitle>
+              <CardDescription>When you receive group payouts</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="bg-primary/10 p-4 rounded-lg border border-primary/20">
+                  <h4 className="font-semibold text-primary mb-2">
+                    Next Person to Receive Payout
+                  </h4>
+                  <div className="flex items-center gap-2">
+                    <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center">
+                      <Wallet className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-lg">
+                        {currentCycleData.nextRecipient}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Will receive when cycle is fully collected
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-accent/10 p-4 rounded-lg">
+                  <h4 className="font-semibold text-accent mb-2">
+                    Your Next Payout
+                  </h4>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    You will receive the group payout in cycle #
+                    {memberStats.nextPayoutCycle || "Not assigned"}
+                  </p>
+                  <div className="flex justify-between text-sm">
+                    <span>Expected Amount:</span>
+                    <span className="font-semibold">
+                      KES {currentCycleData?.totalAmount?.toLocaleString() || 0}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-muted/50 p-4 rounded-lg">
+                  <h4 className="font-semibold mb-2">How Payouts Work</h4>
+                  <ul className="text-sm text-muted-foreground space-y-1">
+                    <li>â€¢ Payouts are distributed based on member hierarchy</li>
+                    <li>
+                      â€¢ You receive the full collected amount when it's your
+                      turn
+                    </li>
+                    <li>â€¢ Payouts are sent directly to your M-Pesa number</li>
+                    <li>
+                      â€¢ You'll receive SMS confirmation when funds are sent
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="messages" className="space-y-4">
+          <MemberMessageComposer mode="authenticated" source="member-dashboard" title="Message Main SMCF Admin" />
+        </TabsContent>
+      </Tabs>
+
+      {/* Payment Dialog */}
+      <PaymentDialog
+        open={showPayment}
+        onOpenChange={setShowPayment}
+        onPaymentSuccess={handlePaymentSuccess}
+        amount={224}
+        memberData={userData}
+        cycle={currentCycleData?.currentCycle || 1}
+      />
+
+      <LoanRequestDialog
+        open={showLoanRequest}
+        onOpenChange={setShowLoanRequest}
+        memberId={userData?.memberId || userData?.member_id || userData?._id}
+        memberPhone={userData?.phoneNumber || userData?.phone}
+        onSubmitted={() => {
+          toast({
+            title: "Request Sent",
+            description: "Your loan request has been sent to admin.",
+          });
+        }}
+      />
+
+      {/* Loan Repayment Dialog */}
+      <Dialog open={showRepayment} onOpenChange={setShowRepayment}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Phone className="w-5 h-5 text-mpesa-green" />
+              Loan Repayment
+            </DialogTitle>
+            <DialogDescription>
+              Make full or partial payment towards your loan
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedLoan && (
+            <div className="space-y-4">
+              {/* Overdue Warning */}
+              {selectedLoan.is_overdue && (
+                <div className="bg-red-50 border border-red-200 p-3 rounded-lg">
+                  <div className="flex items-center gap-2 text-red-600 font-medium">
+                    <AlertCircle className="w-4 h-4" />
+                    Loan is {selectedLoan.days_overdue} days overdue
+                  </div>
+                  <p className="text-sm text-red-600 mt-1">
+                    Late fees of 3% per day are being applied to your remaining balance. Pay as soon as possible to avoid additional charges.
+                  </p>
+                </div>
+              )}
+
+              {/* Loan Summary */}
+              <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Original Loan:</span>
+                  <span className="font-medium">
+                    KES {selectedLoan.amount.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    Interest ({selectedLoan.interest_rate || 10}%):
+                  </span>
+                  <span className="font-medium">
+                    KES{" "}
+                    {(
+                      (selectedLoan.amount *
+                        (selectedLoan.interest_rate || 10)) /
+                      100
+                    ).toLocaleString()}
+                  </span>
+                </div>
+                {/* Late Fees Section */}
+                {(selectedLoan.total_late_fees || 0) > 0 && (
+                  <div className="flex justify-between text-sm text-red-600">
+                    <span>Late Fees ({selectedLoan.days_overdue || 0} days):</span>
+                    <span className="font-medium">
+                      + KES {selectedLoan.total_late_fees?.toLocaleString()}
+                    </span>
+                  </div>
+                )}
+                <Separator />
+                <div className="flex justify-between">
+                  <span className="font-semibold">Total Due:</span>
+                  <span className="text-lg font-bold">
+                    KES{" "}
+                    {(
+                      selectedLoan.current_total_due || selectedLoan.total_repayable || selectedLoan.amount * 1.1
+                    ).toLocaleString()}
+                  </span>
+                </div>
+                {/* Due Date */}
+                {selectedLoan.due_date && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Due Date:</span>
+                    <span className={selectedLoan.is_overdue ? "text-red-600 font-medium" : ""}>
+                      {new Date(selectedLoan.due_date).toLocaleDateString()}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Payment Progress */}
+              <div className="bg-green-50 border border-green-200 p-4 rounded-lg space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-green-900">
+                    Payment Progress
+                  </span>
+                  <span className="text-sm font-bold text-green-700">
+                    {Math.round(
+                      ((selectedLoan.amount_paid || 0) /
+                        (selectedLoan.total_repayable || selectedLoan.amount)) *
+                        100
+                    )}
+                    %
+                  </span>
+                </div>
+                <Progress
+                  className="h-3 [&>div]:bg-green-600"
+                  value={Math.min(
+                    ((selectedLoan.amount_paid || 0) /
+                      (selectedLoan.total_repayable || selectedLoan.amount)) *
+                      100,
+                    100
+                  )}
+                />
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Paid</p>
+                    <p className="font-bold text-green-700">
+                      KES {(selectedLoan.amount_paid || 0).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-muted-foreground">Remaining</p>
+                    <p className="font-bold text-orange-600">
+                      KES{" "}
+                      {(
+                        selectedLoan.current_remaining ||
+                        selectedLoan.amount_remaining ||
+                        selectedLoan.total_repayable ||
+                        selectedLoan.amount
+                      ).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Payment Amount Input */}
+              <div className="space-y-2">
+                <Label htmlFor="payment-amount">Payment Amount (KES)</Label>
+                <Input
+                  id="payment-amount"
+                  type="number"
+                  placeholder="Enter amount to pay"
+                  value={partialPaymentAmount}
+                  onChange={(e) => setPartialPaymentAmount(e.target.value)}
+                  max={selectedLoan?.current_remaining || selectedLoan?.amount_remaining || selectedLoan?.total_repayable}
+                  disabled={selectedLoanLoading}
+                />
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setPartialPaymentAmount(
+                        (
+                          (selectedLoan?.current_remaining ||
+                            selectedLoan?.amount_remaining ||
+                            selectedLoan?.total_repayable) / 2
+                        ).toFixed(0)
+                      )
+                    }
+                    className="flex-1"
+                    disabled={selectedLoanLoading}
+                  >
+                    Half
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setPartialPaymentAmount(
+                        ((
+                          selectedLoan?.current_remaining ||
+                          selectedLoan?.amount_remaining ||
+                          selectedLoan?.total_repayable ||
+                          0
+                        ) as number).toString()
+                      )
+                    }
+                    className="flex-1"
+                    disabled={selectedLoanLoading}
+                  >
+                    Full Amount
+                  </Button>
+                </div>
+              </div>
+
+              {/* Phone Number Input */}
+              <div className="space-y-2">
+                <Label htmlFor="repayment-phone">Payment Phone Number</Label>
+                <Input
+                  id="repayment-phone"
+                  type="tel"
+                  placeholder="254712345678"
+                  value={repaymentPhone}
+                  onChange={(e) => setRepaymentPhone(e.target.value)}
+                  disabled={isProcessingRepayment}
+                />
+                <p className="text-xs text-muted-foreground">
+                  The STK Push will be sent to this number. You can edit it to use a different number.
+                </p>
+              </div>
+
+              {/* Payment History */}
+              {selectedLoan.payment_history &&
+                selectedLoan.payment_history.length > 0 && (
+                  <div className="space-y-2">
+                    <Label>
+                      Payment History ({selectedLoan.payment_history.length}{" "}
+                      payments)
+                    </Label>
+                    <div className="max-h-32 overflow-y-auto space-y-2 border rounded-lg p-2">
+                      {selectedLoan.payment_history.map(
+                        (payment: any, idx: number) => (
+                          <div
+                            key={idx}
+                            className="flex justify-between text-xs bg-gray-50 p-2 rounded">
+                            <span className="text-muted-foreground">
+                              {new Date(
+                                payment.payment_date
+                              ).toLocaleDateString()}
+                            </span>
+                            <span className="font-semibold text-green-600">
+                              +KES {payment.amount.toLocaleString()}
+                            </span>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  </div>
+                )}
+
+              <div className="bg-mpesa-green/10 border border-mpesa-green/20 p-4 rounded-lg space-y-2">
+                <p className="text-sm font-medium">Payment Details:</p>
+                <div className="text-sm space-y-1">
+                  <p>
+                    â€¢ Till Number: <span className="font-bold">6938069</span>
+                  </p>
+                  <p>â€¢ You will receive an M-Pesa prompt</p>
+                  <p>â€¢ Enter your M-Pesa PIN to complete payment</p>
+                </div>
+              </div>
+
+              <DialogFooter className="gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowRepayment(false);
+                    setSelectedLoan(null);
+                    setPartialPaymentAmount("");
+                  }}
+                  disabled={isProcessingRepayment}>
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="mpesa"
+                  onClick={() => {
+                    devLog('ðŸ’š Pay button clicked in dialog');
+                    devLog('Amount:', partialPaymentAmount);
+                    devLog('Phone:', repaymentPhone);
+                    devLog('Is disabled:', isProcessingRepayment || !partialPaymentAmount || isNaN(parseFloat(partialPaymentAmount)) || parseFloat(partialPaymentAmount) <= 0);
+                    handleLoanRepayment();
+                  }}
+                  disabled={
+                    isProcessingRepayment ||
+                    !partialPaymentAmount ||
+                    isNaN(parseFloat(partialPaymentAmount)) ||
+                    parseFloat(partialPaymentAmount) <= 0
+                  }>
+                  {isProcessingRepayment ? (
+                    <>
+                      {repaymentState === "confirm" && "Initiating Payment..."}
+                      {repaymentState === "processing" &&
+                        "Enter M-Pesa PIN on your phone..."}
+                      {repaymentState === "waiting" &&
+                        "Waiting for confirmation..."}
+                      {repaymentState === "success" && "Payment Successful!"}
+                      {repaymentState === "failed" && "Payment Failed"}
+                    </>
+                  ) : (
+                    <>
+                      <Phone className="w-4 h-4 mr-2" />
+                      Pay KES{" "}
+                      {parseFloat(partialPaymentAmount || "0").toLocaleString()}
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+export default MemberDashboard;
+// ...end of file...
+

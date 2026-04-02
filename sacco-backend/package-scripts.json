@@ -1,0 +1,8 @@
+{
+  "name": "SMCF SACCO Backend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "seed": "tsx src/scripts/seedData.ts"
+  }
+}

@@ -1,0 +1,8 @@
+/* Progress bar fill — width driven by --loan-repay-pct CSS custom property
+   set on the element so the width value stays out of the attribute directly */
+.loan-repay-progress-fill {
+  width: var(--loan-repay-pct, 0%);
+  height: 100%;
+  background-color: rgb(59 130 246); /* bg-blue-500 */
+  transition: width 0.2s ease;
+}
