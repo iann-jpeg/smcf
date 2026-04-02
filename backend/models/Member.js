@@ -99,6 +99,17 @@ const memberSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  savings_override: {
+    is_enabled: { type: Boolean, default: false },
+    current_balance: { type: Number, default: 0 },
+    total_deposits: { type: Number, default: 0 },
+    total_withdrawals: { type: Number, default: 0 },
+    total_interest_earned: { type: Number, default: 0 },
+    total_transaction_fees: { type: Number, default: 0 },
+    total_locked_savings: { type: Number, default: 0 },
+    last_transaction: { type: Date, default: null },
+    updated_at: { type: Date, default: null },
+  },
   // Payment breakdown fields (KES 224 split)
   total_cycle_contribution: {
     type: Number,

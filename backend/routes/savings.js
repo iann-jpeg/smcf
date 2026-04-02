@@ -26,6 +26,26 @@ router.get("/summary", protect, async (req, res) => {
   try {
     const memberId = req.member ? req.member._id : req.admin._id;
 
+    const member = await Member.findById(memberId).select(
+      "savings_override total_savings wallet_balance"
+    );
+    const override = member?.savings_override;
+    if (override?.is_enabled) {
+      return res.json({
+        success: true,
+        data: {
+          currentBalance: override.current_balance || 0,
+          totalDeposits: override.total_deposits || 0,
+          totalWithdrawals: override.total_withdrawals || 0,
+          totalInterestEarned: override.total_interest_earned || 0,
+          totalTransactionFees: override.total_transaction_fees || 0,
+          totalLockedSavings: override.total_locked_savings || 0,
+          transactionCount: 0,
+          overrideApplied: true,
+        },
+      });
+    }
+
     // Get all completed savings transactions for this member
     const transactions = await Saving.find({ 
       member_id: memberId,
@@ -76,6 +96,8 @@ router.get("/summary", protect, async (req, res) => {
         totalInterestEarned,
         totalTransactionFees,
         transactionCount: transactions.length,
+        totalLockedSavings: 0,
+        overrideApplied: false,
       },
     });
   } catch (error) {
@@ -506,15 +528,26 @@ router.get("/all-members", protect, async (req, res) => {
   try {
     // Get all members with their savings data
     const members = await Member.find().select(
-      "name member_id total_savings wallet_balance"
+      "name member_id total_savings wallet_balance savings_override"
     );
 
     // Get savings summary for each member (only completed transactions)
     const membersWithSavings = await Promise.all(
       members.map(async (member) => {
-        const transactions = await Saving.find({ 
+        const override = member.savings_override;
+        if (override?.is_enabled) {
+          return {
+            _id: member._id,
+            name: member.name,
+            member_id: member.member_id,
+            totalDeposits: override.total_deposits || 0,
+            overrideApplied: true,
+          };
+        }
+
+        const transactions = await Saving.find({
           member_id: member._id,
-          status: "completed"
+          status: "completed",
         });
 
         const totalDeposits = transactions
@@ -526,6 +559,7 @@ router.get("/all-members", protect, async (req, res) => {
           name: member.name,
           member_id: member.member_id,
           totalDeposits,
+          overrideApplied: false,
         };
       })
     );
@@ -544,15 +578,38 @@ router.get("/admin/all", protect, adminOnly, async (req, res) => {
   try {
     // Get all members with their savings data
     const members = await Member.find().select(
-      "name member_id phone total_savings wallet_balance position"
+      "name member_id phone total_savings wallet_balance position savings_override"
     );
 
     // Get savings summary for each member (only completed transactions)
     const membersWithSavings = await Promise.all(
       members.map(async (member) => {
-        const transactions = await Saving.find({ 
+        const override = member.savings_override;
+        if (override?.is_enabled) {
+          const currentBalance = override.current_balance || 0;
+          return {
+            _id: member._id,
+            name: member.name,
+            member_id: member.member_id,
+            phone: member.phone,
+            position: member.position,
+            currentBalance,
+            totalDeposits: override.total_deposits || 0,
+            totalWithdrawals: override.total_withdrawals || 0,
+            totalInterestEarned: override.total_interest_earned || 0,
+            totalTransactionFees: override.total_transaction_fees || 0,
+            totalLockedSavings: override.total_locked_savings || 0,
+            lockedDepositsCount: 0,
+            earliestUnlockDate: null,
+            lockPeriodDetails: [],
+            lastTransaction: override.last_transaction || null,
+            overrideApplied: true,
+          };
+        }
+
+        const transactions = await Saving.find({
           member_id: member._id,
-          status: "completed"
+          status: "completed",
         }).sort({
           created_at: -1,
         });
@@ -621,6 +678,7 @@ router.get("/admin/all", protect, adminOnly, async (req, res) => {
           lockPeriodDetails, // Include lock period information
           lastTransaction:
             transactions.length > 0 ? transactions[0].created_at : null,
+          overrideApplied: false,
         };
       })
     );
@@ -634,6 +692,81 @@ router.get("/admin/all", protect, adminOnly, async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching all savings:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Admin override for member savings display values
+router.put("/admin/override/:memberId", protect, adminOnly, async (req, res) => {
+  try {
+    const member = await Member.findById(req.params.memberId);
+    if (!member) {
+      return res.status(404).json({ success: false, error: "Member not found" });
+    }
+
+    const toNumber = (value) =>
+      value === null || value === undefined || value === "" ? 0 : Number(value);
+
+    const payload = {
+      is_enabled: true,
+      current_balance: Math.max(0, toNumber(req.body.currentBalance)),
+      total_deposits: Math.max(0, toNumber(req.body.totalDeposits)),
+      total_withdrawals: Math.max(0, toNumber(req.body.totalWithdrawals)),
+      total_interest_earned: Math.max(0, toNumber(req.body.totalInterestEarned)),
+      total_transaction_fees: Math.max(0, toNumber(req.body.totalTransactionFees)),
+      total_locked_savings: Math.max(0, toNumber(req.body.totalLockedSavings)),
+      last_transaction: req.body.lastTransaction ? new Date(req.body.lastTransaction) : new Date(),
+      updated_at: new Date(),
+    };
+
+    member.savings_override = payload;
+    member.total_savings = payload.current_balance;
+    member.wallet_balance = payload.current_balance;
+
+    await member.save();
+
+    if (req.app.get("io")) {
+      req.app.get("io").emit("saving:new", { memberId: member._id });
+      req.app.get("io").emit("memberUpdated", member);
+    }
+
+    res.json({ success: true, data: member });
+  } catch (error) {
+    console.error("Error updating savings override:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Clear admin savings override for a member
+router.put("/admin/override/:memberId/clear", protect, adminOnly, async (req, res) => {
+  try {
+    const member = await Member.findById(req.params.memberId);
+    if (!member) {
+      return res.status(404).json({ success: false, error: "Member not found" });
+    }
+
+    member.savings_override = {
+      is_enabled: false,
+      current_balance: 0,
+      total_deposits: 0,
+      total_withdrawals: 0,
+      total_interest_earned: 0,
+      total_transaction_fees: 0,
+      total_locked_savings: 0,
+      last_transaction: null,
+      updated_at: new Date(),
+    };
+
+    await member.save();
+
+    if (req.app.get("io")) {
+      req.app.get("io").emit("saving:new", { memberId: member._id });
+      req.app.get("io").emit("memberUpdated", member);
+    }
+
+    res.json({ success: true, data: member });
+  } catch (error) {
+    console.error("Error clearing savings override:", error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
