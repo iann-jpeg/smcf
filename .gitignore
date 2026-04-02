@@ -55,3 +55,7 @@ data/
 # Temp files
 .tmp_*
 *.tmp
+
+# Member statement exports (sensitive)
+**/member-statements*.pdf
+**/member-statements*.json
