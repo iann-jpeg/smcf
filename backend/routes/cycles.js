@@ -40,6 +40,20 @@ router.get("/current", protect, async (req, res) => {
         "next_recipient",
         "name phone member_id position"
       );
+    } else if (!cycle.next_recipient) {
+      // Backfill next recipient if it was never set on an existing cycle
+      const fallbackRecipient = await Member.findOne({
+        member_type: { $ne: "wallet_only" }
+      }).sort({ position: 1 });
+
+      if (fallbackRecipient) {
+        cycle.next_recipient = fallbackRecipient._id;
+        await cycle.save();
+        cycle = await cycle.populate(
+          "next_recipient",
+          "name phone member_id position"
+        );
+      }
     }
 
     // Calculate real-time stats
