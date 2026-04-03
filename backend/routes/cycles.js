@@ -252,6 +252,62 @@ router.get("/:cycleNumber/stats", protect, async (req, res) => {
   }
 });
 
+// Fix current cycle data (admin only - one-time use)
+router.post("/fix-current", protect, adminOnly, async (req, res) => {
+  try {
+    // 1. Mark all existing cycles as completed
+    await Cycle.updateMany({}, { status: "completed" });
+
+    // 2. Find the last member who was paid to determine the next recipient
+    const lastPaidCycle = await Cycle.findOne({ recipient_paid: true }).sort({ cycle_number: -1 });
+    const lastPaidMember = lastPaidCycle ? await Member.findById(lastPaidCycle.recipient_id) : null;
+    const lastRecipientPosition = lastPaidMember?.position || 0;
+
+    let nextRecipient = await Member.findOne({
+      position: { $gt: lastRecipientPosition },
+      status: "active",
+      member_type: { $ne: "wallet_only" }
+    }).sort({ position: 1 });
+
+    // If we're at the end, loop back to the beginning
+    if (!nextRecipient) {
+      nextRecipient = await Member.findOne({
+        status: "active",
+        member_type: { $ne: "wallet_only" }
+      }).sort({ position: 1 });
+    }
+
+    if (!nextRecipient) {
+      return res.status(404).json({ success: false, error: "No active members found to set as next recipient." });
+    }
+
+    // 3. Create the new, correct cycle
+    const totalMembers = await Member.countDocuments({ member_type: { $ne: "wallet_only" } });
+    const cycleStartDate = new Date(); // Starts now
+    const cycleEndDate = new Date(cycleStartDate.getTime() + 5 * 24 * 60 * 60 * 1000); // 5 days from now
+
+    const newCycle = await Cycle.create({
+      cycle_number: 17,
+      start_date: cycleStartDate,
+      end_date: cycleEndDate,
+      status: "active",
+      total_members: totalMembers,
+      next_recipient: nextRecipient._id,
+    });
+
+    const populatedCycle = await newCycle.populate("next_recipient", "name phone member_id position");
+
+    res.status(201).json({
+      success: true,
+      message: "Successfully reset to Cycle #17.",
+      data: populatedCycle,
+    });
+
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Delete all cycles (admin only - for system reset)
 router.delete("/", protect, adminOnly, async (req, res) => {
   try {
