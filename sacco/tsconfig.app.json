@@ -6,6 +6,7 @@
     "module": "ESNext",
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
+    "ignoreDeprecations": "6.0",
     "types": [],
 
     /* Bundler mode */
