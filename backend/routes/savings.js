@@ -836,12 +836,14 @@ router.post("/admin/approve-withdrawal/:id", protect, adminOnly, async (req, res
       });
     }
 
+    const override = member?.savings_override;
+
     // Get the ACTUAL current balance from most recent completed transaction (not wallet_balance field)
     const latestTransaction = await Saving.findOne({ 
       member_id: saving.member_id._id,
       status: "completed"
     }).sort({ created_at: -1 });
-    const actualCurrentBalance = latestTransaction ? latestTransaction.balance_after : 0;
+    let actualCurrentBalance = latestTransaction ? latestTransaction.balance_after : 0;
 
     // Check if this is an early withdrawal from locked deposits
     const lockedDeposits = await Saving.find({
@@ -851,7 +853,12 @@ router.post("/admin/approve-withdrawal/:id", protect, adminOnly, async (req, res
       unlock_date: { $gt: new Date() },
     }).sort({ created_at: 1 }); // FIFO
 
-    const totalLockedAmount = lockedDeposits.reduce((sum, dep) => sum + (dep.amount || 0), 0);
+    let totalLockedAmount = lockedDeposits.reduce((sum, dep) => sum + (dep.amount || 0), 0);
+
+    if (override?.is_enabled) {
+      actualCurrentBalance = override.current_balance || 0;
+      totalLockedAmount = override.total_locked_savings || 0;
+    }
     const unlockedBalanceAtApproval = Math.max(0, actualCurrentBalance - totalLockedAmount);
     const amountSubjectToEarlyPenalty = Math.max(0, saving.amount - unlockedBalanceAtApproval);
 
@@ -916,13 +923,34 @@ router.post("/admin/approve-withdrawal/:id", protect, adminOnly, async (req, res
     }
 
     // Update member's total_savings, wallet_balance and total_transaction_fees
-    await Member.findByIdAndUpdate(saving.member_id._id, {
-      $inc: { 
-        total_savings: -totalDeduction,
-        wallet_balance: -totalDeduction,
-        total_transaction_fees: withdrawalFee
-      },
-    });
+    if (override?.is_enabled) {
+      const overrideLockedSavings = override.total_locked_savings || 0;
+      const lockedDeduction = Math.min(overrideLockedSavings, amountSubjectToEarlyPenalty);
+
+      await Member.findByIdAndUpdate(saving.member_id._id, {
+        $inc: {
+          total_savings: -totalDeduction,
+          wallet_balance: -totalDeduction,
+          total_transaction_fees: withdrawalFee,
+        },
+        $set: {
+          "savings_override.current_balance": actualCurrentBalance - totalDeduction,
+          "savings_override.total_withdrawals": (override.total_withdrawals || 0) + saving.amount,
+          "savings_override.total_transaction_fees": (override.total_transaction_fees || 0) + withdrawalFee,
+          "savings_override.total_locked_savings": Math.max(0, overrideLockedSavings - lockedDeduction),
+          "savings_override.last_transaction": new Date(),
+          "savings_override.updated_at": new Date(),
+        },
+      });
+    } else {
+      await Member.findByIdAndUpdate(saving.member_id._id, {
+        $inc: {
+          total_savings: -totalDeduction,
+          wallet_balance: -totalDeduction,
+          total_transaction_fees: withdrawalFee,
+        },
+      });
+    }
 
     // Update saving record with proper balance tracking and penalty info
     saving.balance_before = actualCurrentBalance;
