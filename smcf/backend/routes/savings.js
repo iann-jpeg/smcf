@@ -287,36 +287,45 @@ router.post("/withdraw", protect, async (req, res) => {
       });
     }
 
-    // Check for locked deposits that would prevent withdrawal
-    const lockedDeposits = await Saving.find({
-      member_id: memberId,
-      transaction_type: "deposit",
-      status: "completed",
-      unlock_date: { $gt: new Date() }, // Still locked
-    }).sort({ unlock_date: 1 });
+    // Use override values if enabled to keep balance checks consistent with the UI
+    const member = await Member.findById(memberId).select("savings_override");
+    const override = member?.savings_override;
 
-    // Calculate total locked amount
     let totalLockedAmount = 0;
     let earliestUnlockDate = null;
-    
-    if (lockedDeposits.length > 0) {
-      // Calculate locked amount by finding balance at each locked deposit
-      for (const deposit of lockedDeposits) {
-        totalLockedAmount += deposit.amount;
+    let currentBalance = 0;
+
+    if (override?.is_enabled) {
+      currentBalance = override.current_balance || 0;
+      totalLockedAmount = override.total_locked_savings || 0;
+    } else {
+      // Check for locked deposits that would prevent withdrawal
+      const lockedDeposits = await Saving.find({
+        member_id: memberId,
+        transaction_type: "deposit",
+        status: "completed",
+        unlock_date: { $gt: new Date() }, // Still locked
+      }).sort({ unlock_date: 1 });
+
+      // Calculate total locked amount
+      if (lockedDeposits.length > 0) {
+        for (const deposit of lockedDeposits) {
+          totalLockedAmount += deposit.amount;
+        }
+        earliestUnlockDate = lockedDeposits[0].unlock_date;
       }
-      earliestUnlockDate = lockedDeposits[0].unlock_date;
+
+      // Get current balance from most recent completed transaction
+      const lastTransaction = await Saving.findOne({
+        member_id: memberId,
+        status: "completed",
+      }).sort({ created_at: -1 });
+      currentBalance = lastTransaction ? lastTransaction.balance_after : 0;
     }
 
     // Calculate withdrawal fee to check if member can afford it
     const withdrawalFee = calculateWithdrawalFee(amount);
     const totalDeduction = amount + withdrawalFee;
-
-    // Get current balance from most recent completed transaction
-    const lastTransaction = await Saving.findOne({ 
-      member_id: memberId,
-      status: "completed" 
-    }).sort({ created_at: -1 });
-    const currentBalance = lastTransaction ? lastTransaction.balance_after : 0;
 
     // Calculate available (unlocked) balance
     const availableBalance = currentBalance - totalLockedAmount;
@@ -1544,6 +1553,9 @@ router.post("/check-early-withdrawal", protect, async (req, res) => {
       });
     }
 
+    const member = await Member.findById(memberId).select("savings_override");
+    const override = member?.savings_override;
+
     // Get all locked deposits for this member
     const lockedDeposits = await Saving.find({
       member_id: memberId,
@@ -1552,7 +1564,17 @@ router.post("/check-early-withdrawal", protect, async (req, res) => {
       unlock_date: { $gt: new Date() },
     }).sort({ created_at: 1 }); // Oldest first (FIFO)
 
-    if (lockedDeposits.length === 0) {
+    // Estimate unlocked amount first; only the remainder of requested amount can attract early-withdrawal penalties.
+    const latestCompletedTxn = await Saving.findOne({ member_id: memberId, status: "completed" }).sort({ created_at: -1 });
+    let currentBalance = latestCompletedTxn ? latestCompletedTxn.balance_after : 0;
+    let totalLockedAmount = lockedDeposits.reduce((sum, dep) => sum + (dep.amount || 0), 0);
+
+    if (override?.is_enabled) {
+      currentBalance = override.current_balance || 0;
+      totalLockedAmount = override.total_locked_savings || 0;
+    }
+
+    if (totalLockedAmount <= 0) {
       return res.json({
         success: true,
         early_withdrawal_allowed: true,
@@ -1564,10 +1586,6 @@ router.post("/check-early-withdrawal", protect, async (req, res) => {
       });
     }
 
-    // Estimate unlocked amount first; only the remainder of requested amount can attract early-withdrawal penalties.
-    const latestCompletedTxn = await Saving.findOne({ member_id: memberId, status: "completed" }).sort({ created_at: -1 });
-    const currentBalance = latestCompletedTxn ? latestCompletedTxn.balance_after : 0;
-    const totalLockedAmount = lockedDeposits.reduce((sum, dep) => sum + (dep.amount || 0), 0);
     const unlockedBalance = Math.max(0, currentBalance - totalLockedAmount);
     const amountSubjectToPenalty = Math.max(0, amount - unlockedBalance);
 
@@ -1584,6 +1602,22 @@ router.post("/check-early-withdrawal", protect, async (req, res) => {
         affected_deposits: [],
         credit_score_penalty: 0,
         warning: "Withdrawal can be fulfilled from unlocked funds. No early withdrawal penalty will apply.",
+      });
+    }
+
+    if (lockedDeposits.length === 0) {
+      const withdrawalFee = calculateWithdrawalFee(amount);
+      return res.json({
+        success: true,
+        early_withdrawal_allowed: true,
+        requested_amount: amount,
+        penalty_amount: 0,
+        withdrawal_fee: withdrawalFee,
+        net_amount: amount,
+        final_amount: amount - withdrawalFee,
+        affected_deposits: [],
+        credit_score_penalty: settings.credit_penalty,
+        warning: `Locked funds detected (KES ${totalLockedAmount.toFixed(2)}). Early withdrawal penalty will be calculated during approval.`,
       });
     }
 
