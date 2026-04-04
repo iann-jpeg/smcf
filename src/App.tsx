@@ -25,7 +25,7 @@ function SocketNotificationHandler({ children }: { children: React.ReactNode }) 
 function SaccoBridge() {
   useEffect(() => {
     // Force-load SACCO app entry in case a stale root bundle handles /sacco/*.
-    window.location.replace("/sacco/index.html");
+    window.location.replace("/sacco/");
   }, []);
 
   return null;
