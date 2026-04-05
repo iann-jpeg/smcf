@@ -172,6 +172,67 @@ export function exportGuarantorExposure(
   doc.save("guarantor-exposure.pdf");
 }
 
+export function exportLoanApplicationReceipt(data: {
+  loanNumber: string;
+  memberName: string;
+  memberId: string;
+  appliedBy?: string;
+  appliedAt?: string | Date;
+  principal: number;
+  interestRate: number;
+  interestModel: "reducing" | "flat" | string;
+  termMonths: number;
+  purpose?: string;
+  riskRating?: string;
+  monthlyPayment?: number;
+  totalPayable?: number;
+  guarantors?: Array<{ name: string; memberId: string; guaranteeAmount?: number; savings?: number }>;
+}) {
+  const doc = initDoc("Loan Application Receipt");
+  const appliedDate = data.appliedAt ? DATE_FMT.format(new Date(data.appliedAt)) : DATE_FMT.format(new Date());
+  const modelLabel = data.interestModel === "reducing" ? "Reducing Balance" : data.interestModel === "flat" ? "Flat Rate" : String(data.interestModel || "");
+  const safeLoanNumber = String(data.loanNumber || "loan").replace(/[^a-zA-Z0-9-_]/g, "");
+
+  autoTable(doc, {
+    startY: 54,
+    head: [["Field", "Value"]],
+    body: [
+      ["Loan Number", data.loanNumber || "—"],
+      ["Applicant", `${data.memberName || ""}${data.memberId ? ` (${data.memberId})` : ""}`.trim() || "—"],
+      ["Applied By", data.appliedBy || "Member Portal"],
+      ["Applied On", appliedDate],
+      ["Principal", `KES ${Number(data.principal || 0).toLocaleString()}`],
+      ["Interest", `${Number(data.interestRate || 0)}% ${modelLabel}`.trim()],
+      ["Term", `${Number(data.termMonths || 0)} months`],
+      ["Purpose", data.purpose || "—"],
+      ["Monthly Payment", data.monthlyPayment ? `KES ${Number(data.monthlyPayment).toLocaleString()}` : "—"],
+      ["Total Payable", data.totalPayable ? `KES ${Number(data.totalPayable).toLocaleString()}` : "—"],
+      ["Risk Rating", data.riskRating ? data.riskRating.toUpperCase() : "—"],
+    ],
+    headStyles: { fillColor: HEADER_COLOR },
+    styles: { halign: "left" },
+    columnStyles: { 1: { halign: "right" } },
+  });
+
+  if (data.guarantors && data.guarantors.length > 0) {
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 10,
+      head: [["Guarantor", "Member ID", "Guarantee (KES)", "Savings (KES)"]],
+      body: data.guarantors.map((g) => [
+        g.name,
+        g.memberId,
+        Number(g.guaranteeAmount ?? 0).toLocaleString(),
+        Number(g.savings ?? 0).toLocaleString(),
+      ]),
+      headStyles: { fillColor: HEADER_COLOR },
+      columnStyles: { 2: { halign: "right" }, 3: { halign: "right" } },
+    });
+  }
+
+  addPageFooters(doc, `Loan Application Receipt — ${data.loanNumber || ""}`.trim());
+  doc.save(`loan-application-${safeLoanNumber || "loan"}.pdf`);
+}
+
 export function exportMyLoans(
   memberName: string,
   memberId: string,

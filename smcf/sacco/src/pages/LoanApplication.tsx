@@ -17,9 +17,10 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Calculator, Users, ShieldCheck, CheckCircle2, Clock, XCircle, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Calculator, Users, ShieldCheck, CheckCircle2, Clock, XCircle, AlertTriangle, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { exportLoanApplicationReceipt } from "@/lib/pdf-export";
 
 type ApprovalStatus = "pending" | "approved" | "rejected";
 
@@ -27,6 +28,30 @@ interface ApprovalStep {
   role: string;
   label: string;
   status: ApprovalStatus;
+}
+
+interface LoanReceiptGuarantor {
+  name: string;
+  memberId: string;
+  guaranteeAmount: number;
+  savings: number;
+}
+
+interface LoanReceiptData {
+  loanNumber: string;
+  memberName: string;
+  memberId: string;
+  appliedBy?: string;
+  appliedAt?: string;
+  principal: number;
+  interestRate: number;
+  interestModel: "reducing" | "flat";
+  termMonths: number;
+  purpose?: string;
+  riskRating?: string;
+  monthlyPayment?: number;
+  totalPayable?: number;
+  guarantors?: LoanReceiptGuarantor[];
 }
 
 const APPROVAL_THRESHOLDS = [
@@ -75,6 +100,7 @@ export default function LoanApplication() {
   const [selectedGuarantors, setSelectedGuarantors] = useState<string[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [submittedLoan, setSubmittedLoan] = useState<LoanReceiptData | null>(null);
 
   const principalNum = Number(principal) || 0;
   const rateNum = Number(interestRate) || 0;
@@ -100,6 +126,9 @@ export default function LoanApplication() {
   const availableGuarantors = members.filter(
     (m: any) => m.id !== selectedMemberId && m.status === "active"
   );
+
+  const shouldEnforceEligibility = !isBypassUser && !isStaff;
+  const selectableMembers = isStaff ? members : members.filter((m: any) => m.status === "active");
 
   // Compute SACCO-wide aggregates for the master algorithm
   const saccoCapital = useMemo(() => members.reduce((s: number, m: any) => s + Number(m.savings) + Number(m.shares), 0), [members]);
@@ -134,7 +163,7 @@ export default function LoanApplication() {
   const maxBorrowing = safetyResult?.layer1.safeLoanLimit ?? (selectedMember ? (selectedMember.savings + selectedMember.shares) * 3 : 0);
 
   const eligibilityIssues: string[] = [];
-  if (selectedMember && !isBypassUser) {
+  if (selectedMember && shouldEnforceEligibility) {
     if (selectedMember.status !== "active") eligibilityIssues.push("Member is not active");
     if (safetyResult && safetyResult.decision === "REJECT") {
       safetyResult.reasons.forEach((r) => eligibilityIssues.push(r));
@@ -154,7 +183,7 @@ export default function LoanApplication() {
       toast({ title: "Validation Error", description: "Please complete all required fields.", variant: "destructive" });
       return;
     }
-    if (eligibilityIssues.length > 0) {
+    if (shouldEnforceEligibility && eligibilityIssues.length > 0) {
       toast({ title: "Eligibility Failed", description: eligibilityIssues[0], variant: "destructive" });
       return;
     }
@@ -174,7 +203,34 @@ export default function LoanApplication() {
         })),
       });
 
-      const loanNumber = response.data?.loanNumber ?? "LN-NEW";
+      const loanData = (response as any)?.data ?? response;
+      const loanNumber = loanData?.loanNumber ?? loanData?.loan_number ?? "LN-NEW";
+      const receiptGuarantors: LoanReceiptGuarantor[] = selectedGuarantors.map((gId) => {
+        const guarantor = members.find((m: any) => m.id === gId);
+        return {
+          name: guarantor?.name ?? "Guarantor",
+          memberId: guarantor?.member_id ?? guarantor?.memberId ?? "",
+          guaranteeAmount: Math.round(principalNum / selectedGuarantors.length),
+          savings: Number(guarantor?.savings ?? 0),
+        };
+      });
+
+      setSubmittedLoan({
+        loanNumber,
+        memberName: selectedMember?.name ?? "Member",
+        memberId: selectedMember?.member_id ?? selectedMember?.memberId ?? "",
+        appliedBy: user?.fullName ?? user?.email ?? "Staff",
+        appliedAt: loanData?.createdAt ?? loanData?.created_at ?? new Date().toISOString(),
+        principal: principalNum,
+        interestRate: rateNum,
+        interestModel,
+        termMonths: termNum,
+        purpose,
+        riskRating: safetyResult?.layer2.riskLevel.toLowerCase() ?? riskBreakdown?.riskLevel ?? "medium",
+        monthlyPayment,
+        totalPayable,
+        guarantors: receiptGuarantors,
+      });
       setSubmitted(true);
       toast({ title: "Loan Application Submitted", description: `Application ${loanNumber} for KES ${principalNum.toLocaleString()} submitted for approval.` });
     } catch (err: any) {
@@ -238,7 +294,12 @@ export default function LoanApplication() {
 
         <div className="flex gap-3">
           <Button variant="outline" onClick={() => navigate("/loans")}>Back to Loans</Button>
-          <Button variant="outline" onClick={() => { setSubmitted(false); }}>New Application</Button>
+          {isStaff && submittedLoan && (
+            <Button variant="outline" className="gap-2" onClick={() => exportLoanApplicationReceipt(submittedLoan)}>
+              <Download className="h-4 w-4" /> Download Receipt
+            </Button>
+          )}
+          <Button variant="outline" onClick={() => { setSubmitted(false); setSubmittedLoan(null); }}>New Application</Button>
         </div>
       </div>
     );
@@ -280,7 +341,7 @@ export default function LoanApplication() {
                     <Select value={selectedMemberId} onValueChange={setSelectedMemberId}>
                       <SelectTrigger><SelectValue placeholder="Select member" /></SelectTrigger>
                       <SelectContent>
-                        {members.filter((m: any) => m.status === "active").map((m: any) => (
+                        {selectableMembers.map((m: any) => (
                           <SelectItem key={m.id} value={m.id}>
                             {m.member_id} — {m.name}
                           </SelectItem>
@@ -489,7 +550,7 @@ export default function LoanApplication() {
             </CardContent>
           </Card>
 
-          <Button className="w-full gap-2" size="lg" onClick={handleSubmit} disabled={!selectedMemberId || principalNum <= 0 || (!isBypassUser && eligibilityIssues.length > 0) || submitting}>
+          <Button className="w-full gap-2" size="lg" onClick={handleSubmit} disabled={!selectedMemberId || principalNum <= 0 || (shouldEnforceEligibility && eligibilityIssues.length > 0) || submitting}>
             {submitting ? "Submitting..." : "Submit Application"}
           </Button>
         </div>

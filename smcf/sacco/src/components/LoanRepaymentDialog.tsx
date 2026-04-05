@@ -61,8 +61,9 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
   function startPolling(id: string) {
     pollRef.current = setInterval(async () => {
       try {
-        // api.get already unwraps json.data, so d = { status, mpesaRef, loanCompleted, ... }
-        const d = await api.get<{ status: string; mpesaRef?: string; loanCompleted?: boolean; resultDesc?: string }>(`/mpesa/repay-status/${id}`);
+        const d = await api.get<{ status: string; mpesaRef?: string; loanCompleted?: boolean; resultDesc?: string }>(
+          `/mpesa/repay-status/${id}`
+        );
         if (d.status === "success") {
           stopPolling();
           setMpesaRef(d.mpesaRef ?? null);
