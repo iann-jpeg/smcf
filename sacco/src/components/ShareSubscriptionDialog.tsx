@@ -67,7 +67,7 @@ export function ShareSubscriptionDialog({ open, onClose, memberId, memberPhone, 
     pollRef.current = setInterval(async () => {
       try {
         const res = await api.get(`/mpesa/status/${id}`);
-        const d = (res as any)?.data ?? res;
+        const d = res as any;
         if (d.status === "success") {
           stopPolling();
           setMpesaRef(d.mpesaRef ?? null);

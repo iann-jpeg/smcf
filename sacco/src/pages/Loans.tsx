@@ -10,10 +10,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Plus, Gavel, CreditCard, Loader2, CheckCircle2, ArrowRight } from "lucide-react";
+import { Plus, Gavel, CreditCard, Loader2, CheckCircle2, ArrowRight, Download } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { exportLoanApplicationReceipt } from "@/lib/pdf-export";
 import { toast } from "sonner";
 
 function statusBadge(status: string) {
@@ -97,6 +98,33 @@ export default function Loans() {
     }
   }
 
+  function handleDownloadReceipt(loan: any) {
+    const ref = loan.loan_number ?? "this loan";
+    if (!confirm(`Download receipt for ${ref}?`)) return;
+    const guarantors = (loan.loan_guarantors ?? []).map((g: any) => ({
+      name: g.members?.name ?? "Guarantor",
+      memberId: g.members?.member_id ?? g.member_id ?? "",
+      guaranteeAmount: Number(g.guarantee_amount ?? 0),
+      savings: Number(g.members?.savings ?? 0),
+    }));
+
+    exportLoanApplicationReceipt({
+      loanNumber: loan.loan_number ?? "LN-NEW",
+      memberName: loan.members?.name ?? "Member",
+      memberId: loan.members?.member_id ?? loan.member_id ?? "",
+      appliedAt: loan.applied_at ?? loan.created_at,
+      principal: Number(loan.principal ?? 0),
+      interestRate: Number(loan.interest_rate ?? 0),
+      interestModel: loan.interest_model ?? "reducing",
+      termMonths: Number(loan.term_months ?? 0),
+      purpose: loan.purpose ?? undefined,
+      riskRating: loan.risk_rating ?? undefined,
+      monthlyPayment: loan.monthly_installment ? Number(loan.monthly_installment) : undefined,
+      totalPayable: loan.total_payable ? Number(loan.total_payable) : undefined,
+      guarantors,
+    });
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -151,29 +179,40 @@ export default function Loans() {
                     <TableCell><Badge variant={riskBadge(loan.risk_rating ?? "medium")}>{loan.risk_rating ?? "medium"}</Badge></TableCell>
                     <TableCell><Badge variant={statusBadge(loan.status)}>{loan.status}</Badge></TableCell>
                     <TableCell>
-                      {loan.status === "approved" && (
+                      <div className="flex flex-wrap gap-2">
+                        {loan.status === "approved" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5 text-xs border-green-400 text-green-600 hover:bg-green-50 hover:text-green-700 whitespace-nowrap"
+                            onClick={() => handleDisburse(loan.id)}
+                            disabled={disbursing}
+                          >
+                            <ArrowRight className="h-3.5 w-3.5" />
+                            Disburse
+                          </Button>
+                        )}
+                        {["active", "disbursed", "repaying"].includes(loan.status) && Number(loan.balance) > 0 && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5 text-xs border-blue-400 text-blue-600 hover:bg-blue-50 hover:text-blue-700 whitespace-nowrap"
+                            onClick={() => openPayDialog(loan)}
+                          >
+                            <CreditCard className="h-3.5 w-3.5" />
+                            Record Payment
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           variant="outline"
-                          className="gap-1.5 text-xs border-green-400 text-green-600 hover:bg-green-50 hover:text-green-700 whitespace-nowrap"
-                          onClick={() => handleDisburse(loan.id)}
-                          disabled={disbursing}
+                          className="gap-1.5 text-xs"
+                          onClick={() => handleDownloadReceipt(loan)}
                         >
-                          <ArrowRight className="h-3.5 w-3.5" />
-                          Disburse
+                          <Download className="h-3.5 w-3.5" />
+                          Receipt
                         </Button>
-                      )}
-                      {["active", "disbursed", "repaying"].includes(loan.status) && Number(loan.balance) > 0 && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="gap-1.5 text-xs border-blue-400 text-blue-600 hover:bg-blue-50 hover:text-blue-700 whitespace-nowrap"
-                          onClick={() => openPayDialog(loan)}
-                        >
-                          <CreditCard className="h-3.5 w-3.5" />
-                          Record Payment
-                        </Button>
-                      )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

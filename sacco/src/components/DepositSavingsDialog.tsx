@@ -60,7 +60,7 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone }: P
     pollRef.current = setInterval(async () => {
       try {
         const res = await api.get(`/mpesa/status/${id}`);
-        const d   = res.data?.data ?? res.data;
+        const d   = res as any;
         if (d.status === "success") {
           stopPolling();
           playAtmDepositSound();
@@ -100,7 +100,7 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone }: P
         amount: num,
         phone: phone.trim(),
       });
-      const id = res.data?.data?.checkoutRequestId;
+      const id = (res as any)?.checkoutRequestId || (res as any)?.data?.checkoutRequestId;
       if (!id) throw new Error("No checkout ID returned");
       setCheckoutId(id);
       setStep("processing");
