@@ -179,7 +179,7 @@ export default function LoanApplication() {
   };
 
   const handleSubmit = async () => {
-    if (!selectedMemberId || principalNum <= 0 || termNum <= 0 || selectedGuarantors.length < 2) {
+    if (!selectedMemberId || principalNum <= 0 || termNum <= 0 || (!isStaff && selectedGuarantors.length < 2)) {
       toast({ title: "Validation Error", description: "Please complete all required fields.", variant: "destructive" });
       return;
     }
