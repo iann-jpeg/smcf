@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useMembers } from "@/hooks/useMembers";
@@ -32,10 +32,10 @@ function riskBadgeVariant(level: string) {
   return "destructive" as const;
 }
 
-// Map approval levels based on loan amount
-function getRequiredLevels(principal: number): string[] {
-  if (principal <= 100_000) return ["credit_officer"];
-  if (principal <= 500_000) return ["credit_officer", "credit_committee"];
+// Map approval levels based on loan amount + system config
+function getRequiredLevels(principal: number, autoApproveLimit: number, committeeThreshold: number): string[] {
+  if (principal <= autoApproveLimit) return ["credit_officer"];
+  if (principal <= committeeThreshold) return ["credit_officer", "credit_committee"];
   return ["credit_officer", "credit_committee", "board"];
 }
 
@@ -74,6 +74,10 @@ export default function LoanApprovals() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { data: membersData = [] } = useMembers();
+  const { data: systemConfig } = useQuery({
+    queryKey: ["system-config"],
+    queryFn: async () => api.get("/config"),
+  });
 
   const [activeRole, setActiveRole] = useState("credit_officer");
   const [reviewLoan, setReviewLoan] = useState<any>(null);
@@ -106,8 +110,10 @@ export default function LoanApprovals() {
 
   // Compute approval status for each loan
   const enrichedLoans = useMemo(() => {
+    const autoApproveLimit = Math.max(0, Number(systemConfig?.autoApproveLimit ?? 100_000));
+    const committeeThreshold = Math.max(autoApproveLimit, Number(systemConfig?.committeeThreshold ?? 500_000));
     return loans.map((loan: any) => {
-      const requiredLevels = getRequiredLevels(loan.principal);
+      const requiredLevels = getRequiredLevels(loan.principal, autoApproveLimit, committeeThreshold);
       const approvals = loan.loan_approvals || [];
       const levels = requiredLevels.map((level) => {
         const approval = approvals.find((a: any) => a.approval_level === level);
@@ -130,7 +136,7 @@ export default function LoanApprovals() {
 
       return { ...loan, levels, overallStatus, nextPending, risk, memberName: loan.members?.name ?? "Unknown" };
     });
-  }, [loans, membersData]);
+  }, [loans, membersData, systemConfig]);
 
   // Filter: only show loans that have the active role in their required levels
   const roleLoans = enrichedLoans.filter((l: any) => l.levels.some((lv: any) => lv.role === activeRole));

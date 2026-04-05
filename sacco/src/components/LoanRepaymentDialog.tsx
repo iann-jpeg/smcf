@@ -94,6 +94,10 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
   async function handlePay() {
     const num = Number(amount);
     if (!num || num < 10)  { toast.error("Enter an amount of at least KES 10"); return; }
+    if (num > Number(loan.balance)) {
+      toast.error(`Amount exceeds outstanding balance KES ${Number(loan.balance).toLocaleString()}`);
+      return;
+    }
     if (!phone.trim())     { toast.error("Enter your M-Pesa phone number"); return; }
 
     setLoading(true);

@@ -1,7 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useMembers } from "@/hooks/useMembers";
+import { useAuth } from "@/hooks/useAuth";
 import { api, normalizeTransaction } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,10 +18,20 @@ import { toast } from "sonner";
 
 export default function Accounts() {
   const qc = useQueryClient();
+  const { roles } = useAuth();
+  const isAdmin = roles.includes("admin");
   const { data: members = [], isLoading: membersLoading } = useMembers();
   const { data: transactions = [], isLoading: txnLoading } = useTransactions(50);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [decliningId, setDecliningId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get("tab") || "coa";
+
+  useEffect(() => {
+    if (!isAdmin && activeTab === "savings-interest") {
+      setSearchParams({ tab: "coa" });
+    }
+  }, [activeTab, isAdmin, setSearchParams]);
 
   // Dividend distribution state
   const [dividendAmount, setDividendAmount] = useState("");
@@ -64,6 +76,7 @@ export default function Accounts() {
       const arr = Array.isArray(res) ? res : (res as any).data ?? [];
       return arr as any[];
     },
+    enabled: isAdmin,
   });
 
   async function confirmPayment(id: string) {
@@ -199,7 +212,7 @@ export default function Accounts() {
         <p className="text-muted-foreground text-sm">Double-entry accounting system</p>
       </div>
 
-      <Tabs defaultValue="coa">
+      <Tabs value={activeTab} onValueChange={(val) => setSearchParams({ tab: val })}>
         <TabsList>
           <TabsTrigger value="coa">Chart of Accounts</TabsTrigger>
           <TabsTrigger value="transactions">Recent Transactions</TabsTrigger>
@@ -215,10 +228,12 @@ export default function Accounts() {
             <Coins className="mr-1.5 h-3.5 w-3.5" />
             Dividends
           </TabsTrigger>
-          <TabsTrigger value="savings-interest">
-            <Percent className="mr-1.5 h-3.5 w-3.5" />
-            Savings Interest
-          </TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="savings-interest">
+              <Percent className="mr-1.5 h-3.5 w-3.5" />
+              Savings Interest
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="coa">
@@ -611,179 +626,181 @@ export default function Accounts() {
 
         </TabsContent>
 
-        {/* ── Savings Interest Distribution ─────────────────────────────── */}
-        <TabsContent value="savings-interest" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-heading text-lg flex items-center gap-2">
-                <Percent className="h-5 w-5 text-emerald-600" />
-                Savings Interest Distribution
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Distribute savings interest to active members based on their current savings balances.
-              </p>
+        {/* ── Savings Interest Distribution (Admin only) ───────────────── */}
+        {isAdmin && (
+          <TabsContent value="savings-interest" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-heading text-lg flex items-center gap-2">
+                  <Percent className="h-5 w-5 text-emerald-600" />
+                  Savings Interest Distribution
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Distribute savings interest to active members based on their current savings balances.
+                </p>
 
-              {members.length > 0 && (() => {
-                const eligibleMembers = members.filter((m: any) => m.status === "active");
-                const totalSavings = eligibleMembers.reduce((s: number, m: any) => s + Number(m.savings), 0);
-                const eligibleCount = eligibleMembers.filter((m: any) => Number(m.savings) > 0).length;
-                return (
-                  <div className="grid grid-cols-2 gap-3 max-w-xl">
-                    <div className="rounded-lg border bg-muted/40 p-3">
-                      <p className="text-xs text-muted-foreground">Total Savings (Active)</p>
-                      <p className="font-bold text-lg">KES {totalSavings.toLocaleString()}</p>
+                {members.length > 0 && (() => {
+                  const eligibleMembers = members.filter((m: any) => m.status === "active");
+                  const totalSavings = eligibleMembers.reduce((s: number, m: any) => s + Number(m.savings), 0);
+                  const eligibleCount = eligibleMembers.filter((m: any) => Number(m.savings) > 0).length;
+                  return (
+                    <div className="grid grid-cols-2 gap-3 max-w-xl">
+                      <div className="rounded-lg border bg-muted/40 p-3">
+                        <p className="text-xs text-muted-foreground">Total Savings (Active)</p>
+                        <p className="font-bold text-lg">KES {totalSavings.toLocaleString()}</p>
+                      </div>
+                      <div className="rounded-lg border bg-muted/40 p-3">
+                        <p className="text-xs text-muted-foreground">Eligible Members</p>
+                        <p className="font-bold text-lg flex items-center gap-1">
+                          <Users className="h-4 w-4 text-muted-foreground" /> {eligibleCount}
+                        </p>
+                      </div>
                     </div>
-                    <div className="rounded-lg border bg-muted/40 p-3">
-                      <p className="text-xs text-muted-foreground">Eligible Members</p>
-                      <p className="font-bold text-lg flex items-center gap-1">
-                        <Users className="h-4 w-4 text-muted-foreground" /> {eligibleCount}
-                      </p>
+                  );
+                })()}
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 max-w-2xl">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="interest-profit">Total Profit Available (KES)</Label>
+                    <Input
+                      id="interest-profit"
+                      type="number"
+                      min={1}
+                      value={interestProfit}
+                      onChange={(e) => setInterestProfit(e.target.value)}
+                      placeholder="e.g. 200000"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="interest-rate">Interest Rate (%)</Label>
+                    <Input
+                      id="interest-rate"
+                      type="number"
+                      min={0}
+                      step={0.1}
+                      value={interestRate}
+                      onChange={(e) => setInterestRate(e.target.value)}
+                      placeholder="e.g. 5"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="interest-period">Period</Label>
+                    <Input
+                      id="interest-period"
+                      value={interestPeriod}
+                      onChange={(e) => setInterestPeriod(e.target.value)}
+                      placeholder="e.g. 2025"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    className="gap-2"
+                    onClick={previewSavingsInterest}
+                    disabled={previewing || !interestProfit || !interestPeriod.trim()}
+                  >
+                    {previewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <TrendingUp className="h-4 w-4" />}
+                    {previewing ? "Generating Preview…" : "Preview Distribution"}
+                  </Button>
+                  <Button
+                    className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                    onClick={approveSavingsInterest}
+                    disabled={approvingInterest || !interestPreview}
+                  >
+                    {approvingInterest ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                    {approvingInterest ? "Approving…" : "Approve Distribution"}
+                  </Button>
+                </div>
+
+                {interestPreview && (
+                  <div className="rounded-lg border border-blue-200 bg-blue-50/60 dark:bg-blue-900/10 dark:border-blue-800 p-4 space-y-3">
+                    <div className="flex flex-wrap items-center gap-4 text-sm">
+                      <span className="text-muted-foreground">Members:</span>
+                      <span className="font-semibold">{interestPreview.membersCount}</span>
+                      <span className="text-muted-foreground">Total Interest:</span>
+                      <span className="font-semibold">KES {Number(interestPreview.totalInterest).toLocaleString()}</span>
+                    </div>
+                    <div className="max-h-60 overflow-y-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Member</TableHead>
+                            <TableHead className="text-right">Savings</TableHead>
+                            <TableHead className="text-right">Interest</TableHead>
+                            <TableHead className="text-right">New Savings</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {interestPreview.preview?.map((row: any) => (
+                            <TableRow key={row.memberId}>
+                              <TableCell className="text-sm">{row.memberName}</TableCell>
+                              <TableCell className="text-right">KES {Number(row.savings).toLocaleString()}</TableCell>
+                              <TableCell className="text-right font-semibold text-emerald-600">KES {Number(row.interest).toLocaleString()}</TableCell>
+                              <TableCell className="text-right">KES {Number(row.newSavings).toLocaleString()}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
                     </div>
                   </div>
-                );
-              })()}
+                )}
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 max-w-2xl">
-                <div className="space-y-1.5">
-                  <Label htmlFor="interest-profit">Total Profit Available (KES)</Label>
-                  <Input
-                    id="interest-profit"
-                    type="number"
-                    min={1}
-                    value={interestProfit}
-                    onChange={(e) => setInterestProfit(e.target.value)}
-                    placeholder="e.g. 200000"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="interest-rate">Interest Rate (%)</Label>
-                  <Input
-                    id="interest-rate"
-                    type="number"
-                    min={0}
-                    step={0.1}
-                    value={interestRate}
-                    onChange={(e) => setInterestRate(e.target.value)}
-                    placeholder="e.g. 5"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="interest-period">Period</Label>
-                  <Input
-                    id="interest-period"
-                    value={interestPeriod}
-                    onChange={(e) => setInterestPeriod(e.target.value)}
-                    placeholder="e.g. 2025"
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  className="gap-2"
-                  onClick={previewSavingsInterest}
-                  disabled={previewing || !interestProfit || !interestPeriod.trim()}
-                >
-                  {previewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <TrendingUp className="h-4 w-4" />}
-                  {previewing ? "Generating Preview…" : "Preview Distribution"}
-                </Button>
-                <Button
-                  className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
-                  onClick={approveSavingsInterest}
-                  disabled={approvingInterest || !interestPreview}
-                >
-                  {approvingInterest ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                  {approvingInterest ? "Approving…" : "Approve Distribution"}
-                </Button>
-              </div>
-
-              {interestPreview && (
-                <div className="rounded-lg border border-blue-200 bg-blue-50/60 dark:bg-blue-900/10 dark:border-blue-800 p-4 space-y-3">
-                  <div className="flex flex-wrap items-center gap-4 text-sm">
-                    <span className="text-muted-foreground">Members:</span>
-                    <span className="font-semibold">{interestPreview.membersCount}</span>
-                    <span className="text-muted-foreground">Total Interest:</span>
-                    <span className="font-semibold">KES {Number(interestPreview.totalInterest).toLocaleString()}</span>
+                {interestResult && (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 dark:bg-emerald-900/10 dark:border-emerald-700 p-4 space-y-2">
+                    <p className="font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
+                      <Check className="h-4 w-4" /> Distribution complete — {interestResult.period}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      KES {Number(interestResult.totalInterest).toLocaleString()} distributed to {interestResult.membersCount} members.
+                    </p>
                   </div>
-                  <div className="max-h-60 overflow-y-auto">
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-heading text-base">Past Savings Interest Distributions</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {(savingsInterestHistory as any[]).length === 0 ? (
+                  <p className="text-center text-muted-foreground py-6 text-sm">No savings interest distributions yet.</p>
+                ) : (
+                  <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Member</TableHead>
-                          <TableHead className="text-right">Savings</TableHead>
-                          <TableHead className="text-right">Interest</TableHead>
-                          <TableHead className="text-right">New Savings</TableHead>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Period</TableHead>
+                          <TableHead className="text-right">Rate (%)</TableHead>
+                          <TableHead className="text-right">Total Interest</TableHead>
+                          <TableHead className="text-right">Members</TableHead>
+                          <TableHead>Approved By</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {interestPreview.preview?.map((row: any) => (
-                          <TableRow key={row.memberId}>
-                            <TableCell className="text-sm">{row.memberName}</TableCell>
-                            <TableCell className="text-right">KES {Number(row.savings).toLocaleString()}</TableCell>
-                            <TableCell className="text-right font-semibold text-emerald-600">KES {Number(row.interest).toLocaleString()}</TableCell>
-                            <TableCell className="text-right">KES {Number(row.newSavings).toLocaleString()}</TableCell>
+                        {(savingsInterestHistory as any[]).map((row: any) => (
+                          <TableRow key={row._id ?? row.id}>
+                            <TableCell className="text-sm">{new Date(row.approvedAt ?? row.createdAt).toLocaleDateString()}</TableCell>
+                            <TableCell className="font-medium">{row.period}</TableCell>
+                            <TableCell className="text-right">{Number(row.interestRate).toLocaleString()}</TableCell>
+                            <TableCell className="text-right font-semibold">KES {Number(row.totalInterest).toLocaleString()}</TableCell>
+                            <TableCell className="text-right">{row.membersCount}</TableCell>
+                            <TableCell className="text-sm">{row.approvedBy?.fullName || row.approvedBy?.email || "—"}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
                     </Table>
                   </div>
-                </div>
-              )}
-
-              {interestResult && (
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 dark:bg-emerald-900/10 dark:border-emerald-700 p-4 space-y-2">
-                  <p className="font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
-                    <Check className="h-4 w-4" /> Distribution complete — {interestResult.period}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    KES {Number(interestResult.totalInterest).toLocaleString()} distributed to {interestResult.membersCount} members.
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-heading text-base">Past Savings Interest Distributions</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {(savingsInterestHistory as any[]).length === 0 ? (
-                <p className="text-center text-muted-foreground py-6 text-sm">No savings interest distributions yet.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Period</TableHead>
-                        <TableHead className="text-right">Rate (%)</TableHead>
-                        <TableHead className="text-right">Total Interest</TableHead>
-                        <TableHead className="text-right">Members</TableHead>
-                        <TableHead>Approved By</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {(savingsInterestHistory as any[]).map((row: any) => (
-                        <TableRow key={row._id ?? row.id}>
-                          <TableCell className="text-sm">{new Date(row.approvedAt ?? row.createdAt).toLocaleDateString()}</TableCell>
-                          <TableCell className="font-medium">{row.period}</TableCell>
-                          <TableCell className="text-right">{Number(row.interestRate).toLocaleString()}</TableCell>
-                          <TableCell className="text-right font-semibold">KES {Number(row.totalInterest).toLocaleString()}</TableCell>
-                          <TableCell className="text-right">{row.membersCount}</TableCell>
-                          <TableCell className="text-sm">{row.approvedBy?.fullName || row.approvedBy?.email || "—"}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

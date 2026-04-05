@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, normalizeMember, normalizeLoan, normalizeTransaction } from "@/lib/api";
+import { useRealtimeSubscription } from "./useRealtimeQuery";
 import { useAuth } from "./useAuth";
 
 /** Member profile linked to current user */
@@ -16,8 +17,10 @@ export function useMyMember() {
 }
 
 export function useMyLoans(memberId: string | undefined) {
+  const queryKey = ["my-loans", memberId];
+  useRealtimeSubscription("loans", queryKey);
   return useQuery({
-    queryKey: ["my-loans", memberId],
+    queryKey,
     queryFn: async () => {
       const res = await api.get(`/loans?memberId=${memberId}`);
       const arr = Array.isArray(res) ? res : (res as any).data ?? [];
@@ -28,8 +31,10 @@ export function useMyLoans(memberId: string | undefined) {
 }
 
 export function useMyRepayments(memberId: string | undefined) {
+  const queryKey = ["my-repayments", memberId];
+  useRealtimeSubscription("repayments", queryKey);
   return useQuery({
-    queryKey: ["my-repayments", memberId],
+    queryKey,
     queryFn: async () => {
       const res = await api.get(`/repayments?memberId=${memberId}`);
       const arr = Array.isArray(res) ? res : (res as any).data ?? [];

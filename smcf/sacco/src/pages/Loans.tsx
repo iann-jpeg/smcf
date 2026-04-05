@@ -11,9 +11,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Plus, Gavel, CreditCard, Loader2, CheckCircle2, ArrowRight, Download } from "lucide-react";
+import { Plus, Gavel, CreditCard, Loader2, CheckCircle2, ArrowRight, Download, History } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { exportLoanApplicationReceipt } from "@/lib/pdf-export";
 import { toast } from "sonner";
@@ -79,6 +79,16 @@ export default function Loans() {
   const [saving,   setSaving]   = useState(false);
   const [success,  setSuccess]  = useState(false);
   const [disbursing, setDisbursing] = useState(false);
+  const [historyLoan, setHistoryLoan] = useState<any | null>(null);
+
+  const { data: historyData, isLoading: historyLoading } = useQuery({
+    queryKey: ["repayment-history", historyLoan?.id],
+    queryFn: async () => {
+      if (!historyLoan?.id) return null;
+      return api.get(`/repayments/loan/${historyLoan.id}/history`);
+    },
+    enabled: !!historyLoan?.id,
+  });
 
   function openPayDialog(loan: any) {
     setPayLoan(loan);
@@ -258,6 +268,23 @@ export default function Loans() {
                             <Download className="h-3.5 w-3.5" />
                             Receipt
                           </Button>
+                          {[
+                            "active",
+                            "disbursed",
+                            "repaying",
+                            "completed",
+                            "defaulted",
+                          ].includes(loan.status) && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1.5 text-xs"
+                              onClick={() => setHistoryLoan(loan)}
+                            >
+                              <History className="h-3.5 w-3.5" />
+                              History
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -368,6 +395,99 @@ export default function Loans() {
                 </p>
               </div>
               <Button className="w-full bg-green-600 hover:bg-green-700 text-white" onClick={closePayDialog}>Done</Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Repayment History Dialog ───────────────────── */}
+      <Dialog open={!!historyLoan} onOpenChange={(v) => { if (!v) setHistoryLoan(null); }}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-heading">
+              <History className="h-5 w-5 text-primary" /> Repayment History
+            </DialogTitle>
+            <DialogDescription>
+              {historyLoan?.loan_number} — {historyLoan?.members?.name ?? "Member"}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Outstanding</p>
+              <p className="text-lg font-semibold">KES {Number(historyLoan?.balance ?? 0).toLocaleString()}</p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Monthly Installment</p>
+              <p className="text-lg font-semibold">KES {Number(historyLoan?.monthly_installment ?? 0).toLocaleString()}</p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Status</p>
+              <p className="text-lg font-semibold capitalize">{historyLoan?.status ?? "—"}</p>
+            </div>
+          </div>
+
+          {historyLoading ? (
+            <div className="py-6"><Skeleton className="h-10 w-full" /></div>
+          ) : (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-sm font-semibold mb-2">Repayment Schedule</h3>
+                {historyData?.schedule?.length ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Due Date</TableHead>
+                        <TableHead className="text-right">Due (KES)</TableHead>
+                        <TableHead className="text-right">Paid (KES)</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Paid On</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {historyData.schedule.map((r: any) => (
+                        <TableRow key={r._id ?? r.id}>
+                          <TableCell>{r.dueDate ? new Date(r.dueDate).toLocaleDateString() : "—"}</TableCell>
+                          <TableCell className="text-right">{Number(r.amountDue ?? 0).toLocaleString()}</TableCell>
+                          <TableCell className="text-right">{Number(r.amountPaid ?? 0).toLocaleString()}</TableCell>
+                          <TableCell><Badge variant={statusBadge(String(r.status ?? "pending"))}>{r.status}</Badge></TableCell>
+                          <TableCell>{r.paidDate ? new Date(r.paidDate).toLocaleDateString() : "—"}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No repayment schedule found.</p>
+                )}
+              </div>
+
+              <div>
+                <h3 className="text-sm font-semibold mb-2">Payment Transactions</h3>
+                {historyData?.payments?.length ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Ref</TableHead>
+                        <TableHead className="text-right">Amount (KES)</TableHead>
+                        <TableHead>Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {historyData.payments.map((p: any) => (
+                        <TableRow key={p._id ?? p.id}>
+                          <TableCell>{new Date(p.processedAt ?? p.processed_at ?? p.createdAt ?? p.created_at).toLocaleDateString()}</TableCell>
+                          <TableCell className="font-mono text-xs">{p.transactionRef ?? p.transaction_ref ?? "—"}</TableCell>
+                          <TableCell className="text-right">{Number(p.amount ?? 0).toLocaleString()}</TableCell>
+                          <TableCell><Badge variant={statusBadge(String(p.status ?? "completed"))}>{p.status ?? "completed"}</Badge></TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No repayment transactions yet.</p>
+                )}
+              </div>
             </div>
           )}
         </DialogContent>

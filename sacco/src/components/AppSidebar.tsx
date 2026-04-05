@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Users, Landmark, BookOpen, BarChart3, Shield, Settings,
-  FileText, AlertTriangle, ShieldCheck, Gavel, UserCircle, UserCircle2, CreditCard, CalendarCheck, FlaskConical, Receipt,
+  FileText, AlertTriangle, ShieldCheck, Gavel, UserCircle, UserCircle2, CreditCard, CalendarCheck, FlaskConical, Receipt, Percent,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -10,16 +10,26 @@ import {
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/useAuth";
 
+type StaffRole = "admin" | "credit_officer" | "credit_committee" | "treasurer" | "auditor";
+
+type StaffNavItem = {
+  title: string;
+  url: string;
+  icon: any;
+  allowedRoles: StaffRole[];
+};
+
 const staffNav = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Members", url: "/members", icon: Users },
-  { title: "Loans", url: "/loans", icon: Landmark },
-  { title: "Accounts & Ledger", url: "/accounts", icon: BookOpen },
-  { title: "Guarantor Exposure", url: "/guarantors", icon: AlertTriangle },
-  { title: "Risk Scoring", url: "/risk-scoring", icon: ShieldCheck },
-  { title: "Loan Simulator", url: "/loans/simulator", icon: FlaskConical },
-  { title: "Loan Approvals", url: "/loans/approvals", icon: Gavel },
-];
+  { title: "Dashboard", url: "/", icon: LayoutDashboard, allowedRoles: ["admin", "credit_officer", "credit_committee", "treasurer", "auditor"] },
+  { title: "Members", url: "/members", icon: Users, allowedRoles: ["admin", "credit_officer"] },
+  { title: "Loans", url: "/loans", icon: Landmark, allowedRoles: ["admin", "credit_officer", "credit_committee"] },
+  { title: "Accounts & Ledger", url: "/accounts", icon: BookOpen, allowedRoles: ["admin", "treasurer"] },
+  { title: "Savings Interest", url: "/accounts?tab=savings-interest", icon: Percent, allowedRoles: ["admin"] },
+  { title: "Guarantor Exposure", url: "/guarantors", icon: AlertTriangle, allowedRoles: ["admin", "treasurer"] },
+  { title: "Risk Scoring", url: "/risk-scoring", icon: ShieldCheck, allowedRoles: ["admin", "credit_officer"] },
+  { title: "Loan Simulator", url: "/loans/simulator", icon: FlaskConical, allowedRoles: ["admin", "credit_officer", "credit_committee", "treasurer", "auditor"] },
+  { title: "Loan Approvals", url: "/loans/approvals", icon: Gavel, allowedRoles: ["admin", "credit_officer", "credit_committee"] },
+] satisfies StaffNavItem[];
 
 const memberNav = [
   { title: "My Account", url: "/my-account", icon: UserCircle },
@@ -28,12 +38,12 @@ const memberNav = [
 ];
 
 const adminNav = [
-  { title: "Reports", url: "/reports", icon: BarChart3 },
-  { title: "Registration Fee", url: "/registration-fee", icon: Receipt },
-  { title: "Compliance & Audit", url: "/compliance", icon: Shield },
-  { title: "Documents", url: "/documents", icon: FileText },
-  { title: "Settings", url: "/settings", icon: Settings },
-];
+  { title: "Reports", url: "/reports", icon: BarChart3, allowedRoles: ["admin", "credit_committee", "treasurer", "auditor"] },
+  { title: "Registration Fee", url: "/registration-fee", icon: Receipt, allowedRoles: ["admin"] },
+  { title: "Compliance & Audit", url: "/compliance", icon: Shield, allowedRoles: ["admin", "auditor"] },
+  { title: "Documents", url: "/documents", icon: FileText, allowedRoles: ["admin", "auditor"] },
+  { title: "Settings", url: "/settings", icon: Settings, allowedRoles: ["admin"] },
+] satisfies StaffNavItem[];
 
 export function AppSidebar() {
   const { user, roles, isStaff } = useAuth();
@@ -44,6 +54,14 @@ export function AppSidebar() {
   const handleNavClick = () => {
     setOpenMobile(false);
   };
+
+  const hasAccess = (allowedRoles: StaffRole[]) => {
+    if (roles.includes("admin")) return true;
+    return roles.some((r) => allowedRoles.includes(r as StaffRole));
+  };
+
+  const visibleStaffNav = staffNav.filter((item) => hasAccess(item.allowedRoles));
+  const visibleAdminNav = adminNav.filter((item) => hasAccess(item.allowedRoles));
 
   return (
     <Sidebar>
@@ -87,7 +105,7 @@ export function AppSidebar() {
             <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs uppercase tracking-wider">Operations</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {staffNav.map((item) => (
+                {visibleStaffNav.map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild>
                       <NavLink to={item.url} onClick={handleNavClick} end={item.url === "/"} className="hover:bg-sidebar-accent" activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold">
@@ -108,7 +126,7 @@ export function AppSidebar() {
             <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs uppercase tracking-wider">Administration</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {adminNav.map((item) => (
+                {visibleAdminNav.map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild>
                       <NavLink to={item.url} onClick={handleNavClick} className="hover:bg-sidebar-accent" activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold">

@@ -39,7 +39,7 @@ import { Area, AreaChart, XAxis, YAxis, CartesianGrid, ResponsiveContainer } fro
 import { api } from "@/lib/api";
 import { format, isAfter, isBefore, startOfDay, endOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { z } from "zod";
 import { GrowthInsightsPopup } from "@/components/GrowthInsightsPopup";
@@ -105,6 +105,7 @@ export default function MyAccount() {
   const [saving, setSaving] = useState(false);
   const [depositOpen, setDepositOpen] = useState(false);
   const [repayLoan, setRepayLoan] = useState<any | null>(null);
+  const [historyLoanId, setHistoryLoanId] = useState<string | null>(null);
   const [shareSubscribeOpen, setShareSubscribeOpen] = useState(false);
   const [shareTransferOpen, setShareTransferOpen] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -141,6 +142,15 @@ export default function MyAccount() {
   const [passwordError, setPasswordError] = useState("");
   const [declineNote, setDeclineNote] = useState<Record<string, string>>({});
 
+  const { data: repaymentHistoryData, isLoading: repaymentHistoryLoading } = useQuery({
+    queryKey: ["repayment-history", historyLoanId],
+    queryFn: async () => {
+      if (!historyLoanId) return null;
+      return api.get(`/repayments/loan/${historyLoanId}/history`);
+    },
+    enabled: !!historyLoanId,
+  });
+
   const stopRegFeePolling = () => {
     if (regFeePollRef.current) {
       clearInterval(regFeePollRef.current);
@@ -172,6 +182,13 @@ export default function MyAccount() {
   }, [activeTab]);
 
   useEffect(() => {
+    if (activeTab !== "repayment-history") return;
+    if (!historyLoanId && loans.length > 0) {
+      setHistoryLoanId(loans[0].id);
+    }
+  }, [activeTab, historyLoanId, loans]);
+
+  useEffect(() => {
     return () => {
       stopRegFeePolling();
     };
@@ -181,6 +198,7 @@ export default function MyAccount() {
   const registrationFeeAmount = Number((member as any)?.registration_fee_amount ?? 100);
   const registrationFeeMpesaCode = (member as any)?.registration_fee_mpesa_code as string | null;
   const registrationFeeDate = (member as any)?.registration_fee_date as string | null;
+  const historyLoan = historyLoanId ? loans.find((l: any) => l.id === historyLoanId) : null;
 
   const handleRegistrationFeePayment = async () => {
     if (!member?.id) return;
@@ -728,6 +746,10 @@ export default function MyAccount() {
               <Badge variant="outline" className="ml-2 text-[10px] border-current">{upcomingRepayments.length}</Badge>
             )}
           </TabsTrigger>
+          <TabsTrigger value="repayment-history" className="rounded-lg px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-foreground/60 transition-all hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm flex-1 sm:flex-none">
+            <span className="hidden sm:inline">Repayment History</span>
+            <span className="sm:hidden">History</span>
+          </TabsTrigger>
           <TabsTrigger value="loans" className="rounded-lg px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-foreground/60 transition-all hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm flex-1 sm:flex-none">
             <span className="hidden sm:inline">My Loans</span>
             <span className="sm:hidden">Loans</span>
@@ -828,6 +850,118 @@ export default function MyAccount() {
                     })}
                   </TableBody>
                 </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Repayment History */}
+        <TabsContent value="repayment-history">
+          <Card>
+            <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <CardTitle className="font-heading text-lg">Repayment History</CardTitle>
+                <p className="text-xs text-muted-foreground">View your full repayment schedule and payment transactions.</p>
+              </div>
+              <div className="w-full sm:max-w-sm">
+                <Label htmlFor="history-loan" className="text-xs">Select Loan</Label>
+                <select
+                  id="history-loan"
+                  aria-label="Select loan"
+                  title="Select loan"
+                  className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  value={historyLoanId ?? ""}
+                  onChange={(e) => setHistoryLoanId(e.target.value || null)}
+                >
+                  <option value="">Choose a loan</option>
+                  {loans.map((loan: any) => (
+                    <option key={loan.id} value={loan.id}>
+                      {loan.loan_number} - KES {Number(loan.principal ?? 0).toLocaleString()}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {!historyLoanId ? (
+                <p className="text-sm text-muted-foreground py-6 text-center">Select a loan to view repayment history.</p>
+              ) : repaymentHistoryLoading ? (
+                <div className="py-6"><Skeleton className="h-10 w-full" /></div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="rounded-lg border p-3">
+                      <p className="text-xs text-muted-foreground">Outstanding</p>
+                      <p className="text-lg font-semibold">KES {Number(historyLoan?.balance ?? 0).toLocaleString()}</p>
+                    </div>
+                    <div className="rounded-lg border p-3">
+                      <p className="text-xs text-muted-foreground">Monthly Installment</p>
+                      <p className="text-lg font-semibold">KES {Number(historyLoan?.monthly_installment ?? 0).toLocaleString()}</p>
+                    </div>
+                    <div className="rounded-lg border p-3">
+                      <p className="text-xs text-muted-foreground">Status</p>
+                      <p className="text-lg font-semibold capitalize">{historyLoan?.status ?? "—"}</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-semibold mb-2">Repayment Schedule</h3>
+                    {repaymentHistoryData?.schedule?.length ? (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Due Date</TableHead>
+                            <TableHead className="text-right">Due (KES)</TableHead>
+                            <TableHead className="text-right">Paid (KES)</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Paid On</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {repaymentHistoryData.schedule.map((r: any) => (
+                            <TableRow key={r._id ?? r.id}>
+                              <TableCell>{r.dueDate ? new Date(r.dueDate).toLocaleDateString() : "—"}</TableCell>
+                              <TableCell className="text-right">{Number(r.amountDue ?? 0).toLocaleString()}</TableCell>
+                              <TableCell className="text-right">{Number(r.amountPaid ?? 0).toLocaleString()}</TableCell>
+                              <TableCell><Badge variant={statusVariant(String(r.status ?? "pending"))}>{r.status}</Badge></TableCell>
+                              <TableCell>{r.paidDate ? new Date(r.paidDate).toLocaleDateString() : "—"}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No repayment schedule found.</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-semibold mb-2">Payment Transactions</h3>
+                    {repaymentHistoryData?.payments?.length ? (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Ref</TableHead>
+                            <TableHead className="text-right">Amount (KES)</TableHead>
+                            <TableHead>Status</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {repaymentHistoryData.payments.map((p: any) => (
+                            <TableRow key={p._id ?? p.id}>
+                              <TableCell>{new Date(p.processedAt ?? p.processed_at ?? p.createdAt ?? p.created_at).toLocaleDateString()}</TableCell>
+                              <TableCell className="font-mono text-xs">{p.transactionRef ?? p.transaction_ref ?? "—"}</TableCell>
+                              <TableCell className="text-right">{Number(p.amount ?? 0).toLocaleString()}</TableCell>
+                              <TableCell><Badge variant={statusVariant(String(p.status ?? "completed"))}>{p.status ?? "completed"}</Badge></TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No repayment transactions yet.</p>
+                    )}
+                  </div>
+                </div>
               )}
             </CardContent>
           </Card>
