@@ -489,7 +489,7 @@ export default function LoanApplication() {
                   <TableRow>
                     <TableHead className="w-12"></TableHead>
                     <TableHead>Member</TableHead>
-                    <TableHead className="text-right">Savings</TableHead>
+                    {isStaff && <TableHead className="text-right">Savings</TableHead>}
                     <TableHead className="text-right">Max Guarantee</TableHead>
                     <TableHead className="text-center">Risk Score</TableHead>
                   </TableRow>
@@ -507,7 +507,7 @@ export default function LoanApplication() {
                           </div>
                         </TableCell>
                         <TableCell className="font-medium">{g.name}</TableCell>
-                        <TableCell className="text-right">KES {g.savings.toLocaleString()}</TableCell>
+                        {isStaff && <TableCell className="text-right">KES {g.savings.toLocaleString()}</TableCell>}
                         <TableCell className="text-right">KES {maxGuarantee.toLocaleString()}</TableCell>
                         <TableCell className="text-center">
                           <Badge variant={riskBadgeVariant(gRisk.riskLevel)}>{gRisk.compositeScore}</Badge>

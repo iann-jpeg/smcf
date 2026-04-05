@@ -21,6 +21,7 @@ import { ArrowLeft, Wallet, Landmark, TrendingUp, Pencil, Link2, Link2Off, UserC
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { StatCard } from "@/components/StatCard";
 import { useState } from "react";
+import { exportLoanApplicationReceipt } from "@/lib/pdf-export";
 
 function downloadDataUrl(dataUrl: string, filename = "document") {
   const a = document.createElement("a");
@@ -34,6 +35,19 @@ function riskLabel(score: number) {
   if (score >= 75) return { label: "Low Risk", variant: "default" as const };
   if (score >= 50) return { label: "Medium Risk", variant: "secondary" as const };
   return { label: "High Risk", variant: "destructive" as const };
+}
+
+const LOAN_TYPE_LABELS: Record<string, string> = {
+  business_development: "Business Development Loan",
+  education: "Education Loan",
+  emergency: "Emergency Loan",
+  asset_acquisition: "Asset Acquisition Loan",
+  personal: "Personal Loan",
+};
+
+function formatLoanType(value?: string) {
+  if (!value) return "—";
+  return LOAN_TYPE_LABELS[value] ?? value;
 }
 
 export default function MemberDetail() {
@@ -129,6 +143,36 @@ export default function MemberDetail() {
     } catch (err: any) {
       toast.error(err.message || "Failed to unlink account");
     }
+  };
+
+  const handleDownloadReceipt = (loan: any) => {
+    if (!isAdmin) return;
+    const ref = loan.loan_number ?? "this loan";
+    if (!confirm(`Download receipt for ${ref}?`)) return;
+    const guarantors = (loan.loan_guarantors ?? []).map((g: any) => ({
+      name: g.members?.name ?? "Guarantor",
+      memberId: g.members?.member_id ?? g.member_id ?? "",
+      guaranteeAmount: Number(g.guarantee_amount ?? 0),
+      savings: Number(g.members?.savings ?? 0),
+    }));
+
+    exportLoanApplicationReceipt({
+      loanNumber: loan.loan_number ?? "LN-NEW",
+      memberName: member.name ?? "Member",
+      memberId: member.member_id ?? "",
+      loanType: formatLoanType(loan.loan_type),
+      appliedAt: loan.applied_at ?? loan.created_at,
+      principal: Number(loan.principal ?? 0),
+      interestRate: Number(loan.interest_rate ?? 0),
+      interestModel: loan.interest_model ?? "reducing",
+      termMonths: Number(loan.term_months ?? 0),
+      monthlyInterest: loan.monthly_interest ? Number(loan.monthly_interest) : undefined,
+      totalInterest: loan.total_interest ? Number(loan.total_interest) : undefined,
+      riskRating: loan.risk_rating ?? undefined,
+      monthlyPayment: loan.monthly_installment ? Number(loan.monthly_installment) : undefined,
+      totalPayable: loan.total_payable ? Number(loan.total_payable) : undefined,
+      guarantors,
+    });
   };
 
   if (isLoading) {
@@ -410,6 +454,13 @@ export default function MemberDetail() {
                             <p className="font-semibold">KES {Number(loan.balance).toLocaleString()}</p>
                           </div>
                         </div>
+                        {isAdmin && (
+                          <div className="flex justify-end">
+                            <Button variant="outline" size="sm" className="gap-1" onClick={() => handleDownloadReceipt(loan)}>
+                              <Download className="h-3.5 w-3.5" /> Receipt
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -423,6 +474,7 @@ export default function MemberDetail() {
                           <TableHead>Term</TableHead>
                           <TableHead className="text-right">Balance</TableHead>
                           <TableHead>Status</TableHead>
+                          {isAdmin && <TableHead></TableHead>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -438,6 +490,13 @@ export default function MemberDetail() {
                                 {loan.status}
                               </Badge>
                             </TableCell>
+                            {isAdmin && (
+                              <TableCell className="text-right">
+                                <Button variant="outline" size="sm" className="gap-1" onClick={() => handleDownloadReceipt(loan)}>
+                                  <Download className="h-3.5 w-3.5" /> Receipt
+                                </Button>
+                              </TableCell>
+                            )}
                           </TableRow>
                         ))}
                       </TableBody>
