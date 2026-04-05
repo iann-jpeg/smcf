@@ -5,6 +5,8 @@ import LoanGuarantor from '../models/LoanGuarantor';
 import LoanApproval from '../models/LoanApproval';
 import Member from '../models/Member';
 import RepaymentRecord from '../models/RepaymentRecord';
+import SystemConfig from '../models/SystemConfig';
+import User from '../models/User';
 import { protect, authorize, AuthRequest } from '../middleware/auth';
 import { auditLog } from '../middleware/auditLog';
 import { notifyMember, notifyStaff } from '../utils/notify';
@@ -182,12 +184,23 @@ router.post(
       } else {
         const loan = await Loan.findById(loanId);
         if (loan) {
-          const required =
-            loan.principal <= 100_000 ? ['credit_officer'] :
-            loan.principal <= 500_000 ? ['credit_officer', 'credit_committee'] :
+          const config = await SystemConfig.getConfig();
+          const autoApproveLimit = Math.max(0, Number(config.autoApproveLimit || 0));
+          const committeeThreshold = Math.max(autoApproveLimit, Number(config.committeeThreshold || 0));
+
+          const baseRequired =
+            loan.principal <= autoApproveLimit ? ['credit_officer'] :
+            loan.principal <= committeeThreshold ? ['credit_officer', 'credit_committee'] :
             ['credit_officer', 'credit_committee', 'board'];
+
+          const availableRoles = new Set(
+            (await User.distinct('roles')).map((r) => String(r))
+          );
+          const required = baseRequired.filter((role) => availableRoles.has(role));
           const approvedLevels = await LoanApproval.find({ loanId, decision: 'approved' }).distinct('approvalLevel');
-          const allDone = required.every((l) => approvedLevels.includes(l) || l === approvalLevel);
+          const allDone = required.length === 0
+            ? true
+            : required.every((l) => approvedLevels.includes(l) || l === approvalLevel);
           if (allDone) {
             await Loan.findByIdAndUpdate(loanId, { status: 'approved', approvedAt: new Date(), approvedBy: req.userId });
             notifyMember(
