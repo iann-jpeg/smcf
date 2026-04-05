@@ -32,7 +32,7 @@ import { StatCard } from "@/components/StatCard";
 import { Wallet, Landmark, TrendingUp, CreditCard, CalendarCheck, PlusCircle, User, Download, Bell, CheckCheck, Save, Lock, FileText, CalendarIcon, Sparkles, Shield, ShieldCheck, ShieldX, Clock, ArrowRightLeft, Camera, Upload, Eye, Trash2, AlertCircle, Loader2, Smartphone } from "lucide-react";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { Separator } from "@/components/ui/separator";
-import { exportMyTransactions, exportMyRepayments, exportMyLoans, exportMyStatement, downloadMembershipForm } from "@/lib/pdf-export";
+import { exportMyTransactions, exportMyRepayments, exportMyLoans, exportMyStatement, downloadMembershipForm, exportLoanApplicationReceipt } from "@/lib/pdf-export";
 import { useNotifications, useMarkRead, useMarkAllRead } from "@/hooks/useNotifications";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Area, AreaChart, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
@@ -402,6 +402,35 @@ export default function MyAccount() {
     } finally {
       setUploadingDoc((prev) => ({ ...prev, [field]: false }));
     }
+  };
+
+  const handleDownloadReceipt = (loan: any) => {
+    const ref = loan.loan_number ?? "this loan";
+    if (!confirm(`Download receipt for ${ref}?`)) return;
+
+    const guarantors = (loan.loan_guarantors ?? []).map((g: any) => ({
+      name: g.members?.name ?? "Guarantor",
+      memberId: g.members?.member_id ?? g.member_id ?? "",
+      guaranteeAmount: Number(g.guarantee_amount ?? 0),
+    }));
+
+    exportLoanApplicationReceipt({
+      loanNumber: loan.loan_number ?? "LN-NEW",
+      memberName: member?.name ?? "Member",
+      memberId: member?.member_id ?? "",
+      loanType: formatLoanType(loan.loan_type),
+      appliedAt: loan.applied_at ?? loan.created_at,
+      principal: Number(loan.principal ?? 0),
+      interestRate: Number(loan.interest_rate ?? 0),
+      interestModel: loan.interest_model ?? "reducing",
+      termMonths: Number(loan.term_months ?? 0),
+      monthlyInterest: loan.monthly_interest ? Number(loan.monthly_interest) : undefined,
+      totalInterest: loan.total_interest ? Number(loan.total_interest) : undefined,
+      riskRating: loan.risk_rating ?? undefined,
+      monthlyPayment: loan.monthly_installment ? Number(loan.monthly_installment) : undefined,
+      totalPayable: loan.total_payable ? Number(loan.total_payable) : undefined,
+      guarantors,
+    });
   };
 
   if (memberLoading) {
@@ -852,16 +881,27 @@ export default function MyAccount() {
                           <Badge variant={statusVariant(loan.status)}>{loan.status}</Badge>
                         </TableCell>
                         <TableCell>
-                          {["active", "disbursed"].includes(loan.status) && Number(loan.balance) > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {["active", "disbursed"].includes(loan.status) && Number(loan.balance) > 0 && (
+                              <Button
+                                size="sm"
+                                className="bg-blue-600 hover:bg-blue-700 text-white gap-1 text-xs whitespace-nowrap"
+                                onClick={() => setRepayLoan(loan)}
+                              >
+                                <CreditCard className="h-3.5 w-3.5" />
+                                Pay via M-Pesa
+                              </Button>
+                            )}
                             <Button
                               size="sm"
-                              className="bg-blue-600 hover:bg-blue-700 text-white gap-1 text-xs whitespace-nowrap"
-                              onClick={() => setRepayLoan(loan)}
+                              variant="outline"
+                              className="gap-1 text-xs"
+                              onClick={() => handleDownloadReceipt(loan)}
                             >
-                              <CreditCard className="h-3.5 w-3.5" />
-                              Pay via M-Pesa
+                              <Download className="h-3.5 w-3.5" />
+                              Receipt
                             </Button>
-                          )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}

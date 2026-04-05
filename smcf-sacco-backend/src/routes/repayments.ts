@@ -36,34 +36,44 @@ async function processRepayment(
     throw new Error('Loan is not active or disbursed — repayment not allowed');
   }
 
-  // 1. Update the oldest pending/overdue repayment installment
-  const installment = await RepaymentRecord.findOne({
+  // 1. Apply penalties to any overdue installments and collect pending schedule
+  const installments = await RepaymentRecord.find({
     loanId: loan._id,
     status: { $in: ['pending', 'overdue', 'partial'] },
   }).sort({ dueDate: 1 });
 
   let penaltyApplied = 0;
-  if (installment) {
-    const now = new Date();
+  const now = new Date();
+  const config = await SystemConfig.getConfig();
+  const penaltyRate = Math.max(0, Number(config.penaltyRate || 0));
+
+  for (const installment of installments) {
     if (installment.dueDate < now && installment.status !== 'paid') {
       if (!installment.penaltyAmount) {
-        const config = await SystemConfig.getConfig();
-        const penaltyRate = Math.max(0, Number(config.penaltyRate || 0));
-        penaltyApplied = Math.round((installment.amountDue * penaltyRate) / 100);
-        if (penaltyApplied > 0) {
+        const penaltyForInstallment = penaltyRate > 0
+          ? Math.round((installment.amountDue * penaltyRate) / 100)
+          : 0;
+        if (penaltyForInstallment > 0) {
           await RepaymentRecord.findByIdAndUpdate(
             installment._id,
             {
-              penaltyAmount: penaltyApplied,
-              amountDue: installment.amountDue + penaltyApplied,
+              penaltyAmount: penaltyForInstallment,
+              amountDue: installment.amountDue + penaltyForInstallment,
               status: 'overdue',
             },
             { new: true }
           );
-          installment.amountDue += penaltyApplied;
+          installment.amountDue += penaltyForInstallment;
+          installment.penaltyAmount = penaltyForInstallment;
+          installment.status = 'overdue';
+          penaltyApplied += penaltyForInstallment;
+        } else if (installment.status === 'pending') {
+          await RepaymentRecord.findByIdAndUpdate(installment._id, { status: 'overdue' });
+          installment.status = 'overdue';
         }
       } else if (installment.status === 'pending') {
         await RepaymentRecord.findByIdAndUpdate(installment._id, { status: 'overdue' });
+        installment.status = 'overdue';
       }
     }
   }
@@ -84,10 +94,16 @@ async function processRepayment(
   });
 
   let repaymentRecord = null;
-  if (installment) {
-    const newPaid = (installment.amountPaid || 0) + paid;
-    const newStatus: IRepaymentStatus =
-      newPaid >= installment.amountDue ? 'paid' : 'partial';
+  let remaining = paid;
+
+  for (const installment of installments) {
+    if (remaining <= 0) break;
+    const dueLeft = Math.max(0, installment.amountDue - (installment.amountPaid || 0));
+    if (dueLeft <= 0) continue;
+
+    const applied = Math.min(remaining, dueLeft);
+    const newPaid = (installment.amountPaid || 0) + applied;
+    const newStatus: IRepaymentStatus = newPaid >= installment.amountDue ? 'paid' : 'partial';
 
     repaymentRecord = await RepaymentRecord.findByIdAndUpdate(
       installment._id,
@@ -98,6 +114,8 @@ async function processRepayment(
       },
       { new: true }
     );
+
+    remaining -= applied;
   }
 
   // 3. Update loan balance

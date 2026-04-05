@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLoans } from "@/hooks/useLoans";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,6 +56,15 @@ function formatLoanType(value?: string) {
 function formatInterestModel(value?: string) {
   if (!value) return "flat";
   return value === "reducing_balance" ? "reducing" : value;
+}
+
+function getLoanProgress(loan: any) {
+  const total = Number(loan.total_payable ?? 0);
+  const balance = Number(loan.balance ?? 0);
+  if (!total || Number.isNaN(total)) return null;
+  const paid = Math.max(0, total - (Number.isNaN(balance) ? total : balance));
+  const pct = Math.min(100, Math.max(0, (paid / total) * 100));
+  return { total, paid, pct };
 }
 
 export default function Loans() {
@@ -182,62 +192,77 @@ export default function Loans() {
                   <TableHead>Term</TableHead>
                   <TableHead className="text-right">Monthly</TableHead>
                   <TableHead className="text-right">Balance</TableHead>
+                  <TableHead>Progress</TableHead>
                   <TableHead>Risk</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {loans.map((loan: any) => (
-                  <TableRow key={loan.id} className="hover:bg-muted/50">
-                    <TableCell className="font-mono text-xs">{loan.loan_number}</TableCell>
-                    <TableCell className="font-medium">{loan.members?.name ?? "—"}</TableCell>
-                    <TableCell className="text-right">KES {Number(loan.principal).toLocaleString()}</TableCell>
-                    <TableCell className="text-sm">{formatLoanType(loan.loan_type)}</TableCell>
-                    <TableCell className="text-sm">{loan.interest_rate}% {formatInterestModel(loan.interest_model)}</TableCell>
-                    <TableCell>{loan.term_months}mo</TableCell>
-                    <TableCell className="text-right">KES {Number(loan.monthly_installment).toLocaleString()}</TableCell>
-                    <TableCell className="text-right font-semibold">KES {Number(loan.balance).toLocaleString()}</TableCell>
-                    <TableCell><Badge variant={riskBadge(loan.risk_rating ?? "medium")}>{loan.risk_rating ?? "medium"}</Badge></TableCell>
-                    <TableCell><Badge variant={statusBadge(loan.status)}>{loan.status}</Badge></TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-2">
-                        {loan.status === "approved" && (
+                {loans.map((loan: any) => {
+                  const progress = getLoanProgress(loan);
+                  return (
+                    <TableRow key={loan.id} className="hover:bg-muted/50">
+                      <TableCell className="font-mono text-xs">{loan.loan_number}</TableCell>
+                      <TableCell className="font-medium">{loan.members?.name ?? "—"}</TableCell>
+                      <TableCell className="text-right">KES {Number(loan.principal).toLocaleString()}</TableCell>
+                      <TableCell className="text-sm">{formatLoanType(loan.loan_type)}</TableCell>
+                      <TableCell className="text-sm">{loan.interest_rate}% {formatInterestModel(loan.interest_model)}</TableCell>
+                      <TableCell>{loan.term_months}mo</TableCell>
+                      <TableCell className="text-right">KES {Number(loan.monthly_installment).toLocaleString()}</TableCell>
+                      <TableCell className="text-right font-semibold">KES {Number(loan.balance).toLocaleString()}</TableCell>
+                      <TableCell>
+                        {progress ? (
+                          <div className="min-w-[120px]">
+                            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                              <span>KES {Math.round(progress.paid).toLocaleString()}</span>
+                              <span>{Math.round(progress.pct)}%</span>
+                            </div>
+                            <Progress value={progress.pct} className="h-1.5" />
+                          </div>
+                        ) : "—"}
+                      </TableCell>
+                      <TableCell><Badge variant={riskBadge(loan.risk_rating ?? "medium")}>{loan.risk_rating ?? "medium"}</Badge></TableCell>
+                      <TableCell><Badge variant={statusBadge(loan.status)}>{loan.status}</Badge></TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-2">
+                          {loan.status === "approved" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1.5 text-xs border-green-400 text-green-600 hover:bg-green-50 hover:text-green-700 whitespace-nowrap"
+                              onClick={() => handleDisburse(loan.id)}
+                              disabled={disbursing}
+                            >
+                              <ArrowRight className="h-3.5 w-3.5" />
+                              Disburse
+                            </Button>
+                          )}
+                          {["active", "disbursed", "repaying"].includes(loan.status) && Number(loan.balance) > 0 && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1.5 text-xs border-blue-400 text-blue-600 hover:bg-blue-50 hover:text-blue-700 whitespace-nowrap"
+                              onClick={() => openPayDialog(loan)}
+                            >
+                              <CreditCard className="h-3.5 w-3.5" />
+                              Record Payment
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="outline"
-                            className="gap-1.5 text-xs border-green-400 text-green-600 hover:bg-green-50 hover:text-green-700 whitespace-nowrap"
-                            onClick={() => handleDisburse(loan.id)}
-                            disabled={disbursing}
+                            className="gap-1.5 text-xs"
+                            onClick={() => handleDownloadReceipt(loan)}
                           >
-                            <ArrowRight className="h-3.5 w-3.5" />
-                            Disburse
+                            <Download className="h-3.5 w-3.5" />
+                            Receipt
                           </Button>
-                        )}
-                        {["active", "disbursed", "repaying"].includes(loan.status) && Number(loan.balance) > 0 && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="gap-1.5 text-xs border-blue-400 text-blue-600 hover:bg-blue-50 hover:text-blue-700 whitespace-nowrap"
-                            onClick={() => openPayDialog(loan)}
-                          >
-                            <CreditCard className="h-3.5 w-3.5" />
-                            Record Payment
-                          </Button>
-                        )}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="gap-1.5 text-xs"
-                          onClick={() => handleDownloadReceipt(loan)}
-                        >
-                          <Download className="h-3.5 w-3.5" />
-                          Receipt
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}

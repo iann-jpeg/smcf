@@ -1338,7 +1338,7 @@ export default function Documents() {
     setStatuses((prev) => ({ ...prev, [path]: status }));
   }
 
-  const activeLoans = loans.filter((l: any) => ["repaying", "disbursed", "approved"].includes(l.status));
+  const activeLoans = loans.filter((l: any) => ["active", "disbursed", "approved"].includes(l.status));
 
   const memberKycDocuments = useMemo<KycDocument[]>(() => {
     const docs: KycDocument[] = [];
@@ -1515,7 +1515,7 @@ export default function Documents() {
                       <TableCell>{loan.term_months}mo</TableCell>
                       <TableCell>{formatLoanType(loan.loan_type)}</TableCell>
                       <TableCell>{loan.interest_rate}% {formatInterestModel(loan.interest_model)}</TableCell>
-                      <TableCell><Badge variant={loan.status === "repaying" ? "default" : loan.status === "defaulted" ? "destructive" : "secondary"}>{loan.status}</Badge></TableCell>
+                      <TableCell><Badge variant={loan.status === "active" || loan.status === "completed" ? "default" : loan.status === "defaulted" ? "destructive" : "secondary"}>{loan.status}</Badge></TableCell>
                       <TableCell className="text-sm">{loan.applied_at?.split("T")[0]}</TableCell>
                     </TableRow>
                   ))}

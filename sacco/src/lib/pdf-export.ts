@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { LoanSafetyResult } from "@/lib/loan-safety-engine";
+import { generateAmortization } from "@/lib/amortization";
 
 const NAVY: [number, number, number] = [15, 23, 42];
 const GOLD: [number, number, number] = [180, 150, 60];
@@ -192,7 +193,21 @@ export function exportLoanApplicationReceipt(data: {
 }) {
   const doc = initDoc("Loan Application Receipt");
   const appliedDate = data.appliedAt ? DATE_FMT.format(new Date(data.appliedAt)) : DATE_FMT.format(new Date());
-  const modelLabel = data.interestModel === "reducing" ? "Reducing Balance" : data.interestModel === "flat" ? "Flat Rate" : String(data.interestModel || "");
+  const rawModel = String(data.interestModel || "").toLowerCase();
+  const normalizedModel = rawModel === "reducing_balance" ? "reducing" : rawModel;
+  const modelLabel = normalizedModel === "reducing"
+    ? "Reducing Balance"
+    : normalizedModel === "flat"
+      ? "Flat Rate"
+      : String(data.interestModel || "");
+  const loanTypeLabel = data.loanType || "—";
+  const principal = Number(data.principal || 0);
+  const interestRate = Number(data.interestRate || 0);
+  const termMonths = Number(data.termMonths || 0);
+  const monthlyPayment = data.monthlyPayment ?? undefined;
+  const totalPayable = data.totalPayable ?? (monthlyPayment && termMonths ? monthlyPayment * termMonths : undefined);
+  const totalInterest = data.totalInterest ?? (totalPayable !== undefined ? totalPayable - principal : undefined);
+  const monthlyInterest = data.monthlyInterest ?? (totalInterest !== undefined && termMonths ? totalInterest / termMonths : undefined);
   const safeLoanNumber = String(data.loanNumber || "loan").replace(/[^a-zA-Z0-9-_]/g, "");
 
   autoTable(doc, {
@@ -203,14 +218,14 @@ export function exportLoanApplicationReceipt(data: {
       ["Applicant", `${data.memberName || ""}${data.memberId ? ` (${data.memberId})` : ""}`.trim() || "—"],
       ["Applied By", data.appliedBy || "Member Portal"],
       ["Applied On", appliedDate],
-      ["Loan Type", data.loanType || "—"],
-      ["Principal", `KES ${Number(data.principal || 0).toLocaleString()}`],
-      ["Interest", `${Number(data.interestRate || 0)}% ${modelLabel}`.trim()],
-      ["Term", `${Number(data.termMonths || 0)} months`],
-      ["Monthly Interest", data.monthlyInterest ? `KES ${Number(data.monthlyInterest).toLocaleString()}` : "—"],
-      ["Total Interest", data.totalInterest ? `KES ${Number(data.totalInterest).toLocaleString()}` : "—"],
-      ["Monthly Installment", data.monthlyPayment ? `KES ${Number(data.monthlyPayment).toLocaleString()}` : "—"],
-      ["Total Repayment", data.totalPayable ? `KES ${Number(data.totalPayable).toLocaleString()}` : "—"],
+      ["Loan Type", loanTypeLabel],
+      ["Principal", `KES ${principal.toLocaleString()}`],
+      ["Interest", `${interestRate}% ${modelLabel}`.trim()],
+      ["Term", `${termMonths} months`],
+      ["Monthly Interest", monthlyInterest !== undefined ? `KES ${Number(monthlyInterest).toLocaleString()}` : "—"],
+      ["Total Interest", totalInterest !== undefined ? `KES ${Number(totalInterest).toLocaleString()}` : "—"],
+      ["Monthly Installment", monthlyPayment !== undefined ? `KES ${Number(monthlyPayment).toLocaleString()}` : "—"],
+      ["Total Repayment", totalPayable !== undefined ? `KES ${Number(totalPayable).toLocaleString()}` : "—"],
       ["Risk Rating", data.riskRating ? data.riskRating.toUpperCase() : "—"],
     ],
     headStyles: { fillColor: HEADER_COLOR },
@@ -221,15 +236,14 @@ export function exportLoanApplicationReceipt(data: {
   if (data.guarantors && data.guarantors.length > 0) {
     autoTable(doc, {
       startY: (doc as any).lastAutoTable.finalY + 10,
-      head: [["Guarantor", "Member ID", "Guarantee (KES)", "Savings (KES)"]],
+      head: [["Guarantor", "Member ID", "Guarantee (KES)"]],
       body: data.guarantors.map((g) => [
         g.name,
         g.memberId,
         Number(g.guaranteeAmount ?? 0).toLocaleString(),
-        Number(g.savings ?? 0).toLocaleString(),
       ]),
       headStyles: { fillColor: HEADER_COLOR },
-      columnStyles: { 2: { halign: "right" }, 3: { halign: "right" } },
+      columnStyles: { 2: { halign: "right" } },
     });
   }
 
@@ -240,13 +254,84 @@ export function exportLoanApplicationReceipt(data: {
 export function exportMyLoans(
   memberName: string,
   memberId: string,
-  rows: Array<{ loan_number: string; principal: number; interest_rate: number; interest_model: string; term_months: number; balance: number; monthly_installment: number; status: string }>
+  rows: Array<{
+    loan_number: string;
+    loan_type?: string;
+    principal: number;
+    interest_rate: number;
+    interest_model: string;
+    term_months: number;
+    balance: number;
+    monthly_installment: number;
+    total_payable?: number;
+    total_interest?: number;
+    status: string;
+  }>
 ) {
   const doc = initDoc("Loan Statement");
   const pageW = doc.internal.pageSize.getWidth();
   const L = 14;
   const R = pageW - 14;
   const W = R - L;
+
+  const formatLoanType = (value?: string) => {
+    if (!value) return "—";
+    const map: Record<string, string> = {
+      business_development: "Business Development Loan",
+      education: "Education Loan",
+      emergency: "Emergency Loan",
+      asset_acquisition: "Asset Acquisition Loan",
+      personal: "Personal Loan",
+    };
+    return map[value] ?? value;
+  };
+
+  const normalizeInterestModel = (value?: string) => {
+    if (!value) return "flat";
+    return value === "reducing_balance" ? "reducing" : value;
+  };
+
+  const formatInterestModelLabel = (value?: string) => {
+    const normalized = normalizeInterestModel(value);
+    return normalized === "reducing"
+      ? "Reducing Balance"
+      : normalized === "flat"
+        ? "Flat Rate"
+        : normalized;
+  };
+
+  const loanRows = rows.map((row) => {
+    const principal = Number(row.principal) || 0;
+    const balance = Number(row.balance) || 0;
+    const termMonths = Number(row.term_months) || 0;
+    const monthlyInstallment = Number(row.monthly_installment) || 0;
+    const interestRate = Number(row.interest_rate) || 0;
+    const interestModel = normalizeInterestModel(row.interest_model);
+    const computedTotalPayable =
+      Number(row.total_payable) ||
+      (monthlyInstallment && termMonths ? monthlyInstallment * termMonths : 0) ||
+      (Number(row.total_interest) ? principal + Number(row.total_interest) : 0) ||
+      principal;
+    const totalPayable = Math.max(principal, balance, computedTotalPayable);
+    const paid = Math.max(0, totalPayable - balance);
+    const loanTypeLabel = formatLoanType(row.loan_type);
+    const modelLabel = formatInterestModelLabel(row.interest_model);
+    const rateParts = [loanTypeLabel !== "—" ? loanTypeLabel : null, `${interestRate}% ${modelLabel}`].filter(Boolean);
+
+    return {
+      ...row,
+      principal,
+      balance,
+      termMonths,
+      monthlyInstallment,
+      interestRate,
+      interestModel,
+      totalPayable,
+      paid,
+      loanTypeLabel,
+      rateModelLabel: rateParts.join(" • "),
+    };
+  });
 
   // ── Member info box ──────────────────────────────────────────────────────
   doc.setFillColor(245, 247, 252);
@@ -274,10 +359,10 @@ export function exportMyLoans(
   doc.setTextColor(0);
 
   // ── Summary stats row ────────────────────────────────────────────────────
-  const totalPrincipal = rows.reduce((s, r) => s + Number(r.principal), 0);
-  const totalBalance   = rows.reduce((s, r) => s + Number(r.balance), 0);
-  const totalPaid      = totalPrincipal - totalBalance;
-  const activeCount    = rows.filter(r => ["disbursed", "repaying", "active"].includes(r.status)).length;
+  const totalPrincipal = loanRows.reduce((s, r) => s + r.principal, 0);
+  const totalBalance   = loanRows.reduce((s, r) => s + r.balance, 0);
+  const totalPaid      = loanRows.reduce((s, r) => s + r.paid, 0);
+  const activeCount    = loanRows.filter(r => ["disbursed", "repaying", "active"].includes(r.status)).length;
 
   const boxes = [
     { label: "Total Loans", value: String(rows.length) },
@@ -345,16 +430,16 @@ export function exportMyLoans(
   autoTable(doc, {
     startY: tableStartY + 2,
     head: [["#", "Loan No.", "Principal (KES)", "Rate / Model", "Term", "Paid (KES)", "Balance (KES)", "Monthly (KES)", "Status"]],
-    body: rows.map((l, idx) => [
+    body: loanRows.map((l, idx) => [
       String(idx + 1),
       l.loan_number,
-      Number(l.principal).toLocaleString(),
-      `${l.interest_rate}% ${l.interest_model}`,
-      `${l.term_months} mo`,
-      (Number(l.principal) - Number(l.balance)).toLocaleString(),
-      Number(l.balance).toLocaleString(),
-      Number(l.monthly_installment).toLocaleString(),
-      l.status.charAt(0).toUpperCase() + l.status.slice(1),
+      l.principal.toLocaleString(),
+      l.rateModelLabel,
+      `${l.termMonths} mo`,
+      l.paid.toLocaleString(),
+      l.balance.toLocaleString(),
+      l.monthlyInstallment.toLocaleString(),
+      l.status ? l.status.charAt(0).toUpperCase() + l.status.slice(1) : "—",
     ]),
     headStyles: {
       fillColor: NAVY,
@@ -379,7 +464,7 @@ export function exportMyLoans(
     didDrawCell(data) {
       // Colour-code the Status column cells
       if (data.section === "body" && data.column.index === 8) {
-        const status = rows[data.row.index]?.status ?? "";
+        const status = loanRows[data.row.index]?.status ?? "";
         const [r, g, b] = statusColor(status);
         doc.setTextColor(r, g, b);
         doc.setFontSize(8);
@@ -406,13 +491,66 @@ export function exportMyLoans(
   doc.setTextColor(0);
   void col2x; // suppress unused warning
 
+  let scheduleY = finalY + 14;
+  loanRows.forEach((loan) => {
+    if (scheduleY > 240) {
+      doc.addPage();
+      scheduleY = 20;
+    }
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...NAVY);
+    doc.text(`Amortization Schedule — ${loan.loan_number}`, L, scheduleY);
+    scheduleY += 4;
+
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(90);
+    doc.text(`${loan.rateModelLabel} • ${loan.termMonths} months`, L, scheduleY);
+    doc.setTextColor(0);
+    scheduleY += 4;
+
+    const amortModel = loan.interestModel === "reducing" ? "reducing" : "flat";
+    const schedule = generateAmortization(loan.principal, loan.interestRate, loan.termMonths, amortModel);
+    if (schedule.length === 0) {
+      doc.setFontSize(8);
+      doc.setTextColor(120);
+      doc.text("Schedule unavailable for this loan.", L, scheduleY + 2);
+      doc.setTextColor(0);
+      scheduleY += 8;
+      return;
+    }
+
+    autoTable(doc, {
+      startY: scheduleY,
+      head: [["Month", "Payment", "Principal", "Interest", "Balance"]],
+      body: schedule.map((row) => [
+        String(row.month),
+        row.payment.toLocaleString(),
+        row.principal.toLocaleString(),
+        row.interest.toLocaleString(),
+        row.balance.toLocaleString(),
+      ]),
+      headStyles: { fillColor: HEADER_COLOR },
+      styles: { fontSize: 8 },
+      columnStyles: { 1: { halign: "right" }, 2: { halign: "right" }, 3: { halign: "right" }, 4: { halign: "right" } },
+    });
+
+    scheduleY = (doc as any).lastAutoTable.finalY + 8;
+  });
+
   // ── Disclaimer note ───────────────────────────────────────────────────────
+  if (scheduleY > 260) {
+    doc.addPage();
+    scheduleY = 20;
+  }
   doc.setFontSize(7.5);
   doc.setFont("helvetica", "italic");
   doc.setTextColor(120);
   doc.text(
     "This statement is generated for informational purposes only. For official queries contact SMCF SACCO at +254 759 097 157.",
-    L, finalY + 14,
+    L, scheduleY,
     { maxWidth: W }
   );
   doc.setTextColor(0);

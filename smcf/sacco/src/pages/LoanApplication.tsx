@@ -188,7 +188,7 @@ export default function LoanApplication() {
   // Compute SACCO-wide aggregates for the master algorithm
   const saccoCapital = useMemo(() => members.reduce((s: number, m: any) => s + Number(m.savings) + Number(m.shares), 0), [members]);
   const totalLoansIssued = useMemo(() => loansData
-    .filter((l: any) => ["repaying", "disbursed", "approved"].includes(l.status))
+    .filter((l: any) => ["active", "disbursed", "approved"].includes(l.status))
     .reduce((s: number, l: any) => s + Number(l.balance), 0), [loansData]);
 
   // Master Loan Safety Algorithm evaluation
@@ -223,7 +223,7 @@ export default function LoanApplication() {
     if (safetyResult && safetyResult.decision === "REJECT") {
       safetyResult.reasons.forEach((r) => eligibilityIssues.push(r));
     }
-    const existingLoans = loansData.filter((l: any) => l.member_id === selectedMemberId && ["repaying", "disbursed"].includes(l.status));
+    const existingLoans = loansData.filter((l: any) => l.member_id === selectedMemberId && ["active", "disbursed"].includes(l.status));
     if (existingLoans.length >= 2) eligibilityIssues.push("Maximum 2 active loans allowed");
   }
 

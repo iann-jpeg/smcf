@@ -36,13 +36,13 @@ export default function Reports() {
   // Income statement
   const incomeStatement = useMemo(() => {
     const interestIncome = loans.reduce((s, l: any) => s + (Number(l.total_payable) - Number(l.principal)), 0);
-    const disbursed = loans.filter((l: any) => ["repaying", "disbursed", "cleared"].includes(l.status)).length;
+    const disbursed = loans.filter((l: any) => ["active", "disbursed", "completed"].includes(l.status)).length;
     return { interestIncome, disbursed };
   }, [loans]);
 
   // Loan portfolio
   const portfolio = useMemo(() => {
-    const active = loans.filter((l: any) => ["repaying", "disbursed"].includes(l.status));
+    const active = loans.filter((l: any) => ["active", "disbursed"].includes(l.status));
     const defaulted = loans.filter((l: any) => l.status === "defaulted");
     const pending = loans.filter((l: any) => l.status === "pending");
     const totalOutstanding = active.reduce((s, l: any) => s + Number(l.balance), 0);
@@ -191,7 +191,7 @@ export default function Reports() {
                     <div key={loan.id} className="rounded-lg border p-3 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <p className="font-mono text-xs truncate">{loan.loan_number}</p>
-                        <Badge variant={loan.status === "repaying" ? "default" : loan.status === "defaulted" ? "destructive" : "secondary"}>{loan.status}</Badge>
+                        <Badge variant={loan.status === "active" || loan.status === "completed" ? "default" : loan.status === "defaulted" ? "destructive" : "secondary"}>{loan.status}</Badge>
                       </div>
                       <p className="text-sm">{loan.members?.name ?? "—"}</p>
                       <div className="grid grid-cols-2 gap-2 text-sm">
@@ -223,7 +223,7 @@ export default function Reports() {
                           <TableCell>{loan.members?.name ?? "—"}</TableCell>
                           <TableCell className="text-right font-mono">KES {Number(loan.principal).toLocaleString()}</TableCell>
                           <TableCell className="text-right font-mono">KES {Number(loan.balance).toLocaleString()}</TableCell>
-                          <TableCell><Badge variant={loan.status === "repaying" ? "default" : loan.status === "defaulted" ? "destructive" : "secondary"}>{loan.status}</Badge></TableCell>
+                          <TableCell><Badge variant={loan.status === "active" || loan.status === "completed" ? "default" : loan.status === "defaulted" ? "destructive" : "secondary"}>{loan.status}</Badge></TableCell>
                           <TableCell><Badge variant={loan.risk_rating === "low" ? "default" : loan.risk_rating === "high" ? "destructive" : "secondary"}>{loan.risk_rating}</Badge></TableCell>
                         </TableRow>
                       ))}

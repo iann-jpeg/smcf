@@ -451,7 +451,7 @@ export default function LoanSimulator() {
   );
   const totalLoansIssued = useMemo(
     () => loansData
-      .filter((l: any) => ["repaying", "disbursed", "approved"].includes(l.status))
+      .filter((l: any) => ["active", "disbursed", "approved"].includes(l.status))
       .reduce((s: number, l: any) => s + Number(l.balance), 0),
     [loansData]
   );

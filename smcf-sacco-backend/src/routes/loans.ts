@@ -425,15 +425,6 @@ router.put(
         '/loans'
       );
 
-      loan.status = 'disbursed';
-      loan.disbursedDate = new Date();
-      await loan.save();
-
-      // Update member loan balance
-      await Member.findByIdAndUpdate(loan.memberId, {
-        $inc: { loanBalance: loan.principal }
-      });
-
       res.json({
         success: true,
         data: loan
