@@ -92,8 +92,13 @@ export function useMyGuarantorRequests() {
           loan_id: String(loan._id ?? loan.id ?? ""),
           loan_number: loan.loanNumber ?? loan.loan_number ?? "—",
           principal: Number(loan.principal ?? 0),
+          loan_type: loan.loanType ?? loan.loan_type ?? null,
           interest_rate: Number(loan.interestRate ?? loan.interest_rate ?? 0),
+          interest_model: loan.interestModel ?? loan.interest_model ?? "flat",
           term_months: Number(loan.termMonths ?? loan.term_months ?? 0),
+          monthly_interest: Number(loan.monthlyInterest ?? loan.monthly_interest ?? 0),
+          total_interest: Number(loan.totalInterest ?? loan.total_interest ?? 0),
+          total_payable: Number(loan.totalPayable ?? loan.total_payable ?? 0),
           monthly_installment: Number(loan.monthlyInstallment ?? loan.monthly_installment ?? 0),
           loan_status: loan.status ?? "unknown",
           applicant_name: applicant.name ?? "Unknown",
@@ -105,6 +110,31 @@ export function useMyGuarantorRequests() {
           created_at: r.createdAt ?? r.created_at,
         };
       });
+    },
+  });
+}
+
+/** Savings interest statements for the logged-in member */
+export function useMySavingsInterest() {
+  return useQuery({
+    queryKey: ["my-savings-interest"],
+    queryFn: async () => {
+      const res = await api.get("/savings-interest/my");
+      const arr = Array.isArray(res) ? res : (res as any).data ?? [];
+      return arr.map((r: any) => ({
+        id: String(r._id ?? r.id),
+        savings_before: Number(r.savingsBefore ?? r.savings_before ?? 0),
+        interest_amount: Number(r.interestAmount ?? r.interest_amount ?? 0),
+        savings_after: Number(r.savingsAfter ?? r.savings_after ?? 0),
+        created_at: r.createdAt ?? r.created_at,
+        distribution: r.distributionId
+          ? {
+              period: r.distributionId.period,
+              interest_rate: r.distributionId.interestRate,
+              approved_at: r.distributionId.approvedAt,
+            }
+          : null,
+      }));
     },
   });
 }

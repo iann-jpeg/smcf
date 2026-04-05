@@ -36,6 +36,24 @@ function riskLabel(score: number) {
   return { label: "High Risk", variant: "destructive" as const };
 }
 
+const LOAN_TYPE_LABELS: Record<string, string> = {
+  business_development: "Business Development Loan",
+  education: "Education Loan",
+  emergency: "Emergency Loan",
+  asset_acquisition: "Asset Acquisition Loan",
+  personal: "Personal Loan",
+};
+
+function formatLoanType(value?: string) {
+  if (!value) return "—";
+  return LOAN_TYPE_LABELS[value] ?? value;
+}
+
+function formatInterestModel(value?: string) {
+  if (!value) return "flat";
+  return value === "reducing_balance" ? "reducing" : value;
+}
+
 export default function MemberDetail() {
   const { id } = useParams<{ id: string }>();
   const { hasRole } = useAuth();
@@ -399,7 +417,7 @@ export default function MemberDetail() {
                             {loan.status}
                           </Badge>
                         </div>
-                        <p className="text-sm">{loan.interest_rate}% {loan.interest_model} • {loan.term_months}mo</p>
+                        <p className="text-sm">{formatLoanType(loan.loan_type)} • {loan.interest_rate}% {formatInterestModel(loan.interest_model)} • {loan.term_months}mo</p>
                         <div className="grid grid-cols-2 gap-2 text-sm">
                           <div>
                             <p className="text-xs text-muted-foreground">Principal</p>
@@ -430,7 +448,7 @@ export default function MemberDetail() {
                           <TableRow key={loan.id}>
                             <TableCell className="font-mono text-xs">{loan.loan_number}</TableCell>
                             <TableCell className="text-right">KES {Number(loan.principal).toLocaleString()}</TableCell>
-                            <TableCell className="text-sm">{loan.interest_rate}% {loan.interest_model}</TableCell>
+                            <TableCell className="text-sm">{formatLoanType(loan.loan_type)} • {loan.interest_rate}% {formatInterestModel(loan.interest_model)}</TableCell>
                             <TableCell>{loan.term_months}mo</TableCell>
                             <TableCell className="text-right font-semibold">KES {Number(loan.balance).toLocaleString()}</TableCell>
                             <TableCell>

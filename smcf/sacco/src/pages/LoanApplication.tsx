@@ -41,13 +41,15 @@ interface LoanReceiptData {
   loanNumber: string;
   memberName: string;
   memberId: string;
+  loanType?: string;
   appliedBy?: string;
   appliedAt?: string;
   principal: number;
   interestRate: number;
   interestModel: "reducing" | "flat";
   termMonths: number;
-  purpose?: string;
+  monthlyInterest?: number;
+  totalInterest?: number;
   riskRating?: string;
   monthlyPayment?: number;
   totalPayable?: number;
@@ -59,6 +61,41 @@ const APPROVAL_THRESHOLDS = [
   { max: 500_000, levels: ["Credit Officer", "Credit Committee"] },
   { max: Infinity, levels: ["Credit Officer", "Credit Committee", "Board"] },
 ];
+
+const LOAN_TYPES = {
+  business_development: {
+    label: "Business Development Loan",
+    rate: 4,
+    minMonths: 3,
+    maxMonths: 12,
+  },
+  education: {
+    label: "Education Loan",
+    rate: 2.5,
+    minMonths: 3,
+    maxMonths: 6,
+  },
+  emergency: {
+    label: "Emergency Loan",
+    rate: 3,
+    minMonths: 1,
+    maxMonths: 2,
+  },
+  asset_acquisition: {
+    label: "Asset Acquisition Loan",
+    rate: 3,
+    minMonths: 4,
+    maxMonths: 8,
+  },
+  personal: {
+    label: "Personal Loan",
+    rate: 6,
+    minMonths: 1,
+    maxMonths: 3,
+  },
+} as const;
+
+type LoanTypeKey = keyof typeof LOAN_TYPES;
 
 function getRequiredApprovals(amount: number): ApprovalStep[] {
   const config = APPROVAL_THRESHOLDS.find((t) => amount <= t.max)!;
@@ -93,18 +130,31 @@ export default function LoanApplication() {
     }
   }, [isStaff, myMember?.id]);
   const [principal, setPrincipal] = useState("");
-  const [interestRate, setInterestRate] = useState("10");
-  const [interestModel, setInterestModel] = useState<"reducing" | "flat">("reducing");
-  const [term, setTerm] = useState("12");
-  const [purpose, setPurpose] = useState("");
+  const [loanType, setLoanType] = useState<LoanTypeKey | "">("");
+  const [term, setTerm] = useState("");
   const [selectedGuarantors, setSelectedGuarantors] = useState<string[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submittedLoan, setSubmittedLoan] = useState<LoanReceiptData | null>(null);
 
   const principalNum = Number(principal) || 0;
-  const rateNum = Number(interestRate) || 0;
   const termNum = Number(term) || 0;
+  const loanTypeConfig = loanType ? LOAN_TYPES[loanType] : null;
+  const rateNum = loanTypeConfig?.rate ?? 0;
+  const loanTypeLabel = loanTypeConfig?.label ?? "";
+  const minTerm = loanTypeConfig?.minMonths ?? 0;
+  const maxTerm = loanTypeConfig?.maxMonths ?? 0;
+  const isTermValid = !!loanTypeConfig && termNum >= minTerm && termNum <= maxTerm;
+  const termOptions = loanTypeConfig
+    ? Array.from({ length: maxTerm - minTerm + 1 }, (_, i) => minTerm + i)
+    : [];
+
+  useEffect(() => {
+    if (!loanTypeConfig) return;
+    if (!termNum || termNum < minTerm || termNum > maxTerm) {
+      setTerm(String(minTerm));
+    }
+  }, [loanTypeConfig, minTerm, maxTerm, termNum]);
 
   const selectedMember = members.find((m: any) => m.id === selectedMemberId);
   const riskBreakdown = useMemo(
@@ -113,13 +163,18 @@ export default function LoanApplication() {
   );
 
   const schedule = useMemo(
-    () => generateAmortization(principalNum, rateNum, termNum, interestModel),
-    [principalNum, rateNum, termNum, interestModel]
+    () => generateAmortization(principalNum, rateNum, termNum, "flat"),
+    [principalNum, rateNum, termNum]
   );
 
-  const totalPayable = schedule.reduce((sum, r) => sum + r.payment, 0);
-  const totalInterest = schedule.reduce((sum, r) => sum + r.interest, 0);
-  const monthlyPayment = schedule.length > 0 ? schedule[0].payment : 0;
+  const monthlyInterest = principalNum * (rateNum / 100);
+  const totalInterest = monthlyInterest * termNum;
+  const totalPayable = principalNum + totalInterest;
+  const monthlyPayment = termNum > 0 ? totalPayable / termNum : 0;
+  const roundedMonthlyInterest = Math.round(monthlyInterest);
+  const roundedTotalInterest = Math.round(totalInterest);
+  const roundedTotalPayable = Math.round(totalPayable);
+  const roundedMonthlyPayment = Math.round(monthlyPayment);
 
   const approvalSteps = useMemo(() => getRequiredApprovals(principalNum), [principalNum]);
 
@@ -179,7 +234,7 @@ export default function LoanApplication() {
   };
 
   const handleSubmit = async () => {
-    if (!selectedMemberId || principalNum <= 0 || termNum <= 0 || (!isStaff && selectedGuarantors.length < 2)) {
+    if (!selectedMemberId || principalNum <= 0 || termNum <= 0 || !loanTypeConfig || !isTermValid || (!isStaff && selectedGuarantors.length < 2)) {
       toast({ title: "Validation Error", description: "Please complete all required fields.", variant: "destructive" });
       return;
     }
@@ -193,8 +248,9 @@ export default function LoanApplication() {
       const response = await api.post("/loans", {
         memberId: selectedMemberId,
         principal: principalNum,
+        loanType,
         interestRate: rateNum,
-        interestModel: interestModel,
+        interestModel: "flat",
         termMonths: termNum,
         riskRating: safetyResult?.layer2.riskLevel.toLowerCase() ?? riskBreakdown?.riskLevel ?? "medium",
         guarantors: selectedGuarantors.map((gId) => ({
@@ -222,13 +278,15 @@ export default function LoanApplication() {
         appliedBy: user?.fullName ?? user?.email ?? "Staff",
         appliedAt: loanData?.createdAt ?? loanData?.created_at ?? new Date().toISOString(),
         principal: principalNum,
+        loanType: loanTypeLabel,
         interestRate: rateNum,
-        interestModel,
+        interestModel: "flat",
         termMonths: termNum,
-        purpose,
+        monthlyInterest: roundedMonthlyInterest,
+        totalInterest: roundedTotalInterest,
         riskRating: safetyResult?.layer2.riskLevel.toLowerCase() ?? riskBreakdown?.riskLevel ?? "medium",
-        monthlyPayment,
-        totalPayable,
+        monthlyPayment: roundedMonthlyPayment,
+        totalPayable: roundedTotalPayable,
         guarantors: receiptGuarantors,
       });
       setSubmitted(true);
@@ -261,7 +319,8 @@ export default function LoanApplication() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
               <div><span className="text-muted-foreground">Applicant</span><p className="font-semibold">{selectedMember?.name}</p></div>
               <div><span className="text-muted-foreground">Principal</span><p className="font-semibold">KES {principalNum.toLocaleString()}</p></div>
-              <div><span className="text-muted-foreground">Monthly Payment</span><p className="font-semibold">KES {monthlyPayment.toLocaleString()}</p></div>
+              <div><span className="text-muted-foreground">Loan Type</span><p className="font-semibold">{loanTypeLabel || "—"}</p></div>
+              <div><span className="text-muted-foreground">Monthly Payment</span><p className="font-semibold">KES {roundedMonthlyPayment.toLocaleString()}</p></div>
               <div><span className="text-muted-foreground">Risk Score</span><p className="font-semibold">{riskBreakdown?.compositeScore}/100</p></div>
             </div>
           </CardContent>
@@ -359,17 +418,22 @@ export default function LoanApplication() {
                   )}
                 </div>
                 <div className="space-y-2">
-                  <Label>Loan Purpose *</Label>
-                  <Select value={purpose} onValueChange={setPurpose}>
-                    <SelectTrigger><SelectValue placeholder="Select purpose" /></SelectTrigger>
+                  <Label>Loan Type *</Label>
+                  <Select value={loanType} onValueChange={(value) => setLoanType(value as LoanTypeKey)}>
+                    <SelectTrigger><SelectValue placeholder="Select loan type" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="business">Business Development</SelectItem>
-                      <SelectItem value="education">Education</SelectItem>
-                      <SelectItem value="emergency">Emergency</SelectItem>
-                      <SelectItem value="asset">Asset Acquisition</SelectItem>
-                      <SelectItem value="personal">Personal</SelectItem>
+                      {Object.entries(LOAN_TYPES).map(([key, cfg]) => (
+                        <SelectItem key={key} value={key}>
+                          {cfg.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
+                  {loanTypeConfig && (
+                    <p className="text-xs text-muted-foreground">
+                      Fixed {rateNum}% per month • {minTerm}–{maxTerm} months
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -385,24 +449,26 @@ export default function LoanApplication() {
                 </div>
                 <div className="space-y-2">
                   <Label>Monthly Interest Rate (%)</Label>
-                  <Input type="number" min={0.1} max={30} step={0.1} value={interestRate} onChange={(e) => setInterestRate(e.target.value)} />
+                  <Input type="text" value={loanTypeConfig ? `${rateNum}` : ""} readOnly disabled />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Interest Model</Label>
-                  <Select value={interestModel} onValueChange={(v) => setInterestModel(v as "reducing" | "flat")}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                  <Label>Term (Months) *</Label>
+                  <Select value={term} onValueChange={setTerm} disabled={!loanTypeConfig}>
+                    <SelectTrigger><SelectValue placeholder={loanTypeConfig ? "Select duration" : "Select loan type first"} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="reducing">Reducing Balance</SelectItem>
-                      <SelectItem value="flat">Flat Rate</SelectItem>
+                      {termOptions.map((value) => (
+                        <SelectItem key={value} value={String(value)}>
+                          {value} {value === 1 ? "month" : "months"}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Term (Months) *</Label>
-                  <Input type="number" min={1} max={60} value={term} onChange={(e) => setTerm(e.target.value)} />
+                  {loanTypeConfig && !isTermValid && term && (
+                    <p className="text-xs text-destructive">Select {minTerm}–{maxTerm} months for this loan type.</p>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -460,22 +526,26 @@ export default function LoanApplication() {
               <CardHeader>
                 <CardTitle className="font-heading text-lg flex items-center gap-2">
                   <Calculator className="h-5 w-5 text-primary" /> Amortization Schedule
-                  <Badge variant="secondary" className="ml-auto">{interestModel === "reducing" ? "Reducing Balance" : "Flat Rate"}</Badge>
+                  <Badge variant="secondary" className="ml-auto">Flat Rate</Badge>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-3 gap-4 mb-4 text-sm">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 text-sm">
                   <div className="p-3 rounded-lg bg-muted/50">
                     <p className="text-muted-foreground">Monthly Payment</p>
-                    <p className="text-lg font-bold font-heading">KES {monthlyPayment.toLocaleString()}</p>
+                    <p className="text-lg font-bold font-heading">KES {roundedMonthlyPayment.toLocaleString()}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-muted/50">
+                    <p className="text-muted-foreground">Monthly Interest</p>
+                    <p className="text-lg font-bold font-heading">KES {roundedMonthlyInterest.toLocaleString()}</p>
                   </div>
                   <div className="p-3 rounded-lg bg-muted/50">
                     <p className="text-muted-foreground">Total Interest</p>
-                    <p className="text-lg font-bold font-heading">KES {totalInterest.toLocaleString()}</p>
+                    <p className="text-lg font-bold font-heading">KES {roundedTotalInterest.toLocaleString()}</p>
                   </div>
                   <div className="p-3 rounded-lg bg-muted/50">
                     <p className="text-muted-foreground">Total Payable</p>
-                    <p className="text-lg font-bold font-heading">KES {totalPayable.toLocaleString()}</p>
+                    <p className="text-lg font-bold font-heading">KES {roundedTotalPayable.toLocaleString()}</p>
                   </div>
                 </div>
                 <div className="max-h-[300px] overflow-y-auto">
@@ -550,7 +620,7 @@ export default function LoanApplication() {
             </CardContent>
           </Card>
 
-          <Button className="w-full gap-2" size="lg" onClick={handleSubmit} disabled={!selectedMemberId || principalNum <= 0 || (shouldEnforceEligibility && eligibilityIssues.length > 0) || submitting}>
+          <Button className="w-full gap-2" size="lg" onClick={handleSubmit} disabled={!selectedMemberId || principalNum <= 0 || !loanTypeConfig || !isTermValid || (shouldEnforceEligibility && eligibilityIssues.length > 0) || submitting}>
             {submitting ? "Submitting..." : "Submit Application"}
           </Button>
         </div>

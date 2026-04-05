@@ -176,13 +176,15 @@ export function exportLoanApplicationReceipt(data: {
   loanNumber: string;
   memberName: string;
   memberId: string;
+  loanType?: string;
   appliedBy?: string;
   appliedAt?: string | Date;
   principal: number;
   interestRate: number;
   interestModel: "reducing" | "flat" | string;
   termMonths: number;
-  purpose?: string;
+  monthlyInterest?: number;
+  totalInterest?: number;
   riskRating?: string;
   monthlyPayment?: number;
   totalPayable?: number;
@@ -201,12 +203,14 @@ export function exportLoanApplicationReceipt(data: {
       ["Applicant", `${data.memberName || ""}${data.memberId ? ` (${data.memberId})` : ""}`.trim() || "—"],
       ["Applied By", data.appliedBy || "Member Portal"],
       ["Applied On", appliedDate],
+      ["Loan Type", data.loanType || "—"],
       ["Principal", `KES ${Number(data.principal || 0).toLocaleString()}`],
       ["Interest", `${Number(data.interestRate || 0)}% ${modelLabel}`.trim()],
       ["Term", `${Number(data.termMonths || 0)} months`],
-      ["Purpose", data.purpose || "—"],
-      ["Monthly Payment", data.monthlyPayment ? `KES ${Number(data.monthlyPayment).toLocaleString()}` : "—"],
-      ["Total Payable", data.totalPayable ? `KES ${Number(data.totalPayable).toLocaleString()}` : "—"],
+      ["Monthly Interest", data.monthlyInterest ? `KES ${Number(data.monthlyInterest).toLocaleString()}` : "—"],
+      ["Total Interest", data.totalInterest ? `KES ${Number(data.totalInterest).toLocaleString()}` : "—"],
+      ["Monthly Installment", data.monthlyPayment ? `KES ${Number(data.monthlyPayment).toLocaleString()}` : "—"],
+      ["Total Repayment", data.totalPayable ? `KES ${Number(data.totalPayable).toLocaleString()}` : "—"],
       ["Risk Rating", data.riskRating ? data.riskRating.toUpperCase() : "—"],
     ],
     headStyles: { fillColor: HEADER_COLOR },

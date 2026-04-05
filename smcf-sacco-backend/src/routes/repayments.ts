@@ -4,6 +4,7 @@ import RepaymentRecord from '../models/RepaymentRecord';
 import Transaction from '../models/Transaction';
 import Loan from '../models/Loan';
 import Member from '../models/Member';
+import SystemConfig from '../models/SystemConfig';
 import { protect, authorize, AuthRequest } from '../middleware/auth';
 import { auditLog } from '../middleware/auditLog';
 import { notifyMember } from '../utils/notify';
@@ -29,16 +30,48 @@ async function processRepayment(
   note: string | null,
   actorId: string | null
 ): Promise<{ transaction: any; repaymentRecord: any; loanCompleted: boolean }> {
-
   const loan = await Loan.findById(loanId);
   if (!loan) throw new Error('Loan not found');
   if (!['disbursed', 'active'].includes(loan.status)) {
     throw new Error('Loan is not active or disbursed — repayment not allowed');
   }
 
-  const paid = Math.min(amount, loan.balance); // can't overpay
+  // 1. Update the oldest pending/overdue repayment installment
+  const installment = await RepaymentRecord.findOne({
+    loanId: loan._id,
+    status: { $in: ['pending', 'overdue', 'partial'] },
+  }).sort({ dueDate: 1 });
 
-  // 1. Create transaction record
+  let penaltyApplied = 0;
+  if (installment) {
+    const now = new Date();
+    if (installment.dueDate < now && installment.status !== 'paid') {
+      if (!installment.penaltyAmount) {
+        const config = await SystemConfig.getConfig();
+        const penaltyRate = Math.max(0, Number(config.penaltyRate || 0));
+        penaltyApplied = Math.round((installment.amountDue * penaltyRate) / 100);
+        if (penaltyApplied > 0) {
+          await RepaymentRecord.findByIdAndUpdate(
+            installment._id,
+            {
+              penaltyAmount: penaltyApplied,
+              amountDue: installment.amountDue + penaltyApplied,
+              status: 'overdue',
+            },
+            { new: true }
+          );
+          installment.amountDue += penaltyApplied;
+        }
+      } else if (installment.status === 'pending') {
+        await RepaymentRecord.findByIdAndUpdate(installment._id, { status: 'overdue' });
+      }
+    }
+  }
+
+  const effectiveBalance = Math.max(0, loan.balance + penaltyApplied);
+  const paid = Math.min(amount, effectiveBalance); // can't overpay
+
+  // 2. Create transaction record
   const txnRef = await generateTxnRef();
   const transaction = await Transaction.create({
     transactionRef: txnRef,
@@ -50,15 +83,9 @@ async function processRepayment(
     createdBy: actorId,
   });
 
-  // 2. Update the oldest pending/overdue repayment installment
-  const installment = await RepaymentRecord.findOne({
-    loanId: loan._id,
-    status: { $in: ['pending', 'overdue', 'partial'] },
-  }).sort({ dueDate: 1 });
-
   let repaymentRecord = null;
   if (installment) {
-    const newPaid  = (installment.amountPaid || 0) + paid;
+    const newPaid = (installment.amountPaid || 0) + paid;
     const newStatus: IRepaymentStatus =
       newPaid >= installment.amountDue ? 'paid' : 'partial';
 
@@ -74,7 +101,7 @@ async function processRepayment(
   }
 
   // 3. Update loan balance
-  const newBalance = Math.max(0, loan.balance - paid);
+  const newBalance = Math.max(0, effectiveBalance - paid);
   const loanCompleted = newBalance === 0;
   await Loan.findByIdAndUpdate(loanId, {
     balance: newBalance,
@@ -82,7 +109,7 @@ async function processRepayment(
   });
 
   // 4. Update member's loanBalance
-  await Member.findByIdAndUpdate(loan.memberId, { $inc: { loanBalance: -paid } });
+  await Member.findByIdAndUpdate(loan.memberId, { $inc: { loanBalance: penaltyApplied - paid } });
 
   // 5. Notify the member their repayment was recorded
   notifyMember(
@@ -90,7 +117,7 @@ async function processRepayment(
     loanCompleted ? 'Loan Fully Repaid 🎉' : 'Repayment Confirmed ✅',
     loanCompleted
       ? `Congratulations! Your loan ${loan.loanNumber} has been fully repaid.`
-      : `Your repayment of KES ${paid.toLocaleString()} for loan ${loan.loanNumber} has been confirmed. Remaining balance: KES ${Math.max(0, loan.balance - paid).toLocaleString()}.`,
+      : `Your repayment of KES ${paid.toLocaleString()} for loan ${loan.loanNumber} has been confirmed. Remaining balance: KES ${Math.max(0, newBalance).toLocaleString()}.`,
     'approval',
     '/my-account'
   );

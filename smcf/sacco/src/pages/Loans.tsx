@@ -39,6 +39,24 @@ const PAYMENT_METHODS = [
   { value: "cheque",        label: "Cheque" },
 ];
 
+const LOAN_TYPE_LABELS: Record<string, string> = {
+  business_development: "Business Development Loan",
+  education: "Education Loan",
+  emergency: "Emergency Loan",
+  asset_acquisition: "Asset Acquisition Loan",
+  personal: "Personal Loan",
+};
+
+function formatLoanType(value?: string) {
+  if (!value) return "—";
+  return LOAN_TYPE_LABELS[value] ?? value;
+}
+
+function formatInterestModel(value?: string) {
+  if (!value) return "flat";
+  return value === "reducing_balance" ? "reducing" : value;
+}
+
 export default function Loans() {
   const navigate = useNavigate();
   const { data: loans = [], isLoading } = useLoans();
@@ -112,12 +130,14 @@ export default function Loans() {
       loanNumber: loan.loan_number ?? "LN-NEW",
       memberName: loan.members?.name ?? "Member",
       memberId: loan.members?.member_id ?? loan.member_id ?? "",
+      loanType: formatLoanType(loan.loan_type),
       appliedAt: loan.applied_at ?? loan.created_at,
       principal: Number(loan.principal ?? 0),
       interestRate: Number(loan.interest_rate ?? 0),
       interestModel: loan.interest_model ?? "reducing",
       termMonths: Number(loan.term_months ?? 0),
-      purpose: loan.purpose ?? undefined,
+      monthlyInterest: loan.monthly_interest ? Number(loan.monthly_interest) : undefined,
+      totalInterest: loan.total_interest ? Number(loan.total_interest) : undefined,
       riskRating: loan.risk_rating ?? undefined,
       monthlyPayment: loan.monthly_installment ? Number(loan.monthly_installment) : undefined,
       totalPayable: loan.total_payable ? Number(loan.total_payable) : undefined,
@@ -157,7 +177,8 @@ export default function Loans() {
                   <TableHead>Loan #</TableHead>
                   <TableHead>Member</TableHead>
                   <TableHead className="text-right">Principal</TableHead>
-                  <TableHead>Rate / Model</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Rate (Monthly)</TableHead>
                   <TableHead>Term</TableHead>
                   <TableHead className="text-right">Monthly</TableHead>
                   <TableHead className="text-right">Balance</TableHead>
@@ -172,7 +193,8 @@ export default function Loans() {
                     <TableCell className="font-mono text-xs">{loan.loan_number}</TableCell>
                     <TableCell className="font-medium">{loan.members?.name ?? "—"}</TableCell>
                     <TableCell className="text-right">KES {Number(loan.principal).toLocaleString()}</TableCell>
-                    <TableCell className="text-sm">{loan.interest_rate}% {loan.interest_model}</TableCell>
+                    <TableCell className="text-sm">{formatLoanType(loan.loan_type)}</TableCell>
+                    <TableCell className="text-sm">{loan.interest_rate}% {formatInterestModel(loan.interest_model)}</TableCell>
                     <TableCell>{loan.term_months}mo</TableCell>
                     <TableCell className="text-right">KES {Number(loan.monthly_installment).toLocaleString()}</TableCell>
                     <TableCell className="text-right font-semibold">KES {Number(loan.balance).toLocaleString()}</TableCell>

@@ -51,6 +51,24 @@ const ROLE_OPTIONS = [
   { value: "board", label: "Board" },
 ];
 
+const LOAN_TYPE_LABELS: Record<string, string> = {
+  business_development: "Business Development Loan",
+  education: "Education Loan",
+  emergency: "Emergency Loan",
+  asset_acquisition: "Asset Acquisition Loan",
+  personal: "Personal Loan",
+};
+
+function formatLoanType(value?: string) {
+  if (!value) return "—";
+  return LOAN_TYPE_LABELS[value] ?? value;
+}
+
+function formatInterestModel(value?: string) {
+  if (!value) return "flat";
+  return value === "reducing_balance" ? "reducing" : value;
+}
+
 export default function LoanApprovals() {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -240,8 +258,13 @@ export default function LoanApprovals() {
                       </div>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                         <div><p className="text-muted-foreground text-xs">Principal</p><p className="font-semibold">KES {loan.principal?.toLocaleString()}</p></div>
-                        <div><p className="text-muted-foreground text-xs">Rate / Model</p><p className="font-semibold">{loan.interest_rate}% {loan.interest_model}</p></div>
+                        <div><p className="text-muted-foreground text-xs">Loan Type</p><p className="font-semibold">{formatLoanType(loan.loan_type)}</p></div>
+                        <div><p className="text-muted-foreground text-xs">Rate (Monthly)</p><p className="font-semibold">{loan.interest_rate}% {formatInterestModel(loan.interest_model)}</p></div>
                         <div><p className="text-muted-foreground text-xs">Term</p><p className="font-semibold">{loan.term_months} months</p></div>
+                        <div><p className="text-muted-foreground text-xs">Monthly Interest</p><p className="font-semibold">KES {Number(loan.monthly_interest ?? 0).toLocaleString()}</p></div>
+                        <div><p className="text-muted-foreground text-xs">Total Interest</p><p className="font-semibold">KES {Number(loan.total_interest ?? 0).toLocaleString()}</p></div>
+                        <div><p className="text-muted-foreground text-xs">Monthly Installment</p><p className="font-semibold">KES {Number(loan.monthly_installment ?? 0).toLocaleString()}</p></div>
+                        <div><p className="text-muted-foreground text-xs">Total Repayment</p><p className="font-semibold">KES {Number(loan.total_payable ?? 0).toLocaleString()}</p></div>
                         <div><p className="text-muted-foreground text-xs">Guarantors</p><p className="font-semibold">{loan.loan_guarantors?.length ?? 0}</p></div>
                       </div>
                       {loan.loan_guarantors?.length > 0 && (
@@ -346,6 +369,13 @@ export default function LoanApprovals() {
                 <div className="p-3 rounded-lg bg-muted/50"><p className="text-muted-foreground text-xs">Risk Score</p><p className="font-bold text-lg">{reviewLoan.risk?.compositeScore ?? "N/A"}/100</p></div>
                 <div className="p-3 rounded-lg bg-muted/50"><p className="text-muted-foreground text-xs">Term</p><p className="font-bold text-lg">{reviewLoan.term_months}mo</p></div>
                 <div className="p-3 rounded-lg bg-muted/50"><p className="text-muted-foreground text-xs">Guarantors</p><p className="font-bold text-lg">{reviewLoan.loan_guarantors?.length ?? 0}</p></div>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                <div className="p-3 rounded-lg bg-muted/50"><p className="text-muted-foreground text-xs">Loan Type</p><p className="font-bold text-sm">{formatLoanType(reviewLoan.loan_type)}</p></div>
+                <div className="p-3 rounded-lg bg-muted/50"><p className="text-muted-foreground text-xs">Rate (Monthly)</p><p className="font-bold text-sm">{reviewLoan.interest_rate}% {formatInterestModel(reviewLoan.interest_model)}</p></div>
+                <div className="p-3 rounded-lg bg-muted/50"><p className="text-muted-foreground text-xs">Monthly Interest</p><p className="font-bold text-sm">KES {Number(reviewLoan.monthly_interest ?? 0).toLocaleString()}</p></div>
+                <div className="p-3 rounded-lg bg-muted/50"><p className="text-muted-foreground text-xs">Total Repayment</p><p className="font-bold text-sm">KES {Number(reviewLoan.total_payable ?? 0).toLocaleString()}</p></div>
               </div>
 
               {reviewLoan.risk?.factors?.length > 0 && (

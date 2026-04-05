@@ -74,7 +74,7 @@ router.post(
   auditLog('transactions', 'create'),
   [
     body('memberId').notEmpty().withMessage('Member ID is required'),
-    body('type').isIn(['deposit', 'withdrawal', 'loan_disbursement', 'loan_repayment', 'share_purchase', 'share_transfer', 'dividend'])
+    body('type').isIn(['deposit', 'withdrawal', 'loan_disbursement', 'loan_repayment', 'share_purchase', 'share_transfer', 'dividend', 'savings_interest'])
       .withMessage('Invalid transaction type'),
     body('amount').isNumeric().withMessage('Amount is required'),
     body('description').optional()
@@ -114,6 +114,8 @@ router.post(
         updateField.$inc = { savings: -amount };
       } else if (type === 'share_purchase') {
         updateField.$inc = { shares: amount };
+      } else if (type === 'savings_interest') {
+        updateField.$inc = { savings: amount };
       } else if (type === 'loan_repayment') {
         updateField.$inc = { loanBalance: -amount };
       }
