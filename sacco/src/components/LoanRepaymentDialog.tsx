@@ -223,9 +223,11 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
                 </div>
                 {amountNum > 0 && (
                   <div className="space-y-1">
-                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                      <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${pct}%` }} />
-                    </div>
+                    <progress
+                      value={pct}
+                      max={100}
+                      className="h-1.5 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:bg-blue-500 [&::-moz-progress-bar]:bg-blue-500"
+                    />
                     <p className="text-xs text-muted-foreground">
                       Paying <span className="font-semibold text-blue-600">{pct}%</span> of outstanding balance.
                       {isFull && <span className="text-green-600 font-semibold ml-1">This will fully clear the loan!</span>}
