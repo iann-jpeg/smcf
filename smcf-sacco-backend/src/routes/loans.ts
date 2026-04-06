@@ -552,16 +552,18 @@ router.put(
         return res.status(404).json({ success: false, message: 'Loan not found' });
       }
 
-      if (loan.status !== 'approved') {
+      if (!['approved', 'pending'].includes(loan.status)) {
         return res.status(400).json({
           success: false,
-          message: `Loan is not in approved status. Current status: ${loan.status}`
+          message: `Loan cannot be disbursed from status: ${loan.status}`
         });
       }
 
       // Update loan to active status (ready for repayments)
       loan.status = 'active';
       loan.disbursedDate = new Date();
+      if (loan.approvedAt == null) loan.approvedAt = new Date();
+      if (loan.approvedBy == null) loan.approvedBy = req.userId as any;
       await loan.save();
 
       await createRepaymentSchedule(loan, loan.disbursedDate);

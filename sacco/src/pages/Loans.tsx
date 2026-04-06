@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLoans } from "@/hooks/useLoans";
+import { useAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -69,6 +70,7 @@ function getLoanProgress(loan: any) {
 
 export default function Loans() {
   const navigate = useNavigate();
+  const { isStaff } = useAuth();
   const { data: loans = [], isLoading } = useLoans();
   const qc = useQueryClient();
 
@@ -103,11 +105,14 @@ export default function Loans() {
     setSuccess(false);
   }
 
-  async function handleDisburse(loanId: string) {
-    if (!confirm("Confirm disbursement of this loan?")) return;
+  async function handleDisburse(loan: any) {
+    const confirmMessage = loan.status === "pending"
+      ? "This loan is still pending approval. Disburse anyway and activate the repayment schedule?"
+      : "Confirm disbursement of this loan?";
+    if (!confirm(confirmMessage)) return;
     setDisbursing(true);
     try {
-      await api.put(`/loans/${loanId}/disburse`);
+      await api.put(`/loans/${loan.id}/disburse`);
       toast.success("Loan disbursed successfully");
       qc.invalidateQueries({ queryKey: ["loans"] });
     } catch (error: any) {
@@ -236,16 +241,16 @@ export default function Loans() {
                     <TableCell><Badge variant={statusBadge(loan.status)}>{loan.status}</Badge></TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-2">
-                        {loan.status === "approved" && (
+                        {isStaff && ["approved", "pending"].includes(loan.status) && (
                           <Button
                             size="sm"
                             variant="outline"
                             className="gap-1.5 text-xs border-green-400 text-green-600 hover:bg-green-50 hover:text-green-700 whitespace-nowrap"
-                            onClick={() => handleDisburse(loan.id)}
+                            onClick={() => handleDisburse(loan)}
                             disabled={disbursing}
                           >
                             <ArrowRight className="h-3.5 w-3.5" />
-                            Disburse
+                            {loan.status === "pending" ? "Approve + Disburse" : "Disburse"}
                           </Button>
                         )}
                         {["active", "disbursed", "repaying"].includes(loan.status) && Number(loan.balance) > 0 && (
