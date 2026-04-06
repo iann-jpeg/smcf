@@ -3,7 +3,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface ITransaction extends Document {
   transactionRef: string;
   memberId: mongoose.Types.ObjectId;
-  type: 'deposit' | 'withdrawal' | 'loan_disbursement' | 'loan_repayment' | 'share_purchase' | 'share_transfer' | 'dividend';
+  type: 'deposit' | 'withdrawal' | 'loan_disbursement' | 'loan_repayment' | 'share_purchase' | 'share_transfer' | 'dividend' | 'savings_interest';
   amount: number;
   description: string | null;
   status: 'pending' | 'completed' | 'failed' | 'reversed' | 'declined';
@@ -25,7 +25,7 @@ const TransactionSchema = new Schema<ITransaction>({
   },
   type: { 
     type: String, 
-    enum: ['deposit', 'withdrawal', 'loan_disbursement', 'loan_repayment', 'share_purchase', 'share_transfer', 'dividend'],
+    enum: ['deposit', 'withdrawal', 'loan_disbursement', 'loan_repayment', 'share_purchase', 'share_transfer', 'dividend', 'savings_interest'],
     required: true 
   },
   amount: { 

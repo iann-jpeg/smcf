@@ -71,7 +71,7 @@ function formatInterestModel(value?: string) {
 
 export default function LoanApprovals() {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { roles } = useAuth();
   const queryClient = useQueryClient();
   const { data: membersData = [] } = useMembers();
   const { data: systemConfig } = useQuery({
@@ -83,6 +83,7 @@ export default function LoanApprovals() {
   const [reviewLoan, setReviewLoan] = useState<any>(null);
   const [reviewAction, setReviewAction] = useState<"approve" | "reject" | null>(null);
   const [reviewNote, setReviewNote] = useState("");
+  const [disbursingLoanId, setDisbursingLoanId] = useState<string | null>(null);
 
   // Fetch pending loans with their approvals and guarantors
   const { data: loans = [], isLoading } = useLoans();
@@ -166,6 +167,22 @@ export default function LoanApprovals() {
       return;
     }
     approvalMutation.mutate({ loanId: reviewLoan.id, decision: reviewAction === "approve" ? "approved" : "rejected", notes: reviewNote });
+  };
+
+  const canDisburseRole = roles.some((r) => ["admin", "credit_officer", "treasurer"].includes(r));
+
+  const handleDisburse = async (loan: any) => {
+    if (!confirm(`Disburse loan ${loan.loan_number}?`)) return;
+    setDisbursingLoanId(loan.id);
+    try {
+      await api.put(`/loans/${loan.id}/disburse`);
+      toast({ title: "Loan disbursed" });
+      queryClient.invalidateQueries({ queryKey: ["loans"] });
+    } catch (err: any) {
+      toast({ title: "Disbursement failed", description: err.message, variant: "destructive" });
+    } finally {
+      setDisbursingLoanId(null);
+    }
   };
 
   if (isLoading) {
@@ -348,11 +365,11 @@ export default function LoanApprovals() {
         </TabsContent>
 
         <TabsContent value="processed" className="mt-4">
-          <Card><CardContent className="pt-6"><LoanTable loans={processedByRole} activeRole={activeRole} /></CardContent></Card>
+          <Card><CardContent className="pt-6"><LoanTable loans={processedByRole} activeRole={activeRole} canDisburse={canDisburseRole} onDisburse={handleDisburse} disbursingLoanId={disbursingLoanId} /></CardContent></Card>
         </TabsContent>
 
         <TabsContent value="all" className="mt-4">
-          <Card><CardContent className="pt-6"><LoanTable loans={enrichedLoans} activeRole={activeRole} showPipeline /></CardContent></Card>
+          <Card><CardContent className="pt-6"><LoanTable loans={enrichedLoans} activeRole={activeRole} showPipeline canDisburse={canDisburseRole} onDisburse={handleDisburse} disbursingLoanId={disbursingLoanId} /></CardContent></Card>
         </TabsContent>
       </Tabs>
 
@@ -435,7 +452,21 @@ export default function LoanApprovals() {
   );
 }
 
-function LoanTable({ loans, activeRole, showPipeline = false }: { loans: any[]; activeRole: string; showPipeline?: boolean }) {
+function LoanTable({
+  loans,
+  activeRole,
+  showPipeline = false,
+  canDisburse = false,
+  onDisburse,
+  disbursingLoanId,
+}: {
+  loans: any[];
+  activeRole: string;
+  showPipeline?: boolean;
+  canDisburse?: boolean;
+  onDisburse?: (loan: any) => void;
+  disbursingLoanId?: string | null;
+}) {
   if (loans.length === 0) return <p className="text-center text-muted-foreground py-8">No applications to display.</p>;
 
   return (
@@ -448,11 +479,14 @@ function LoanTable({ loans, activeRole, showPipeline = false }: { loans: any[]; 
           <TableHead className="text-center">Risk</TableHead>
           <TableHead>Applied</TableHead>
           {showPipeline ? <TableHead>Pipeline</TableHead> : <><TableHead>Decision</TableHead><TableHead>Note</TableHead></>}
+          {canDisburse && <TableHead>Action</TableHead>}
         </TableRow>
       </TableHeader>
       <TableBody>
         {loans.map((loan: any) => {
           const level = loan.levels.find((l: any) => l.role === activeRole);
+          const isFullyApproved = loan.overallStatus === "approved" && loan.status === "approved";
+          const isDisbursed = ["active", "disbursed", "completed"].includes(loan.status);
           return (
             <TableRow key={loan.id}>
               <TableCell className="font-mono text-xs">{loan.loan_number}</TableCell>
@@ -476,6 +510,22 @@ function LoanTable({ loans, activeRole, showPipeline = false }: { loans: any[]; 
                   <TableCell>{level && <Badge variant={level.status === "approved" ? "default" : level.status === "rejected" ? "destructive" : "secondary"}>{level.status}</Badge>}</TableCell>
                   <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">{level?.note || "—"}</TableCell>
                 </>
+              )}
+              {canDisburse && (
+                <TableCell>
+                  {isFullyApproved && !isDisbursed && onDisburse ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onDisburse(loan)}
+                      disabled={disbursingLoanId === loan.id}
+                    >
+                      {disbursingLoanId === loan.id ? "Disbursing..." : "Disburse"}
+                    </Button>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
+                </TableCell>
               )}
             </TableRow>
           );

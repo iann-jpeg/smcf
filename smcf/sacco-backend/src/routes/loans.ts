@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { body, validationResult } from 'express-validator';
 import Loan from '../models/Loan';
+import RepaymentRecord from '../models/RepaymentRecord';
 import LoanGuarantor from '../models/LoanGuarantor';
 import LoanApproval from '../models/LoanApproval';
 import Member from '../models/Member';
@@ -9,6 +10,32 @@ import { auditLog } from '../middleware/auditLog';
 import { notifyMember, notifyStaff } from '../utils/notify';
 
 const router = Router();
+
+function addMonths(date: Date, months: number): Date {
+  const d = new Date(date);
+  d.setMonth(d.getMonth() + months);
+  return d;
+}
+
+async function createRepaymentSchedule(loan: any, startDate: Date) {
+  const existing = await RepaymentRecord.countDocuments({ loanId: loan._id });
+  if (existing > 0) return;
+
+  const termMonths = Math.max(1, Number(loan.termMonths || 0));
+  const amountDue = Math.round(Number(loan.monthlyInstallment || 0));
+  if (!amountDue || Number.isNaN(amountDue)) return;
+
+  const rows = Array.from({ length: termMonths }).map((_, idx) => ({
+    loanId: loan._id,
+    memberId: loan.memberId,
+    dueDate: addMonths(startDate, idx + 1),
+    amountDue,
+    amountPaid: 0,
+    status: 'pending' as const,
+  }));
+
+  await RepaymentRecord.insertMany(rows);
+}
 
 // @route   GET /api/loans
 // @desc    Get all loans (with optional filters)
@@ -348,19 +375,64 @@ router.put(
         '/loans'
       );
 
-      loan.status = 'disbursed';
-      loan.disbursedDate = new Date();
-      await loan.save();
-
-      // Update member loan balance
-      await Member.findByIdAndUpdate(loan.memberId, {
-        $inc: { loanBalance: loan.principal }
-      });
-
       res.json({
         success: true,
         data: loan
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// @route   PUT /api/loans/:id/disburse
+// @desc    Disburse an approved loan
+// @access  Private (Staff only)
+router.put(
+  '/:id/disburse', 
+  protect,
+  authorize('admin', 'credit_officer', 'treasurer'),
+  auditLog('loans', 'disburse'),
+  async (req: AuthRequest, res, next) => {
+    try {
+      const loan = await Loan.findById(req.params.id);
+      if (!loan) {
+        return res.status(404).json({ success: false, message: 'Loan not found' });
+      }
+
+      if (loan.status !== 'approved') {
+        return res.status(400).json({
+          success: false,
+          message: `Loan is not approved. Current status: ${loan.status}`,
+        });
+      }
+
+      loan.status = 'active';
+      loan.disbursedDate = new Date();
+      await loan.save();
+
+      await createRepaymentSchedule(loan, loan.disbursedDate);
+
+      await Member.findByIdAndUpdate(loan.memberId, {
+        $inc: { loanBalance: loan.principal },
+      });
+
+      notifyMember(
+        loan.memberId,
+        'Loan Disbursed',
+        `Your loan ${loan.loanNumber} for KES ${Number(loan.principal).toLocaleString()} has been disbursed.`,
+        'approval',
+        '/my-account?tab=loans'
+      );
+
+      notifyStaff(
+        `Loan ${loan.loanNumber} disbursed`,
+        `Loan ${loan.loanNumber} for KES ${Number(loan.principal).toLocaleString()} has been disbursed.`,
+        'info',
+        '/loans'
+      );
+
+      res.json({ success: true, data: loan });
     } catch (error) {
       next(error);
     }
