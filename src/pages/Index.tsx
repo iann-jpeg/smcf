@@ -528,6 +528,37 @@ const Index = () => {
         </div>
       </section>
 
+      {/* Till Banner (floating) */}
+      <section className="relative px-3 sm:px-4">
+        <div className="container mx-auto max-w-4xl">
+          <div className="relative -mt-10 sm:-mt-12 md:-mt-16 mb-10">
+            <div className="rounded-2xl border border-white/40 bg-[#6BB043] text-white shadow-2xl">
+              <div className="px-4 sm:px-6 py-4 sm:py-5 text-center">
+                <p className="text-sm sm:text-base font-semibold tracking-wide">
+                  BUY GOODS &amp; SERVICES
+                </p>
+                <p className="text-xs sm:text-sm font-semibold tracking-[0.3em]">TILL NO</p>
+              </div>
+              <div className="bg-[#5CA63A] px-4 sm:px-6 pb-5 sm:pb-6">
+                <div className="flex items-center justify-center gap-2 sm:gap-3">
+                  {"6938069".split("").map((digit, index) => (
+                    <div
+                      key={`${digit}-${index}`}
+                      className="flex h-12 w-12 items-center justify-center rounded-md bg-white text-2xl font-bold text-[#2F5E2B] shadow-sm sm:h-14 sm:w-14"
+                    >
+                      {digit}
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-3 text-center text-[10px] sm:text-xs text-white/90">
+                  Use MySafaricom App (Cost Calculator) or dial *234# to view applicable charges
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Features */}
       <section className="py-10 sm:py-16 md:py-20 px-3 sm:px-4 bg-muted/30">
         <div className="container mx-auto max-w-6xl">
