@@ -3,10 +3,16 @@
  * Reads VITE_SACCO_API_URL first, then falls back to VITE_API_URL.
  */
 
-const BASE =
+function normalizeApiBase(raw: string | undefined, fallback = "http://localhost:5000/api"): string {
+  const value = String(raw || "").trim();
+  if (!value) return fallback;
+  return value.endsWith("/api") ? value : `${value.replace(/\/+$/, "")}/api`;
+}
+
+const BASE = normalizeApiBase(
   (import.meta.env.VITE_SACCO_API_URL as string) ||
-  (import.meta.env.VITE_API_URL as string) ||
-  "http://localhost:5000/api";
+  (import.meta.env.VITE_API_URL as string)
+);
 const TOKEN_KEY = "smcf_auth_token";
 
 export function getApiBaseForDebug(): string {
@@ -33,6 +39,28 @@ interface DbDocument {
   _id?: string | object;
   id?: string;
   [key: string]: unknown;
+}
+
+type UnknownRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === "object" && value !== null;
+}
+
+function asRecordArray(value: unknown): UnknownRecord[] {
+  return Array.isArray(value) ? value.filter(isRecord) : [];
+}
+
+function toStringSafe(value: unknown, fallback = ""): string {
+  if (value === null || value === undefined) return fallback;
+  return String(value);
+}
+
+function toNullableString(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
+  return null;
 }
 
 export interface NormalizedMember extends DbDocument {
@@ -160,8 +188,10 @@ export async function initiateRegistrationFeePayment(payload: {
   phone?: string | null;
 }): Promise<{ checkoutRequestId: string }> {
   const res = await api.post('/mpesa/registration-fee/initiate', payload);
-  const checkoutRequestId = (res as any)?.checkoutRequestId || (res as any)?.data?.checkoutRequestId;
-  return { checkoutRequestId: String(checkoutRequestId || '') };
+  const response = isRecord(res) ? res : {};
+  const nested = isRecord(response.data) ? response.data : {};
+  const checkoutRequestId = response.checkoutRequestId ?? nested.checkoutRequestId;
+  return { checkoutRequestId: toStringSafe(checkoutRequestId) };
 }
 
 export async function getRegistrationFeeMembers(params?: {
@@ -196,13 +226,15 @@ function base(doc: DbDocument): DbDocument {
 }
 
 export function normalizeMember(m: DbDocument): NormalizedMember {
-  const raw = base(m) as any;
-  const linkedUser = (raw.userId && typeof raw.userId === "object" ? raw.userId : null) as any;
+  const raw = base(m);
+  const linkedUser = isRecord(raw.userId) ? raw.userId : null;
   return {
     ...raw,
     id: raw.id || String(raw._id || ""),
     member_id: String(raw.memberId ?? raw.member_id ?? ""),
-    user_id: linkedUser ? String(linkedUser._id ?? linkedUser.id ?? "") : (raw.userId ? String(raw.userId) : (raw.user_id ?? null)),
+    user_id: linkedUser
+      ? toStringSafe(linkedUser._id ?? linkedUser.id)
+      : toNullableString(raw.userId ?? raw.user_id),
     name: String(raw.name ?? ""),
     email: (linkedUser?.email ?? raw.email ?? null) as string | null,
     phone: (raw.phone ?? null) as string | null,
@@ -243,7 +275,7 @@ export function normalizeLoan(l: DbDocument) {
   if (!l) return l;
   l = base(l);
   // Populated memberId may be an object
-  const memberObj = (l.memberId && typeof l.memberId === "object" ? l.memberId : null) as any;
+  const memberObj = isRecord(l.memberId) ? l.memberId : null;
   return {
     ...l,
     id: l.id || String(l._id),
@@ -271,8 +303,8 @@ export function normalizeLoan(l: DbDocument) {
       ? { name: memberObj.name, member_id: memberObj.memberId ?? memberObj.member_id }
       : (l.members ?? null),
     // Guarantors array if returned
-    loan_guarantors: ((l.guarantors ?? l.loan_guarantors ?? []) as any[]).map((g: any) => {
-      const gm = (g.memberId && typeof g.memberId === "object" ? g.memberId : null) as any;
+    loan_guarantors: asRecordArray(l.guarantors ?? l.loan_guarantors).map((g) => {
+      const gm = isRecord(g.memberId) ? g.memberId : null;
       return {
         ...base(g),
         member_id: gm ? String(gm._id || gm.id) : (g.memberId ? String(g.memberId) : g.member_id),
@@ -284,7 +316,7 @@ export function normalizeLoan(l: DbDocument) {
       };
     }),
     // Approvals array if returned
-    loan_approvals: ((l.approvals ?? l.loan_approvals ?? []) as any[]).map((a: any) => ({
+    loan_approvals: asRecordArray(l.approvals ?? l.loan_approvals).map((a) => ({
       ...base(a),
       loan_id: a.loanId ? String(a.loanId) : (a.loan_id ?? null),
       approver_id: a.approverId ? String(a.approverId) : (a.approver_id ?? null),
@@ -298,7 +330,7 @@ export function normalizeLoan(l: DbDocument) {
 export function normalizeTransaction(t: DbDocument) {
   if (!t) return t;
   t = base(t);
-  const memberObj = (t.memberId && typeof t.memberId === "object" ? t.memberId : null) as any;
+  const memberObj = isRecord(t.memberId) ? t.memberId : null;
   return {
     ...t,
     id: t.id || String(t._id),
@@ -381,6 +413,31 @@ export interface AdminEmailBroadcastResponse {
     sent: number;
     failed: number;
   };
+}
+
+export interface EmailBroadcastHistoryItem {
+  _id: string;
+  subject: string;
+  messagePreview: string;
+  templateMode: "plain" | "branded";
+  filters: {
+    staffOnly: boolean;
+    activeMembersOnly: boolean;
+    verifiedUsersOnly: boolean;
+  };
+  recipients: {
+    dedupedTotal: number;
+    attempted: number;
+  };
+  delivery: {
+    sent: number;
+    failed: number;
+  };
+  createdBy?: {
+    email?: string;
+    fullName?: string;
+  } | null;
+  createdAt: string;
 }
 
 let bridgeFeedRetryAfter = 0;
@@ -523,17 +580,20 @@ export async function getMainSmcfBridgeMessages(): Promise<MemberMessageItem[]> 
 
     bridgeFeedRetryAfter = 0;
 
-    const data = await res.json();
-    const messages = Array.isArray(data) ? data : (data?.data ?? []);
-    return messages.map((m: any) => ({
-      _id: m._id || m.id || "",
-      subject: m.subject || "",
-      message: m.message || m.messageBody || "",
-      senderName: m.senderName || m.sender_name || "Unknown",
-      senderContact: m.senderContact || m.sender_contact || null,
-      source: m.source || "main-smcf",
-      status: m.status || "new",
-      createdAt: m.createdAt || m.created_at || new Date().toISOString(),
+    const data: unknown = await res.json();
+    const messagePayload = Array.isArray(data)
+      ? data
+      : (isRecord(data) ? (data.data ?? []) : []);
+    const messages = asRecordArray(messagePayload);
+    return messages.map((m) => ({
+      _id: toStringSafe(m._id ?? m.id),
+      subject: toStringSafe(m.subject),
+      message: toStringSafe(m.message ?? m.messageBody),
+      senderName: toStringSafe(m.senderName ?? m.sender_name, "Unknown"),
+      senderContact: toNullableString(m.senderContact ?? m.sender_contact),
+      source: toStringSafe(m.source, "main-smcf"),
+      status: m.status === "read" ? "read" : "new",
+      createdAt: toStringSafe(m.createdAt ?? m.created_at, new Date().toISOString()),
     }));
   } catch {
     bridgeFeedRetryAfter = Date.now() + 60_000;
@@ -541,7 +601,7 @@ export async function getMainSmcfBridgeMessages(): Promise<MemberMessageItem[]> 
   }
 }
 
-export async function getAdminEmailBroadcastHistory(): Promise<any[]> {
+export async function getAdminEmailBroadcastHistory(): Promise<EmailBroadcastHistoryItem[]> {
   const candidatePaths = [
     "/communications/history",
     "/communications/email-broadcast-history",

@@ -3,10 +3,16 @@
  * Reads VITE_SACCO_API_URL first, then falls back to VITE_API_URL.
  */
 
-const BASE =
+function normalizeApiBase(raw: string | undefined, fallback = "http://localhost:5000/api"): string {
+  const value = String(raw || "").trim();
+  if (!value) return fallback;
+  return value.endsWith("/api") ? value : `${value.replace(/\/+$/, "")}/api`;
+}
+
+const BASE = normalizeApiBase(
   (import.meta.env.VITE_SACCO_API_URL as string) ||
-  (import.meta.env.VITE_API_URL as string) ||
-  "http://localhost:5000/api";
+  (import.meta.env.VITE_API_URL as string)
+);
 const TOKEN_KEY = "smcf_auth_token";
 
 export function getApiBaseForDebug(): string {
