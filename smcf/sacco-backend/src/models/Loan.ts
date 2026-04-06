@@ -4,8 +4,11 @@ export interface ILoan extends Document {
   loanNumber: string;
   memberId: mongoose.Types.ObjectId;
   principal: number;
+  loanType: string;
   interestRate: number;
   termMonths: number;
+  monthlyInterest: number;
+  totalInterest: number;
   monthlyInstallment: number;
   totalPayable: number;
   balance: number;
@@ -37,6 +40,10 @@ const LoanSchema = new Schema<ILoan>({
     type: Number, 
     required: true 
   },
+  loanType: {
+    type: String,
+    required: true,
+  },
   interestRate: { 
     type: Number, 
     required: true 
@@ -44,6 +51,14 @@ const LoanSchema = new Schema<ILoan>({
   termMonths: { 
     type: Number, 
     required: true 
+  },
+  monthlyInterest: {
+    type: Number,
+    default: 0,
+  },
+  totalInterest: {
+    type: Number,
+    default: 0,
   },
   monthlyInstallment: { 
     type: Number, 
@@ -59,7 +74,7 @@ const LoanSchema = new Schema<ILoan>({
   },
   interestModel: { 
     type: String, 
-    default: 'reducing_balance' 
+    default: 'flat' 
   },
   status: { 
     type: String, 

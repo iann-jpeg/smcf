@@ -26,12 +26,13 @@ import auditLogRoutes from './routes/auditLogs';
 import simulationRoutes from './routes/simulation';
 import repaymentRoutes from './routes/repayments';
 import savingsHistoryRoutes from './routes/savingsHistory';
-import savingsInterestRoutes from './routes/savingsInterest';
 import userRoutes from './routes/users';
 import mpesaRoutes from './routes/mpesa';
 import configRoutes from './routes/config';
 import sharesRoutes from './routes/shares';
 import communicationsRoutes from './routes/communications';
+import savingsInterestRoutes from './routes/savingsInterest';
+import { startOverdueRepaymentJob } from './utils/overdueRepayments';
 
 // Initialize app
 const app: Application = express();
@@ -42,6 +43,9 @@ app.set('trust proxy', 1);
 
 // Connect to database
 connectDB();
+
+const overdueIntervalMinutes = Number(process.env.OVERDUE_JOB_INTERVAL_MINUTES) || 60;
+startOverdueRepaymentJob(overdueIntervalMinutes);
 
 // Security middleware
 app.use(helmet());
@@ -113,11 +117,11 @@ app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/simulation', simulationRoutes);
 app.use('/api/repayments', repaymentRoutes);
 app.use('/api/savings-history', savingsHistoryRoutes);
-app.use('/api/savings-interest', savingsInterestRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/mpesa', mpesaRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/shares', sharesRoutes);
+app.use('/api/savings-interest', savingsInterestRoutes);
 app.use('/api/communications', communicationsRoutes);
 app.use('/api/email', communicationsRoutes);
 

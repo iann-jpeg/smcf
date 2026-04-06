@@ -6,6 +6,20 @@ import Member from "../models/Member.js";
 
 const router = express.Router();
 
+// Helper: find next recipient after a paid member (by position)
+async function findNextActiveRecipient(lastPaidMember) {
+  if (!lastPaidMember) {
+    return await Member.findOne({ status: "active" }).sort({ position: 1 });
+  }
+
+  const nextCandidate = await Member.findOne({
+    status: "active",
+    position: { $gt: lastPaidMember.position },
+  }).sort({ position: 1 });
+
+  return nextCandidate || (await Member.findOne({ status: "active" }).sort({ position: 1 }));
+}
+
 // Get all disbursements
 router.get("/", protect, async (req, res) => {
   try {
@@ -85,11 +99,13 @@ router.post("/", protect, adminOnly, async (req, res) => {
     disbursement.mpesa_transaction_id = `DISB${Date.now()}`;
     await disbursement.save();
 
-    // Update cycle status
+    // Update cycle status and finalize current cycle
     cycle.disbursement_status = "completed";
     cycle.disbursement_date = new Date();
     cycle.recipient_id = recipient_id;
-    cycle.status = "completed"; // Mark cycle as completed
+    cycle.next_recipient = null; // avoid stale on completed cycle
+    cycle.recipient_paid = true;
+    cycle.status = "completed";
     await cycle.save();
 
     // Update member record
@@ -97,6 +113,7 @@ router.post("/", protect, adminOnly, async (req, res) => {
       $inc: { total_received: amount },
       last_payout_date: new Date(),
       last_payout_amount: amount,
+      disbursement_status: "received",
     });
 
     // Emit socket event
@@ -112,14 +129,8 @@ router.post("/", protect, adminOnly, async (req, res) => {
 
     // AUTOMATION: Start next cycle immediately after disbursement
     try {
-      // Find the next recipient for the new cycle
       const lastRecipient = await Member.findById(recipient_id);
-      const lastRecipientPosition = lastRecipient?.position || 0;
-      const nextRecipient = await Member.findOne({
-        position: { $gt: lastRecipientPosition },
-        status: "active",
-      }).sort({ position: 1 });
-      const recipientForNextCycle = nextRecipient || (await Member.findOne({ status: "active" }).sort({ position: 1 }));
+      const recipientForNextCycle = await findNextActiveRecipient(lastRecipient);
       const totalMembersActive = await Member.countDocuments({ status: "active" });
       const newCycleNumber = (cycle.cycle_number || 0) + 1;
       const firstCycleStart = new Date('2026-01-05T00:00:00.000Z');
@@ -133,7 +144,7 @@ router.post("/", protect, adminOnly, async (req, res) => {
         total_members: totalMembersActive,
         next_recipient: recipientForNextCycle?._id,
       });
-      await Member.updateMany({}, { payment_status: "pending", payment_date: null });
+      await Member.updateMany({ status: "active" }, { payment_status: "pending", payment_date: null });
       if (req.app.get("io")) {
         req.app.get("io").emit("cycle:new", newCycle);
       }
@@ -171,11 +182,13 @@ router.put("/:id/status", protect, adminOnly, async (req, res) => {
       const recipient_id = disbursement.recipient_id._id || disbursement.recipient_id;
       
       if (cycle) {
-        // Update cycle status
+        // Finalize current cycle
         cycle.disbursement_status = "completed";
         cycle.disbursement_date = new Date();
         cycle.recipient_id = recipient_id;
-        cycle.status = "completed"; // Mark cycle as completed
+        cycle.next_recipient = null;
+        cycle.recipient_paid = true;
+        cycle.status = "completed";
         await cycle.save();
 
         // Update member record
@@ -183,18 +196,13 @@ router.put("/:id/status", protect, adminOnly, async (req, res) => {
           $inc: { total_received: disbursement.amount },
           last_payout_date: new Date(),
           last_payout_amount: disbursement.amount,
+          disbursement_status: "received",
         });
 
         // AUTOMATION: Start next cycle immediately after disbursement
         try {
-          // Find the next recipient for the new cycle
           const lastRecipient = await Member.findById(recipient_id);
-          const lastRecipientPosition = lastRecipient?.position || 0;
-          const nextRecipient = await Member.findOne({
-            position: { $gt: lastRecipientPosition },
-            status: "active",
-          }).sort({ position: 1 });
-          const recipientForNextCycle = nextRecipient || (await Member.findOne({ status: "active" }).sort({ position: 1 }));
+          const recipientForNextCycle = await findNextActiveRecipient(lastRecipient);
           const totalMembers = await Member.countDocuments({ status: "active" });
           const newCycleNumber = (cycle.cycle_number || 0) + 1;
           const firstCycleStart = new Date('2026-01-05T00:00:00.000Z');
@@ -208,7 +216,7 @@ router.put("/:id/status", protect, adminOnly, async (req, res) => {
             total_members: totalMembers,
             next_recipient: recipientForNextCycle?._id,
           });
-          await Member.updateMany({}, { payment_status: "pending", payment_date: null });
+          await Member.updateMany({ status: "active" }, { payment_status: "pending", payment_date: null });
           if (req.app.get("io")) {
             req.app.get("io").emit("cycle:new", newCycle);
             req.app.get("io").emit("cycle:updated", cycle);

@@ -1,26 +1,10 @@
 import express from "express";
-import mongoose from "mongoose";
 import { generateToken } from "../middleware/auth.js";
 import Admin from "../models/Admin.js";
 import Member from "../models/Member.js";
 import { trackLoginAttempt, createUserSession } from "../middleware/activityTracker.js";
 
 const router = express.Router();
-
-// Fail fast when MongoDB is disconnected
-router.use((req, res, next) => {
-  if (mongoose.connection.readyState !== 1) {
-    console.warn(`MongoDB not ready (state=${mongoose.connection.readyState})`, {
-      path: req.path,
-      method: req.method,
-    });
-    return res.status(503).json({
-      success: false,
-      error: "Database is currently unavailable. Please try again in a few seconds.",
-    });
-  }
-  next();
-});
 
 // Health check endpoint
 router.get("/health", (req, res) => {

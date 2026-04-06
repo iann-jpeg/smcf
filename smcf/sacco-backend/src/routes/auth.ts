@@ -3,14 +3,19 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { body, validationResult } from 'express-validator';
 import User from '../models/User';
-import { protect, AuthRequest } from '../middleware/auth';
+import Member from '../models/Member';
+import { protect, authorize, AuthRequest } from '../middleware/auth';
 import { 
   generateVerificationToken, 
   sendVerificationEmail,
-  verifyEmailToken
+  sendPasswordResetEmail,
+  verifyEmailToken,
+  getEmailDeliveryHealth,
 } from '../services/emailService';
 
 const router = Router();
+
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const allowEmailTokenFallback = process.env.ALLOW_EMAIL_TOKEN_FALLBACK !== 'false';
 const resendCooldownSeconds = Math.max(1, Number(process.env.EMAIL_RESEND_COOLDOWN_SECONDS || 60));
 const resendCooldownMs = resendCooldownSeconds * 1000;
@@ -39,6 +44,20 @@ const generateToken = (id: string): string => {
   );
 };
 
+// @route   GET /api/auth/email-delivery-health
+// @desc    Check verification-email delivery configuration and fallback mode
+// @access  Private (Admin only)
+router.get('/email-delivery-health', protect, authorize('admin'), async (_req: AuthRequest, res) => {
+  const health = getEmailDeliveryHealth();
+  res.json({
+    success: true,
+    data: {
+      ...health,
+      checkedAt: new Date().toISOString(),
+    },
+  });
+});
+
 // @route   POST /api/auth/register
 // @desc    Register a new user and send verification email
 // @access  Public
@@ -65,9 +84,69 @@ router.post(
       // Check if user already exists
       const existingUser = await User.findOne({ email: normalizedEmail });
       if (existingUser) {
-        return res.status(400).json({
-          success: false,
-          message: 'User already exists with this email'
+        if (existingUser.isEmailVerified) {
+          return res.status(400).json({
+            success: false,
+            message: 'User already exists with this email'
+          });
+        }
+
+        const prevToken = existingUser.emailVerificationToken;
+        const prevExpiry = existingUser.emailVerificationExpires;
+        const { token: verificationToken, hash: tokenHash, expiresIn } = generateVerificationToken();
+        existingUser.emailVerificationToken = tokenHash;
+        existingUser.emailVerificationExpires = expiresIn;
+        await existingUser.save();
+
+        const emailSent = await sendVerificationEmail(
+          existingUser.email,
+          existingUser.fullName || existingUser.email,
+          verificationToken
+        );
+
+        if (!emailSent.success) {
+          if (allowEmailTokenFallback) {
+            return res.status(200).json({
+              success: true,
+              message: `Email delivery is unavailable. Use the one-time verification code shown below.`,
+              data: {
+                user: {
+                  id: existingUser._id,
+                  email: existingUser.email,
+                  fullName: existingUser.fullName,
+                  roles: existingUser.roles,
+                  isEmailVerified: existingUser.isEmailVerified
+                },
+                requiresEmailVerification: true,
+                verificationToken,
+              }
+            });
+          }
+
+          // Keep the previous token active if send fails, so already delivered links keep working.
+          existingUser.emailVerificationToken = prevToken;
+          existingUser.emailVerificationExpires = prevExpiry;
+          await existingUser.save();
+
+          return res.status(503).json({
+            success: false,
+            message: `Account exists but we could not resend verification email: ${emailSent.error || 'Email service unavailable'}`
+          });
+        }
+
+        return res.status(200).json({
+          success: true,
+          message: 'Account already exists but is not verified. A new verification email has been sent.',
+          data: {
+            user: {
+              id: existingUser._id,
+              email: existingUser.email,
+              fullName: existingUser.fullName,
+              roles: existingUser.roles,
+              isEmailVerified: existingUser.isEmailVerified
+            },
+            requiresEmailVerification: true
+          }
         });
       }
 
@@ -134,7 +213,8 @@ router.post(
 router.post(
   '/login',
   [
-    body('email').isEmail().withMessage('Please provide a valid email'),
+    body('identifier').optional().trim(),
+    body('email').optional().trim(),
     body('password').exists().withMessage('Password is required')
   ],
   async (req, res, next) => {
@@ -147,10 +227,37 @@ router.post(
         });
       }
 
-      const { email, password } = req.body;
+      const { password } = req.body;
+      const rawIdentifier = String(req.body.identifier || req.body.email || '').trim();
 
-      // Find user with password field
-      const user = await User.findOne({ email }).select('+password');
+      if (!rawIdentifier) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email or Member ID is required'
+        });
+      }
+
+      const normalizedIdentifier = rawIdentifier.toLowerCase();
+
+      // Login by email or member ID.
+      let user: any = null;
+
+      if (rawIdentifier.includes('@')) {
+        user = await User.findOne({ email: normalizedIdentifier }).select('+password');
+      } else {
+        const member = await Member.findOne({
+          memberId: { $regex: `^${escapeRegExp(rawIdentifier)}$`, $options: 'i' }
+        }).select('userId');
+
+        if (member?.userId) {
+          user = await User.findById(member.userId).select('+password');
+        }
+
+        if (!user) {
+          user = await User.findOne({ email: normalizedIdentifier }).select('+password');
+        }
+      }
+
       if (!user) {
         return res.status(401).json({
           success: false,
@@ -313,8 +420,8 @@ router.post(
       }
 
       // Generate new verification token
-  const prevToken = user.emailVerificationToken;
-  const prevExpiry = user.emailVerificationExpires;
+      const prevToken = user.emailVerificationToken;
+      const prevExpiry = user.emailVerificationExpires;
       const { token: verificationToken, hash: tokenHash, expiresIn } = generateVerificationToken();
 
       // Update user with new token
@@ -377,6 +484,142 @@ router.get('/me', protect, async (req: AuthRequest, res, next) => {
     next(error);
   }
 });
+
+// @route   PUT /api/auth/email/update-and-verify
+// @desc    Update authenticated user's email and trigger verification flow
+// @access  Private
+router.put(
+  '/email/update-and-verify',
+  protect,
+  [body('email').isEmail().withMessage('Please provide a valid email')],
+  async (req: AuthRequest, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          errors: errors.array(),
+        });
+      }
+
+      const normalizedEmail = String(req.body.email).toLowerCase().trim();
+      const retryAfterSeconds = getRetryAfterSeconds(normalizedEmail);
+      if (retryAfterSeconds > 0) {
+        return res.status(429).json({
+          success: false,
+          message: `Please wait ${retryAfterSeconds} second(s) before requesting another code.`,
+          retryAfterSeconds,
+        });
+      }
+
+      const user = await User.findById(req.userId).select('+emailVerificationToken +emailVerificationExpires');
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found',
+        });
+      }
+
+      const currentEmail = String(user.email || '').toLowerCase().trim();
+      const emailChanged = normalizedEmail !== currentEmail;
+
+      const existingUser = await User.findOne({ email: normalizedEmail });
+      if (existingUser && existingUser._id.toString() !== user._id.toString()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Another account already uses this email address',
+        });
+      }
+
+      const previousState = {
+        email: user.email,
+        isEmailVerified: user.isEmailVerified,
+        emailVerificationToken: user.emailVerificationToken,
+        emailVerificationExpires: user.emailVerificationExpires,
+      };
+
+      const { token: verificationToken, hash: tokenHash, expiresIn } = generateVerificationToken();
+
+      user.email = normalizedEmail;
+      user.isEmailVerified = false;
+      user.emailVerificationToken = tokenHash;
+      user.emailVerificationExpires = expiresIn;
+      await user.save();
+
+      await Member.findOneAndUpdate(
+        { userId: user._id },
+        { email: normalizedEmail },
+        { new: false }
+      );
+
+      const emailSent = await sendVerificationEmail(
+        user.email,
+        user.fullName || user.email,
+        verificationToken
+      );
+
+      if (!emailSent.success) {
+        if (allowEmailTokenFallback) {
+          markResendAttempt(normalizedEmail);
+          return res.json({
+            success: true,
+            message: 'Email delivery is unavailable. Use the one-time verification code shown below.',
+            data: {
+              user: {
+                id: user._id,
+                email: user.email,
+                fullName: user.fullName,
+                roles: user.roles,
+                isEmailVerified: user.isEmailVerified,
+              },
+              requiresEmailVerification: true,
+              verificationToken,
+              emailChanged,
+            },
+          });
+        }
+
+        user.email = previousState.email;
+        user.isEmailVerified = previousState.isEmailVerified;
+        user.emailVerificationToken = previousState.emailVerificationToken;
+        user.emailVerificationExpires = previousState.emailVerificationExpires;
+        await user.save();
+
+        await Member.findOneAndUpdate(
+          { userId: user._id },
+          { email: previousState.email || null },
+          { new: false }
+        );
+
+        return res.status(503).json({
+          success: false,
+          message: `Failed to send verification email: ${emailSent.error || 'Email service unavailable'}`,
+        });
+      }
+
+      markResendAttempt(normalizedEmail);
+      return res.json({
+        success: true,
+        message: emailChanged
+          ? 'Email updated. Please verify your new email address.'
+          : 'Verification email sent! Please check your inbox.',
+        data: {
+          user: {
+            id: user._id,
+            email: user.email,
+            fullName: user.fullName,
+            roles: user.roles,
+            isEmailVerified: user.isEmailVerified,
+          },
+          requiresEmailVerification: true,
+          emailChanged,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 // @route   PUT /api/auth/update
 // @desc    Update user profile
@@ -503,6 +746,154 @@ router.post(
         success: true,
         message: `${user.email} has been promoted to admin. Please log out and log back in.`,
         data: { email: user.email, roles: user.roles }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// @route   POST /api/auth/forgot-password
+// @desc    Request password reset email
+// @access  Public
+router.post(
+  '/forgot-password',
+  [body('email').isEmail().withMessage('Please provide a valid email')],
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          errors: errors.array()
+        });
+      }
+
+      const normalizedEmail = String(req.body.email).toLowerCase().trim();
+      const retryAfterSeconds = getRetryAfterSeconds(normalizedEmail);
+      
+      // Rate limiting
+      if (retryAfterSeconds > 0) {
+        return res.status(429).json({
+          success: false,
+          message: `Please wait ${retryAfterSeconds} second(s) before requesting another reset link.`,
+          retryAfterSeconds,
+        });
+      }
+
+      // Find user by email
+      const user = await User.findOne({ email: normalizedEmail });
+      
+      // For security: return success even if user doesn't exist (prevents email enumeration)
+      if (!user) {
+        markResendAttempt(normalizedEmail);
+        return res.json({
+          success: true,
+          message: 'If an account exists with this email, a password reset link has been sent.'
+        });
+      }
+
+      // Generate password reset token
+      const { token: resetToken, hash: tokenHash, expiresIn } = generateVerificationToken();
+      
+      user.passwordResetToken = tokenHash;
+      user.passwordResetExpires = expiresIn;
+      await user.save();
+
+      // Send password reset email
+      const emailSent = await sendPasswordResetEmail(
+        user.email,
+        user.fullName || user.email,
+        resetToken
+      );
+
+      if (!emailSent.success) {
+        if (allowEmailTokenFallback) {
+          markResendAttempt(normalizedEmail);
+          return res.json({
+            success: true,
+            message: 'Email delivery is unavailable. Use the one-time reset code shown below.',
+            data: {
+              resetToken,
+              requiresEmailVerification: true,
+              message: 'Share this code with the user securely'
+            },
+          });
+        }
+
+        // Clear the reset token if email fails
+        user.passwordResetToken = undefined;
+        user.passwordResetExpires = undefined;
+        await user.save();
+
+        return res.status(503).json({
+          success: false,
+          message: `Failed to send password reset email: ${emailSent.error || 'Email service unavailable'}`,
+        });
+      }
+
+      markResendAttempt(normalizedEmail);
+      return res.json({
+        success: true,
+        message: 'If an account exists with this email, a password reset link has been sent.'
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// @route   POST /api/auth/reset-password
+// @desc    Reset password using token
+// @access  Public
+router.post(
+  '/reset-password',
+  [
+    body('token').trim().notEmpty().withMessage('Reset token is required'),
+    body('newPassword').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  ],
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          errors: errors.array()
+        });
+      }
+
+      const { token, newPassword } = req.body;
+      const tokenHash = verifyEmailToken(token);
+
+      // Find user with valid reset token
+      const user = await User.findOne({
+        passwordResetToken: tokenHash,
+        passwordResetExpires: { $gt: new Date() }
+      }).select('+passwordResetToken +passwordResetExpires +password');
+
+      if (!user) {
+        return res.status(400).json({
+          success: false,
+          message: 'Password reset token is invalid or has expired. Please request a new reset link.'
+        });
+      }
+
+      // Hash new password
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+      // Update password and clear reset token
+      user.password = hashedPassword;
+      user.passwordResetToken = undefined;
+      user.passwordResetExpires = undefined;
+      await user.save();
+
+      res.json({
+        success: true,
+        message: 'Password reset successful. You can now log in with your new password.',
+        data: {
+          email: user.email,
+        }
       });
     } catch (error) {
       next(error);

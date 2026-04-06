@@ -132,12 +132,6 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
         if (summaryData.data.totalTransactionFees !== undefined) {
           setTotalFeesPaid(summaryData.data.totalTransactionFees);
         }
-        if (summaryData.data.totalLockedSavings !== undefined) {
-          setLockedFunds((prev) => ({
-            amount: summaryData.data.totalLockedSavings || 0,
-            earliestUnlockDate: prev.earliestUnlockDate,
-          }));
-        }
       }
 
       if (transactionsData.success) {

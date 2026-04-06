@@ -61,9 +61,8 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
   function startPolling(id: string) {
     pollRef.current = setInterval(async () => {
       try {
-        const d = await api.get<{ status: string; mpesaRef?: string; loanCompleted?: boolean; resultDesc?: string }>(
-          `/mpesa/repay-status/${id}`
-        );
+        // api.get already unwraps json.data, so d = { status, mpesaRef, loanCompleted, ... }
+        const d = await api.get<{ status: string; mpesaRef?: string; loanCompleted?: boolean; resultDesc?: string }>(`/mpesa/repay-status/${id}`);
         if (d.status === "success") {
           stopPolling();
           setMpesaRef(d.mpesaRef ?? null);
@@ -186,9 +185,6 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
                     <span className="text-[10px] text-muted-foreground">Clear entire balance</span>
                   </button>
                 </div>
-                <p className="text-[11px] text-muted-foreground">
-                  Early repayment is allowed, but interest is not reduced under the flat-rate policy.
-                </p>
               </div>
 
               <div className="space-y-2">

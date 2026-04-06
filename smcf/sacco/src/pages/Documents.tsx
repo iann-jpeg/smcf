@@ -27,24 +27,6 @@ const KYC_FIELD_LABELS: Record<KycFieldKey, string> = {
   doc_kra_pin_certificate: "KRA PIN Certificate",
 };
 
-const LOAN_TYPE_LABELS: Record<string, string> = {
-  business_development: "Business Development Loan",
-  education: "Education Loan",
-  emergency: "Emergency Loan",
-  asset_acquisition: "Asset Acquisition Loan",
-  personal: "Personal Loan",
-};
-
-function formatLoanType(value?: string) {
-  if (!value) return "—";
-  return LOAN_TYPE_LABELS[value] ?? value;
-}
-
-function formatInterestModel(value?: string) {
-  if (!value) return "flat";
-  return value === "reducing_balance" ? "reducing" : value;
-}
-
 type KycDocument = {
   memberId: string;
   memberName: string;
@@ -1338,7 +1320,7 @@ export default function Documents() {
     setStatuses((prev) => ({ ...prev, [path]: status }));
   }
 
-  const activeLoans = loans.filter((l: any) => ["active", "disbursed", "approved"].includes(l.status));
+  const activeLoans = loans.filter((l: any) => ["repaying", "disbursed", "approved"].includes(l.status));
 
   const memberKycDocuments = useMemo<KycDocument[]>(() => {
     const docs: KycDocument[] = [];
@@ -1503,7 +1485,7 @@ export default function Documents() {
                   <TableRow>
                     <TableHead>Loan #</TableHead><TableHead>Member</TableHead>
                     <TableHead className="text-right">Principal</TableHead><TableHead>Term</TableHead>
-                    <TableHead>Type</TableHead><TableHead>Rate</TableHead><TableHead>Status</TableHead><TableHead>Date</TableHead>
+                    <TableHead>Rate</TableHead><TableHead>Status</TableHead><TableHead>Date</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1513,9 +1495,8 @@ export default function Documents() {
                       <TableCell>{loan.members?.name ?? "—"}</TableCell>
                       <TableCell className="text-right font-mono">KES {Number(loan.principal).toLocaleString()}</TableCell>
                       <TableCell>{loan.term_months}mo</TableCell>
-                      <TableCell>{formatLoanType(loan.loan_type)}</TableCell>
-                      <TableCell>{loan.interest_rate}% {formatInterestModel(loan.interest_model)}</TableCell>
-                      <TableCell><Badge variant={loan.status === "active" || loan.status === "completed" ? "default" : loan.status === "defaulted" ? "destructive" : "secondary"}>{loan.status}</Badge></TableCell>
+                      <TableCell>{loan.interest_rate}%</TableCell>
+                      <TableCell><Badge variant={loan.status === "repaying" ? "default" : loan.status === "defaulted" ? "destructive" : "secondary"}>{loan.status}</Badge></TableCell>
                       <TableCell className="text-sm">{loan.applied_at?.split("T")[0]}</TableCell>
                     </TableRow>
                   ))}
@@ -1560,7 +1541,7 @@ export default function Documents() {
                   <TableRow>
                     <TableHead>Loan #</TableHead><TableHead>Member</TableHead>
                     <TableHead className="text-right">Monthly Payment</TableHead><TableHead className="text-right">Total Payable</TableHead>
-                    <TableHead className="text-right">Balance</TableHead><TableHead>Type</TableHead>
+                    <TableHead className="text-right">Balance</TableHead><TableHead>Model</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1571,7 +1552,7 @@ export default function Documents() {
                       <TableCell className="text-right font-mono">KES {Number(loan.monthly_installment).toLocaleString()}</TableCell>
                       <TableCell className="text-right font-mono">KES {Number(loan.total_payable).toLocaleString()}</TableCell>
                       <TableCell className="text-right font-mono">KES {Number(loan.balance).toLocaleString()}</TableCell>
-                      <TableCell><Badge variant="secondary">{formatLoanType(loan.loan_type)}</Badge></TableCell>
+                      <TableCell><Badge variant="secondary">{loan.interest_model}</Badge></TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

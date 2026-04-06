@@ -3325,16 +3325,12 @@ Thank you for your cooperation! ðŸ™`;
                       
                       // Current cycle number
                       const currCycle = currentCycle?.cycle_number || 1;
-
-                      // For current cycle explicit paid flag use payment records (real-time)
-                      const memberId = member._id || member.id;
-                      const hasPaidThisCycle = paidMemberIds.has(memberId);
-
+                      
                       // Calculate advance cycles (if paid for more cycles than current)
                       const advanceCycles = cyclesPaidFor > currCycle ? cyclesPaidFor - currCycle : 0;
                       
-                      // Cycles paid (at least current or more), but treat explicit current cycle record as paid too
-                      const isCyclePaid = hasPaidThisCycle || cyclesPaidFor >= currCycle;
+                      // Cycles paid (at least current or more)
+                      const cyclesPaid = cyclesPaidFor >= currCycle ? 1 : 0;
                       
                       // Debug logging for first 5 members to see calculations
                       if (import.meta.env.DEV && index < 5) {
@@ -3399,15 +3395,13 @@ Thank you for your cooperation! ðŸ™`;
                             ) : (
                               <Badge
                                 variant={
-                                  isCyclePaid ? "default" : "secondary"
+                                  cyclesPaid > 0 ? "default" : "secondary"
                                 }
                                 className={advanceCycles > 0 ? "bg-cyan-500 hover:bg-cyan-600 text-white font-bold border-0" : ""}>
-                                {isCyclePaid
+                                {cyclesPaid > 0
                                   ? advanceCycles > 0
                                     ? `Paid (Advance +${advanceCycles})`
-                                    : hasPaidThisCycle
-                                      ? "Paid (Current Cycle)"
-                                      : "Paid"
+                                    : "Paid"
                                   : "Pending"}
                                 {advanceCycles > 0 && (
                                   <span className="ml-2 px-2 py-0.5 bg-white text-cyan-700 rounded-full text-xs font-bold">
@@ -3481,36 +3475,19 @@ Thank you for your cooperation! ðŸ™`;
                                   <Button
                                     size="sm"
                                     variant={
-                                      isCyclePaid ? "outline" : "default"
+                                      cyclesPaid > 0 ? "outline" : "default"
                                     }
                                     onClick={() => togglePaymentStatusRemote(member)}
                                     disabled={isReadOnly}
                                     title={isReadOnly ? "Read-only access" : undefined}>
-                                    {isCyclePaid ? "Unpay" : "Mark Paid"}
+                                    {cyclesPaid > 0 ? "Unpay" : "Mark Paid"}
                                   </Button>
                                   <Button
                                     size="sm"
                                     variant="secondary"
                                     onClick={async () => {
-                                      if (isCyclePaid) {
-                                        toast({
-                                          title: "Already Paid",
-                                          description: `${member.name} is already paid for this cycle`,
-                                        });
-                                        return;
-                                      }
-
                                       const id = member._id || member.id;
-                                      const cycleNumber = currentCycle?.cycle_number;
-                                      if (!cycleNumber) {
-                                        toast({
-                                          title: "Cycle Not Loaded",
-                                          description: "Current cycle is not available. Please refresh the dashboard and retry.",
-                                          variant: "destructive",
-                                        });
-                                        return;
-                                      }
-
+                                      // Mark member as paid for current cycle WITHOUT adding payment record
                                       try {
                                         const res = await fetch(`${API_BASE}/api/members/${id}/mark-paid`, {
                                           method: "PUT",
@@ -3518,28 +3495,25 @@ Thank you for your cooperation! ðŸ™`;
                                             "Content-Type": "application/json",
                                             ...authService.getAuthHeaders(),
                                           },
-                                          body: JSON.stringify({ cycle_number: cycleNumber, no_payment: true }),
+                                          body: JSON.stringify({ cycle_number: currCycle, no_payment: true }),
                                         });
-                                        if (!res.ok) {
-                                          const errorBody = await res.json().catch(() => ({}));
-                                          throw new Error(errorBody.error || "Failed to mark as paid");
-                                        }
-
+                                        if (!res.ok) throw new Error("Failed to mark as paid");
+                                        
                                         // Refresh all data to show updated status
                                         if (typeof refreshMembers === "function") {
                                           await refreshMembers();
                                         }
                                         await fetchCurrentCycle();
                                         await fetchPayments();
-
+                                        
                                         toast({
                                           title: "Member Marked as Paid",
-                                          description: `${member.name} marked as paid for cycle #${cycleNumber}`,
+                                          description: `${member.name} marked as paid for cycle #${currCycle}`,
                                         });
                                       } catch (err: any) {
                                         toast({
                                           title: "Error",
-                                          description: err?.message || "Could not mark member as paid",
+                                          description: err.message || "Could not mark member as paid",
                                           variant: "destructive",
                                         });
                                       }

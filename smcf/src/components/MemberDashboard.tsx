@@ -684,7 +684,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
     setShowPayment(true);
   };
 
-  const handlePaymentSuccess = async () => {
+  const handlePaymentSuccess = () => {
     // Refresh data after payment
     setMemberStats((prev) => ({ ...prev, hasPaidThisCycle: true }));
     toast({
@@ -693,12 +693,10 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
     });
     setShowPayment(false);
 
-    // Refresh client-side state immediately without a full page reload
-    try {
-      await fetchData();
-    } catch (error) {
-      console.error("MemberDashboard: failed to refresh after payment", error);
-    }
+    // Trigger immediate refresh
+    setTimeout(() => {
+      window.location.reload();
+    }, 1500);
   };
 
   // Poll loan repayment status

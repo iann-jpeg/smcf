@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import bcrypt from 'bcryptjs';
 import { body, validationResult } from 'express-validator';
 import Member from '../models/Member';
 import User from '../models/User';
@@ -190,7 +191,141 @@ router.get('/me', protect, async (req: AuthRequest, res, next) => {
       memberObj.email = String(fallbackEmail).toLowerCase().trim();
     }
 
+    // Include registration fee fields with snake_case naming for frontend
+    memberObj.registration_fee_paid = Boolean(memberObj.registrationFeePaid);
+    memberObj.registration_fee_amount = Number(memberObj.registrationFeeAmount ?? 100);
+    memberObj.registration_fee_mpesa_code = memberObj.registrationFeeMpesaCode ?? null;
+    memberObj.registration_fee_date = memberObj.registrationFeeDate ?? null;
+    memberObj.registration_fee_phone = memberObj.registrationFeePhone ?? null;
+    memberObj.registration_fee_transaction_id = memberObj.registrationFeeTransactionId ?? null;
+    memberObj.registration_fee_pending_checkout_id = memberObj.registrationFeePendingCheckoutId ?? null;
+
     res.json({ success: true, data: memberObj });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// @route   GET /api/members/me/registration-fee-status
+// @desc    Get current member registration fee status
+// @access  Private
+router.get('/me/registration-fee-status', protect, async (req: AuthRequest, res, next) => {
+  try {
+    const member = await Member.findOne({ userId: req.userId }).select(
+      'registrationFeePaid registrationFeeAmount registrationFeeMpesaCode registrationFeeDate registrationFeePhone registrationFeeTransactionId registrationFeePendingCheckoutId'
+    );
+
+    if (!member) {
+      return res.status(404).json({ success: false, message: 'Member profile not found for this account' });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        registrationFeePaid: Boolean(member.registrationFeePaid),
+        registrationFeeAmount: Number(member.registrationFeeAmount || 100),
+        registrationFeeMpesaCode: member.registrationFeeMpesaCode ?? null,
+        registrationFeeDate: member.registrationFeeDate ?? null,
+        registrationFeePhone: member.registrationFeePhone ?? null,
+        registrationFeeTransactionId: member.registrationFeeTransactionId ?? null,
+        registrationFeePendingCheckoutId: member.registrationFeePendingCheckoutId ?? null,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// @route   GET /api/members/registration-fee
+// @desc    List registration fee status for all members with summary
+// @access  Private (admin/staff)
+router.get('/registration-fee', protect, authorize('admin', 'credit_officer', 'treasurer', 'auditor'), async (req, res, next) => {
+  try {
+    const status = String(req.query.status || 'all').toLowerCase();
+    const search = String(req.query.search || '').trim();
+
+    const query: Record<string, any> = {};
+    if (status === 'paid') query.registrationFeePaid = true;
+    if (status === 'pending' || status === 'not_paid' || status === 'unpaid') query.registrationFeePaid = false;
+
+    if (search) {
+      const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      query.$or = [
+        { name: regex },
+        { memberId: regex },
+        { phone: regex },
+      ];
+    }
+
+    const members = await Member.find(query)
+      .select('memberId name phone registrationFeePaid registrationFeeAmount registrationFeeMpesaCode registrationFeeDate')
+      .sort({ name: 1 });
+
+    const [totalMembers, paidMembers] = await Promise.all([
+      Member.countDocuments(),
+      Member.countDocuments({ registrationFeePaid: true }),
+    ]);
+
+    const response = members.map((m: any) => ({
+      id: String(m._id),
+      memberId: m.memberId,
+      name: m.name,
+      phone: m.phone,
+      registrationFeePaid: Boolean(m.registrationFeePaid),
+      registrationFeeAmount: Number(m.registrationFeeAmount || 100),
+      registrationFeeMpesaCode: m.registrationFeeMpesaCode ?? null,
+      registrationFeeDate: m.registrationFeeDate ?? null,
+    }));
+
+    return res.json({
+      success: true,
+      data: {
+        members: response,
+        summary: {
+          totalMembers,
+          paid: paidMembers,
+          pending: Math.max(0, totalMembers - paidMembers),
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// @route   POST /api/members/registration-fee/reconcile
+// @desc    Manually reconcile registration fee payment for a member
+// @access  Private (admin/treasurer)
+router.post('/registration-fee/reconcile', protect, authorize('admin', 'treasurer'), async (req, res, next) => {
+  try {
+    const { phone, mpesaRef, amount } = req.body;
+    
+    if (!phone || !mpesaRef) {
+      return res.status(400).json({ success: false, message: 'Phone and M-Pesa reference are required' });
+    }
+
+    // Find member by phone
+    const member = await Member.findOne({ phone: String(phone).trim() });
+    if (!member) {
+      return res.status(404).json({ success: false, message: 'Member not found with that phone number' });
+    }
+
+    // Check if already reconciled with same code
+    if (member.registrationFeeMpesaCode && member.registrationFeeMpesaCode === mpesaRef.toUpperCase()) {
+      return res.status(400).json({ success: false, message: 'This M-Pesa code has already been used for this member' });
+    }
+
+    // Update member registration fee
+    await Member.findByIdAndUpdate(member._id, {
+      registrationFeePaid: true,
+      registrationFeeAmount: amount || 100,
+      registrationFeeMpesaCode: mpesaRef.toUpperCase(),
+      registrationFeeDate: new Date(),
+      registrationFeePhone: String(phone).trim(),
+      registrationFeeTransactionId: `MANUAL-${Date.now()}`,
+    });
+
+    return res.json({ success: true, message: 'Manual registration fee reconciliation completed' });
   } catch (error) {
     next(error);
   }
@@ -296,18 +431,97 @@ router.put(
   protect,
   authorize('admin', 'credit_officer', 'treasurer'),
   auditLog('members', 'update'),
-  async (req, res, next) => {
+  async (req: AuthRequest, res, next) => {
     try {
+      const updatePayload: Record<string, unknown> = { ...req.body };
+      const updatingEmail = Object.prototype.hasOwnProperty.call(updatePayload, 'email');
+      const updatingMemberId = Object.prototype.hasOwnProperty.call(updatePayload, 'memberId');
+
+      // Only admin can modify memberId or member email directly.
+      const isAdmin = req.user?.roles?.includes('admin');
+      if (!isAdmin && (updatingMemberId || updatingEmail)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Only admin can edit member ID or member email'
+        });
+      }
+
+      const existingMember = await Member.findById(req.params.id).select('_id userId email');
+      if (!existingMember) {
+        return res.status(404).json({
+          success: false,
+          message: 'Member not found'
+        });
+      }
+
+      if (updatingMemberId) {
+        const memberId = String(updatePayload.memberId || '').trim().toUpperCase();
+        if (!memberId) {
+          return res.status(400).json({ success: false, message: 'Member ID cannot be empty' });
+        }
+        const duplicate = await Member.findOne({ memberId, _id: { $ne: req.params.id } }).select('_id');
+        if (duplicate) {
+          return res.status(400).json({ success: false, message: 'Member ID already exists' });
+        }
+        updatePayload.memberId = memberId;
+      }
+
+      if (updatingEmail) {
+        const email = updatePayload.email ? String(updatePayload.email).trim().toLowerCase() : null;
+        updatePayload.email = email;
+
+        if (!email && existingMember.userId) {
+          return res.status(400).json({
+            success: false,
+            message: 'Cannot clear email for a linked member account. Set a new email or unlink the account first.'
+          });
+        }
+
+        if (email && existingMember.userId) {
+          const duplicateUser = await User.findOne({ email, _id: { $ne: existingMember.userId } }).select('_id');
+          if (duplicateUser) {
+            return res.status(400).json({ success: false, message: 'Email is already used by another user account' });
+          }
+        }
+      }
+
+      // Handle password reset for linked user accounts in admin UI
+      if (typeof updatePayload.password === 'string' && updatePayload.password.trim()) {
+        if (!existingMember.userId) {
+          return res.status(400).json({
+            success: false,
+            message: 'Member has no linked user account. Please link account before setting password.'
+          });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(updatePayload.password.trim(), salt);
+
+        await User.findByIdAndUpdate(existingMember.userId, {
+          password: hashedPassword
+        });
+
+        // avoid writing password on Member document (no such field)
+        delete updatePayload.password;
+      }
+
       const member = await Member.findByIdAndUpdate(
         req.params.id,
-        req.body,
+        updatePayload,
         { new: true, runValidators: true }
       );
 
       if (!member) {
-        return res.status(404).json({
+        return res.status(500).json({
           success: false,
-          message: 'Member not found'
+          message: 'Failed to update member'
+        });
+      }
+
+      // Keep linked login account email in sync when admin updates member email.
+      if (updatingEmail && existingMember.userId) {
+        await User.findByIdAndUpdate(existingMember.userId, {
+          email: member.email || existingMember.email,
         });
       }
 

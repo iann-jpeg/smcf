@@ -14,7 +14,7 @@ function openDataUrl(dataUrl: string) {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 import { Link } from "react-router-dom";
-import { useMyMember, useMyLoans, useMyRepayments, useMyTransactions, useMySavingsHistory, useMyGuarantorRequests, useRespondToGuarantorRequest, useMySavingsInterest } from "@/hooks/useMyAccount";
+import { useMyMember, useMyLoans, useMyRepayments, useMyTransactions, useMySavingsHistory, useMyGuarantorRequests, useRespondToGuarantorRequest } from "@/hooks/useMyAccount";
 import { useMyGuaranteedLoans } from "@/hooks/useGuaranteedLoans";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -32,7 +32,7 @@ import { StatCard } from "@/components/StatCard";
 import { Wallet, Landmark, TrendingUp, CreditCard, CalendarCheck, PlusCircle, User, Download, Bell, CheckCheck, Save, Lock, FileText, CalendarIcon, Sparkles, Shield, ShieldCheck, ShieldX, Clock, ArrowRightLeft, Camera, Upload, Eye, Trash2, AlertCircle, Loader2, Smartphone } from "lucide-react";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { Separator } from "@/components/ui/separator";
-import { exportMyTransactions, exportMyRepayments, exportMyLoans, exportMyStatement, downloadMembershipForm, exportLoanApplicationReceipt } from "@/lib/pdf-export";
+import { exportMyTransactions, exportMyRepayments, exportMyLoans, exportMyStatement, downloadMembershipForm } from "@/lib/pdf-export";
 import { useNotifications, useMarkRead, useMarkAllRead } from "@/hooks/useNotifications";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Area, AreaChart, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
@@ -60,24 +60,6 @@ function statusVariant(status: string) {
   }
 }
 
-const LOAN_TYPE_LABELS: Record<string, string> = {
-  business_development: "Business Development Loan",
-  education: "Education Loan",
-  emergency: "Emergency Loan",
-  asset_acquisition: "Asset Acquisition Loan",
-  personal: "Personal Loan",
-};
-
-function formatLoanType(value?: string) {
-  if (!value) return "—";
-  return LOAN_TYPE_LABELS[value] ?? value;
-}
-
-function formatInterestModel(value?: string) {
-  if (!value) return "flat";
-  return value === "reducing_balance" ? "reducing" : value;
-}
-
 const profileSchema = z.object({
   phone: z.string().trim().max(20, "Phone must be less than 20 characters").optional().or(z.literal("")),
   email: z.string().trim().email("Invalid email address").max(255, "Email must be less than 255 characters").optional().or(z.literal("")),
@@ -90,7 +72,6 @@ export default function MyAccount() {
   const { data: repayments = [] } = useMyRepayments(member?.id);
   const { data: transactions = [] } = useMyTransactions(member?.id);
   const { data: savingsHistory = [] } = useMySavingsHistory(member?.id);
-  const { data: savingsInterest = [] } = useMySavingsInterest();
   const { data: notifications = [], unreadCount } = useNotifications();
   const { data: guaranteedLoans = [], isLoading: guaranteedLoading } = useMyGuaranteedLoans(member?.id);
   const markRead = useMarkRead();
@@ -198,7 +179,6 @@ export default function MyAccount() {
   const registrationFeeAmount = Number((member as any)?.registration_fee_amount ?? 100);
   const registrationFeeMpesaCode = (member as any)?.registration_fee_mpesa_code as string | null;
   const registrationFeeDate = (member as any)?.registration_fee_date as string | null;
-  const historyLoan = historyLoanId ? loans.find((l: any) => l.id === historyLoanId) : null;
 
   const handleRegistrationFeePayment = async () => {
     if (!member?.id) return;
@@ -422,35 +402,6 @@ export default function MyAccount() {
     }
   };
 
-  const handleDownloadReceipt = (loan: any) => {
-    const ref = loan.loan_number ?? "this loan";
-    if (!confirm(`Download receipt for ${ref}?`)) return;
-
-    const guarantors = (loan.loan_guarantors ?? []).map((g: any) => ({
-      name: g.members?.name ?? "Guarantor",
-      memberId: g.members?.member_id ?? g.member_id ?? "",
-      guaranteeAmount: Number(g.guarantee_amount ?? 0),
-    }));
-
-    exportLoanApplicationReceipt({
-      loanNumber: loan.loan_number ?? "LN-NEW",
-      memberName: member?.name ?? "Member",
-      memberId: member?.member_id ?? "",
-      loanType: formatLoanType(loan.loan_type),
-      appliedAt: loan.applied_at ?? loan.created_at,
-      principal: Number(loan.principal ?? 0),
-      interestRate: Number(loan.interest_rate ?? 0),
-      interestModel: loan.interest_model ?? "reducing",
-      termMonths: Number(loan.term_months ?? 0),
-      monthlyInterest: loan.monthly_interest ? Number(loan.monthly_interest) : undefined,
-      totalInterest: loan.total_interest ? Number(loan.total_interest) : undefined,
-      riskRating: loan.risk_rating ?? undefined,
-      monthlyPayment: loan.monthly_installment ? Number(loan.monthly_installment) : undefined,
-      totalPayable: loan.total_payable ? Number(loan.total_payable) : undefined,
-      guarantors,
-    });
-  };
-
   if (memberLoading) {
     return (
       <div className="space-y-6">
@@ -478,6 +429,7 @@ export default function MyAccount() {
   const pendingLoans = loans.filter((l: any) => l.status === "pending");
   const upcomingRepayments = repayments.filter((r: any) => r.status === "pending");
   const overdueRepayments = repayments.filter((r: any) => r.status === "overdue");
+  const historyLoan = historyLoanId ? loans.find((l: any) => l.id === historyLoanId) : null;
 
   return (
     <div className="space-y-6">
@@ -992,8 +944,7 @@ export default function MyAccount() {
                     <TableRow>
                       <TableHead>Loan #</TableHead>
                       <TableHead className="text-right">Principal</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Rate (Monthly)</TableHead>
+                      <TableHead>Rate</TableHead>
                       <TableHead>Term</TableHead>
                       <TableHead className="text-right">Balance</TableHead>
                       <TableHead className="text-right">Monthly</TableHead>
@@ -1006,8 +957,7 @@ export default function MyAccount() {
                       <TableRow key={loan.id}>
                         <TableCell className="font-mono text-xs">{loan.loan_number}</TableCell>
                         <TableCell className="text-right">KES {Number(loan.principal).toLocaleString()}</TableCell>
-                        <TableCell>{formatLoanType(loan.loan_type)}</TableCell>
-                        <TableCell>{loan.interest_rate}% {formatInterestModel(loan.interest_model)}</TableCell>
+                        <TableCell>{loan.interest_rate}% {loan.interest_model}</TableCell>
                         <TableCell>{loan.term_months}mo</TableCell>
                         <TableCell className="text-right font-semibold">KES {Number(loan.balance).toLocaleString()}</TableCell>
                         <TableCell className="text-right">KES {Number(loan.monthly_installment).toLocaleString()}</TableCell>
@@ -1015,27 +965,16 @@ export default function MyAccount() {
                           <Badge variant={statusVariant(loan.status)}>{loan.status}</Badge>
                         </TableCell>
                         <TableCell>
-                          <div className="flex flex-wrap gap-2">
-                            {["active", "disbursed"].includes(loan.status) && Number(loan.balance) > 0 && (
-                              <Button
-                                size="sm"
-                                className="bg-blue-600 hover:bg-blue-700 text-white gap-1 text-xs whitespace-nowrap"
-                                onClick={() => setRepayLoan(loan)}
-                              >
-                                <CreditCard className="h-3.5 w-3.5" />
-                                Pay via M-Pesa
-                              </Button>
-                            )}
+                          {["active", "disbursed"].includes(loan.status) && Number(loan.balance) > 0 && (
                             <Button
                               size="sm"
-                              variant="outline"
-                              className="gap-1 text-xs"
-                              onClick={() => handleDownloadReceipt(loan)}
+                              className="bg-blue-600 hover:bg-blue-700 text-white gap-1 text-xs whitespace-nowrap"
+                              onClick={() => setRepayLoan(loan)}
                             >
-                              <Download className="h-3.5 w-3.5" />
-                              Receipt
+                              <CreditCard className="h-3.5 w-3.5" />
+                              Pay via M-Pesa
                             </Button>
-                          </div>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1155,46 +1094,6 @@ export default function MyAccount() {
                     />
                   </AreaChart>
                 </ChartContainer>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-heading text-lg">Savings Interest History</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {savingsInterest.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-6 text-center">No savings interest distributions yet.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Period</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead className="text-right">Previous Savings</TableHead>
-                        <TableHead className="text-right">Interest Earned</TableHead>
-                        <TableHead className="text-right">New Savings</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {savingsInterest.map((r: any) => (
-                        <TableRow key={r.id}>
-                          <TableCell className="font-medium">{r.distribution?.period ?? "—"}</TableCell>
-                          <TableCell className="text-sm">
-                            {r.distribution?.approved_at
-                              ? new Date(r.distribution.approved_at).toLocaleDateString()
-                              : new Date(r.created_at).toLocaleDateString()}
-                          </TableCell>
-                          <TableCell className="text-right">KES {Number(r.savings_before).toLocaleString()}</TableCell>
-                          <TableCell className="text-right font-semibold text-emerald-600">KES {Number(r.interest_amount).toLocaleString()}</TableCell>
-                          <TableCell className="text-right">KES {Number(r.savings_after).toLocaleString()}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
               )}
             </CardContent>
           </Card>
@@ -1593,8 +1492,7 @@ export default function MyAccount() {
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                           <div><span className="text-muted-foreground">Loan #</span><p className="font-medium">{req.loan_number}</p></div>
                           <div><span className="text-muted-foreground">Principal</span><p className="font-medium">KES {req.principal?.toLocaleString()}</p></div>
-                          <div><span className="text-muted-foreground">Loan Type</span><p className="font-medium">{formatLoanType(req.loan_type)}</p></div>
-                          <div><span className="text-muted-foreground">Rate (Monthly)</span><p className="font-medium">{req.interest_rate}% {formatInterestModel(req.interest_model)}</p></div>
+                          <div><span className="text-muted-foreground">Interest</span><p className="font-medium">{req.interest_rate}% p.a.</p></div>
                           <div><span className="text-muted-foreground">Term</span><p className="font-medium">{req.term_months} months</p></div>
                           <div><span className="text-muted-foreground">Monthly</span><p className="font-medium">KES {req.monthly_installment?.toLocaleString()}</p></div>
                           <div><span className="text-muted-foreground">Guarantee Amount</span><p className="font-medium">KES {req.guarantee_amount?.toLocaleString()}</p></div>

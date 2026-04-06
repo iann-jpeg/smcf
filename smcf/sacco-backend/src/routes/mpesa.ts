@@ -21,6 +21,7 @@ import Loan from '../models/Loan';
 import { protect, authorize, AuthRequest } from '../middleware/auth';
 import { processRepayment } from './repayments';
 import { notifyStaff } from '../utils/notify';
+import { recalculateMemberRiskScore } from '../utils/riskScore';
 
 const router = Router();
 
@@ -74,6 +75,18 @@ interface PendingSharePurchase {
 
 const pendingSharePurchases = new Map<string, PendingSharePurchase>();
 
+interface PendingRegistrationFee {
+  memberId: string;
+  amount: number;
+  phone: string;
+  status: 'pending' | 'success' | 'failed';
+  mpesaRef?: string;
+  resultDesc?: string;
+  createdAt: number;
+}
+
+const pendingRegistrationFees = new Map<string, PendingRegistrationFee>();
+
 // Purge stale entries every 10 min
 setInterval(() => {
   const cutoff = Date.now() - 10 * 60 * 1000;
@@ -82,6 +95,9 @@ setInterval(() => {
   }
   for (const [k, v] of pendingSharePurchases.entries()) {
     if (v.createdAt < cutoff) pendingSharePurchases.delete(k);
+  }
+  for (const [k, v] of pendingRegistrationFees.entries()) {
+    if (v.createdAt < cutoff) pendingRegistrationFees.delete(k);
   }
 }, 10 * 60 * 1000);
 
@@ -149,7 +165,7 @@ async function queryLipiaStatus(checkoutRequestId: string): Promise<{
  * Updates in-memory Map so the frontend's /status poll picks it up immediately.
  */
 async function pollSACCOPayment(
-  type: 'deposit' | 'loan_repay' | 'share_purchase',
+  type: 'deposit' | 'loan_repay' | 'share_purchase' | 'registration_fee',
   checkoutRequestId: string,
   pendingTxnId: string,   // DB Transaction._id (string) of the pending record
   memberId: string,
@@ -171,6 +187,9 @@ async function pollSACCOPayment(
       } else if (type === 'share_purchase') {
         const s = pendingSharePurchases.get(checkoutRequestId);
         if (s) { s.status = 'failed'; s.resultDesc = 'Payment timed out'; pendingSharePurchases.set(checkoutRequestId, s); }
+      } else if (type === 'registration_fee') {
+        const f = pendingRegistrationFees.get(checkoutRequestId);
+        if (f) { f.status = 'failed'; f.resultDesc = 'Payment timed out'; pendingRegistrationFees.set(checkoutRequestId, f); }
       } else {
         const r = pendingRepayments.get(checkoutRequestId);
         if (r) { r.status = 'failed'; r.resultDesc = 'Payment timed out'; pendingRepayments.set(checkoutRequestId, r); }
@@ -207,8 +226,30 @@ async function pollSACCOPayment(
             depositProcessed: true,
           });
           await Member.findByIdAndUpdate(memberId, { $inc: { shares: confirmedAmount } });
+          await recalculateMemberRiskScore(memberId);
           const s = pendingSharePurchases.get(checkoutRequestId);
           if (s) { s.status = 'success'; s.mpesaRef = mpesaReceiptNumber; s.amount = confirmedAmount; pendingSharePurchases.set(checkoutRequestId, s); }
+
+          const member = await Member.findById(memberId).select('name memberId');
+          const displayName = member?.name || member?.memberId || 'Member';
+          void notifyStaff(
+            'Share Purchase Received',
+            `${displayName} purchased shares worth KES ${Number(confirmedAmount).toLocaleString()} via M-Pesa. Ref: ${mpesaReceiptNumber}.`,
+            'info',
+            '/accounts'
+          );
+
+        } else if (type === 'registration_fee') {
+          await settleRegistrationFeePayment({
+            checkoutRequestId,
+            memberId,
+            amount: confirmedAmount,
+            phone,
+            mpesaRef: mpesaReceiptNumber,
+            source: 'polling',
+          });
+          const f = pendingRegistrationFees.get(checkoutRequestId);
+          if (f) { f.status = 'success'; f.mpesaRef = mpesaReceiptNumber; f.amount = confirmedAmount; pendingRegistrationFees.set(checkoutRequestId, f); }
 
         } else if (type === 'loan_repay' && loanId) {
           // Delete placeholder, processRepayment creates the real transaction
@@ -229,6 +270,9 @@ async function pollSACCOPayment(
         } else if (type === 'share_purchase') {
           const s = pendingSharePurchases.get(checkoutRequestId);
           if (s) { s.status = 'failed'; s.resultDesc = 'Processing error after payment confirmed'; pendingSharePurchases.set(checkoutRequestId, s); }
+        } else if (type === 'registration_fee') {
+          const f = pendingRegistrationFees.get(checkoutRequestId);
+          if (f) { f.status = 'failed'; f.resultDesc = 'Processing error after payment confirmed'; pendingRegistrationFees.set(checkoutRequestId, f); }
         } else {
           const r = pendingRepayments.get(checkoutRequestId);
           if (r) { r.status = 'failed'; r.resultDesc = 'Processing error after payment confirmed'; pendingRepayments.set(checkoutRequestId, r); }
@@ -245,6 +289,9 @@ async function pollSACCOPayment(
       } else if (type === 'share_purchase') {
         const s = pendingSharePurchases.get(checkoutRequestId);
         if (s) { s.status = 'failed'; s.resultDesc = resultDesc || 'Payment cancelled or failed'; pendingSharePurchases.set(checkoutRequestId, s); }
+      } else if (type === 'registration_fee') {
+        const f = pendingRegistrationFees.get(checkoutRequestId);
+        if (f) { f.status = 'failed'; f.resultDesc = resultDesc || 'Payment cancelled or failed'; pendingRegistrationFees.set(checkoutRequestId, f); }
       } else {
         const r = pendingRepayments.get(checkoutRequestId);
         if (r) { r.status = 'failed'; r.resultDesc = resultDesc || 'Payment cancelled or failed'; pendingRepayments.set(checkoutRequestId, r); }
@@ -413,6 +460,110 @@ function maskSecret(value?: string): string | null {
 function envFingerprint(value?: string): string | null {
   if (!value) return null;
   return `${value.length}:${value.charCodeAt(0)}:${value.charCodeAt(value.length - 1)}`;
+}
+
+const REGISTRATION_FEE_AMOUNT = 100;
+
+function isSamePhone(left: string, right: string): boolean {
+  const l = normalizePhone(left || '');
+  const r = normalizePhone(right || '');
+  return l === r;
+}
+
+async function findMemberByPhoneForRegistration(phone: string) {
+  const normalized = normalizePhone(phone);
+  const allCandidates = await Member.find({ registrationFeePaid: { $ne: true }, phone: { $ne: null } })
+    .select('_id phone registrationFeePaid')
+    .limit(2000);
+
+  return allCandidates.find((m: any) => isSamePhone(String(m.phone || ''), normalized)) || null;
+}
+
+async function settleRegistrationFeePayment(params: {
+  memberId: string;
+  amount: number;
+  phone: string;
+  mpesaRef: string;
+  checkoutRequestId?: string;
+  source: 'callback' | 'polling' | 'reconcile';
+}) {
+  const { memberId, amount, phone, mpesaRef, checkoutRequestId, source } = params;
+
+  if (Number(amount) !== REGISTRATION_FEE_AMOUNT) {
+    throw new Error(`Registration fee must be exactly KES ${REGISTRATION_FEE_AMOUNT}`);
+  }
+
+  const duplicate = await Transaction.findOne({
+    type: 'registration_fee',
+    mpesaRef,
+    status: 'completed',
+  }).select('_id');
+
+  if (duplicate) {
+    const already = await Member.findOne({ registrationFeeMpesaCode: mpesaRef }).select('_id');
+    return { updated: false, alreadyPaid: Boolean(already), duplicate: true };
+  }
+
+  const updateResult = await Member.findOneAndUpdate(
+    { _id: memberId, registrationFeePaid: { $ne: true } },
+    {
+      $set: {
+        registrationFeePaid: true,
+        registrationFeeAmount: REGISTRATION_FEE_AMOUNT,
+        registrationFeeMpesaCode: mpesaRef,
+        registrationFeeDate: new Date(),
+        registrationFeePhone: normalizePhone(phone),
+        registrationFeeTransactionId: checkoutRequestId || mpesaRef,
+        registrationFeePendingCheckoutId: null,
+      },
+    },
+    { new: true }
+  );
+
+  await Transaction.findOneAndUpdate(
+    {
+      checkoutRequestId,
+      type: 'registration_fee',
+      status: 'pending',
+    },
+    {
+      status: 'completed',
+      mpesaRef,
+      amount: REGISTRATION_FEE_AMOUNT,
+      description: `M-Pesa Registration Fee - Ref: ${mpesaRef} - ${normalizePhone(phone)}`,
+      processedAt: new Date(),
+      depositProcessed: true,
+    }
+  );
+
+  if (!updateResult) {
+    return { updated: false, alreadyPaid: true, duplicate: false };
+  }
+
+  const existingTxn = await Transaction.findOne({
+    memberId,
+    type: 'registration_fee',
+    mpesaRef,
+    status: 'completed',
+  }).select('_id');
+
+  if (!existingTxn) {
+    const count = await Transaction.countDocuments();
+    const transactionRef = `TXN${new Date().getFullYear()}${String(count + 1).padStart(8, '0')}`;
+    await Transaction.create({
+      transactionRef,
+      memberId,
+      type: 'registration_fee',
+      amount: REGISTRATION_FEE_AMOUNT,
+      description: `M-Pesa Registration Fee (${source}) - Ref: ${mpesaRef} - ${normalizePhone(phone)}`,
+      status: 'completed',
+      mpesaRef,
+      checkoutRequestId: checkoutRequestId || null,
+      createdBy: null,
+    });
+  }
+
+  return { updated: true, alreadyPaid: false, duplicate: false };
 }
 
 async function recordDeposit(memberId: string, amount: number, phone: string, mpesaRef: string) {
@@ -619,6 +770,7 @@ router.post('/share-purchase', protect, async (req: AuthRequest, res: Response, 
             createdBy: null,
           });
           await Member.findByIdAndUpdate(memberId, { $inc: { shares: numAmount } });
+          await recalculateMemberRiskScore(memberId);
           s.status = 'success';
           s.mpesaRef = ref;
         } catch {
@@ -671,6 +823,164 @@ router.post('/share-purchase', protect, async (req: AuthRequest, res: Response, 
     );
 
     return res.json({ success: true, data: { checkoutRequestId } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── POST /api/mpesa/registration-fee/initiate ───────────────────────────────
+// Initiates one-time registration fee payment (KES 100).
+
+router.post('/registration-fee/initiate', protect, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { memberId, phone } = req.body;
+
+    if (!memberId) return res.status(400).json({ success: false, message: 'memberId is required' });
+
+    const member = await Member.findById(memberId).select('phone registrationFeePaid registrationFeePendingCheckoutId');
+    if (!member) return res.status(404).json({ success: false, message: 'Member not found' });
+    if (member.registrationFeePaid) {
+      return res.status(409).json({ success: false, message: 'Registration fee already paid' });
+    }
+
+    const mpesaPhone = normalizePhone(phone || member.phone || '');
+    if (!mpesaPhone || mpesaPhone.length < 12) {
+      return res.status(400).json({ success: false, message: 'Valid phone number is required' });
+    }
+
+    const numAmount = REGISTRATION_FEE_AMOUNT;
+    const hasCredentials = !!process.env.LIPIA_API_KEY;
+
+    if (!hasCredentials) {
+      const simId = `REGSIM-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+
+      pendingRegistrationFees.set(simId, {
+        memberId,
+        amount: numAmount,
+        phone: mpesaPhone,
+        status: 'pending',
+        createdAt: Date.now(),
+      });
+
+      await Member.findByIdAndUpdate(memberId, {
+        $set: {
+          registrationFeeAmount: REGISTRATION_FEE_AMOUNT,
+          registrationFeePendingCheckoutId: simId,
+        },
+      });
+
+      const txnCount = await Transaction.countDocuments();
+      const txnRef = `TXN${new Date().getFullYear()}${String(txnCount + 1).padStart(8, '0')}`;
+      await Transaction.create({
+        transactionRef: txnRef,
+        memberId,
+        type: 'registration_fee',
+        amount: numAmount,
+        description: `M-Pesa Registration Fee - STK Pending - ${mpesaPhone}`,
+        status: 'pending',
+        checkoutRequestId: simId,
+        createdBy: null,
+      });
+
+      setTimeout(async () => {
+        const f = pendingRegistrationFees.get(simId);
+        if (!f || f.status !== 'pending') return;
+        try {
+          const ref = `REGSIM${Date.now()}`;
+          await settleRegistrationFeePayment({
+            memberId: f.memberId,
+            amount: REGISTRATION_FEE_AMOUNT,
+            phone: f.phone,
+            mpesaRef: ref,
+            checkoutRequestId: simId,
+            source: 'polling',
+          });
+          f.status = 'success';
+          f.mpesaRef = ref;
+          pendingRegistrationFees.set(simId, f);
+        } catch {
+          f.status = 'failed';
+          f.resultDesc = 'Simulation internal error';
+          pendingRegistrationFees.set(simId, f);
+        }
+      }, 4000);
+
+      return res.json({ success: true, simulated: true, data: { checkoutRequestId: simId } });
+    }
+
+    const stkData = await sendLipiaSTK(mpesaPhone, numAmount, 'SMCF-REGFEE', 'SMCF SACCO Registration Fee');
+    const checkoutRequestId = extractCheckoutRequestId(stkData);
+
+    if (!checkoutRequestId) {
+      return res.status(400).json({
+        success: false,
+        message: stkData.message || stkData.error || 'STK Push failed. Payment service did not return a checkout request ID.',
+      });
+    }
+
+    const txnCount = await Transaction.countDocuments();
+    const txnRef = `TXN${new Date().getFullYear()}${String(txnCount + 1).padStart(8, '0')}`;
+    const txnDoc = await Transaction.create({
+      transactionRef: txnRef,
+      memberId,
+      type: 'registration_fee',
+      amount: numAmount,
+      description: `M-Pesa Registration Fee - STK Pending - ${mpesaPhone}`,
+      status: 'pending',
+      checkoutRequestId,
+      createdBy: null,
+    });
+
+    pendingRegistrationFees.set(checkoutRequestId, {
+      memberId,
+      amount: numAmount,
+      phone: mpesaPhone,
+      status: 'pending',
+      createdAt: Date.now(),
+    });
+
+    await Member.findByIdAndUpdate(memberId, {
+      $set: {
+        registrationFeeAmount: REGISTRATION_FEE_AMOUNT,
+        registrationFeePendingCheckoutId: checkoutRequestId,
+      },
+    });
+
+    pollSACCOPayment('registration_fee', checkoutRequestId, String(txnDoc._id), memberId, numAmount, mpesaPhone).catch(
+      (err) => console.error('[pollSACCOPayment registration-fee]', err)
+    );
+
+    return res.json({ success: true, data: { checkoutRequestId } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── POST /api/mpesa/registration-fee/reconcile-manual ─────────────────────
+// Allows admin/staff to mark manually paid registration fee after validating details.
+
+router.post('/registration-fee/reconcile-manual', protect, authorize('admin', 'treasurer', 'credit_officer'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { phone, mpesaRef, amount } = req.body;
+    const normalizedRef = String(mpesaRef || '').trim().toUpperCase();
+    if (!normalizedRef) return res.status(400).json({ success: false, message: 'mpesaRef is required' });
+    if (Number(amount) !== REGISTRATION_FEE_AMOUNT) {
+      return res.status(400).json({ success: false, message: 'Amount must be KES 100 for registration fee' });
+    }
+
+    const member = await findMemberByPhoneForRegistration(String(phone || ''));
+    if (!member) return res.status(404).json({ success: false, message: 'No unpaid member found for the provided phone' });
+
+    await settleRegistrationFeePayment({
+      memberId: String((member as any)._id),
+      amount: REGISTRATION_FEE_AMOUNT,
+      phone: String((member as any).phone || phone),
+      mpesaRef: normalizedRef,
+      checkoutRequestId: normalizedRef,
+      source: 'reconcile',
+    });
+
+    return res.json({ success: true, data: { memberId: String((member as any)._id), mpesaRef: normalizedRef } });
   } catch (err) {
     next(err);
   }
@@ -731,20 +1041,58 @@ router.post('/callback', async (req: Request, res: Response) => {
           { new: true }
         );
 
+        // Only increment once if pending transaction existed.
         if (txn) {
           await Member.findByIdAndUpdate(sharePurchase.memberId, { $inc: { shares: amt } });
+          await recalculateMemberRiskScore(sharePurchase.memberId);
+          const member = await Member.findById(sharePurchase.memberId).select('name memberId');
+          const displayName = member?.name || member?.memberId || 'Member';
+          void notifyStaff(
+            'Share Purchase Received',
+            `${displayName} purchased shares worth KES ${Number(amt).toLocaleString()} via M-Pesa. Ref: ${mpesaRef}.`,
+            'info',
+            '/accounts'
+          );
         }
 
         sharePurchase.status = 'success';
         sharePurchase.mpesaRef = mpesaRef;
         sharePurchase.amount = amt;
       }
-
       pendingSharePurchases.set(CheckoutRequestID, sharePurchase);
       return;
     }
 
     // ── Loan repayment ───────────────────────────────────────────────────
+    const regFee = pendingRegistrationFees.get(CheckoutRequestID);
+    if (regFee) {
+      if (ResultCode !== 0) {
+        regFee.status = 'failed';
+        regFee.resultDesc = ResultDesc || 'Payment cancelled or failed';
+      } else {
+        const amt = paidAmt || regFee.amount;
+        if (amt === REGISTRATION_FEE_AMOUNT) {
+          await settleRegistrationFeePayment({
+            memberId: regFee.memberId,
+            amount: amt,
+            phone: regFee.phone,
+            mpesaRef,
+            checkoutRequestId: CheckoutRequestID,
+            source: 'callback',
+          });
+          regFee.status = 'success';
+          regFee.mpesaRef = mpesaRef;
+          regFee.amount = amt;
+        } else {
+          regFee.status = 'failed';
+          regFee.resultDesc = 'Invalid amount for registration fee';
+          await Transaction.findOneAndUpdate({ checkoutRequestId: CheckoutRequestID, type: 'registration_fee' }, { status: 'failed', processedAt: new Date() });
+        }
+      }
+      pendingRegistrationFees.set(CheckoutRequestID, regFee);
+      return;
+    }
+
     const repayment = pendingRepayments.get(CheckoutRequestID);
     if (repayment) {
       if (ResultCode !== 0) {
@@ -781,6 +1129,7 @@ router.get('/status/:checkoutRequestId', protect, async (req: AuthRequest, res: 
       return res.json({
         success: true,
         data: {
+          type: 'deposit',
           status:     deposit.status,
           mpesaRef:   deposit.mpesaRef,
           amount:     deposit.amount,
@@ -789,25 +1138,44 @@ router.get('/status/:checkoutRequestId', protect, async (req: AuthRequest, res: 
       });
     }
 
-    const sharePurchase = pendingSharePurchases.get(checkoutRequestId);
-    if (sharePurchase) {
+    const share = pendingSharePurchases.get(checkoutRequestId);
+    if (share) {
       return res.json({
         success: true,
         data: {
-          status:     sharePurchase.status,
-          mpesaRef:   sharePurchase.mpesaRef,
-          amount:     sharePurchase.amount,
-          resultDesc: sharePurchase.resultDesc,
+          type: 'share_purchase',
+          status:     share.status,
+          mpesaRef:   share.mpesaRef,
+          amount:     share.amount,
+          resultDesc: share.resultDesc,
+        },
+      });
+    }
+
+    const regFee = pendingRegistrationFees.get(checkoutRequestId);
+    if (regFee) {
+      return res.json({
+        success: true,
+        data: {
+          type: 'registration_fee',
+          status: regFee.status,
+          mpesaRef: regFee.mpesaRef,
+          amount: regFee.amount,
+          resultDesc: regFee.resultDesc,
         },
       });
     }
 
     // Fallback: DB lookup (handles server restart where Map was cleared)
-    const txn = await Transaction.findOne({ checkoutRequestId, type: { $in: ['deposit', 'share_purchase'] } }).select('status mpesaRef amount');
+    const txn = await Transaction.findOne({
+      checkoutRequestId,
+      type: { $in: ['deposit', 'share_purchase', 'registration_fee'] },
+    }).select('status mpesaRef amount type');
     if (txn) {
       return res.json({
         success: true,
         data: {
+          type: txn.type,
           status:   txn.status === 'completed' ? 'success' : txn.status === 'failed' ? 'failed' : 'pending',
           mpesaRef: txn.mpesaRef,
           amount:   txn.amount,

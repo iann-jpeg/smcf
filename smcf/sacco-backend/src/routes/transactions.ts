@@ -7,6 +7,7 @@ import { protect, authorize, AuthRequest } from '../middleware/auth';
 import { auditLog } from '../middleware/auditLog';
 import { processRepayment } from './repayments';
 import { notifyMember } from '../utils/notify';
+import { recalculateMemberRiskScore } from '../utils/riskScore';
 
 const router = Router();
 
@@ -73,7 +74,7 @@ router.post(
   auditLog('transactions', 'create'),
   [
     body('memberId').notEmpty().withMessage('Member ID is required'),
-    body('type').isIn(['deposit', 'withdrawal', 'loan_disbursement', 'loan_repayment', 'share_purchase', 'share_transfer', 'dividend'])
+    body('type').isIn(['deposit', 'withdrawal', 'loan_disbursement', 'loan_repayment', 'share_purchase', 'share_transfer', 'dividend', 'savings_interest'])
       .withMessage('Invalid transaction type'),
     body('amount').isNumeric().withMessage('Amount is required'),
     body('description').optional()
@@ -113,12 +114,17 @@ router.post(
         updateField.$inc = { savings: -amount };
       } else if (type === 'share_purchase') {
         updateField.$inc = { shares: amount };
+      } else if (type === 'savings_interest') {
+        updateField.$inc = { savings: amount };
       } else if (type === 'loan_repayment') {
         updateField.$inc = { loanBalance: -amount };
       }
 
       if (Object.keys(updateField).length > 0) {
         await Member.findByIdAndUpdate(memberId, updateField);
+        if (type === 'share_purchase') {
+          await recalculateMemberRiskScore(String(memberId));
+        }
       }
 
       res.status(201).json({
@@ -201,6 +207,7 @@ router.patch(
       } else if (txn.type === 'share_purchase') {
         // Update share capital
         await Member.findByIdAndUpdate(txn.memberId, { $inc: { shares: txn.amount } });
+        await recalculateMemberRiskScore(String(txn.memberId));
         await Transaction.findByIdAndUpdate(txn._id, {
           status: 'completed',
           processedAt: new Date(),

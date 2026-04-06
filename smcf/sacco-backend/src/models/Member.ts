@@ -28,6 +28,13 @@ export interface IMember extends Document {
   docPassportPhoto: string | null;
   docMembershipForm: string | null;
   docKraPinCertificate: string | null;
+  registrationFeePaid: boolean;
+  registrationFeeAmount: number;
+  registrationFeeMpesaCode: string | null;
+  registrationFeeDate: Date | null;
+  registrationFeePhone: string | null;
+  registrationFeeTransactionId: string | null;
+  registrationFeePendingCheckoutId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -140,6 +147,34 @@ const MemberSchema = new Schema<IMember>({
   docKraPinCertificate: {
     type: String,
     default: null
+  },
+  registrationFeePaid: {
+    type: Boolean,
+    default: false
+  },
+  registrationFeeAmount: {
+    type: Number,
+    default: 100
+  },
+  registrationFeeMpesaCode: {
+    type: String,
+    default: undefined
+  },
+  registrationFeeDate: {
+    type: Date,
+    default: null
+  },
+  registrationFeePhone: {
+    type: String,
+    default: null
+  },
+  registrationFeeTransactionId: {
+    type: String,
+    default: null
+  },
+  registrationFeePendingCheckoutId: {
+    type: String,
+    default: null
   }
 }, {
   timestamps: true
@@ -149,5 +184,23 @@ const MemberSchema = new Schema<IMember>({
 MemberSchema.index({ email: 1 });
 MemberSchema.index({ status: 1 });
 MemberSchema.index({ userId: 1 });
+MemberSchema.index({ registrationFeePaid: 1 });
+MemberSchema.index(
+  { registrationFeeMpesaCode: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      registrationFeeMpesaCode: { $exists: true, $ne: null }
+    }
+  }
+);
+MemberSchema.index(
+  { registrationFeePendingCheckoutId: 1 },
+  {
+    partialFilterExpression: {
+      registrationFeePendingCheckoutId: { $exists: true, $ne: null }
+    }
+  }
+);
 
 export default mongoose.model<IMember>('Member', MemberSchema);

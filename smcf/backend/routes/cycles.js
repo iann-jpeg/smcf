@@ -40,6 +40,20 @@ router.get("/current", protect, async (req, res) => {
         "next_recipient",
         "name phone member_id position"
       );
+    } else if (!cycle.next_recipient) {
+      // Backfill next recipient if it was never set on an existing cycle
+      const fallbackRecipient = await Member.findOne({
+        member_type: { $ne: "wallet_only" }
+      }).sort({ position: 1 });
+
+      if (fallbackRecipient) {
+        cycle.next_recipient = fallbackRecipient._id;
+        await cycle.save();
+        cycle = await cycle.populate(
+          "next_recipient",
+          "name phone member_id position"
+        );
+      }
     }
 
     // Calculate real-time stats
@@ -97,6 +111,8 @@ router.post("/start", protect, adminOnly, async (req, res) => {
     const currentCycle = await Cycle.findOne({ status: "active" });
     if (currentCycle) {
       currentCycle.status = "completed";
+      currentCycle.next_recipient = null;
+      currentCycle.recipient_paid = true;
       await currentCycle.save();
     }
 
@@ -108,10 +124,12 @@ router.post("/start", protect, adminOnly, async (req, res) => {
     } else if (member_number) {
       recipient = await Member.findOne({ member_id: member_number });
     } else {
-      // Determine next recipient automatically
-      const lastRecipientPosition = currentCycle?.next_recipient
-        ? (await Member.findById(currentCycle.next_recipient))?.position || 0
-        : 0;
+      // Determine next recipient automatically from last paid (or planned) member
+      const lastPaidMemberId = currentCycle?.recipient_id || currentCycle?.next_recipient;
+      const lastPaidMember = lastPaidMemberId
+        ? await Member.findById(lastPaidMemberId)
+        : null;
+      const lastRecipientPosition = lastPaidMember?.position || 0;
 
       const nextRecipient = await Member.findOne({
         position: { $gt: lastRecipientPosition },
@@ -229,6 +247,62 @@ router.get("/:cycleNumber/stats", protect, async (req, res) => {
         },
       },
     });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Fix current cycle data (admin only - one-time use)
+router.post("/fix-current", protect, adminOnly, async (req, res) => {
+  try {
+    // 1. Mark all existing cycles as completed
+    await Cycle.updateMany({}, { status: "completed" });
+
+    // 2. Find the last member who was paid to determine the next recipient
+    const lastPaidCycle = await Cycle.findOne({ recipient_paid: true }).sort({ cycle_number: -1 });
+    const lastPaidMember = lastPaidCycle ? await Member.findById(lastPaidCycle.recipient_id) : null;
+    const lastRecipientPosition = lastPaidMember?.position || 0;
+
+    let nextRecipient = await Member.findOne({
+      position: { $gt: lastRecipientPosition },
+      status: "active",
+      member_type: { $ne: "wallet_only" }
+    }).sort({ position: 1 });
+
+    // If we're at the end, loop back to the beginning
+    if (!nextRecipient) {
+      nextRecipient = await Member.findOne({
+        status: "active",
+        member_type: { $ne: "wallet_only" }
+      }).sort({ position: 1 });
+    }
+
+    if (!nextRecipient) {
+      return res.status(404).json({ success: false, error: "No active members found to set as next recipient." });
+    }
+
+    // 3. Create the new, correct cycle
+    const totalMembers = await Member.countDocuments({ member_type: { $ne: "wallet_only" } });
+    const cycleStartDate = new Date(); // Starts now
+    const cycleEndDate = new Date(cycleStartDate.getTime() + 5 * 24 * 60 * 60 * 1000); // 5 days from now
+
+    const newCycle = await Cycle.create({
+      cycle_number: 17,
+      start_date: cycleStartDate,
+      end_date: cycleEndDate,
+      status: "active",
+      total_members: totalMembers,
+      next_recipient: nextRecipient._id,
+    });
+
+    const populatedCycle = await newCycle.populate("next_recipient", "name phone member_id position");
+
+    res.status(201).json({
+      success: true,
+      message: "Successfully reset to Cycle #17.",
+      data: populatedCycle,
+    });
+
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

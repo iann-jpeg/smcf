@@ -11,6 +11,7 @@ import Member from '../models/Member';
 import { protect, authorize, AuthRequest } from '../middleware/auth';
 import { auditLog } from '../middleware/auditLog';
 import { notifyMember, notifyStaff } from '../utils/notify';
+import { recalculateMemberRiskScore } from '../utils/riskScore';
 
 const router = Router();
 
@@ -67,7 +68,7 @@ router.post(
         transactionRef: senderRef,
         memberId: sender._id,
         type: 'share_transfer',
-        amount: numAmount,
+        amount: -numAmount,
         description: description || `Share transfer sent to ${recipient.name} (${recipient.memberId})`,
         status: 'completed',
         createdBy: req.userId,
@@ -87,6 +88,10 @@ router.post(
       // Update balances atomically
       await Member.findByIdAndUpdate(sender._id,    { $inc: { shares: -numAmount } });
       await Member.findByIdAndUpdate(recipient._id, { $inc: { shares:  numAmount } });
+      await Promise.all([
+        recalculateMemberRiskScore(String(sender._id)),
+        recalculateMemberRiskScore(String(recipient._id)),
+      ]);
 
       // Notify both parties (fire-and-forget)
       notifyMember(
@@ -119,6 +124,58 @@ router.post(
     }
   }
 );
+
+// ─── GET /api/shares/me/summary ─────────────────────────────────────────────
+// Returns member holdings, worth, and transfer/purchase stats for UI + loan context.
+
+router.get('/me/summary', protect, async (req: AuthRequest, res: any, next: any) => {
+  try {
+    const member = await Member.findOne({ userId: req.userId }).select('name memberId shares');
+    if (!member) {
+      return res.status(404).json({ success: false, message: 'Member profile not found' });
+    }
+
+    const [purchaseAgg, transferInAgg, transferOutAgg] = await Promise.all([
+      Transaction.aggregate([
+        { $match: { memberId: member._id, type: 'share_purchase', status: 'completed' } },
+        { $group: { _id: null, total: { $sum: '$amount' } } },
+      ]),
+      Transaction.aggregate([
+        { $match: { memberId: member._id, type: 'share_transfer', status: 'completed', amount: { $gt: 0 } } },
+        { $group: { _id: null, total: { $sum: '$amount' } } },
+      ]),
+      Transaction.aggregate([
+        { $match: { memberId: member._id, type: 'share_transfer', status: 'completed', amount: { $lt: 0 } } },
+        { $group: { _id: null, total: { $sum: '$amount' } } },
+      ]),
+    ]);
+
+    const unitPrice = 100; // KES per unit for display/analytics consistency
+    const currentShareCapital = Number(member.shares || 0);
+    const purchasedTotal = Number(purchaseAgg[0]?.total || 0);
+    const transferredIn = Number(transferInAgg[0]?.total || 0);
+    const transferredOut = Math.abs(Number(transferOutAgg[0]?.total || 0));
+    const netTransfers = transferredIn - transferredOut;
+
+    return res.json({
+      success: true,
+      data: {
+        memberId: member.memberId,
+        memberName: member.name,
+        unitPrice,
+        unitsHeld: Number((currentShareCapital / unitPrice).toFixed(2)),
+        currentShareCapital,
+        estimatedWorth: currentShareCapital,
+        purchasedTotal,
+        transferredIn,
+        transferredOut,
+        netTransfers,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // ─── POST /api/shares/distribute-dividends ───────────────────────────────────
 // Admin distributes a total dividend pool proportionally to all active members
@@ -194,6 +251,7 @@ router.post(
 
         // Credit dividend to member savings
         await Member.findByIdAndUpdate(member._id, { $inc: { savings: dividend } });
+        await recalculateMemberRiskScore(String(member._id));
 
         // Notify member
         notifyMember(

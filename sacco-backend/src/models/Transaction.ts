@@ -3,13 +3,18 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface ITransaction extends Document {
   transactionRef: string;
   memberId: mongoose.Types.ObjectId;
-  type: 'deposit' | 'withdrawal' | 'loan_disbursement' | 'loan_repayment' | 'share_purchase' | 'share_transfer' | 'dividend';
+  type: 'deposit' | 'withdrawal' | 'loan_disbursement' | 'loan_repayment' | 'share_purchase' | 'share_transfer' | 'dividend' | 'savings_interest' | 'registration_fee';
   amount: number;
   description: string | null;
   status: 'pending' | 'completed' | 'failed' | 'reversed' | 'declined';
   processedAt: Date;
   createdBy: mongoose.Types.ObjectId | null;
   createdAt: Date;
+  // STK push tracking
+  checkoutRequestId?: string;
+  mpesaRef?: string;
+  loanId?: string;
+  depositProcessed?: boolean;
 }
 
 const TransactionSchema = new Schema<ITransaction>({
@@ -25,7 +30,7 @@ const TransactionSchema = new Schema<ITransaction>({
   },
   type: { 
     type: String, 
-    enum: ['deposit', 'withdrawal', 'loan_disbursement', 'loan_repayment', 'share_purchase', 'share_transfer', 'dividend'],
+    enum: ['deposit', 'withdrawal', 'loan_disbursement', 'loan_repayment', 'share_purchase', 'share_transfer', 'dividend', 'savings_interest', 'registration_fee'],
     required: true 
   },
   amount: { 
@@ -53,7 +58,11 @@ const TransactionSchema = new Schema<ITransaction>({
   createdAt: { 
     type: Date, 
     default: Date.now 
-  }
+  },
+  checkoutRequestId: { type: String, default: null },
+  mpesaRef: { type: String, default: null },
+  loanId: { type: String, default: null },
+  depositProcessed: { type: Boolean, default: false },
 });
 
 // Indexes (transactionRef skipped — unique: true already creates it)
@@ -61,5 +70,7 @@ TransactionSchema.index({ memberId: 1 });
 TransactionSchema.index({ type: 1 });
 TransactionSchema.index({ processedAt: -1 });
 TransactionSchema.index({ status: 1 });
+TransactionSchema.index({ checkoutRequestId: 1 });
+TransactionSchema.index({ mpesaRef: 1 }, { sparse: true });
 
 export default mongoose.model<ITransaction>('Transaction', TransactionSchema);

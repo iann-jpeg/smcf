@@ -6,6 +6,7 @@ export interface IRepaymentRecord extends Document {
   dueDate: Date;
   amountDue: number;
   amountPaid: number;
+  penaltyAmount: number;
   paidDate: Date | null;
   status: 'pending' | 'paid' | 'overdue' | 'partial';
   createdAt: Date;
@@ -33,6 +34,10 @@ const RepaymentRecordSchema = new Schema<IRepaymentRecord>({
   amountPaid: { 
     type: Number, 
     default: 0 
+  },
+  penaltyAmount: {
+    type: Number,
+    default: 0,
   },
   paidDate: { 
     type: Date, 

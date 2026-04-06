@@ -51,27 +51,9 @@ const ROLE_OPTIONS = [
   { value: "board", label: "Board" },
 ];
 
-const LOAN_TYPE_LABELS: Record<string, string> = {
-  business_development: "Business Development Loan",
-  education: "Education Loan",
-  emergency: "Emergency Loan",
-  asset_acquisition: "Asset Acquisition Loan",
-  personal: "Personal Loan",
-};
-
-function formatLoanType(value?: string) {
-  if (!value) return "—";
-  return LOAN_TYPE_LABELS[value] ?? value;
-}
-
-function formatInterestModel(value?: string) {
-  if (!value) return "flat";
-  return value === "reducing_balance" ? "reducing" : value;
-}
-
 export default function LoanApprovals() {
   const { toast } = useToast();
-  const { roles } = useAuth();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const { data: membersData = [] } = useMembers();
   const { data: systemConfig } = useQuery({
@@ -83,7 +65,6 @@ export default function LoanApprovals() {
   const [reviewLoan, setReviewLoan] = useState<any>(null);
   const [reviewAction, setReviewAction] = useState<"approve" | "reject" | null>(null);
   const [reviewNote, setReviewNote] = useState("");
-  const [disbursingLoanId, setDisbursingLoanId] = useState<string | null>(null);
 
   // Fetch pending loans with their approvals and guarantors
   const { data: loans = [], isLoading } = useLoans();
@@ -167,22 +148,6 @@ export default function LoanApprovals() {
       return;
     }
     approvalMutation.mutate({ loanId: reviewLoan.id, decision: reviewAction === "approve" ? "approved" : "rejected", notes: reviewNote });
-  };
-
-  const canDisburseRole = roles.some((r) => ["admin", "credit_officer", "treasurer"].includes(r));
-
-  const handleDisburse = async (loan: any) => {
-    if (!confirm(`Disburse loan ${loan.loan_number}?`)) return;
-    setDisbursingLoanId(loan.id);
-    try {
-      await api.put(`/loans/${loan.id}/disburse`);
-      toast({ title: "Loan disbursed" });
-      queryClient.invalidateQueries({ queryKey: ["loans"] });
-    } catch (err: any) {
-      toast({ title: "Disbursement failed", description: err.message, variant: "destructive" });
-    } finally {
-      setDisbursingLoanId(null);
-    }
   };
 
   if (isLoading) {
@@ -281,13 +246,8 @@ export default function LoanApprovals() {
                       </div>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                         <div><p className="text-muted-foreground text-xs">Principal</p><p className="font-semibold">KES {loan.principal?.toLocaleString()}</p></div>
-                        <div><p className="text-muted-foreground text-xs">Loan Type</p><p className="font-semibold">{formatLoanType(loan.loan_type)}</p></div>
-                        <div><p className="text-muted-foreground text-xs">Rate (Monthly)</p><p className="font-semibold">{loan.interest_rate}% {formatInterestModel(loan.interest_model)}</p></div>
+                        <div><p className="text-muted-foreground text-xs">Rate / Model</p><p className="font-semibold">{loan.interest_rate}% {loan.interest_model}</p></div>
                         <div><p className="text-muted-foreground text-xs">Term</p><p className="font-semibold">{loan.term_months} months</p></div>
-                        <div><p className="text-muted-foreground text-xs">Monthly Interest</p><p className="font-semibold">KES {Number(loan.monthly_interest ?? 0).toLocaleString()}</p></div>
-                        <div><p className="text-muted-foreground text-xs">Total Interest</p><p className="font-semibold">KES {Number(loan.total_interest ?? 0).toLocaleString()}</p></div>
-                        <div><p className="text-muted-foreground text-xs">Monthly Installment</p><p className="font-semibold">KES {Number(loan.monthly_installment ?? 0).toLocaleString()}</p></div>
-                        <div><p className="text-muted-foreground text-xs">Total Repayment</p><p className="font-semibold">KES {Number(loan.total_payable ?? 0).toLocaleString()}</p></div>
                         <div><p className="text-muted-foreground text-xs">Guarantors</p><p className="font-semibold">{loan.loan_guarantors?.length ?? 0}</p></div>
                       </div>
                       {loan.loan_guarantors?.length > 0 && (
@@ -365,11 +325,11 @@ export default function LoanApprovals() {
         </TabsContent>
 
         <TabsContent value="processed" className="mt-4">
-          <Card><CardContent className="pt-6"><LoanTable loans={processedByRole} activeRole={activeRole} canDisburse={canDisburseRole} onDisburse={handleDisburse} disbursingLoanId={disbursingLoanId} /></CardContent></Card>
+          <Card><CardContent className="pt-6"><LoanTable loans={processedByRole} activeRole={activeRole} /></CardContent></Card>
         </TabsContent>
 
         <TabsContent value="all" className="mt-4">
-          <Card><CardContent className="pt-6"><LoanTable loans={enrichedLoans} activeRole={activeRole} showPipeline canDisburse={canDisburseRole} onDisburse={handleDisburse} disbursingLoanId={disbursingLoanId} /></CardContent></Card>
+          <Card><CardContent className="pt-6"><LoanTable loans={enrichedLoans} activeRole={activeRole} showPipeline /></CardContent></Card>
         </TabsContent>
       </Tabs>
 
@@ -392,13 +352,6 @@ export default function LoanApprovals() {
                 <div className="p-3 rounded-lg bg-muted/50"><p className="text-muted-foreground text-xs">Risk Score</p><p className="font-bold text-lg">{reviewLoan.risk?.compositeScore ?? "N/A"}/100</p></div>
                 <div className="p-3 rounded-lg bg-muted/50"><p className="text-muted-foreground text-xs">Term</p><p className="font-bold text-lg">{reviewLoan.term_months}mo</p></div>
                 <div className="p-3 rounded-lg bg-muted/50"><p className="text-muted-foreground text-xs">Guarantors</p><p className="font-bold text-lg">{reviewLoan.loan_guarantors?.length ?? 0}</p></div>
-              </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-muted-foreground text-xs">Loan Type</p><p className="font-bold text-sm">{formatLoanType(reviewLoan.loan_type)}</p></div>
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-muted-foreground text-xs">Rate (Monthly)</p><p className="font-bold text-sm">{reviewLoan.interest_rate}% {formatInterestModel(reviewLoan.interest_model)}</p></div>
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-muted-foreground text-xs">Monthly Interest</p><p className="font-bold text-sm">KES {Number(reviewLoan.monthly_interest ?? 0).toLocaleString()}</p></div>
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-muted-foreground text-xs">Total Repayment</p><p className="font-bold text-sm">KES {Number(reviewLoan.total_payable ?? 0).toLocaleString()}</p></div>
               </div>
 
               {reviewLoan.risk?.factors?.length > 0 && (
@@ -452,21 +405,7 @@ export default function LoanApprovals() {
   );
 }
 
-function LoanTable({
-  loans,
-  activeRole,
-  showPipeline = false,
-  canDisburse = false,
-  onDisburse,
-  disbursingLoanId,
-}: {
-  loans: any[];
-  activeRole: string;
-  showPipeline?: boolean;
-  canDisburse?: boolean;
-  onDisburse?: (loan: any) => void;
-  disbursingLoanId?: string | null;
-}) {
+function LoanTable({ loans, activeRole, showPipeline = false }: { loans: any[]; activeRole: string; showPipeline?: boolean }) {
   if (loans.length === 0) return <p className="text-center text-muted-foreground py-8">No applications to display.</p>;
 
   return (
@@ -479,14 +418,11 @@ function LoanTable({
           <TableHead className="text-center">Risk</TableHead>
           <TableHead>Applied</TableHead>
           {showPipeline ? <TableHead>Pipeline</TableHead> : <><TableHead>Decision</TableHead><TableHead>Note</TableHead></>}
-          {canDisburse && <TableHead>Action</TableHead>}
         </TableRow>
       </TableHeader>
       <TableBody>
         {loans.map((loan: any) => {
           const level = loan.levels.find((l: any) => l.role === activeRole);
-          const isFullyApproved = loan.overallStatus === "approved" && loan.status === "approved";
-          const isDisbursed = ["active", "disbursed", "completed"].includes(loan.status);
           return (
             <TableRow key={loan.id}>
               <TableCell className="font-mono text-xs">{loan.loan_number}</TableCell>
@@ -510,22 +446,6 @@ function LoanTable({
                   <TableCell>{level && <Badge variant={level.status === "approved" ? "default" : level.status === "rejected" ? "destructive" : "secondary"}>{level.status}</Badge>}</TableCell>
                   <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">{level?.note || "—"}</TableCell>
                 </>
-              )}
-              {canDisburse && (
-                <TableCell>
-                  {isFullyApproved && !isDisbursed && onDisburse ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => onDisburse(loan)}
-                      disabled={disbursingLoanId === loan.id}
-                    >
-                      {disbursingLoanId === loan.id ? "Disbursing..." : "Disburse"}
-                    </Button>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">—</span>
-                  )}
-                </TableCell>
               )}
             </TableRow>
           );

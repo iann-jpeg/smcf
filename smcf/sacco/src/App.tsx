@@ -57,9 +57,7 @@ const queryClient = new QueryClient({
   },
 });
 
-const routerBasename = import.meta.env.BASE_URL === "/"
-  ? (typeof window !== "undefined" && window.location.pathname.startsWith("/sacco") ? "/sacco" : undefined)
-  : import.meta.env.BASE_URL.replace(/\/$/, "");
+const routerBasename = import.meta.env.BASE_URL === "/" ? undefined : import.meta.env.BASE_URL.replace(/\/$/, "");
 
 function ProtectedRoutes() {
   const { user, loading } = useAuth();

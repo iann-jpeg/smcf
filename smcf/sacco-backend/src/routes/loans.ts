@@ -1,20 +1,30 @@
 import { Router } from 'express';
 import { body, validationResult } from 'express-validator';
 import Loan from '../models/Loan';
-import RepaymentRecord from '../models/RepaymentRecord';
 import LoanGuarantor from '../models/LoanGuarantor';
 import LoanApproval from '../models/LoanApproval';
 import Member from '../models/Member';
+import RepaymentRecord from '../models/RepaymentRecord';
+import SystemConfig from '../models/SystemConfig';
+import User from '../models/User';
 import { protect, authorize, AuthRequest } from '../middleware/auth';
 import { auditLog } from '../middleware/auditLog';
 import { notifyMember, notifyStaff } from '../utils/notify';
 
 const router = Router();
 
-function addMonths(date: Date, months: number): Date {
-  const d = new Date(date);
-  d.setMonth(d.getMonth() + months);
-  return d;
+const LOAN_TYPES: Record<string, { label: string; rate: number; minMonths: number; maxMonths: number }> = {
+  business_development: { label: 'Business Development Loan', rate: 4, minMonths: 3, maxMonths: 12 },
+  education: { label: 'Education Loan', rate: 2.5, minMonths: 3, maxMonths: 6 },
+  emergency: { label: 'Emergency Loan', rate: 3, minMonths: 1, maxMonths: 2 },
+  asset_acquisition: { label: 'Asset Acquisition Loan', rate: 3, minMonths: 4, maxMonths: 8 },
+  personal: { label: 'Personal Loan', rate: 6, minMonths: 1, maxMonths: 3 },
+};
+
+function addMonths(base: Date, months: number) {
+  const next = new Date(base);
+  next.setMonth(next.getMonth() + months);
+  return next;
 }
 
 async function createRepaymentSchedule(loan: any, startDate: Date) {
@@ -22,19 +32,31 @@ async function createRepaymentSchedule(loan: any, startDate: Date) {
   if (existing > 0) return;
 
   const termMonths = Math.max(1, Number(loan.termMonths || 0));
-  const amountDue = Math.round(Number(loan.monthlyInstallment || 0));
-  if (!amountDue || Number.isNaN(amountDue)) return;
+  const totalPayable = Number(loan.totalPayable || 0);
+  const baseInstallment = Number(loan.monthlyInstallment || 0);
 
-  const rows = Array.from({ length: termMonths }).map((_, idx) => ({
-    loanId: loan._id,
-    memberId: loan.memberId,
-    dueDate: addMonths(startDate, idx + 1),
-    amountDue,
-    amountPaid: 0,
-    status: 'pending' as const,
-  }));
+  let remaining = totalPayable;
+  const rows = Array.from({ length: termMonths }, (_, index) => {
+    const month = index + 1;
+    const amountDue = month === termMonths
+      ? Math.round(remaining)
+      : Math.round(baseInstallment || (totalPayable / termMonths));
+    remaining = Math.max(0, remaining - amountDue);
 
-  await RepaymentRecord.insertMany(rows);
+    return {
+      loanId: loan._id,
+      memberId: loan.memberId,
+      dueDate: addMonths(startDate, month),
+      amountDue,
+      amountPaid: 0,
+      penaltyAmount: 0,
+      status: 'pending',
+    };
+  });
+
+  if (rows.length > 0) {
+    await RepaymentRecord.insertMany(rows);
+  }
 }
 
 // @route   GET /api/loans
@@ -162,12 +184,23 @@ router.post(
       } else {
         const loan = await Loan.findById(loanId);
         if (loan) {
-          const required =
-            loan.principal <= 100_000 ? ['credit_officer'] :
-            loan.principal <= 500_000 ? ['credit_officer', 'credit_committee'] :
+          const config = await SystemConfig.getConfig();
+          const autoApproveLimit = Math.max(0, Number(config.autoApproveLimit || 0));
+          const committeeThreshold = Math.max(autoApproveLimit, Number(config.committeeThreshold || 0));
+
+          const baseRequired =
+            loan.principal <= autoApproveLimit ? ['credit_officer'] :
+            loan.principal <= committeeThreshold ? ['credit_officer', 'credit_committee'] :
             ['credit_officer', 'credit_committee', 'board'];
+
+          const availableRoles = new Set(
+            (await User.distinct('roles')).map((r) => String(r))
+          );
+          const required = baseRequired.filter((role) => availableRoles.has(role));
           const approvedLevels = await LoanApproval.find({ loanId, decision: 'approved' }).distinct('approvalLevel');
-          const allDone = required.every((l) => approvedLevels.includes(l) || l === approvalLevel);
+          const allDone = required.length === 0
+            ? true
+            : required.every((l) => approvedLevels.includes(l) || l === approvalLevel);
           if (allDone) {
             await Loan.findByIdAndUpdate(loanId, { status: 'approved', approvedAt: new Date(), approvedBy: req.userId });
             notifyMember(
@@ -198,7 +231,7 @@ router.post(
   [
     body('memberId').notEmpty().withMessage('Member ID is required'),
     body('principal').isNumeric().withMessage('Principal amount is required'),
-    body('interestRate').isNumeric().withMessage('Interest rate is required'),
+    body('loanType').notEmpty().withMessage('Loan type is required'),
     body('termMonths').isInt({ min: 1 }).withMessage('Term months must be at least 1'),
     body('guarantors').optional().isArray()
   ],
@@ -212,30 +245,60 @@ router.post(
         });
       }
 
-      const { memberId, principal, interestRate, termMonths, guarantors } = req.body;
+      const { memberId, principal, loanType, termMonths, guarantors } = req.body;
+
+      const loanTypeConfig = LOAN_TYPES[String(loanType)];
+      if (!loanTypeConfig) {
+        return res.status(400).json({ success: false, message: 'Invalid loan type selected' });
+      }
+
+      if (termMonths < loanTypeConfig.minMonths || termMonths > loanTypeConfig.maxMonths) {
+        return res.status(400).json({
+          success: false,
+          message: `Duration must be between ${loanTypeConfig.minMonths} and ${loanTypeConfig.maxMonths} months for ${loanTypeConfig.label}.`,
+        });
+      }
+
+      const member = await Member.findById(memberId).select('status').lean();
+      if (!member) return res.status(404).json({ success: false, message: 'Member not found' });
+      if ((member as any).status !== 'active') {
+        return res.status(400).json({ success: false, message: 'Member is not active' });
+      }
+
+      const activeLoans = await Loan.countDocuments({
+        memberId,
+        status: { $in: ['active', 'disbursed'] },
+      });
+      if (activeLoans >= 2) {
+        return res.status(400).json({ success: false, message: 'Maximum 2 active loans allowed' });
+      }
 
       // Generate loan number
       const count = await Loan.countDocuments();
       const loanNumber = `LN${new Date().getFullYear()}${String(count + 1).padStart(5, '0')}`;
 
-      // Calculate loan details (interestRate is monthly %)
-      const monthlyInterestRate = interestRate / 100;
-      const monthlyInstallment = principal * monthlyInterestRate * 
-        Math.pow(1 + monthlyInterestRate, termMonths) / 
-        (Math.pow(1 + monthlyInterestRate, termMonths) - 1);
-      const totalPayable = monthlyInstallment * termMonths;
+      // Calculate loan details using flat monthly interest
+      const monthlyInterestRate = loanTypeConfig.rate / 100;
+      const monthlyInterest = Math.round(principal * monthlyInterestRate);
+      const totalInterest = Math.round(monthlyInterest * termMonths);
+      const totalPayable = Math.round(principal + totalInterest);
+      const monthlyInstallment = termMonths > 0 ? Math.round(totalPayable / termMonths) : 0;
 
       // Create loan
       const loan = await Loan.create({
         loanNumber,
         memberId,
         principal,
-        interestRate,
+        loanType,
+        interestRate: loanTypeConfig.rate,
         termMonths,
+        monthlyInterest,
+        totalInterest,
         monthlyInstallment,
         totalPayable,
         balance: totalPayable,
         appliedBy: req.userId,
+        interestModel: 'flat',
         status: 'pending'
       });
 
@@ -385,60 +448,6 @@ router.put(
   }
 );
 
-// @route   PUT /api/loans/:id/disburse
-// @desc    Disburse an approved loan
-// @access  Private (Staff only)
-router.put(
-  '/:id/disburse', 
-  protect,
-  authorize('admin', 'credit_officer', 'treasurer'),
-  auditLog('loans', 'disburse'),
-  async (req: AuthRequest, res, next) => {
-    try {
-      const loan = await Loan.findById(req.params.id);
-      if (!loan) {
-        return res.status(404).json({ success: false, message: 'Loan not found' });
-      }
-
-      if (loan.status !== 'approved') {
-        return res.status(400).json({
-          success: false,
-          message: `Loan is not approved. Current status: ${loan.status}`,
-        });
-      }
-
-      loan.status = 'active';
-      loan.disbursedDate = new Date();
-      await loan.save();
-
-      await createRepaymentSchedule(loan, loan.disbursedDate);
-
-      await Member.findByIdAndUpdate(loan.memberId, {
-        $inc: { loanBalance: loan.principal },
-      });
-
-      notifyMember(
-        loan.memberId,
-        'Loan Disbursed',
-        `Your loan ${loan.loanNumber} for KES ${Number(loan.principal).toLocaleString()} has been disbursed.`,
-        'approval',
-        '/my-account?tab=loans'
-      );
-
-      notifyStaff(
-        `Loan ${loan.loanNumber} disbursed`,
-        `Loan ${loan.loanNumber} for KES ${Number(loan.principal).toLocaleString()} has been disbursed.`,
-        'info',
-        '/loans'
-      );
-
-      res.json({ success: true, data: loan });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
 // @route   GET /api/loans/guarantor-requests
 // @desc    Get all pending guarantor consent requests for the logged-in member
 // @access  Private
@@ -451,7 +460,7 @@ router.get('/guarantor-requests/me', protect, async (req: AuthRequest, res, next
     const records = await LoanGuarantor.find({ memberId: (myMember as any)._id })
       .populate({
         path: 'loanId',
-        select: 'loanNumber principal interestRate termMonths monthlyInstallment status memberId',
+        select: 'loanNumber principal loanType interestRate interestModel termMonths monthlyInstallment monthlyInterest totalInterest totalPayable status memberId',
         populate: { path: 'memberId', select: 'name memberId' },
       })
       .sort({ createdAt: -1 })
@@ -522,6 +531,62 @@ router.put(
       }
 
       res.json({ success: true, data: record });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// @route   PUT /api/loans/:id/disburse
+// @desc    Disburse an approved loan (move to "active" status)
+// @access  Private (Staff only)
+router.put(
+  '/:id/disburse',
+  protect,
+  authorize('admin', 'credit_officer', 'treasurer'),
+  auditLog('loans', 'disburse'),
+  async (req: AuthRequest, res, next) => {
+    try {
+      const loan = await Loan.findById(req.params.id);
+      if (!loan) {
+        return res.status(404).json({ success: false, message: 'Loan not found' });
+      }
+
+      if (loan.status !== 'approved') {
+        return res.status(400).json({
+          success: false,
+          message: `Loan is not in approved status. Current status: ${loan.status}`
+        });
+      }
+
+      // Update loan to active status (ready for repayments)
+      loan.status = 'active';
+      loan.disbursedDate = new Date();
+      await loan.save();
+
+      await createRepaymentSchedule(loan, loan.disbursedDate);
+
+      // Update member's loan balance
+      await Member.findByIdAndUpdate(loan.memberId, {
+        $inc: { loanBalance: loan.principal }
+      });
+
+      // Notify the member their loan was disbursed
+      notifyMember(
+        loan.memberId,
+        'Loan Disbursed',
+        `Your loan application ${loan.loanNumber} for KES ${loan.principal.toLocaleString()} has been approved and disbursed. The amount should reflect in your account within 1-2 business days.`,
+        'approval',
+        '/my-account?tab=loans'
+      );
+
+      // Notify staff
+      notifyStaff(
+        `Loan ${loan.loanNumber} disbursed for KES ${loan.principal.toLocaleString()}`,
+        `/loans`
+      );
+
+      res.json({ success: true, data: loan });
     } catch (error) {
       next(error);
     }
