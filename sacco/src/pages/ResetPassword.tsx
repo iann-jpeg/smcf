@@ -7,7 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Eye, EyeOff, CheckCircle2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
-const API_URL = import.meta.env.VITE_SACCO_API_URL || "http://localhost:5000/api";
+const API_URL = (() => {
+  const raw = String(import.meta.env.VITE_SACCO_API_URL || "").trim();
+  return raw.endsWith("/api") ? raw : `${raw.replace(/\/+$/, "")}/api`;
+})();
 
 export default function ResetPassword() {
   const navigate = useNavigate();

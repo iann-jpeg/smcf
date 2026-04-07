@@ -9,7 +9,10 @@ import { Loader2, Eye, EyeOff, CheckCircle2, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { storeAuth } from "@/hooks/useAuth";
 
-const API_URL = import.meta.env.VITE_SACCO_API_URL || "http://localhost:5000/api";
+const API_URL = (() => {
+  const raw = String(import.meta.env.VITE_SACCO_API_URL || "").trim();
+  return raw.endsWith("/api") ? raw : `${raw.replace(/\/+$/, "")}/api`;
+})();
 const DEFAULT_RESEND_COOLDOWN_SECONDS = 60;
 
 export default function Auth() {

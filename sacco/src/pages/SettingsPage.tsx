@@ -40,7 +40,10 @@ const roleBadgeVariant = (role: string) => {
   }
 };
 
-const BASE = (import.meta.env.VITE_SACCO_API_URL as string) || "http://localhost:5000/api";
+const BASE = (() => {
+  const raw = String(import.meta.env.VITE_SACCO_API_URL || "").trim();
+  return raw.endsWith("/api") ? raw : `${raw.replace(/\/+$/, "")}/api`;
+})();
 
 export default function SettingsPage() {
   const { hasRole, user } = useAuth();
