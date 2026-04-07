@@ -17,6 +17,7 @@ smcf/backend/.env
 smcf/backend/.env.*
 !/.env.example
 !**/.env.example
+!sacco/.env.production
 
 # Logs
 logs
