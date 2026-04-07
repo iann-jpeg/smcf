@@ -63,7 +63,7 @@ export default function Auth() {
       const res = await fetch(`${API_URL}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ identifier: email, password }),
       });
       const data = await res.json();
       setLoading(false);
@@ -233,8 +233,15 @@ export default function Auth() {
             <TabsContent value="login">
               <form onSubmit={handleLogin} className="space-y-4 mt-4">
                 <div className="space-y-2">
-                  <Label htmlFor="login-email">Email</Label>
-                  <Input id="login-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="admin@smcf.co.ke" />
+                  <Label htmlFor="login-identifier">Email or Member ID</Label>
+                  <Input
+                    id="login-identifier"
+                    type="text"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    placeholder="you@example.com or SMCF-0001"
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="login-password">Password</Label>
