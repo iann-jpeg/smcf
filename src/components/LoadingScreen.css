@@ -1,0 +1,11 @@
+.loading-dot {
+  animation-delay: 0ms;
+}
+
+.loading-dot--150 {
+  animation-delay: 150ms;
+}
+
+.loading-dot--300 {
+  animation-delay: 300ms;
+}

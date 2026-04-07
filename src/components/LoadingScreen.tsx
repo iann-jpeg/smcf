@@ -1,5 +1,6 @@
 import smcfLogo from "@/assets/newsmcflogo.png";
 import { StyledSMCF } from "./StyledSMCF";
+import "./LoadingScreen.css";
 
 export const LoadingScreen = () => {
   return (
@@ -25,9 +26,9 @@ export const LoadingScreen = () => {
 
         {/* Modern loading bars */}
         <div className="flex gap-2 justify-center mb-4">
-          <div className="w-3 h-3 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-          <div className="w-3 h-3 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-          <div className="w-3 h-3 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+          <div className="w-3 h-3 bg-primary rounded-full animate-bounce loading-dot" />
+          <div className="w-3 h-3 bg-primary rounded-full animate-bounce loading-dot loading-dot--150" />
+          <div className="w-3 h-3 bg-primary rounded-full animate-bounce loading-dot loading-dot--300" />
         </div>
 
         {/* Loading text */}

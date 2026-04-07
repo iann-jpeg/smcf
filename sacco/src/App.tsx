@@ -59,6 +59,20 @@ const queryClient = new QueryClient({
 
 const routerBasename = import.meta.env.BASE_URL === "/" ? undefined : import.meta.env.BASE_URL.replace(/\/$/, "");
 
+type NotificationInput = Record<string, unknown> & {
+  _id?: string | object;
+  id?: string;
+};
+
+const extractList = <T,>(res: unknown): T[] => {
+  if (Array.isArray(res)) return res as T[];
+  if (res && typeof res === "object" && "data" in res) {
+    const data = (res as { data?: unknown }).data;
+    return Array.isArray(data) ? (data as T[]) : [];
+  }
+  return [];
+};
+
 function ProtectedRoutes() {
   const { user, loading } = useAuth();
   const queryClient = useQueryClient();
@@ -75,7 +89,7 @@ function ProtectedRoutes() {
       queryKey: ["notifications"],
       queryFn: async () => {
         const res = await api.get("/notifications");
-        const arr = Array.isArray(res) ? res : (res as any).data ?? [];
+        const arr = extractList<NotificationInput>(res);
         return arr.map(normalizeNotification);
       },
     });
