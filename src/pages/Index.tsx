@@ -486,7 +486,7 @@ const Index = () => {
           src={landingBackground}
           alt=""
           aria-hidden="true"
-          className="absolute inset-0 z-0 h-full w-full object-cover opacity-50 pointer-events-none"
+          className="absolute inset-0 z-0 h-full w-full object-cover opacity-50 blur-sm pointer-events-none"
         />
         <div className="container mx-auto max-w-7xl relative z-10">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
