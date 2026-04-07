@@ -492,8 +492,11 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
       return;
     }
 
-    // Silent background refresh every 15 seconds (reduced from 10s for better performance)
-    const interval = setInterval(fetchData, 15000);
+    // Silent background refresh every 15 seconds (skip when tab is hidden)
+    const interval = setInterval(() => {
+      if (document.hidden) return;
+      fetchData();
+    }, 15000);
 
     // Socket.IO real-time event listeners
     const socket = (window as any).socket;

@@ -1,9 +1,7 @@
 import smcfLogo from "@/assets/newsmcflogo.png";
 import landingBackground from "@/assets/landingbackground.jpg";
-import AdminDashboard from "@/components/AdminDashboard";
 import AdminSetup from "@/components/AdminSetup";
 import AuthDialog from "@/components/AuthDialog";
-import Dashboard from "@/components/Dashboard";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import SEO from "@/components/SEO";
 import { StyledSMCF } from "@/components/StyledSMCF";
@@ -28,7 +26,7 @@ import {
   CheckCircle2,
   FileText,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 // Test components removed; render the real AdminDashboard
 import OrganizationDialog from "@/components/OrganizationDialog";
 import MemberMessageComposer from "@/components/MemberMessageComposer";
@@ -70,6 +68,9 @@ type CurrentUser = UserData & {
 
 type Member = Record<string, unknown>;
 type Announcement = Record<string, unknown>;
+
+const AdminDashboard = lazy(() => import("@/components/AdminDashboard"));
+const Dashboard = lazy(() => import("@/components/Dashboard"));
 
 const getAuthHeaders = (): HeadersInit | undefined => {
   const authHeaders = authService.getAuthHeaders() as Record<string, string>;
@@ -235,8 +236,11 @@ const Index = () => {
 
       // Initial fetch
       fetchData();
-      // Silent refresh every 15 seconds for real-time updates
-      const interval = setInterval(fetchData, 15000);
+      // Silent refresh every 15 seconds for real-time updates (skip when tab is hidden)
+      const interval = setInterval(() => {
+        if (document.hidden) return;
+        fetchData();
+      }, 15000);
       return () => clearInterval(interval);
     }
   }, [userRole, hasCurrentUser, currentUserPhone]); // Use phone as dependency to avoid infinite loops
@@ -371,24 +375,28 @@ const Index = () => {
             </div>
           </header>
           <main className="container mx-auto px-2 sm:px-4 py-4 sm:py-8">
-            <AdminDashboard
-              userData={currentUser}
-              members={members}
-              announcements={announcements}
-              onLogout={handleLogout}
-              refreshMembers={refreshMembers}
-            />
+            <Suspense fallback={<LoadingScreen />}>
+              <AdminDashboard
+                userData={currentUser}
+                members={members}
+                announcements={announcements}
+                onLogout={handleLogout}
+                refreshMembers={refreshMembers}
+              />
+            </Suspense>
           </main>
         </div>
       );
     }
     console.log("Rendering member dashboard");
     return (
-      <Dashboard
-        userRole={userRole}
-        userData={currentUser}
-        onLogout={handleLogout}
-      />
+      <Suspense fallback={<LoadingScreen />}>
+        <Dashboard
+          userRole={userRole}
+          userData={currentUser}
+          onLogout={handleLogout}
+        />
+      </Suspense>
     );
   }
 

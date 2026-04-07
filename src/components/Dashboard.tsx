@@ -281,8 +281,11 @@ const Dashboard = ({ userRole, userData, onLogout }: DashboardProps) => {
   useEffect(() => {
     fetchData();
 
-    // Refresh every 10 seconds for faster updates
-    const interval = setInterval(fetchData, 10000);
+    // Refresh every 10 seconds for faster updates (skip when tab is hidden)
+    const interval = setInterval(() => {
+      if (document.hidden) return;
+      fetchData();
+    }, 10000);
 
     // Fallback timeout - if data doesn't load within 5 seconds, stop showing loading state
     const timeout = setTimeout(() => {
