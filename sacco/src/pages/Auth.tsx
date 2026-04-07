@@ -60,10 +60,16 @@ export default function Auth() {
     e.preventDefault();
     setLoading(true);
     try {
+      const identifierValue = email.trim();
       const res = await fetch(`${API_URL}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identifier: email, email, password }),
+        body: JSON.stringify({
+          identifier: identifierValue,
+          email: identifierValue,
+          memberId: identifierValue,
+          password,
+        }),
       });
       const data = await res.json();
       setLoading(false);
