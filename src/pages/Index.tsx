@@ -35,6 +35,47 @@ import MemberMessageComposer from "@/components/MemberMessageComposer";
 import API_BASE from "@/lib/api";
 import { authService } from "@/lib/authService";
 
+type CycleData = {
+  currentCycle: number;
+  daysLeft: number;
+  paidMembers: number;
+  totalMembers: number;
+  collectedAmount: number;
+  totalAmount: number;
+  nextRecipient: string;
+  cycleStartDate?: string;
+  cycleEndDate?: string;
+};
+
+type UserData = {
+  _id?: string;
+  id?: string;
+  memberId?: string;
+  member_id?: string;
+  phoneNumber?: string;
+  phone?: string;
+  total_contributed?: number;
+  total_received?: number;
+  position?: number;
+  payment_status?: string;
+  token?: string;
+  name?: string;
+  role?: string;
+  [key: string]: unknown;
+};
+
+type CurrentUser = UserData & {
+  cycleData?: CycleData;
+};
+
+type Member = Record<string, unknown>;
+type Announcement = Record<string, unknown>;
+
+const getAuthHeaders = (): HeadersInit | undefined => {
+  const authHeaders = authService.getAuthHeaders() as Record<string, string>;
+  return Object.keys(authHeaders).length ? authHeaders : undefined;
+};
+
 const Index = () => {
   const [setupComplete, setSetupComplete] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
@@ -42,9 +83,11 @@ const Index = () => {
   const [isLoading, setIsLoading] = useState(true);
   // userRole is simplified for UI: 'admin' means any administrative role (treasurer, secretary, etc.)
   const [userRole, setUserRole] = useState<"admin" | "member" | null>(null);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [members, setMembers] = useState([]);
-  const [announcements, setAnnouncements] = useState([]);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const currentUserPhone = currentUser?.phoneNumber || currentUser?.phone;
+  const hasCurrentUser = Boolean(currentUser);
 
   // Restore authentication on page load
   useEffect(() => {
@@ -105,7 +148,7 @@ const Index = () => {
 
   // Fetch data when admin logs in - MUST be before any conditional returns
   useEffect(() => {
-    if (userRole === "admin" && currentUser) {
+    if (userRole === "admin" && hasCurrentUser) {
       // Silent background data fetch without UI flicker
       const fetchData = async () => {
         try {
@@ -113,13 +156,13 @@ const Index = () => {
           // Use lean query for members to exclude large profile pictures
           const [cycleRes, membersRes, announcementsRes] = await Promise.all([
             fetch(`${API_BASE}/api/cycles/current`, {
-              headers: { ...authService.getAuthHeaders() },
+              headers: getAuthHeaders(),
             }),
             fetch(`${API_BASE}/api/members?lean=true`, {
-              headers: { ...authService.getAuthHeaders() },
+              headers: getAuthHeaders(),
             }),
             fetch(`${API_BASE}/api/announcements`, {
-              headers: { ...authService.getAuthHeaders() },
+              headers: getAuthHeaders(),
             }),
           ]);
 
@@ -156,9 +199,12 @@ const Index = () => {
               if (!prev) return prev;
               
               // Safe date parsing with validation
-              const parseDate = (dateStr: any) => {
-                if (!dateStr) return "Not Set";
-                const date = new Date(dateStr);
+              const parseDate = (dateInput: unknown) => {
+                if (!dateInput) return "Not Set";
+                const date =
+                  dateInput instanceof Date
+                    ? dateInput
+                    : new Date(String(dateInput));
                 return isNaN(date.getTime()) ? "Not Set" : date.toLocaleDateString();
               };
               
@@ -193,7 +239,7 @@ const Index = () => {
       const interval = setInterval(fetchData, 15000);
       return () => clearInterval(interval);
     }
-  }, [userRole, currentUser?.phone]); // Use phone as dependency to avoid infinite loops
+  }, [userRole, hasCurrentUser, currentUserPhone]); // Use phone as dependency to avoid infinite loops
 
   // Show loading state while checking authentication
   if (isLoading) {
@@ -205,7 +251,7 @@ const Index = () => {
     return <AdminSetup onSetupComplete={() => setSetupComplete(true)} />;
   }
 
-  const handleLogin = (role: string, userData: any) => {
+  const handleLogin = (role: string, userData: UserData) => {
     console.log("handleLogin called with:", { role, userData });
 
     // Normalize role: treat several roles as admin for UI access
@@ -280,7 +326,7 @@ const Index = () => {
   const refreshMembers = async () => {
     try {
       const membersRes = await fetch(`${API_BASE}/api/members?lean=true`, {
-        headers: { ...authService.getAuthHeaders() },
+        headers: getAuthHeaders(),
       });
       const membersData = await membersRes.json();
 
@@ -432,7 +478,7 @@ const Index = () => {
           src={landingBackground}
           alt=""
           aria-hidden="true"
-          className="absolute inset-0 z-0 h-full w-full object-cover opacity-30 pointer-events-none"
+          className="absolute inset-0 z-0 h-full w-full object-cover opacity-50 pointer-events-none"
         />
         <div className="container mx-auto max-w-7xl relative z-10">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
