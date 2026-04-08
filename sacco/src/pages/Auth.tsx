@@ -101,9 +101,6 @@ export default function Auth() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           username: identifierValue,
-          identifier: identifierValue,
-          email: identifierValue,
-          memberId: identifierValue,
           password,
         }),
       });

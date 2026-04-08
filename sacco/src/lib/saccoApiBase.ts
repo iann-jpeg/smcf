@@ -1,195 +1,61 @@
-function normalizeApiBase(raw: string | undefined): string {
+function normalizeBase(raw: string | undefined): string {
   const value = String(raw || "").trim();
   if (!value) return "";
+  return value.replace(/\/+$/, "");
+}
 
-  const trimmed = value.replace(/\/+$/, "");
-
-  if (trimmed.startsWith("/")) {
-    if (typeof window !== "undefined" && window.location?.origin) {
-      return `${window.location.origin}${trimmed}`;
-    }
+function normalizeApiPath(path: string): string {
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  if (cleanPath === "/api" || cleanPath.startsWith("/api/")) {
+    return cleanPath;
   }
-
-  return trimmed;
+  return `/api${cleanPath}`;
 }
 
-function toggleApiSuffix(base: string): string {
-  const clean = base.replace(/\/+$/, "");
-  if (clean.endsWith("/api")) {
-    return clean.slice(0, -4);
-  }
-  return `${clean}/api`;
-}
-
-function withApiVariants(base: string): string[] {
-  const clean = base.replace(/\/+$/, "");
-  return unique([clean, toggleApiSuffix(clean)]);
-}
-
-function unique(values: string[]): string[] {
-  return Array.from(new Set(values.filter(Boolean)));
-}
-
-function getOrigin(): string {
-  if (typeof window !== "undefined" && window.location?.origin) {
-    return window.location.origin;
-  }
-  return "";
-}
-
-function isLocalHost(): boolean {
-  if (typeof window === "undefined") return false;
-  const host = window.location.hostname;
-  return host === "localhost" || host === "127.0.0.1";
-}
-
-function normalizePath(path: string): string {
-  return path.startsWith("/") ? path : `/${path}`;
-}
-
-async function shouldRetryWrongBackend(path: string, res: Response): Promise<boolean> {
-  const normalizedPath = normalizePath(path);
-  if (!normalizedPath.startsWith("/auth/login") || res.status !== 400) {
-    return false;
-  }
-
-  const bodyText = (await res.clone().text().catch(() => "")).toLowerCase();
-
-  // Main SMCF backend responds with phone/password validation for non-SACCO auth.
-  if (bodyText.includes("phone and password")) {
-    return true;
-  }
-
-  // Proxy/parser errors should not pin this base for SACCO login.
-  if (bodyText.includes("expected property name or '}' in json")) {
-    return true;
-  }
-
-  return false;
-}
-
-async function shouldRetryCaptchaBlocked(path: string, res: Response): Promise<boolean> {
-  const normalizedPath = normalizePath(path);
-  if (!normalizedPath.startsWith("/auth/login") || res.status !== 403) {
-    return false;
-  }
-
-  const bodyText = (await res.clone().text().catch(() => "")).toLowerCase();
-  return bodyText.includes("captcha") || bodyText.includes("verification required");
-}
-
-async function shouldRetryUnauthorizedProtectedRoute(path: string, res: Response): Promise<boolean> {
-  const normalizedPath = normalizePath(path);
-  if (!normalizedPath.startsWith("/auth/login") || res.status !== 401) {
-    return false;
-  }
-
-  const bodyText = (await res.clone().text().catch(() => "")).toLowerCase();
-  return bodyText.includes("not authorized to access this route") || bodyText.includes("unauthorized");
-}
+const saccoBase = normalizeBase(import.meta.env.VITE_SACCO_API_URL as string);
+let activeBase = saccoBase;
 
 export function getSaccoApiBaseCandidates(): string[] {
-  const envPrimary = normalizeApiBase(import.meta.env.VITE_SACCO_API_URL as string);
-  const origin = getOrigin();
-
-  const candidates: string[] = [];
-  if (envPrimary) candidates.push(...withApiVariants(envPrimary));
-
-  if (origin) {
-    // Support both proxy styles used by different VPS/rewrite setups.
-    candidates.push(...withApiVariants(`${origin}/sacco-api`));
-    candidates.push(...withApiVariants(`${origin}/api/sacco-api`));
-    // Main backend masked proxy fallback.
-    candidates.push(...withApiVariants(`${origin}/api/sacco`));
-  }
-
-  if (isLocalHost()) {
-    // Keep localhost fallbacks for direct backend testing.
-    candidates.push("http://localhost:5000/api");
-    candidates.push("http://localhost:5000");
-  }
-
-  return unique(candidates);
+  return saccoBase ? [saccoBase] : [];
 }
 
-let activeBase = getSaccoApiBaseCandidates()[0] || "";
-
 export function getPreferredSaccoApiBase(): string {
-  return activeBase || getSaccoApiBaseCandidates()[0] || "";
+  return activeBase || saccoBase;
 }
 
 export function getActiveSaccoApiBase(): string {
   return getPreferredSaccoApiBase();
 }
 
-function withApi(base: string, path: string): string {
-  const cleanPath = path.startsWith("/") ? path : `/${path}`;
-  return `${base}${cleanPath}`;
-}
-
 export async function fetchFromSaccoApi(path: string, init?: RequestInit): Promise<Response> {
-  const baseCandidates = unique([
-    getPreferredSaccoApiBase(),
-    ...getSaccoApiBaseCandidates(),
-  ]);
-  const candidates = baseCandidates;
-
-  let lastResponse: Response | null = null;
-  let lastError: unknown = null;
-
-  for (const base of candidates) {
-    if (!base) continue;
-    try {
-      const res = await fetch(withApi(base, path), init);
-      // If pathing/proxying is wrong, deployments commonly return 404/405.
-      // Also retry known wrong-backend/captcha-blocked login responses.
-      if (
-        res.status === 404 ||
-        res.status === 405 ||
-        await shouldRetryWrongBackend(path, res) ||
-        await shouldRetryCaptchaBlocked(path, res) ||
-        await shouldRetryUnauthorizedProtectedRoute(path, res)
-      ) {
-        lastResponse = res;
-        continue;
-      }
-
-      activeBase = base;
-      return res;
-    } catch (err) {
-      lastError = err;
-    }
+  const base = getPreferredSaccoApiBase();
+  if (!base) {
+    throw new Error("VITE_SACCO_API_URL is not configured");
   }
 
-  if (lastResponse) return lastResponse;
-  throw (lastError instanceof Error ? lastError : new Error("Unable to reach SACCO API"));
-}
-
-function getHealthUrlsForBase(base: string): string[] {
-  const clean = base.replace(/\/+$/, "");
-  const toggled = toggleApiSuffix(clean);
-  return unique([
-    `${clean}/health`,
-    `${toggled}/health`,
-  ]);
+  const url = `${base}${normalizeApiPath(path)}`;
+  const res = await fetch(url, init);
+  if (res.ok) {
+    activeBase = base;
+  }
+  return res;
 }
 
 export function getSaccoHealthProbeUrls(): string[] {
-  return unique(getSaccoApiBaseCandidates().flatMap((base) => getHealthUrlsForBase(base)));
+  const base = getPreferredSaccoApiBase();
+  if (!base) return [];
+  return [`${base}/health`, `${base}/api/health`];
 }
 
 export async function warmSaccoBackend(): Promise<void> {
-  const bases = getSaccoApiBaseCandidates();
-  const probeTargets = bases.flatMap((base) => getHealthUrlsForBase(base).map((url) => ({ base, url })));
-  for (const target of probeTargets) {
+  for (const url of getSaccoHealthProbeUrls()) {
     try {
-      const res = await fetch(target.url, { signal: AbortSignal.timeout(15_000) });
+      const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
       if (res.ok) {
-        activeBase = target.base;
         return;
       }
     } catch {
-      // Try the next candidate silently.
+      // Ignore warm-up probe failures.
     }
   }
 }
