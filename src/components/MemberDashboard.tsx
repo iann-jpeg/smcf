@@ -224,7 +224,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
         fetch(`${API_BASE}/api/savings/summary`, {
           headers: { ...authService.getAuthHeaders() },
         }),
-        fetch(`${API_BASE}/api/savings/admin/all`, {
+        fetch(`${API_BASE}/api/savings/all-members`, {
           headers: { ...authService.getAuthHeaders() },
         }),
         fetch(`${API_BASE}/api/guarantors/my-guarantor-requests`, {
@@ -281,15 +281,12 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
       const savingsSummaryData = await savingsSummaryRes.json();
       const allSavingsData = await allSavingsRes.json();
 
-      if (
-        savingsSummaryData.success &&
-        allSavingsData.success &&
-        allSavingsData.data
-      ) {
+      if (savingsSummaryData.success) {
         const currentBalance = savingsSummaryData.data.currentBalance || 0;
         setSavingsBalance(currentBalance);
+      }
 
-        // Determine top saver based on total deposits
+      if (savingsSummaryData.success && allSavingsData.success && allSavingsData.data) {
         const totalDeposits = savingsSummaryData.data.totalDeposits || 0;
         if (totalDeposits > 0) {
           const topSaver = allSavingsData.data.reduce(
@@ -300,7 +297,17 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
             { totalDeposits: 0 } as User
           );
 
-          setIsTopSaver(topSaver._id === userData._id);
+          const userIdStr = String(userData._id || userData.id || '');
+          const userMemberId = userData.member_id || userData.memberId;
+          const topSaverIdStr = String(topSaver._id || (topSaver as any).id || '');
+          const topSaverMemberId = (topSaver as any).member_id || (topSaver as any).memberId;
+          const isTop =
+            (topSaverIdStr && topSaverIdStr === userIdStr) ||
+            (topSaverMemberId && topSaverMemberId === userMemberId);
+
+          setIsTopSaver(isTop);
+        } else {
+          setIsTopSaver(false);
         }
       }
 
@@ -696,10 +703,10 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
     });
     setShowPayment(false);
 
-    // Trigger immediate refresh
+    fetchData();
     setTimeout(() => {
-      window.location.reload();
-    }, 1500);
+      fetchData();
+    }, 1000);
   };
 
   // Poll loan repayment status

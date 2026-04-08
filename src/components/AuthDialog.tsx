@@ -184,108 +184,118 @@ const AuthDialog = ({ open, onOpenChange, onLogin }: AuthDialogProps) => {
                   Access your member account
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="member-phone">Phone Number</Label>
-                  <Input
-                    id="member-phone"
-                    placeholder="254722123456"
-                    value={loginData.phone}
-                    onChange={(e) =>
-                      setLoginData((prev) => ({
-                        ...prev,
-                        phone: e.target.value,
-                      }))
+              <CardContent>
+                <form
+                  className="space-y-4"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (forgotMode) {
+                      handleForgotPassword();
+                      return;
                     }
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="member-password">Password</Label>
-                  <div className="relative">
+                    handleLogin("member");
+                  }}
+                >
+                  <div className="space-y-2">
+                    <Label htmlFor="member-phone">Phone Number</Label>
                     <Input
-                      id="member-password"
-                      type={showPassword ? "text" : "password"}
-                      placeholder="Enter your password"
-                      value={loginData.password}
+                      id="member-phone"
+                      placeholder="254722123456"
+                      value={loginData.phone}
                       onChange={(e) =>
                         setLoginData((prev) => ({
                           ...prev,
-                          password: e.target.value,
+                          phone: e.target.value,
                         }))
                       }
-                      onKeyDown={(e) =>
-                        e.key === "Enter" && handleLogin("member")
-                      }
                     />
-                    <button
-                      type="button"
-                      aria-label={showPassword ? "Hide password" : "Show password"}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground focus:outline-none"
-                      tabIndex={0}
-                      onClick={() => setShowPassword((v) => !v)}
-                    >
-                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                    </button>
                   </div>
-                </div>
 
-                {forgotMode ? (
-                  <>
-                    <div className="space-y-2">
-                      <Label htmlFor="forgot-phone">Phone Number</Label>
+                  <div className="space-y-2">
+                    <Label htmlFor="member-password">Password</Label>
+                    <div className="relative">
                       <Input
-                        id="forgot-phone"
-                        placeholder="254722123456"
-                        value={forgotData.phone}
-                        onChange={(e) =>
-                          setForgotData((prev) => ({
-                            ...prev,
-                            phone: e.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="forgot-new-password">New Password</Label>
-                      <Input
-                        id="forgot-new-password"
+                        id="member-password"
                         type={showPassword ? "text" : "password"}
-                        placeholder="Enter new password"
-                        value={forgotData.newPassword}
+                        placeholder="Enter your password"
+                        value={loginData.password}
                         onChange={(e) =>
-                          setForgotData((prev) => ({
+                          setLoginData((prev) => ({
                             ...prev,
-                            newPassword: e.target.value,
+                            password: e.target.value,
                           }))
                         }
-                        onKeyDown={(e) => e.key === "Enter" && handleForgotPassword()}
                       />
+                      <button
+                        type="button"
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground focus:outline-none"
+                        tabIndex={0}
+                        onClick={() => setShowPassword((v) => !v)}
+                      >
+                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
                     </div>
-                    <Button className="w-full" onClick={handleForgotPassword} variant="primary">
-                      Reset Password
-                    </Button>
-                    <Button className="w-full" variant="ghost" onClick={() => setForgotMode(false)}>
-                      Back to login
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button
-                      className="w-full"
-                      onClick={() => handleLogin("member")}
-                      variant="financial">
-                      <Phone className="w-4 h-4 mr-2" />
-                      Login as Member
-                    </Button>
+                  </div>
 
-                    <div className="text-center space-y-2">
-                      <p className="text-xs text-muted-foreground">
-                        Contact admin if you don't have an account: <span className="font-semibold text-foreground">+254 759 097157</span>
-                      </p>
-                    </div>
-                  </>
-                )}
+                  {forgotMode ? (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="forgot-phone">Phone Number</Label>
+                        <Input
+                          id="forgot-phone"
+                          placeholder="254722123456"
+                          value={forgotData.phone}
+                          onChange={(e) =>
+                            setForgotData((prev) => ({
+                              ...prev,
+                              phone: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="forgot-new-password">New Password</Label>
+                        <Input
+                          id="forgot-new-password"
+                          type={showPassword ? "text" : "password"}
+                          placeholder="Enter new password"
+                          value={forgotData.newPassword}
+                          onChange={(e) =>
+                            setForgotData((prev) => ({
+                              ...prev,
+                              newPassword: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <Button className="w-full" type="submit" variant="primary">
+                        Reset Password
+                      </Button>
+                      <Button
+                        className="w-full"
+                        type="button"
+                        variant="ghost"
+                        onClick={() => setForgotMode(false)}
+                      >
+                        Back to login
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button className="w-full" type="submit" variant="financial">
+                        <Phone className="w-4 h-4 mr-2" />
+                        Login as Member
+                      </Button>
+
+                      <div className="text-center space-y-2">
+                        <p className="text-xs text-muted-foreground">
+                          Contact admin if you don't have an account: <span className="font-semibold text-foreground">+254 759 097157</span>
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </form>
               </CardContent>
             </Card>
           </TabsContent>
@@ -298,61 +308,65 @@ const AuthDialog = ({ open, onOpenChange, onLogin }: AuthDialogProps) => {
                   Access administrative controls
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="admin-phone">Admin Phone Number</Label>
-                  <Input
-                    id="admin-phone"
-                    placeholder="254722123456"
-                    value={loginData.phone}
-                    onChange={(e) =>
-                      setLoginData((prev) => ({
-                        ...prev,
-                        phone: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="admin-password">Password</Label>
-                  <div className="relative">
+              <CardContent>
+                <form
+                  className="space-y-4"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleLogin("admin");
+                  }}
+                >
+                  <div className="space-y-2">
+                    <Label htmlFor="admin-phone">Admin Phone Number</Label>
                     <Input
-                      id="admin-password"
-                      type={showPassword ? "text" : "password"}
-                      placeholder="Enter your password"
-                      value={loginData.password}
+                      id="admin-phone"
+                      placeholder="254722123456"
+                      value={loginData.phone}
                       onChange={(e) =>
                         setLoginData((prev) => ({
                           ...prev,
-                          password: e.target.value,
+                          phone: e.target.value,
                         }))
                       }
-                      onKeyDown={(e) => e.key === "Enter" && handleLogin("admin")}
                     />
-                    <button
-                      type="button"
-                      aria-label={showPassword ? "Hide password" : "Show password"}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground focus:outline-none"
-                      tabIndex={0}
-                      onClick={() => setShowPassword((v) => !v)}
-                    >
-                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                    </button>
                   </div>
-                </div>
 
-                <Button
-                  className="w-full"
-                  onClick={() => handleLogin("admin")}
-                  variant="gold">
-                  <Shield className="w-4 h-4 mr-2" />
-                  Login as Admin
-                </Button>
+                  <div className="space-y-2">
+                    <Label htmlFor="admin-password">Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="admin-password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Enter your password"
+                        value={loginData.password}
+                        onChange={(e) =>
+                          setLoginData((prev) => ({
+                            ...prev,
+                            password: e.target.value,
+                          }))
+                        }
+                      />
+                      <button
+                        type="button"
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground focus:outline-none"
+                        tabIndex={0}
+                        onClick={() => setShowPassword((v) => !v)}
+                      >
+                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
+                    </div>
+                  </div>
 
-                <div className="text-xs text-muted-foreground text-center">
-                  Admin access requires authorized credentials
-                </div>
+                  <Button className="w-full" type="submit" variant="gold">
+                    <Shield className="w-4 h-4 mr-2" />
+                    Login as Admin
+                  </Button>
+
+                  <div className="text-xs text-muted-foreground text-center">
+                    Admin access requires authorized credentials
+                  </div>
+                </form>
               </CardContent>
             </Card>
           </TabsContent>

@@ -241,107 +241,109 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
   });
 
   useEffect(() => {
+    let socket: any = null;
+    let createdSocket = false;
+
+    const handlePaymentCompleted = (data: any) => {
+      console.log("💰 Wallet payment completed event:", data);
+      if (data.memberId === userData?._id && data.type === "wallet_deposit") {
+        console.log("✅ My wallet deposit completed!");
+
+        // Stop polling immediately
+        if ((window as any).walletPollInterval) {
+          clearInterval((window as any).walletPollInterval);
+        }
+        if ((window as any).walletPollingActive) {
+          (window as any).walletPollingActive = false;
+        }
+
+        // Close the dialog and reset state
+        setShowDepositDialog(false);
+        setDepositAmount("");
+        setIsProcessing(false);
+        setPaymentStep("confirm");
+        setPollCount(0);
+
+        // Show success notification with fee info if applicable
+        const feeMessage = data.fee && data.fee > 0
+          ? `(Fee: KES ${data.fee.toLocaleString()}, Net: KES ${data.amount.toLocaleString()})`
+          : '';
+
+        toast({
+          title: "Payment Successful! 🎉",
+          description: `KES ${data.grossAmount?.toLocaleString() || data.amount.toLocaleString()} deposited ${feeMessage}`,
+          duration: 5000,
+        });
+
+        // Fetch updated wallet data immediately and again after 1 second
+        fetchWalletData();
+        setTimeout(() => {
+          fetchWalletData();
+        }, 1000);
+      }
+    };
+
+    const handlePaymentFailed = (data: any) => {
+      console.log("❌ Payment failed event:", data);
+      if (data.memberId === userData?._id) {
+        console.log("❌ My payment failed!");
+
+        // Clear poll interval
+        if ((window as any).walletPollInterval) {
+          clearInterval((window as any).walletPollInterval);
+        }
+
+        setShowDepositDialog(false);
+        setDepositAmount("");
+        setIsProcessing(false);
+        setPaymentStep("confirm");
+        setPollCount(0);
+
+        toast({
+          title: "Payment Failed",
+          description: data.message || "Payment was not completed. Please try again.",
+          variant: "destructive",
+          duration: 5000,
+        });
+      }
+    };
+
+    const handleSavingNew = (data: any) => {
+      console.log("💾 New saving record event:", data);
+      if (data.memberId === userData?._id) {
+        console.log("✅ My saving record created!");
+        fetchWalletData();
+      }
+    };
+
+    const handleSavingDeposit = (data: any) => {
+      console.log("💰 Saving deposit event:", data);
+      if (data.memberId === userData?._id) {
+        console.log("✅ My deposit received!");
+        fetchWalletData();
+      }
+    };
 
     // Set up Socket.IO listeners for real-time updates
     const setupSocketListeners = async () => {
       try {
-        const io = (await import("socket.io-client")).default;
-        const socket = io(API_BASE, {
-          transports: ["websocket", "polling"],
-          reconnection: true,
-        });
+        const existingSocket = (window as any).socket;
+        if (existingSocket) {
+          socket = existingSocket;
+        } else {
+          const io = (await import("socket.io-client")).default;
+          socket = io(API_BASE, {
+            transports: ["websocket", "polling"],
+            reconnection: true,
+          });
+          (window as any).socket = socket;
+          createdSocket = true;
+        }
 
-        // Listen for wallet deposit completions
-        socket.on("payment:completed", (data: any) => {
-          console.log("💰 Wallet payment completed event:", data);
-          if (
-            data.memberId === userData?._id &&
-            data.type === "wallet_deposit"
-          ) {
-            console.log("✅ My wallet deposit completed!");
-
-            // Stop polling immediately
-            if ((window as any).walletPollInterval) {
-              clearInterval((window as any).walletPollInterval);
-            }
-            if ((window as any).walletPollingActive) {
-              (window as any).walletPollingActive = false;
-            }
-
-            // Close the dialog and reset state
-            setShowDepositDialog(false);
-            setDepositAmount("");
-            setIsProcessing(false);
-            setPaymentStep("confirm");
-            setPollCount(0);
-
-            // Show success notification with fee info if applicable
-            const feeMessage = data.fee && data.fee > 0
-              ? `(Fee: KES ${data.fee.toLocaleString()}, Net: KES ${data.amount.toLocaleString()})`
-              : '';
-            
-            toast({
-              title: "Payment Successful! 🎉",
-              description: `KES ${data.grossAmount?.toLocaleString() || data.amount.toLocaleString()} deposited ${feeMessage}`,
-              duration: 5000,
-            });
-
-            // Fetch updated wallet data immediately and again after 1 second
-            fetchWalletData();
-            setTimeout(() => {
-              fetchWalletData();
-            }, 1000);
-          }
-        });
-
-        // Listen for failed payments
-        socket.on("payment:failed", (data: any) => {
-          console.log("❌ Payment failed event:", data);
-          if (data.memberId === userData?._id) {
-            console.log("❌ My payment failed!");
-
-            // Clear poll interval
-            if ((window as any).walletPollInterval) {
-              clearInterval((window as any).walletPollInterval);
-            }
-
-            setShowDepositDialog(false);
-            setDepositAmount("");
-            setIsProcessing(false);
-            setPaymentStep("confirm");
-            setPollCount(0);
-
-            toast({
-              title: "Payment Failed",
-              description:
-                data.message || "Payment was not completed. Please try again.",
-              variant: "destructive",
-              duration: 5000,
-            });
-          }
-        });
-
-        // Listen for new savings records
-        socket.on("saving:new", (data: any) => {
-          console.log("💾 New saving record event:", data);
-          if (data.memberId === userData?._id) {
-            console.log("✅ My saving record created!");
-            fetchWalletData();
-          }
-        });
-
-        // Listen for savings deposits
-        socket.on("savingDeposit", (data: any) => {
-          console.log("💰 Saving deposit event:", data);
-          if (data.memberId === userData?._id) {
-            console.log("✅ My deposit received!");
-            fetchWalletData();
-          }
-        });
-
-        return () => {
-          socket.disconnect();
-        };
+        socket.on("payment:completed", handlePaymentCompleted);
+        socket.on("payment:failed", handlePaymentFailed);
+        socket.on("saving:new", handleSavingNew);
+        socket.on("savingDeposit", handleSavingDeposit);
       } catch (error) {
         console.error("Socket.IO setup error:", error);
       }
@@ -351,8 +353,19 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
 
     // Refresh every 30 seconds as backup
     const interval = setInterval(fetchWalletData, 30000);
-    return () => clearInterval(interval);
-  }, [userData?._id]);
+    return () => {
+      clearInterval(interval);
+      if (socket) {
+        socket.off("payment:completed", handlePaymentCompleted);
+        socket.off("payment:failed", handlePaymentFailed);
+        socket.off("saving:new", handleSavingNew);
+        socket.off("savingDeposit", handleSavingDeposit);
+        if (createdSocket) {
+          socket.disconnect();
+        }
+      }
+    };
+  }, [userData?._id, fetchWalletData, toast]);
 
   const resetDepositDialog = () => {
     setPaymentStep("confirm");

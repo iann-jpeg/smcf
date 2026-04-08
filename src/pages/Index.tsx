@@ -486,8 +486,9 @@ const Index = () => {
           src={landingBackground}
           alt=""
           aria-hidden="true"
-          className="absolute inset-0 z-0 h-full w-full object-cover opacity-50 blur-sm pointer-events-none"
+          className="absolute inset-0 z-0 h-full w-full object-cover opacity-35 blur-sm pointer-events-none"
         />
+        <div className="absolute inset-0 z-0 bg-gradient-to-br from-background/90 via-background/80 to-background/70" />
         <div className="container mx-auto max-w-7xl relative z-10">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
             {/* Left side - Text content */}
@@ -498,7 +499,7 @@ const Index = () => {
               <h2 className="text-xl sm:text-2xl md:text-3xl font-semibold mb-4 animate-fade-in-left animation-delay-200">
                 <StyledSMCF /> - Smart Moves Cash Flow
               </h2>
-              <p className="text-base sm:text-lg md:text-xl text-muted-foreground mb-6 sm:mb-8 animate-fade-in-left animation-delay-300">
+              <p className="text-base sm:text-lg md:text-xl text-foreground/80 mb-6 sm:mb-8 animate-fade-in-left animation-delay-300">
                 Kenya's #1 automated chama management system.{" "}
                 <br className="hidden sm:block" />
                 Contribute every 5 days • 3% monthly interest • Instant M-Pesa payments

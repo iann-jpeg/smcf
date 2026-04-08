@@ -4,7 +4,11 @@ import AuthDialog from '@/components/AuthDialog';
 import io from 'socket.io-client';
 import API_BASE from '@/lib/api';
 
-const socket = io(API_BASE);
+const existingSocket = (window as any).socket;
+const socket = existingSocket || io(API_BASE);
+if (!existingSocket) {
+  (window as any).socket = socket;
+}
 
 const Admin = ({ userData, onLogout }) => {
   const [members, setMembers] = useState([]);

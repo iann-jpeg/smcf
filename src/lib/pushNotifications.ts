@@ -5,10 +5,42 @@
 import { playNotificationSound } from './notificationSounds';
 
 // VAPID public key for push notifications (from environment variable)
-const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || 'BISgKVrTV-OdFzVEaxt4ugMbIk-dbEQW22ESUfqQomeZURsV5fIq3CToWmjb-j2jW4f5dgL3VHdGLkmTxTlwoUU';
+const VAPID_KEY_FROM_ENV = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+const VAPID_PUBLIC_KEY = VAPID_KEY_FROM_ENV || 'BISgKVrTV-OdFzVEaxt4ugMbIk-dbEQW22ESUfqQomeZURsV5fIq3CToWmjb-j2jW4f5dgL3VHdGLkmTxTlwoUU';
+const PUSH_FAILURE_UNTIL_KEY = 'smcf-push-failure-until';
+const PUSH_FAILURE_COUNT_KEY = 'smcf-push-failure-count';
+const PUSH_BACKOFF_BASE_MS = 15 * 60 * 1000;
+const PUSH_BACKOFF_MAX_MS = 6 * 60 * 60 * 1000;
 
 let serviceWorkerRegistration: ServiceWorkerRegistration | null = null;
 let pushSubscription: PushSubscription | null = null;
+
+function getFailureUntil(): number {
+  const value = localStorage.getItem(PUSH_FAILURE_UNTIL_KEY);
+  const parsed = value ? Number(value) : 0;
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function shouldAttemptPush(): boolean {
+  const failureUntil = getFailureUntil();
+  if (failureUntil && Date.now() < failureUntil) {
+    return false;
+  }
+  return true;
+}
+
+function recordPushFailure(error: unknown): void {
+  const count = Number(localStorage.getItem(PUSH_FAILURE_COUNT_KEY) || 0) + 1;
+  const delayMs = Math.min(PUSH_BACKOFF_MAX_MS, PUSH_BACKOFF_BASE_MS * count);
+  localStorage.setItem(PUSH_FAILURE_COUNT_KEY, String(count));
+  localStorage.setItem(PUSH_FAILURE_UNTIL_KEY, String(Date.now() + delayMs));
+  console.warn('Push subscribe failed, backing off:', error);
+}
+
+function clearPushFailure(): void {
+  localStorage.removeItem(PUSH_FAILURE_COUNT_KEY);
+  localStorage.removeItem(PUSH_FAILURE_UNTIL_KEY);
+}
 
 // Register the service worker
 export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
@@ -58,6 +90,19 @@ export async function requestPushPermission(): Promise<NotificationPermission> {
 
 // Subscribe to push notifications
 export async function subscribeToPush(): Promise<PushSubscription | null> {
+  if (!isPushSupported()) {
+    return null;
+  }
+
+  if (!window.isSecureContext && window.location.hostname !== 'localhost') {
+    console.warn('Push requires a secure context (HTTPS).');
+    return null;
+  }
+
+  if (!shouldAttemptPush()) {
+    return null;
+  }
+
   if (!serviceWorkerRegistration) {
     await registerServiceWorker();
   }
@@ -90,10 +135,13 @@ export async function subscribeToPush(): Promise<PushSubscription | null> {
     
     // Store subscription for the member
     await storeSubscription(subscription);
+
+    clearPushFailure();
     
     return subscription;
   } catch (error) {
     console.error('Failed to subscribe to push:', error);
+    recordPushFailure(error);
     return null;
   }
 }
@@ -185,6 +233,10 @@ export async function showPushNotification(
 
 // Initialize push notifications on app load
 export async function initializePushNotifications(): Promise<void> {
+  if (!shouldAttemptPush()) {
+    return;
+  }
+
   // Register service worker
   await registerServiceWorker();
   
@@ -201,6 +253,9 @@ export async function initializePushNotifications(): Promise<void> {
 // Store member ID when they log in (for future push notifications)
 export function storeMemberIdForPush(memberId: string): void {
   localStorage.setItem('smcf-member-id', memberId);
+  if (!shouldAttemptPush()) {
+    return;
+  }
   // Subscribe to push if not already
   subscribeToPush();
 }

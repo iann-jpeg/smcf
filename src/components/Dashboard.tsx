@@ -19,8 +19,9 @@ import { Clock, LogOut } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import io from "socket.io-client";
 
+const existingSocket = (window as any).socket;
 // Initialize socket with Render-optimized settings
-const socket = io(API_BASE, {
+const socket = existingSocket || io(API_BASE, {
   transports: ["websocket", "polling"],
   reconnection: true,
   reconnectionDelay: 1000,
@@ -31,7 +32,9 @@ const socket = io(API_BASE, {
 });
 
 // Attach to window for debugging and access from other components
-(window as any).socket = socket;
+if (!existingSocket) {
+  (window as any).socket = socket;
+}
 
 // Log socket connection status
 socket.on("connect", () => {
