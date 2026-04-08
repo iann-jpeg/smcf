@@ -37,6 +37,7 @@ import searchRoutes from "./routes/search.js";
 import dashboardRoutes from "./routes/dashboard.js";
 import saccoPaymentRoutes from "./routes/saccoPayments.js";
 import memberMessageRoutes from "./routes/memberMessages.js";
+import saccoProxyRoutes from "./routes/saccoProxy.js";
 
 // Import interest service
 import { startInterestCronJob } from "./services/interestService.js";
@@ -75,7 +76,7 @@ const io = new Server(httpServer, {
     origin: allowedOrigins,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization", "x-bridge-key"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-bridge-key", "x-sacco-key"],
   },
   // Optimize for production (Render deployment)
   pingTimeout: 60000,
@@ -94,7 +95,7 @@ app.use(
     origin: allowedOrigins,
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "x-bridge-key"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-bridge-key", "x-sacco-key"],
   })
 );
 app.use(express.json({ limit: '15mb' }));
@@ -368,6 +369,8 @@ app.use("/api/reports", analyticsRoutes); // Alias to avoid ad blocker issues
 app.use("/api/search", searchRoutes);
 app.use("/api/sacco-payments", saccoPaymentRoutes); // SACCO portal payment bridge
 app.use("/api/member-messages", memberMessageRoutes);
+app.use("/api/sacco", saccoProxyRoutes); // SACCO backend proxy (masked route)
+app.use("/sacco-api", saccoProxyRoutes); // Legacy/proxy-compatible SACCO path
 app.use("/api", dashboardRoutes); // Optimized dashboard endpoint
 
 // Health check endpoint
