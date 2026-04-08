@@ -14,6 +14,25 @@ const API_URL = (() => {
   return raw.endsWith("/api") ? raw : `${raw.replace(/\/+$/, "")}/api`;
 })();
 const DEFAULT_RESEND_COOLDOWN_SECONDS = 60;
+const DEFAULT_LOGIN_COOLDOWN_SECONDS = 30;
+
+const getRetryAfterSeconds = (res: Response, data: unknown, fallbackSeconds: number): number => {
+  const fromBody = Number((data as { retryAfterSeconds?: number })?.retryAfterSeconds);
+  if (Number.isFinite(fromBody) && fromBody > 0) {
+    return Math.ceil(fromBody);
+  }
+
+  const headerValue = res.headers.get("retry-after") || res.headers.get("ratelimit-reset");
+  const headerNumber = Number(headerValue);
+  if (Number.isFinite(headerNumber) && headerNumber > 0) {
+    if (headerNumber > 1000000000) {
+      return Math.max(1, Math.ceil(headerNumber - Date.now() / 1000));
+    }
+    return Math.ceil(headerNumber);
+  }
+
+  return fallbackSeconds;
+};
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -24,6 +43,7 @@ export default function Auth() {
   const [fullName, setFullName] = useState("");
   const [tab, setTab] = useState("login");
   const [showPassword, setShowPassword] = useState(false);
+  const [loginCooldownSeconds, setLoginCooldownSeconds] = useState(0);
   
   // Email verification states
   const [showVerificationModal, setShowVerificationModal] = useState(false);
@@ -55,9 +75,27 @@ export default function Auth() {
     };
   }, [resendCooldownSeconds]);
 
+  useEffect(() => {
+    if (loginCooldownSeconds <= 0) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setLoginCooldownSeconds((current) => (current > 0 ? current - 1 : 0));
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [loginCooldownSeconds]);
+
   // Use backend REST API for login
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loginCooldownSeconds > 0) {
+      toast.error(`Please wait ${loginCooldownSeconds}s before trying again.`);
+      return;
+    }
     setLoading(true);
     try {
       const identifierValue = email.trim();
@@ -71,9 +109,14 @@ export default function Auth() {
           password,
         }),
       });
-      const data = await res.json();
-      setLoading(false);
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        if (res.status === 429) {
+          const retryAfterSeconds = getRetryAfterSeconds(res, data, DEFAULT_LOGIN_COOLDOWN_SECONDS);
+          setLoginCooldownSeconds(retryAfterSeconds);
+          toast.error(data.message || `Too many requests. Please wait ${retryAfterSeconds}s before trying again.`);
+          return;
+        }
         if (data.requiresEmailVerification) {
           toast.error("Please verify your email before logging in");
           setVerificationEmail(data.email || email);
@@ -88,8 +131,9 @@ export default function Auth() {
         navigate("/");
       }
     } catch (error) {
-      setLoading(false);
       toast.error("Network error – check your connection");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -247,20 +291,34 @@ export default function Auth() {
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     placeholder="you@example.com or SMCF-0001"
+                    autoComplete="username"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="login-password">Password</Label>
                   <div className="relative">
-                    <Input id="login-password" type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" className="pr-10" />
+                    <Input
+                      id="login-password"
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      placeholder="••••••••"
+                      autoComplete="current-password"
+                      className="pr-10"
+                    />
                     <button type="button" tabIndex={-1} onClick={() => setShowPassword((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
                 </div>
-                <Button type="submit" className="w-full" disabled={loading}>
+                <Button type="submit" className="w-full" disabled={loading || loginCooldownSeconds > 0}>
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Sign In
+                  {loading
+                    ? "Signing In..."
+                    : loginCooldownSeconds > 0
+                      ? `Try again in ${loginCooldownSeconds}s`
+                      : "Sign In"}
                 </Button>
 
               </form>
@@ -270,16 +328,41 @@ export default function Auth() {
               <form onSubmit={handleSignup} className="space-y-4 mt-4">
                 <div className="space-y-2">
                   <Label htmlFor="signup-name">Full Name</Label>
-                  <Input id="signup-name" value={fullName} onChange={(e) => setFullName(e.target.value)} required placeholder="John Doe" />
+                  <Input
+                    id="signup-name"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    required
+                    placeholder="John Doe"
+                    autoComplete="name"
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signup-email">Email</Label>
-                  <Input id="signup-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="you@example.com" />
+                  <Input
+                    id="signup-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    placeholder="you@example.com"
+                    autoComplete="email"
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signup-password">Password</Label>
                   <div className="relative">
-                    <Input id="signup-password" type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="Minimum 6 characters" minLength={6} className="pr-10" />
+                    <Input
+                      id="signup-password"
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      placeholder="Minimum 6 characters"
+                      minLength={6}
+                      autoComplete="new-password"
+                      className="pr-10"
+                    />
                     <button type="button" tabIndex={-1} onClick={() => setShowPassword((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>

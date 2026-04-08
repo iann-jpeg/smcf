@@ -7,7 +7,8 @@ import "./index.css";
 try {
   const raw = String(import.meta.env.VITE_SACCO_API_URL || "").trim();
   const _base = raw.endsWith("/api") ? raw : `${raw.replace(/\/+$/, "")}/api`;
-  fetch(_base.replace(/\/api\/?$/, "") + "/health", { signal: AbortSignal.timeout(15_000) }).catch(() => {});
+  const healthUrl = `${_base}/health`;
+  fetch(healthUrl, { signal: AbortSignal.timeout(15_000) }).catch(() => {});
 } catch { /* ignore – AbortSignal.timeout not supported in very old browsers */ }
 
 createRoot(document.getElementById("root")!).render(<App />);
