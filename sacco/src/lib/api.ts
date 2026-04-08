@@ -1,6 +1,6 @@
 /**
  * Central API client for the SMCF SACCO backend (MongoDB/Express on Render).
- * Reads VITE_SACCO_API_URL first, then falls back to VITE_API_URL.
+ * Uses VITE_SACCO_API_URL as the SACCO API base.
  */
 import {
   fetchFromSaccoApi,

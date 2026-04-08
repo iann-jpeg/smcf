@@ -2,17 +2,17 @@ function normalizeApiBase(raw: string | undefined): string {
   const value = String(raw || "").trim();
   if (!value) return "";
 
-  const withApi = value.endsWith("/api")
-    ? value
-    : `${value.replace(/\/+$/, "")}/api`;
+  const trimmed = value.replace(/\/+$/, "");
+  // Some older configs used /sacco-api/api which now double-prefixes on smcf.app.
+  const normalized = trimmed.replace(/\/sacco-api\/api$/i, "/sacco-api");
 
-  if (withApi.startsWith("/")) {
+  if (normalized.startsWith("/")) {
     if (typeof window !== "undefined" && window.location?.origin) {
-      return `${window.location.origin}${withApi}`;
+      return `${window.location.origin}${normalized}`;
     }
   }
 
-  return withApi;
+  return normalized;
 }
 
 function unique(values: string[]): string[] {
@@ -32,25 +32,8 @@ function isLocalHost(): boolean {
   return host === "localhost" || host === "127.0.0.1";
 }
 
-function isLegacySaccoProxyBase(base: string): boolean {
-  return /\/sacco-api\/api\/?$/.test(base);
-}
-
 function normalizePath(path: string): string {
   return path.startsWith("/") ? path : `/${path}`;
-}
-
-function prioritizeCandidatesForPath(path: string, bases: string[]): string[] {
-  const normalizedPath = normalizePath(path);
-
-  // Login must prefer the SACCO legacy proxy when available on production.
-  if (!normalizedPath.startsWith("/auth/login")) {
-    return bases;
-  }
-
-  const legacyBases = bases.filter(isLegacySaccoProxyBase);
-  const otherBases = bases.filter((base) => !isLegacySaccoProxyBase(base));
-  return unique([...legacyBases, ...otherBases]);
 }
 
 async function shouldRetryWrongBackend(path: string, res: Response): Promise<boolean> {
@@ -76,31 +59,20 @@ async function shouldRetryWrongBackend(path: string, res: Response): Promise<boo
 
 export function getSaccoApiBaseCandidates(): string[] {
   const envPrimary = normalizeApiBase(import.meta.env.VITE_SACCO_API_URL as string);
-  const envSecondary = normalizeApiBase(import.meta.env.VITE_API_URL as string);
   const origin = getOrigin();
-  const isLegacySaccoProxy = /\/sacco-api\/api\/?$/.test(envPrimary);
 
   const candidates: string[] = [];
-  if (envPrimary && !isLegacySaccoProxy) candidates.push(envPrimary);
-  if (envSecondary) candidates.push(envSecondary);
+  if (envPrimary) candidates.push(envPrimary);
 
   if (origin) {
-    // Vercel experimental service routing.
-    candidates.push(`${origin}/_/backend/api`);
-    // Same-origin API root.
-    candidates.push(`${origin}/api`);
-    // Legacy path used by older deployments.
-    candidates.push(`${origin}/sacco-api/api`);
-  }
-
-  if (envPrimary && isLegacySaccoProxy) {
-    // Keep legacy path available, but after modern proxy candidates.
-    candidates.push(envPrimary);
+    // Same-origin SACCO proxy path.
+    candidates.push(`${origin}/sacco-api`);
   }
 
   if (isLocalHost()) {
+    // Keep localhost fallbacks for direct backend testing.
     candidates.push("http://localhost:5000/api");
-    candidates.push("http://localhost:4000/api");
+    candidates.push("http://localhost:5000");
   }
 
   return unique(candidates);
@@ -126,7 +98,7 @@ export async function fetchFromSaccoApi(path: string, init?: RequestInit): Promi
     getPreferredSaccoApiBase(),
     ...getSaccoApiBaseCandidates(),
   ]);
-  const candidates = prioritizeCandidatesForPath(path, baseCandidates);
+  const candidates = baseCandidates;
 
   let lastResponse: Response | null = null;
   let lastError: unknown = null;
@@ -153,18 +125,26 @@ export async function fetchFromSaccoApi(path: string, init?: RequestInit): Promi
   throw (lastError instanceof Error ? lastError : new Error("Unable to reach SACCO API"));
 }
 
+function toHealthUrl(base: string): string {
+  const trimmedBase = base.replace(/\/+$/, "");
+  const withoutApiSuffix = trimmedBase.endsWith("/api")
+    ? trimmedBase.slice(0, -4)
+    : trimmedBase;
+  return `${withoutApiSuffix}/health`;
+}
+
 export function getSaccoHealthProbeUrls(): string[] {
-  return getSaccoApiBaseCandidates().map((base) => `${base.replace(/\/api$/, "")}/health`);
+  return getSaccoApiBaseCandidates().map((base) => toHealthUrl(base));
 }
 
 export async function warmSaccoBackend(): Promise<void> {
   const bases = getSaccoApiBaseCandidates();
-  const probeUrls = bases.map((base) => `${base.replace(/\/api$/, "")}/health`);
+  const probeUrls = bases.map((base) => toHealthUrl(base));
   for (const url of probeUrls) {
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
       if (res.ok) {
-        const matchedBase = bases.find((base) => `${base.replace(/\/api$/, "")}/health` === url);
+        const matchedBase = bases.find((base) => toHealthUrl(base) === url);
         if (matchedBase) {
           activeBase = matchedBase;
         }
