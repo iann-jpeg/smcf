@@ -226,7 +226,7 @@ router.post(
       }
 
       const { email, password } = req.body;
-      const normalizedEmail = String(email || req.body.username || '').trim().toLowerCase();
+      const normalizedEmail = String(email || '').trim().toLowerCase();
 
       if (!normalizedEmail || !String(password || '').trim()) {
         return res.status(400).json({
@@ -235,13 +235,7 @@ router.post(
         });
       }
 
-      // Primary email login with backward-compatible username fallback.
-      const user = await User.findOne({
-        $or: [
-          { email: normalizedEmail },
-          { username: normalizedEmail }
-        ]
-      }).select('+password');
+      const user = await User.findOne({ email: normalizedEmail }).select('+password');
 
       if (!user) {
         return res.status(401).json({
