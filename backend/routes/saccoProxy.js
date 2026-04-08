@@ -32,9 +32,10 @@ function toOrigin(urlValue) {
 
 function getSaccoTargetBases(req) {
   const configured = String(process.env.SACCO_BACKEND_URL || "").trim().replace(/\/+$/, "");
+  const configuredFallback = String(process.env.SACCO_BACKEND_FALLBACK_URL || "").trim().replace(/\/+$/, "");
   const fallbacks = [
     "http://127.0.0.1:5000",
-    "https://smcf-sacco-backend.onrender.com",
+    configuredFallback,
   ];
 
   const requestOrigin = getRequestOrigin(req);
