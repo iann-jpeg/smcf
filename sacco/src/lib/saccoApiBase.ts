@@ -1,7 +1,17 @@
+export const BASE = import.meta.env.VITE_SACCO_API_URL as string;
+
 function normalizeBase(raw: string | undefined): string {
-  const value = String(raw || "").trim();
+  const value = String(raw || "").trim().replace(/\/+$/, "");
   if (!value) return "";
-  return value.replace(/\/+$/, "");
+
+  // Accept either "/sacco-api" or values that already include "/api"
+  // and normalize to the canonical gateway base.
+  const lower = value.toLowerCase();
+  if (lower.endsWith("/api") && value.length > 4) {
+    return value.slice(0, -4).replace(/\/+$/, "");
+  }
+
+  return value;
 }
 
 function normalizeApiPath(path: string): string {
@@ -12,7 +22,7 @@ function normalizeApiPath(path: string): string {
   return `/api${cleanPath}`;
 }
 
-const saccoBase = normalizeBase(import.meta.env.VITE_SACCO_API_URL as string);
+const saccoBase = normalizeBase(BASE);
 let activeBase = saccoBase;
 
 export function getSaccoApiBaseCandidates(): string[] {

@@ -369,9 +369,7 @@ app.use("/api/reports", analyticsRoutes); // Alias to avoid ad blocker issues
 app.use("/api/search", searchRoutes);
 app.use("/api/sacco-payments", saccoPaymentRoutes); // SACCO portal payment bridge
 app.use("/api/member-messages", memberMessageRoutes);
-app.use("/api/sacco-api", saccoProxyRoutes); // SACCO backend proxy alias
-app.use("/api/sacco", saccoProxyRoutes); // SACCO backend proxy (masked route)
-app.use("/sacco-api", saccoProxyRoutes); // Legacy/proxy-compatible SACCO path
+app.use("/sacco-api", saccoProxyRoutes); // Canonical SACCO backend proxy path
 app.use("/api", dashboardRoutes); // Optimized dashboard endpoint
 
 // Health check endpoint

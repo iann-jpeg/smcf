@@ -13,6 +13,11 @@ function normalizeUpstreamPath(path) {
   return `/api${clean}`;
 }
 
+function getNormalizedRequestPath(req) {
+  const [pathPart = ""] = String(req.url || "").split("?");
+  return normalizeUpstreamPath(pathPart || "/");
+}
+
 function getRequestOrigin(req) {
   const hostHeader = req.headers["x-forwarded-host"] || req.headers.host || "";
   const host = Array.isArray(hostHeader) ? hostHeader[0] : hostHeader;
@@ -30,11 +35,25 @@ function toOrigin(urlValue) {
   }
 }
 
+function normalizeTargetBase(raw) {
+  const value = String(raw || "").trim().replace(/\/+$/, "");
+  if (!value) {
+    return "";
+  }
+
+  const lower = value.toLowerCase();
+  if (lower.endsWith("/api") && value.length > 4) {
+    return value.slice(0, -4).replace(/\/+$/, "");
+  }
+
+  return value;
+}
+
 function getSaccoTargetBases(req) {
-  const configured = String(process.env.SACCO_BACKEND_URL || "").trim().replace(/\/+$/, "");
-  const configuredFallback = String(process.env.SACCO_BACKEND_FALLBACK_URL || "").trim().replace(/\/+$/, "");
+  const configured = normalizeTargetBase(process.env.SACCO_BACKEND_URL);
+  const configuredFallback = normalizeTargetBase(process.env.SACCO_BACKEND_FALLBACK_URL);
   const fallbacks = [
-    "http://127.0.0.1:5000",
+    normalizeTargetBase("http://127.0.0.1:5000"),
     configuredFallback,
   ];
 
@@ -58,8 +77,7 @@ function buildUpstreamUrl(base, req) {
 }
 
 function shouldRetryUpstream(req, upstreamResponse, responseText) {
-  const [pathPart = ""] = String(req.url || "").split("?");
-  const normalizedPath = normalizeUpstreamPath(pathPart || "/");
+  const normalizedPath = getNormalizedRequestPath(req);
   const isLogin = normalizedPath.startsWith("/api/auth/login");
   const bodyText = String(responseText || "").toLowerCase();
   const contentType = String(upstreamResponse.headers.get("content-type") || "").toLowerCase();
@@ -72,7 +90,7 @@ function shouldRetryUpstream(req, upstreamResponse, responseText) {
     return false;
   }
 
-  if (upstreamResponse.status === 403 && (bodyText.includes("captcha") || bodyText.includes("verification required"))) {
+  if (isCaptchaChallengeLogin(req, upstreamResponse.status, responseText, contentType)) {
     return true;
   }
 
@@ -85,6 +103,49 @@ function shouldRetryUpstream(req, upstreamResponse, responseText) {
   }
 
   return false;
+}
+
+function isCaptchaChallengeLogin(req, status, responseText, contentType = "") {
+  const normalizedPath = getNormalizedRequestPath(req);
+
+  if (!normalizedPath.startsWith("/api/auth/login") || status !== 403) {
+    return false;
+  }
+
+  const bodyText = String(responseText || "").toLowerCase();
+  const type = String(contentType || "").toLowerCase();
+
+  if (bodyText.includes("captcha")) {
+    return true;
+  }
+
+  if (type.includes("text/html") && (bodyText.includes("cloudflare") || bodyText.includes("attention required"))) {
+    return true;
+  }
+
+  return false;
+}
+
+function sendSanitizedLoginFailure(res) {
+  return res.status(401).json({
+    success: false,
+    message: "Invalid email or password",
+  });
+}
+
+function normalizeUpstreamBody(req, sourceBody) {
+  const normalizedPath = getNormalizedRequestPath(req);
+  if (!normalizedPath.startsWith("/api/auth/login")) {
+    return sourceBody ?? {};
+  }
+
+  const input = sourceBody && typeof sourceBody === "object" ? sourceBody : {};
+  const username = input.username ?? input.identifier ?? input.email ?? "";
+
+  return {
+    username: String(username || "").trim(),
+    password: String(input.password ?? ""),
+  };
 }
 
 router.use(async (req, res) => {
@@ -124,7 +185,7 @@ router.use(async (req, res) => {
         if (!headers["content-type"]) {
           headers["content-type"] = "application/json";
         }
-        body = JSON.stringify(req.body ?? {});
+        body = JSON.stringify(normalizeUpstreamBody(req, req.body ?? {}));
       }
 
       const upstreamResponse = await fetch(targetUrl, {
@@ -156,6 +217,10 @@ router.use(async (req, res) => {
   }
 
   if (lastFailed) {
+    if (isCaptchaChallengeLogin(req, lastFailed.status, lastFailed.body, lastFailed.contentType)) {
+      return sendSanitizedLoginFailure(res);
+    }
+
     if (lastFailed.contentType) {
       res.setHeader("content-type", lastFailed.contentType);
     }

@@ -31,6 +31,35 @@ const getRetryAfterSeconds = (res: Response, data: unknown, fallbackSeconds: num
   return fallbackSeconds;
 };
 
+const getLoginErrorMessage = (status: number, data: Record<string, unknown>): string => {
+  const rawMessage = String(data.message || data.error || "").trim();
+  const lower = rawMessage.toLowerCase();
+
+  if (status === 400) {
+    if (lower.includes("username and password required") || lower.includes("email and password required")) {
+      return "Email and password are required.";
+    }
+    return rawMessage || "Invalid login request. Please check your email and password.";
+  }
+
+  if (status === 401) {
+    return rawMessage || "Invalid email or password.";
+  }
+
+  if (status === 403) {
+    if (/captcha|cloudflare|attention required/i.test(rawMessage)) {
+      return "Login is temporarily blocked. Please try again in a moment.";
+    }
+    return rawMessage || "Login request was blocked. Please try again.";
+  }
+
+  if (/captcha/i.test(rawMessage)) {
+    return "Invalid email or password.";
+  }
+
+  return rawMessage || "Login failed";
+};
+
 export default function Auth() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -100,25 +129,25 @@ export default function Auth() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: identifierValue,
+          username: identifierValue,
           password,
         }),
       });
-      const data = await res.json().catch(() => ({}));
+      const data = await res.json().catch(() => ({} as Record<string, unknown>));
       if (!res.ok) {
         if (res.status === 429) {
           const retryAfterSeconds = getRetryAfterSeconds(res, data, DEFAULT_LOGIN_COOLDOWN_SECONDS);
           setLoginCooldownSeconds(retryAfterSeconds);
-          toast.error(data.message || `Too many requests. Please wait ${retryAfterSeconds}s before trying again.`);
+          toast.error(String((data as { message?: string }).message || `Too many requests. Please wait ${retryAfterSeconds}s before trying again.`));
           return;
         }
-        if (data.requiresEmailVerification) {
+        if ((data as { requiresEmailVerification?: boolean }).requiresEmailVerification) {
           toast.error("Please verify your email before logging in");
-          setVerificationEmail(data.email || email);
+          setVerificationEmail(String((data as { email?: string }).email || email));
           setShowVerificationModal(true);
           setTab("signup");
         } else {
-          toast.error(data.message || data.error || "Login failed");
+          toast.error(getLoginErrorMessage(res.status, data as Record<string, unknown>));
         }
       } else {
         const rawUser = data?.data?.user || data?.user || {};
@@ -296,14 +325,14 @@ export default function Auth() {
             <TabsContent value="login">
               <form onSubmit={handleLogin} className="space-y-4 mt-4">
                 <div className="space-y-2">
-                  <Label htmlFor="login-identifier">Email or Member ID</Label>
+                  <Label htmlFor="login-identifier">Email</Label>
                   <Input
                     id="login-identifier"
-                    type="text"
+                    type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    placeholder="you@example.com or SMCF-0001"
+                    placeholder="you@example.com"
                     autoComplete="username"
                   />
                 </div>
