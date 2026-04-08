@@ -1,0 +1,14 @@
+{
+  "name": "smcf-sacco-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "install:frontend": "cd smcf-sacco && npm install",
+    "install:backend": "cd smcf-sacco-backend && npm install",
+    "build": "cd smcf-sacco && npm install && npm run build",
+    "start": "node smcf-sacco-backend/dist/server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

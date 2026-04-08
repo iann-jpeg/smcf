@@ -1,0 +1,33 @@
+{
+  "$schema": "https://openapis.vercel.sh/vercel.json",
+  "buildCommand": "npm run build",
+  "outputDirectory": "smcf-sacco/dist",
+  "installCommand": "npm install --prefix smcf-sacco",
+  "framework": null,
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*).js",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/javascript; charset=utf-8"
+        }
+      ]
+    },
+    {
+      "source": "/(.*).mjs",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/javascript; charset=utf-8"
+        }
+      ]
+    }
+  ]
+}
