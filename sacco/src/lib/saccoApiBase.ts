@@ -3,16 +3,27 @@ function normalizeApiBase(raw: string | undefined): string {
   if (!value) return "";
 
   const trimmed = value.replace(/\/+$/, "");
-  // Some older configs used /sacco-api/api which now double-prefixes on smcf.app.
-  const normalized = trimmed.replace(/\/sacco-api\/api$/i, "/sacco-api");
 
-  if (normalized.startsWith("/")) {
+  if (trimmed.startsWith("/")) {
     if (typeof window !== "undefined" && window.location?.origin) {
-      return `${window.location.origin}${normalized}`;
+      return `${window.location.origin}${trimmed}`;
     }
   }
 
-  return normalized;
+  return trimmed;
+}
+
+function toggleApiSuffix(base: string): string {
+  const clean = base.replace(/\/+$/, "");
+  if (clean.endsWith("/api")) {
+    return clean.slice(0, -4);
+  }
+  return `${clean}/api`;
+}
+
+function withApiVariants(base: string): string[] {
+  const clean = base.replace(/\/+$/, "");
+  return unique([clean, toggleApiSuffix(clean)]);
 }
 
 function unique(values: string[]): string[] {
@@ -62,11 +73,11 @@ export function getSaccoApiBaseCandidates(): string[] {
   const origin = getOrigin();
 
   const candidates: string[] = [];
-  if (envPrimary) candidates.push(envPrimary);
+  if (envPrimary) candidates.push(...withApiVariants(envPrimary));
 
   if (origin) {
-    // Same-origin SACCO proxy path.
-    candidates.push(`${origin}/sacco-api`);
+    // Support both proxy styles used by different VPS/rewrite setups.
+    candidates.push(...withApiVariants(`${origin}/sacco-api`));
   }
 
   if (isLocalHost()) {
@@ -125,29 +136,27 @@ export async function fetchFromSaccoApi(path: string, init?: RequestInit): Promi
   throw (lastError instanceof Error ? lastError : new Error("Unable to reach SACCO API"));
 }
 
-function toHealthUrl(base: string): string {
-  const trimmedBase = base.replace(/\/+$/, "");
-  const withoutApiSuffix = trimmedBase.endsWith("/api")
-    ? trimmedBase.slice(0, -4)
-    : trimmedBase;
-  return `${withoutApiSuffix}/health`;
+function getHealthUrlsForBase(base: string): string[] {
+  const clean = base.replace(/\/+$/, "");
+  const toggled = toggleApiSuffix(clean);
+  return unique([
+    `${clean}/health`,
+    `${toggled}/health`,
+  ]);
 }
 
 export function getSaccoHealthProbeUrls(): string[] {
-  return getSaccoApiBaseCandidates().map((base) => toHealthUrl(base));
+  return unique(getSaccoApiBaseCandidates().flatMap((base) => getHealthUrlsForBase(base)));
 }
 
 export async function warmSaccoBackend(): Promise<void> {
   const bases = getSaccoApiBaseCandidates();
-  const probeUrls = bases.map((base) => toHealthUrl(base));
-  for (const url of probeUrls) {
+  const probeTargets = bases.flatMap((base) => getHealthUrlsForBase(base).map((url) => ({ base, url })));
+  for (const target of probeTargets) {
     try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+      const res = await fetch(target.url, { signal: AbortSignal.timeout(15_000) });
       if (res.ok) {
-        const matchedBase = bases.find((base) => toHealthUrl(base) === url);
-        if (matchedBase) {
-          activeBase = matchedBase;
-        }
+        activeBase = target.base;
         return;
       }
     } catch {
