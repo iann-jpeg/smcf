@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Shield, UserCog, Settings, Trash2, Plus, KeyRound, Loader2 } from "lucide-react";
 
@@ -25,6 +26,7 @@ interface SystemConfig {
   maxGuaranteeMultiplier: number;
   minGuarantors: number;
   minLiquidityRatio: number;
+  sharePurchaseEnabled: boolean;
 }
 
 const ALL_ROLES: AppRole[] = ["admin", "credit_officer", "credit_committee", "treasurer", "auditor", "member"];
@@ -249,6 +251,27 @@ export default function SettingsPage() {
             </div>
           ) : (
             <>
+          <Card>
+            <CardHeader>
+              <CardTitle className="font-heading">Share Purchase Controls</CardTitle>
+              <CardDescription>Enable or pause member share subscriptions</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <Label htmlFor="share-purchase-enabled">Allow members to buy shares</Label>
+                  <p className="text-sm text-muted-foreground">
+                    When disabled, members cannot initiate share purchases from their accounts.
+                  </p>
+                </div>
+                <Switch
+                  id="share-purchase-enabled"
+                  checked={cfg.sharePurchaseEnabled ?? true}
+                  onCheckedChange={(checked) => setCfg((prev) => prev ? { ...prev, sharePurchaseEnabled: checked } : prev)}
+                />
+              </div>
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader>
               <CardTitle className="font-heading">Interest Rate Configuration</CardTitle>

@@ -132,6 +132,11 @@ export default function MyAccount() {
     enabled: !!historyLoanId,
   });
 
+  const { data: systemConfig } = useQuery({
+    queryKey: ["system-config"],
+    queryFn: async () => api.get("/config"),
+  });
+
   const stopRegFeePolling = () => {
     if (regFeePollRef.current) {
       clearInterval(regFeePollRef.current);
@@ -179,6 +184,8 @@ export default function MyAccount() {
   const registrationFeeAmount = Number((member as any)?.registration_fee_amount ?? 100);
   const registrationFeeMpesaCode = (member as any)?.registration_fee_mpesa_code as string | null;
   const registrationFeeDate = (member as any)?.registration_fee_date as string | null;
+  const sharePurchaseEnabled = (systemConfig as any)?.sharePurchaseEnabled !== false;
+  const sharePurchaseDisabledMessage = "Share purchases are currently disabled by the SACCO administrator.";
 
   const handleRegistrationFeePayment = async () => {
     if (!member?.id) return;
@@ -512,7 +519,15 @@ export default function MyAccount() {
           </Button>
           <Button
             className="bg-purple-600 hover:bg-purple-700 text-white gap-2"
-            onClick={() => setShareSubscribeOpen(true)}
+            onClick={() => {
+              if (!sharePurchaseEnabled) {
+                toast.error(sharePurchaseDisabledMessage);
+                return;
+              }
+              setShareSubscribeOpen(true);
+            }}
+            disabled={!sharePurchaseEnabled}
+            title={!sharePurchaseEnabled ? sharePurchaseDisabledMessage : undefined}
           >
             <Landmark className="h-4 w-4" />
             Buy Shares
@@ -526,6 +541,11 @@ export default function MyAccount() {
             <ArrowRightLeft className="h-4 w-4" />
             Transfer Shares
           </Button>
+          {!sharePurchaseEnabled && (
+            <div className="w-full text-xs text-muted-foreground">
+              Share purchases are currently disabled by the SACCO administrator.
+            </div>
+          )}
         </div>
       </div>
 
