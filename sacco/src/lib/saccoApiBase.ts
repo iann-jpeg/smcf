@@ -32,6 +32,48 @@ function isLocalHost(): boolean {
   return host === "localhost" || host === "127.0.0.1";
 }
 
+function isLegacySaccoProxyBase(base: string): boolean {
+  return /\/sacco-api\/api\/?$/.test(base);
+}
+
+function normalizePath(path: string): string {
+  return path.startsWith("/") ? path : `/${path}`;
+}
+
+function prioritizeCandidatesForPath(path: string, bases: string[]): string[] {
+  const normalizedPath = normalizePath(path);
+
+  // Login must prefer the SACCO legacy proxy when available on production.
+  if (!normalizedPath.startsWith("/auth/login")) {
+    return bases;
+  }
+
+  const legacyBases = bases.filter(isLegacySaccoProxyBase);
+  const otherBases = bases.filter((base) => !isLegacySaccoProxyBase(base));
+  return unique([...legacyBases, ...otherBases]);
+}
+
+async function shouldRetryWrongBackend(path: string, res: Response): Promise<boolean> {
+  const normalizedPath = normalizePath(path);
+  if (!normalizedPath.startsWith("/auth/login") || res.status !== 400) {
+    return false;
+  }
+
+  const bodyText = (await res.clone().text().catch(() => "")).toLowerCase();
+
+  // Main SMCF backend responds with phone/password validation for non-SACCO auth.
+  if (bodyText.includes("phone and password")) {
+    return true;
+  }
+
+  // Proxy/parser errors should not pin this base for SACCO login.
+  if (bodyText.includes("expected property name or '}' in json")) {
+    return true;
+  }
+
+  return false;
+}
+
 export function getSaccoApiBaseCandidates(): string[] {
   const envPrimary = normalizeApiBase(import.meta.env.VITE_SACCO_API_URL as string);
   const envSecondary = normalizeApiBase(import.meta.env.VITE_API_URL as string);
@@ -80,10 +122,11 @@ function withApi(base: string, path: string): string {
 }
 
 export async function fetchFromSaccoApi(path: string, init?: RequestInit): Promise<Response> {
-  const candidates = unique([
+  const baseCandidates = unique([
     getPreferredSaccoApiBase(),
     ...getSaccoApiBaseCandidates(),
   ]);
+  const candidates = prioritizeCandidatesForPath(path, baseCandidates);
 
   let lastResponse: Response | null = null;
   let lastError: unknown = null;
@@ -92,8 +135,9 @@ export async function fetchFromSaccoApi(path: string, init?: RequestInit): Promi
     if (!base) continue;
     try {
       const res = await fetch(withApi(base, path), init);
-      // If pathing/proxying is wrong, deployments commonly return 404/405. Try next candidate.
-      if (res.status === 404 || res.status === 405) {
+      // If pathing/proxying is wrong, deployments commonly return 404/405.
+      // Also retry known wrong-backend login 400 responses.
+      if (res.status === 404 || res.status === 405 || await shouldRetryWrongBackend(path, res)) {
         lastResponse = res;
         continue;
       }

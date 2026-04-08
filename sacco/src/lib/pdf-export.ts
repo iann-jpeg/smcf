@@ -2,50 +2,14 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { LoanSafetyResult } from "@/lib/loan-safety-engine";
 import { generateAmortization } from "@/lib/amortization";
+import { drawSmcfFooterSeal, drawSmcfPageSealWatermark } from "@/lib/pdfSeal";
 
 const NAVY: [number, number, number] = [15, 23, 42];
 const GOLD: [number, number, number] = [180, 150, 60];
-const STAMP_BLUE: [number, number, number] = [31, 82, 196];
-const STAMP_GREEN: [number, number, number] = [25, 132, 74];
-const STAMP_GOLD: [number, number, number] = [200, 165, 48];
 const HEADER_COLOR: [number, number, number] = NAVY;
 const DATE_FMT = new Intl.DateTimeFormat("en-KE", { dateStyle: "long" });
 const SACCO_NAME = "SMCF SACCO";
 const SACCO_TAGLINE = "Empowering Members Through Financial Excellence";
-
-function drawSmcfStampObject(doc: jsPDF, centerX: number, centerY: number) {
-  // Blue circular stamp ring.
-  doc.setDrawColor(...STAMP_BLUE);
-  doc.setLineWidth(0.45);
-  doc.circle(centerX, centerY, 6.2, "S");
-  doc.setLineWidth(0.25);
-  doc.circle(centerX, centerY, 5.1, "S");
-
-  // Stamp belt across the center.
-  doc.setLineWidth(0.3);
-  doc.roundedRect(centerX - 8, centerY - 1.5, 16, 3, 0.8, 0.8, "S");
-
-  // SMCF text styling (gold S + green MCF).
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(4.6);
-  doc.setTextColor(...STAMP_GOLD);
-  doc.text("S", centerX - 2.9, centerY + 1.1);
-  doc.setTextColor(...STAMP_GREEN);
-  doc.text("MCF", centerX - 1.3, centerY + 1.1);
-
-  // Signature stroke under stamp as one bound object.
-  doc.setDrawColor(...STAMP_BLUE);
-  doc.setLineWidth(0.35);
-  doc.line(centerX - 7.8, centerY + 3.7, centerX + 7.6, centerY + 2.1);
-  doc.setLineWidth(0.22);
-  doc.line(centerX - 5.8, centerY + 3.3, centerX - 4.2, centerY + 1.6);
-  doc.line(centerX - 4.2, centerY + 1.6, centerX - 2.4, centerY + 3.8);
-  doc.line(centerX - 2.4, centerY + 3.8, centerX + 0.3, centerY + 1.4);
-  doc.line(centerX + 0.3, centerY + 1.4, centerX + 2.9, centerY + 3.4);
-  doc.line(centerX + 2.9, centerY + 3.4, centerX + 5.6, centerY + 1.9);
-
-  doc.setTextColor(0);
-}
 
 function initDoc(title: string) {
   const doc = new jsPDF();
@@ -92,6 +56,7 @@ function addPageFooters(doc: jsPDF, label: string) {
   const pageHeight = doc.internal.pageSize.getHeight();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
+    drawSmcfPageSealWatermark(doc, pageWidth, pageHeight);
     // Gold accent line above footer
     doc.setFillColor(...GOLD);
     doc.rect(0, pageHeight - 26, pageWidth, 0.5, "F");
@@ -103,7 +68,7 @@ function addPageFooters(doc: jsPDF, label: string) {
     doc.setFontSize(7);
     doc.setTextColor(150);
     doc.text(SACCO_NAME, pageWidth / 2, pageHeight - 14, { align: "center" });
-    drawSmcfStampObject(doc, pageWidth - 22, pageHeight - 10.5);
+    drawSmcfFooterSeal(doc, pageWidth - 22, pageHeight - 10.5);
     doc.setTextColor(0);
   }
 }

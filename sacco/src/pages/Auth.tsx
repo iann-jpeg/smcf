@@ -100,6 +100,7 @@ export default function Auth() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          username: identifierValue,
           identifier: identifierValue,
           email: identifierValue,
           memberId: identifierValue,
@@ -120,10 +121,28 @@ export default function Auth() {
           setShowVerificationModal(true);
           setTab("signup");
         } else {
-          toast.error(data.message || "Login failed");
+          toast.error(data.message || data.error || "Login failed");
         }
       } else {
-        storeAuth(data.data.token, data.data.user);
+        const rawUser = data?.data?.user || data?.user || {};
+        const token = data?.data?.token || data?.token;
+        const normalizedUser = {
+          id: String(rawUser.id || rawUser._id || rawUser.userId || ""),
+          email: String(rawUser.email || identifierValue),
+          fullName: rawUser.fullName || rawUser.name || undefined,
+          roles: Array.isArray(rawUser.roles)
+            ? rawUser.roles.map((role: unknown) => String(role))
+            : rawUser.role
+              ? [String(rawUser.role)]
+              : ["member"],
+        };
+
+        if (!token || !normalizedUser.id) {
+          toast.error("Login response was invalid. Please try again.");
+          return;
+        }
+
+        storeAuth(String(token), normalizedUser);
         toast.success("Login successful!");
         navigate("/");
       }
