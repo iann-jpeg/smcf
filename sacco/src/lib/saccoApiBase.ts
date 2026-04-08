@@ -92,8 +92,8 @@ export async function fetchFromSaccoApi(path: string, init?: RequestInit): Promi
     if (!base) continue;
     try {
       const res = await fetch(withApi(base, path), init);
-      // If pathing is wrong, many deployments return 404. Try next candidate.
-      if (res.status === 404) {
+      // If pathing/proxying is wrong, deployments commonly return 404/405. Try next candidate.
+      if (res.status === 404 || res.status === 405) {
         lastResponse = res;
         continue;
       }
