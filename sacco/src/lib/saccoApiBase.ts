@@ -78,6 +78,16 @@ async function shouldRetryCaptchaBlocked(path: string, res: Response): Promise<b
   return bodyText.includes("captcha") || bodyText.includes("verification required");
 }
 
+async function shouldRetryUnauthorizedProtectedRoute(path: string, res: Response): Promise<boolean> {
+  const normalizedPath = normalizePath(path);
+  if (!normalizedPath.startsWith("/auth/login") || res.status !== 401) {
+    return false;
+  }
+
+  const bodyText = (await res.clone().text().catch(() => "")).toLowerCase();
+  return bodyText.includes("not authorized to access this route") || bodyText.includes("unauthorized");
+}
+
 export function getSaccoApiBaseCandidates(): string[] {
   const envPrimary = normalizeApiBase(import.meta.env.VITE_SACCO_API_URL as string);
   const origin = getOrigin();
@@ -88,7 +98,6 @@ export function getSaccoApiBaseCandidates(): string[] {
   if (origin) {
     // Support both proxy styles used by different VPS/rewrite setups.
     candidates.push(...withApiVariants(`${origin}/sacco-api`));
-    candidates.push(...withApiVariants(`${origin}/api/sacco-api`));
     // Main backend masked proxy fallback.
     candidates.push(...withApiVariants(`${origin}/api/sacco`));
   }
@@ -137,7 +146,8 @@ export async function fetchFromSaccoApi(path: string, init?: RequestInit): Promi
         res.status === 404 ||
         res.status === 405 ||
         await shouldRetryWrongBackend(path, res) ||
-        await shouldRetryCaptchaBlocked(path, res)
+        await shouldRetryCaptchaBlocked(path, res) ||
+        await shouldRetryUnauthorizedProtectedRoute(path, res)
       ) {
         lastResponse = res;
         continue;
