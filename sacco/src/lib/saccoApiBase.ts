@@ -98,6 +98,7 @@ export function getSaccoApiBaseCandidates(): string[] {
   if (origin) {
     // Support both proxy styles used by different VPS/rewrite setups.
     candidates.push(...withApiVariants(`${origin}/sacco-api`));
+    candidates.push(...withApiVariants(`${origin}/api/sacco-api`));
     // Main backend masked proxy fallback.
     candidates.push(...withApiVariants(`${origin}/api/sacco`));
   }
