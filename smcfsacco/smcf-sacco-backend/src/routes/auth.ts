@@ -15,7 +15,6 @@ import {
 
 const router = Router();
 
-const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const allowEmailTokenFallback = process.env.ALLOW_EMAIL_TOKEN_FALLBACK !== 'false';
 const resendCooldownSeconds = Math.max(1, Number(process.env.EMAIL_RESEND_COOLDOWN_SECONDS || 60));
 const resendCooldownMs = resendCooldownSeconds * 1000;
@@ -213,7 +212,6 @@ router.post(
 router.post(
   '/login',
   [
-    body('identifier').optional().trim(),
     body('email').optional().trim(),
     body('password').exists().withMessage('Password is required')
   ],
@@ -227,36 +225,23 @@ router.post(
         });
       }
 
-      const { password } = req.body;
-      const rawIdentifier = String(req.body.identifier || req.body.email || '').trim();
+      const { email, password } = req.body;
+      const normalizedEmail = String(email || req.body.username || '').trim().toLowerCase();
 
-      if (!rawIdentifier) {
+      if (!normalizedEmail || !String(password || '').trim()) {
         return res.status(400).json({
           success: false,
-          message: 'Email or Member ID is required'
+          message: 'Email and password required'
         });
       }
 
-      const normalizedIdentifier = rawIdentifier.toLowerCase();
-
-      // Login by email or member ID.
-      let user: any = null;
-
-      if (rawIdentifier.includes('@')) {
-        user = await User.findOne({ email: normalizedIdentifier }).select('+password');
-      } else {
-        const member = await Member.findOne({
-          memberId: { $regex: `^${escapeRegExp(rawIdentifier)}$`, $options: 'i' }
-        }).select('userId');
-
-        if (member?.userId) {
-          user = await User.findById(member.userId).select('+password');
-        }
-
-        if (!user) {
-          user = await User.findOne({ email: normalizedIdentifier }).select('+password');
-        }
-      }
+      // Primary email login with backward-compatible username fallback.
+      const user = await User.findOne({
+        $or: [
+          { email: normalizedEmail },
+          { username: normalizedEmail }
+        ]
+      }).select('+password');
 
       if (!user) {
         return res.status(401).json({
