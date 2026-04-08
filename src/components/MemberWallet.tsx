@@ -51,6 +51,7 @@ import {
 import { useEffect, useState, useCallback, lazy, Suspense, Component, ReactNode } from "react";
 import { useAutoRefresh } from "@/hooks/use-auto-refresh";
 import smcfLogo from '@/assets/newsmcflogo.png';
+import { getSmcfPrintStampMarkup, getSmcfPrintStampStyles } from "@/lib/printStamp";
 import TopSaverBadge from "@/components/analytics/TopSaverBadge";
 import MemberQRCode from "@/components/MemberQRCode";
 import QRScanner from "@/components/QRScanner";
@@ -669,6 +670,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
     .type-withdrawal { color: #dc2626; font-weight: bold; }
     .type-interest { color: #2563eb; font-weight: bold; }
     .footer { margin-top: 40px; text-align: center; color: #666; font-size: 12px; border-top: 2px solid #e5e7eb; padding-top: 20px; }
+${getSmcfPrintStampStyles()}
   </style>
 </head>
 <body>
@@ -733,6 +735,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
     <p>Digital Table Banking Platform | Automated Contributions | Secure Transactions</p>
     <p>This statement is confidential and intended for the account holder only.</p>
   </div>
+  ${getSmcfPrintStampMarkup()}
 </body>
 </html>
     `;
@@ -782,6 +785,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
     .status-pending { background: #fef3c7; color: #d97706; }
     .footer { margin-top: 40px; text-align: center; color: #666; font-size: 12px; border-top: 2px solid #e5e7eb; padding-top: 20px; }
     .watermark { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-45deg); font-size: 100px; color: rgba(37, 99, 235, 0.05); font-weight: bold; z-index: -1; }
+${getSmcfPrintStampStyles()}
   </style>
 </head>
 <body>
@@ -863,6 +867,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
     <p>This is an official transaction statement. For queries, contact SMCF support.</p>
     <p style="margin-top: 15px; font-size: 10px;">Statement ID: ${transaction._id} | Printed: ${new Date().toLocaleString()}</p>
   </div>
+  ${getSmcfPrintStampMarkup()}
 </body>
 </html>
     `;

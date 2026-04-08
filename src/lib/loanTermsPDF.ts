@@ -10,6 +10,40 @@ interface LoanTermsPDFOptions {
   memberName?: string;
 }
 
+const STAMP_BLUE: [number, number, number] = [31, 82, 196];
+const STAMP_GREEN: [number, number, number] = [25, 132, 74];
+const STAMP_GOLD: [number, number, number] = [200, 165, 48];
+
+const drawSmcfStampObject = (doc: jsPDF, centerX: number, centerY: number) => {
+  doc.setDrawColor(...STAMP_BLUE);
+  doc.setLineWidth(0.45);
+  doc.circle(centerX, centerY, 6.2, "S");
+  doc.setLineWidth(0.25);
+  doc.circle(centerX, centerY, 5.1, "S");
+
+  doc.setLineWidth(0.3);
+  doc.roundedRect(centerX - 8, centerY - 1.5, 16, 3, 0.8, 0.8, "S");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(4.6);
+  doc.setTextColor(...STAMP_GOLD);
+  doc.text("S", centerX - 2.9, centerY + 1.1);
+  doc.setTextColor(...STAMP_GREEN);
+  doc.text("MCF", centerX - 1.3, centerY + 1.1);
+
+  doc.setDrawColor(...STAMP_BLUE);
+  doc.setLineWidth(0.35);
+  doc.line(centerX - 7.8, centerY + 3.7, centerX + 7.6, centerY + 2.1);
+  doc.setLineWidth(0.22);
+  doc.line(centerX - 5.8, centerY + 3.3, centerX - 4.2, centerY + 1.6);
+  doc.line(centerX - 4.2, centerY + 1.6, centerX - 2.4, centerY + 3.8);
+  doc.line(centerX - 2.4, centerY + 3.8, centerX + 0.3, centerY + 1.4);
+  doc.line(centerX + 0.3, centerY + 1.4, centerX + 2.9, centerY + 3.4);
+  doc.line(centerX + 2.9, centerY + 3.4, centerX + 5.6, centerY + 1.9);
+
+  doc.setTextColor(0);
+};
+
 const sanitizeForFilename = (value: string): string =>
   value
     .trim()
@@ -237,6 +271,7 @@ export const generateLoanTermsPDF = (options?: LoanTermsPDFOptions) => {
     doc.text(`Page ${page} of ${totalPages}`, pageWidth - margin, pageHeight - 16, {
       align: "right",
     });
+    drawSmcfStampObject(doc, pageWidth - 40, pageHeight - 10.5);
   }
 
   const today = new Date().toISOString().slice(0, 10);

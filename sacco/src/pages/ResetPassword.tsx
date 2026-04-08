@@ -6,11 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Loader2, Eye, EyeOff, CheckCircle2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
-
-const API_URL = (() => {
-  const raw = String(import.meta.env.VITE_SACCO_API_URL || "").trim();
-  return raw.endsWith("/api") ? raw : `${raw.replace(/\/+$/, "")}/api`;
-})();
+import { fetchFromSaccoApi } from "@/lib/saccoApiBase";
 
 export default function ResetPassword() {
   const navigate = useNavigate();
@@ -50,7 +46,7 @@ export default function ResetPassword() {
 
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/auth/reset-password`, {
+      const res = await fetchFromSaccoApi(`/auth/reset-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token: token.trim(), newPassword }),

@@ -2,18 +2,16 @@
  * Central API client for the SMCF SACCO backend (MongoDB/Express on Render).
  * Reads VITE_SACCO_API_URL first, then falls back to VITE_API_URL.
  */
+import {
+  fetchFromSaccoApi,
+  getActiveSaccoApiBase,
+  getPreferredSaccoApiBase,
+} from "@/lib/saccoApiBase";
 
-function normalizeApiBase(raw: string | undefined): string {
-  const value = String(raw || "").trim();
-  if (!value) return "";
-  return value.endsWith("/api") ? value : `${value.replace(/\/+$/, "")}/api`;
-}
-
-const BASE = normalizeApiBase(import.meta.env.VITE_SACCO_API_URL as string);
 const TOKEN_KEY = "smcf_auth_token";
 
 export function getApiBaseForDebug(): string {
-  return BASE;
+  return getActiveSaccoApiBase();
 }
 
 function getToken(): string | null {
@@ -92,31 +90,31 @@ async function handle<T>(res: Response): Promise<T> {
 
 export const api = {
   get<T = unknown>(path: string): Promise<T> {
-    return fetch(`${BASE}${path}`, { headers: authHeaders() }).then((r) => handle<T>(r));
+    return fetchFromSaccoApi(path, { headers: authHeaders() }).then((r) => handle<T>(r));
   },
   post<T = unknown>(path: string, body: unknown): Promise<T> {
-    return fetch(`${BASE}${path}`, {
+    return fetchFromSaccoApi(path, {
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify(body),
     }).then((r) => handle<T>(r));
   },
   put<T = unknown>(path: string, body: unknown = {}): Promise<T> {
-    return fetch(`${BASE}${path}`, {
+    return fetchFromSaccoApi(path, {
       method: "PUT",
       headers: authHeaders(),
       body: JSON.stringify(body),
     }).then((r) => handle<T>(r));
   },
   patch<T = unknown>(path: string, body: unknown = {}): Promise<T> {
-    return fetch(`${BASE}${path}`, {
+    return fetchFromSaccoApi(path, {
       method: "PATCH",
       headers: authHeaders(),
       body: JSON.stringify(body),
     }).then((r) => handle<T>(r));
   },
   del<T = unknown>(path: string): Promise<T> {
-    return fetch(`${BASE}${path}`, {
+    return fetchFromSaccoApi(path, {
       method: "DELETE",
       headers: authHeaders(),
     }).then((r) => handle<T>(r));
@@ -413,7 +411,7 @@ export async function getAdminCommsHealthStatus(): Promise<AdminCommsHealthStatu
 
   for (const path of emailPaths) {
     try {
-      const res = await fetch(`${BASE}${path}`, { headers: authHeaders() });
+      const res = await fetchFromSaccoApi(path, { headers: authHeaders() });
       emailStatus = res.status;
       if (res.ok) {
         emailOk = true;
@@ -540,6 +538,9 @@ export async function getMainSmcfBridgeMessages(): Promise<MemberMessageItem[]> 
     return [];
   }
 }
+
+// Keep a stable read-only base for legacy direct fetch calls in Settings page.
+export const SACCO_API_BASE = getPreferredSaccoApiBase();
 
 export async function getAdminEmailBroadcastHistory(): Promise<any[]> {
   const candidatePaths = [

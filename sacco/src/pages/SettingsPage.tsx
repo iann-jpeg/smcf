@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Shield, UserCog, Settings, Trash2, Plus, KeyRound, Loader2 } from "lucide-react";
+import { fetchFromSaccoApi } from "@/lib/saccoApiBase";
 
 type AppRole = "admin" | "credit_officer" | "credit_committee" | "treasurer" | "auditor" | "member";
 
@@ -41,11 +42,6 @@ const roleBadgeVariant = (role: string) => {
     default: return "outline";
   }
 };
-
-const BASE = (() => {
-  const raw = String(import.meta.env.VITE_SACCO_API_URL || "").trim();
-  return raw.endsWith("/api") ? raw : `${raw.replace(/\/+$/, "")}/api`;
-})();
 
 export default function SettingsPage() {
   const { hasRole, user } = useAuth();
@@ -168,7 +164,7 @@ export default function SettingsPage() {
     if (!user?.email) return;
     setSetupLoading(true);
     try {
-      const res = await fetch(`${BASE}/auth/setup`, {
+      const res = await fetchFromSaccoApi(`/auth/setup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: user.email }),
@@ -178,7 +174,7 @@ export default function SettingsPage() {
         toast.error(data.message || "Setup failed");
       } else {
         // Re-fetch the updated user and refresh the stored auth
-        const meRes = await fetch(`${BASE}/auth/me`, {
+        const meRes = await fetchFromSaccoApi(`/auth/me`, {
           headers: { Authorization: `Bearer ${localStorage.getItem("smcf_auth_token")}` },
         });
         const meData = await meRes.json();

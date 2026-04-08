@@ -46,6 +46,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import smcfLogo from '@/assets/newsmcflogo.png';
+import { getSmcfPrintStampMarkup, getSmcfPrintStampStyles } from "@/lib/printStamp";
 import { useEffect, useState } from "react";
 import CreditScoreCard from "@/components/CreditScoreCard";
 import { Progress } from "@/components/ui/progress";
@@ -393,6 +394,7 @@ const LoansTab = ({ isReadOnly = false }: LoansTabProps) => {
     .status-disbursed { color: #16a34a; font-weight: bold; }
     .status-repaid { color: #059669; font-weight: bold; }
     .footer { margin-top: 40px; text-align: center; color: #666; font-size: 12px; border-top: 2px solid #e5e7eb; padding-top: 20px; }
+${getSmcfPrintStampStyles()}
   </style>
 </head>
 <body>
@@ -478,6 +480,7 @@ const LoansTab = ({ isReadOnly = false }: LoansTabProps) => {
     <p>Digital Table Banking Platform | Automated Contributions | Secure Transactions</p>
     <p>This report is confidential and intended for authorized personnel only.</p>
   </div>
+  ${getSmcfPrintStampMarkup()}
 </body>
 </html>
     `;

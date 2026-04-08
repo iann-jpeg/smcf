@@ -44,6 +44,7 @@ import {
   XCircle,
 } from "lucide-react";
 import smcfLogo from '@/assets/newsmcflogo.png';
+import { getSmcfPrintStampMarkup, getSmcfPrintStampStyles } from "@/lib/printStamp";
 import { useEffect, useState } from "react";
 import SavingsChart from "@/components/analytics/SavingsChart";
 import TopSaverBadge from "@/components/analytics/TopSaverBadge";
@@ -358,6 +359,7 @@ const AdminSavingsTab = ({ isReadOnly = false }: AdminSavingsTabProps) => {
     td { padding: 10px; border-bottom: 1px solid #e5e7eb; font-size: 11px; }
     tr:nth-child(even) { background: #f9fafb; }
     .footer { margin-top: 40px; text-align: center; color: #666; font-size: 12px; border-top: 2px solid #e5e7eb; padding-top: 20px; }
+${getSmcfPrintStampStyles()}
   </style>
 </head>
 <body>
@@ -430,6 +432,7 @@ const AdminSavingsTab = ({ isReadOnly = false }: AdminSavingsTabProps) => {
     <p>Digital Table Banking Platform | Automated Contributions | Secure Transactions</p>
     <p>This report is confidential and intended for authorized personnel only.</p>
   </div>
+  ${getSmcfPrintStampMarkup()}
 </body>
 </html>
     `;

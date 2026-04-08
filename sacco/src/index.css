@@ -102,8 +102,6 @@
     width: 100%;
     min-height: 100%;
     overflow-x: hidden;
-    -webkit-text-size-adjust: 100%;
-    text-size-adjust: 100%;
   }
 
   * {
@@ -118,7 +116,6 @@
   .overflow-auto,
   .overflow-x-auto,
   .overflow-y-auto {
-    -webkit-overflow-scrolling: touch;
   }
 
   h1, h2, h3, h4, h5, h6 {

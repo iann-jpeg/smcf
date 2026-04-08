@@ -44,6 +44,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useInactivityLogout } from "@/hooks/useInactivityLogout";
 import API_BASE from "@/lib/api";
 import { authService } from "@/lib/authService";
+import { getSmcfPrintStampMarkup, getSmcfPrintStampStyles } from "@/lib/printStamp";
 import {
   AlertCircle,
   AlertTriangle,
@@ -638,6 +639,7 @@ const AdminDashboard = ({
         display: none;
       }
     }
+${getSmcfPrintStampStyles()}
   </style>
 </head>
 <body>
@@ -712,6 +714,7 @@ const AdminDashboard = ({
         </div>
       </div>
     </div>
+    ${getSmcfPrintStampMarkup()}
   </div>
   
   <script>
@@ -774,6 +777,7 @@ const AdminDashboard = ({
     .status-completed { color: #16a34a; font-weight: bold; }
     .status-pending { color: #ea580c; font-weight: bold; }
     .footer { margin-top: 40px; text-align: center; color: #666; font-size: 12px; border-top: 2px solid #e5e7eb; padding-top: 20px; }
+${getSmcfPrintStampStyles()}
   </style>
 </head>
 <body>
@@ -841,6 +845,7 @@ const AdminDashboard = ({
     <p>Digital Table Banking Platform | Automated Contributions | Secure Transactions</p>
     <p>This report is confidential and intended for authorized personnel only.</p>
   </div>
+  ${getSmcfPrintStampMarkup()}
 </body>
 </html>
     `;

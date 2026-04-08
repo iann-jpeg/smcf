@@ -8,11 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Eye, EyeOff, CheckCircle2, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { storeAuth } from "@/hooks/useAuth";
+import { fetchFromSaccoApi } from "@/lib/saccoApiBase";
 
-const API_URL = (() => {
-  const raw = String(import.meta.env.VITE_SACCO_API_URL || "").trim();
-  return raw.endsWith("/api") ? raw : `${raw.replace(/\/+$/, "")}/api`;
-})();
 const DEFAULT_RESEND_COOLDOWN_SECONDS = 60;
 const DEFAULT_LOGIN_COOLDOWN_SECONDS = 30;
 
@@ -99,7 +96,7 @@ export default function Auth() {
     setLoading(true);
     try {
       const identifierValue = email.trim();
-      const res = await fetch(`${API_URL}/auth/login`, {
+      const res = await fetchFromSaccoApi(`/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -142,7 +139,7 @@ export default function Auth() {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/auth/register`, {
+      const res = await fetchFromSaccoApi(`/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, fullName }),
@@ -185,7 +182,7 @@ export default function Auth() {
 
     setVerifyingEmail(true);
     try {
-      const res = await fetch(`${API_URL}/auth/verify-email`, {
+      const res = await fetchFromSaccoApi(`/auth/verify-email`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token: verificationToken }),
@@ -225,7 +222,7 @@ export default function Auth() {
 
     setResendingEmail(true);
     try {
-      const res = await fetch(`${API_URL}/auth/resend-verification-email`, {
+      const res = await fetchFromSaccoApi(`/auth/resend-verification-email`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: verificationEmail }),

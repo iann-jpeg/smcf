@@ -56,6 +56,61 @@ import {
 import { useEffect, useState } from "react";
 import { Progress } from "@/components/ui/progress";
 
+const STAMP_BLUE: [number, number, number] = [31, 82, 196];
+const STAMP_GREEN: [number, number, number] = [25, 132, 74];
+const STAMP_GOLD: [number, number, number] = [200, 165, 48];
+
+const drawSmcfStampObject = (pdf: jsPDF, centerX: number, centerY: number) => {
+  pdf.setDrawColor(...STAMP_BLUE);
+  pdf.setLineWidth(0.45);
+  pdf.circle(centerX, centerY, 6.2, "S");
+  pdf.setLineWidth(0.25);
+  pdf.circle(centerX, centerY, 5.1, "S");
+
+  pdf.setLineWidth(0.3);
+  pdf.roundedRect(centerX - 8, centerY - 1.5, 16, 3, 0.8, 0.8, "S");
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(4.6);
+  pdf.setTextColor(...STAMP_GOLD);
+  pdf.text("S", centerX - 2.9, centerY + 1.1);
+  pdf.setTextColor(...STAMP_GREEN);
+  pdf.text("MCF", centerX - 1.3, centerY + 1.1);
+
+  pdf.setDrawColor(...STAMP_BLUE);
+  pdf.setLineWidth(0.35);
+  pdf.line(centerX - 7.8, centerY + 3.7, centerX + 7.6, centerY + 2.1);
+  pdf.setLineWidth(0.22);
+  pdf.line(centerX - 5.8, centerY + 3.3, centerX - 4.2, centerY + 1.6);
+  pdf.line(centerX - 4.2, centerY + 1.6, centerX - 2.4, centerY + 3.8);
+  pdf.line(centerX - 2.4, centerY + 3.8, centerX + 0.3, centerY + 1.4);
+  pdf.line(centerX + 0.3, centerY + 1.4, centerX + 2.9, centerY + 3.4);
+  pdf.line(centerX + 2.9, centerY + 3.4, centerX + 5.6, centerY + 1.9);
+
+  pdf.setTextColor(0, 0, 0);
+};
+
+const addReserveFooterStamp = (pdf: jsPDF) => {
+  const pageCount = pdf.getNumberOfPages();
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const generatedDate = new Date().toLocaleDateString("en-US", { dateStyle: "medium" });
+
+  for (let i = 1; i <= pageCount; i += 1) {
+    pdf.setPage(i);
+    pdf.setDrawColor(220, 220, 220);
+    pdf.setLineWidth(0.5);
+    pdf.line(16, pageHeight - 18, pageWidth - 16, pageHeight - 18);
+    pdf.setFontSize(8);
+    pdf.setTextColor(90, 90, 90);
+    pdf.text("SMART MONEY CASH FLOW - Reserve Account Management System", 16, pageHeight - 12);
+    pdf.text(`Page ${i} of ${pageCount}`, pageWidth / 2, pageHeight - 12, { align: "center" });
+    pdf.text(generatedDate, pageWidth - 50, pageHeight - 12, { align: "right" });
+    drawSmcfStampObject(pdf, pageWidth - 22, pageHeight - 10.5);
+    pdf.setTextColor(0, 0, 0);
+  }
+};
+
 const ReserveAccountTab = () => {
   const [summary, setSummary] = useState<any>(null);
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -379,10 +434,7 @@ const ReserveAccountTab = () => {
           pdf.text(`Health Change: ${healthChange >= 0 ? '+' : ''}${healthChange.toFixed(1)} points`, 20, yPos);
         }
 
-        // Footer
-        pdf.setFontSize(8);
-        pdf.setTextColor(128, 128, 128);
-        pdf.text("SMART MONEY CASH FLOW - Reserve Account Management System", pageWidth / 2, 285, { align: "center" });
+        addReserveFooterStamp(pdf);
 
         // Download PDF
         pdf.save(`reserve-report-${new Date().toISOString().split("T")[0]}.pdf`);

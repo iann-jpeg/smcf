@@ -7,6 +7,7 @@ import API_BASE from '@/lib/api';
 import { authService } from '@/lib/authService';
 import { useState, useEffect } from 'react';
 import smcfLogo from '@/assets/newsmcflogo.png';
+import { getSmcfPrintStampMarkup, getSmcfPrintStampStyles } from '@/lib/printStamp';
 
 const ReportsTab = () => {
   const { toast } = useToast();
@@ -83,6 +84,7 @@ const ReportsTab = () => {
     .footer { margin-top: 40px; text-align: center; color: #666; font-size: 12px; border-top: 2px solid #e5e7eb; padding-top: 20px; }
     .progress-bar { background: #e5e7eb; height: 20px; border-radius: 10px; overflow: hidden; margin: 10px 0; }
     .progress-fill { background: #2563eb; height: 100%; transition: width 0.3s; }
+${getSmcfPrintStampStyles()}
   </style>
 </head>
 <body>
@@ -222,6 +224,7 @@ const ReportsTab = () => {
     <p>Digital Table Banking Platform | Automated Contributions | Secure Transactions</p>
     <p>This report is confidential and intended for authorized personnel only.</p>
   </div>
+  ${getSmcfPrintStampMarkup()}
 </body>
 </html>
       `;
@@ -385,6 +388,7 @@ const ReportsTab = () => {
       .section { page-break-inside: avoid; }
       @page { margin: 1cm; }
     }
+${getSmcfPrintStampStyles()}
   </style>
 </head>
 <body>
@@ -766,6 +770,7 @@ const ReportsTab = () => {
       <p style="margin-top: 15px;">This report is confidential and intended for authorized personnel only.</p>
       <p style="margin-top: 5px;">© ${new Date().getFullYear()} SMCF. All rights reserved.</p>
     </div>
+    ${getSmcfPrintStampMarkup()}
   </div>
 </body>
 </html>

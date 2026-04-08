@@ -486,20 +486,20 @@ const Index = () => {
           src={landingBackground}
           alt=""
           aria-hidden="true"
-          className="absolute inset-0 z-0 h-full w-full object-cover opacity-35 blur-sm pointer-events-none"
+          className="absolute inset-0 z-0 h-full w-full object-cover opacity-60 blur-[1px] pointer-events-none"
         />
-        <div className="absolute inset-0 z-0 bg-gradient-to-br from-background/90 via-background/80 to-background/70" />
+        <div className="absolute inset-0 z-0 bg-gradient-to-br from-background/72 via-background/58 to-background/66 dark:from-background/82 dark:via-background/72 dark:to-background/78" />
         <div className="container mx-auto max-w-7xl relative z-10">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
             {/* Left side - Text content */}
-            <div className="animate-slide-in-left">
-              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-4 sm:mb-6 bg-gradient-primary bg-clip-text text-transparent">
+            <div className="animate-slide-in-left rounded-2xl border border-white/35 bg-background/35 p-4 shadow-[0_10px_30px_-18px_hsl(var(--foreground)/0.45)] backdrop-blur-[2px] sm:p-6 md:p-8">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-4 sm:mb-6 bg-gradient-primary bg-clip-text text-transparent drop-shadow-[0_4px_10px_hsl(var(--background)/0.85)]">
                 Digital Table Banking Platform for Kenya
               </h1>
-              <h2 className="text-xl sm:text-2xl md:text-3xl font-semibold mb-4 animate-fade-in-left animation-delay-200">
+              <h2 className="text-xl sm:text-2xl md:text-3xl font-semibold mb-4 animate-fade-in-left animation-delay-200 text-foreground drop-shadow-[0_2px_6px_hsl(var(--background)/0.7)]">
                 <StyledSMCF /> - Smart Moves Cash Flow
               </h2>
-              <p className="text-base sm:text-lg md:text-xl text-foreground/80 mb-6 sm:mb-8 animate-fade-in-left animation-delay-300">
+              <p className="text-base sm:text-lg md:text-xl text-foreground/90 mb-6 sm:mb-8 animate-fade-in-left animation-delay-300 drop-shadow-[0_2px_6px_hsl(var(--background)/0.7)]">
                 Kenya's #1 automated chama management system.{" "}
                 <br className="hidden sm:block" />
                 Contribute every 5 days • 3% monthly interest • Instant M-Pesa payments
@@ -521,7 +521,7 @@ const Index = () => {
               </div>
               
               {/* Trust Indicators */}
-              <div className="flex flex-wrap gap-4 sm:gap-6 text-xs sm:text-sm text-muted-foreground animate-fade-in-left animation-delay-500">
+              <div className="flex flex-wrap gap-4 sm:gap-6 text-xs sm:text-sm text-foreground/80 animate-fade-in-left animation-delay-500">
                 <div className="flex items-center gap-2 hover:text-financial-success transition-colors">
                   <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-financial-success" />
                   <span>Bank-Level Security</span>
@@ -539,41 +539,41 @@ const Index = () => {
 
             {/* Right side - Stats Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4 sm:gap-6 animate-slide-in-right">
-              <Card className="text-center hover-lift hover-glow animate-scale-in animation-delay-200">
+              <Card className="text-center hover-lift hover-glow animate-scale-in animation-delay-200 bg-background/78 backdrop-blur-sm border-white/45 dark:border-border/70 shadow-xl">
                 <CardContent className="pt-6 pb-6">
                   <div className="text-3xl sm:text-4xl md:text-5xl font-bold text-financial-success mb-3 animate-float">
                     Contribute
                   </div>
-                  <div className="text-sm sm:text-base text-muted-foreground">
+                  <div className="text-sm sm:text-base text-foreground/80">
                     Every 5 Days
                   </div>
-                  <div className="mt-3 text-xs text-muted-foreground">
+                  <div className="mt-3 text-xs text-foreground/70">
                     Consistent & Affordable Contributions
                   </div>
                 </CardContent>
               </Card>
-              <Card className="text-center hover-lift hover-glow animate-scale-in animation-delay-300">
+              <Card className="text-center hover-lift hover-glow animate-scale-in animation-delay-300 bg-background/78 backdrop-blur-sm border-white/45 dark:border-border/70 shadow-xl">
                 <CardContent className="pt-6 pb-6">
                   <div className="text-3xl sm:text-4xl md:text-5xl font-bold text-primary mb-3">
                     100%
                   </div>
-                  <div className="text-sm sm:text-base text-muted-foreground">
+                  <div className="text-sm sm:text-base text-foreground/80">
                     Automated
                   </div>
-                  <div className="mt-3 text-xs text-muted-foreground">
+                  <div className="mt-3 text-xs text-foreground/70">
                     No Manual Tracking Required
                   </div>
                 </CardContent>
               </Card>
-              <Card className="text-center hover-lift hover-glow animate-scale-in animation-delay-400 sm:col-span-2 lg:col-span-1">
+              <Card className="text-center hover-lift hover-glow animate-scale-in animation-delay-400 sm:col-span-2 lg:col-span-1 bg-background/78 backdrop-blur-sm border-white/45 dark:border-border/70 shadow-xl">
                 <CardContent className="pt-6 pb-6">
                   <div className="text-3xl sm:text-4xl md:text-5xl font-bold text-accent mb-3">
                     Secure
                   </div>
-                  <div className="text-sm sm:text-base text-muted-foreground">
+                  <div className="text-sm sm:text-base text-foreground/80">
                     M-Pesa Integration
                   </div>
-                  <div className="mt-3 text-xs text-muted-foreground">
+                  <div className="mt-3 text-xs text-foreground/70">
                     Protected & Verified Payments
                   </div>
                 </CardContent>
