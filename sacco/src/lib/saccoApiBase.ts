@@ -68,6 +68,16 @@ async function shouldRetryWrongBackend(path: string, res: Response): Promise<boo
   return false;
 }
 
+async function shouldRetryCaptchaBlocked(path: string, res: Response): Promise<boolean> {
+  const normalizedPath = normalizePath(path);
+  if (!normalizedPath.startsWith("/auth/login") || res.status !== 403) {
+    return false;
+  }
+
+  const bodyText = (await res.clone().text().catch(() => "")).toLowerCase();
+  return bodyText.includes("captcha") || bodyText.includes("verification required");
+}
+
 export function getSaccoApiBaseCandidates(): string[] {
   const envPrimary = normalizeApiBase(import.meta.env.VITE_SACCO_API_URL as string);
   const origin = getOrigin();
@@ -78,6 +88,7 @@ export function getSaccoApiBaseCandidates(): string[] {
   if (origin) {
     // Support both proxy styles used by different VPS/rewrite setups.
     candidates.push(...withApiVariants(`${origin}/sacco-api`));
+    candidates.push(...withApiVariants(`${origin}/api/sacco-api`));
     // Main backend masked proxy fallback.
     candidates.push(...withApiVariants(`${origin}/api/sacco`));
   }
@@ -121,8 +132,13 @@ export async function fetchFromSaccoApi(path: string, init?: RequestInit): Promi
     try {
       const res = await fetch(withApi(base, path), init);
       // If pathing/proxying is wrong, deployments commonly return 404/405.
-      // Also retry known wrong-backend login 400 responses.
-      if (res.status === 404 || res.status === 405 || await shouldRetryWrongBackend(path, res)) {
+      // Also retry known wrong-backend/captcha-blocked login responses.
+      if (
+        res.status === 404 ||
+        res.status === 405 ||
+        await shouldRetryWrongBackend(path, res) ||
+        await shouldRetryCaptchaBlocked(path, res)
+      ) {
         lastResponse = res;
         continue;
       }
