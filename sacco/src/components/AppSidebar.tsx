@@ -48,7 +48,23 @@ const adminNav = [
 export function AppSidebar() {
   const { user, roles, isStaff } = useAuth();
   const { setOpenMobile } = useSidebar();
+  const maskEmail = (value?: string | null): string => {
+    if (!value) return "";
+    const [local, domain] = value.split("@");
+    if (!domain) return value;
+    const maskedLocal = local.length <= 2
+      ? `${local.charAt(0)}*`
+      : `${local.charAt(0)}${"*".repeat(Math.max(1, local.length - 2))}${local.charAt(local.length - 1)}`;
+    const domainParts = domain.split(".");
+    const domainName = domainParts[0] || "";
+    const maskedDomain = domainName.length <= 2
+      ? `${domainName.charAt(0)}*`
+      : `${domainName.charAt(0)}${"*".repeat(Math.max(1, domainName.length - 2))}${domainName.charAt(domainName.length - 1)}`;
+    const suffix = domainParts.length > 1 ? `.${domainParts.slice(1).join(".")}` : "";
+    return `${maskedLocal}@${maskedDomain}${suffix}`;
+  };
   const initials = user?.email?.slice(0, 2).toUpperCase() ?? "??";
+  const safeEmail = maskEmail(user?.email || "");
   const displayRole = roles.length > 0 ? roles[0].replace("_", " ") : "member";
 
   const handleNavClick = () => {
@@ -148,7 +164,7 @@ export function AppSidebar() {
             <span className="text-xs font-semibold text-sidebar-primary">{initials}</span>
           </div>
           <div>
-            <p className="text-sm font-medium text-sidebar-foreground truncate max-w-[140px]">{user?.email}</p>
+            <p className="text-sm font-medium text-sidebar-foreground truncate max-w-[140px]">{safeEmail}</p>
             <p className="text-xs text-sidebar-foreground/50 capitalize">{displayRole}</p>
           </div>
         </div>

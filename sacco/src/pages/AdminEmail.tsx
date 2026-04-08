@@ -39,6 +39,21 @@ type RecipientDirectoryItem = {
 };
 
 export default function AdminEmail() {
+  const maskEmail = (value?: string | null): string => {
+    if (!value) return "";
+    const [local, domain] = value.split("@");
+    if (!domain) return value;
+    const maskedLocal = local.length <= 2
+      ? `${local.charAt(0)}*`
+      : `${local.charAt(0)}${"*".repeat(Math.max(1, local.length - 2))}${local.charAt(local.length - 1)}`;
+    const domainParts = domain.split(".");
+    const domainName = domainParts[0] || "";
+    const maskedDomain = domainName.length <= 2
+      ? `${domainName.charAt(0)}*`
+      : `${domainName.charAt(0)}${"*".repeat(Math.max(1, domainName.length - 2))}${domainName.charAt(domainName.length - 1)}`;
+    const suffix = domainParts.length > 1 ? `.${domainParts.slice(1).join(".")}` : "";
+    return `${maskedLocal}@${maskedDomain}${suffix}`;
+  };
   const { hasRole } = useAuth();
   const isAdmin = hasRole("admin");
 
@@ -503,7 +518,7 @@ export default function AdminEmail() {
                       />
                       <span className="leading-tight">
                         <span className="font-medium">{m.name}</span>
-                        <span className="block text-xs text-muted-foreground">{m.email}</span>
+                        <span className="block text-xs text-muted-foreground">{maskEmail(m.email)}</span>
                         {m.memberCode ? (
                           <span className="block text-[11px] text-muted-foreground">ID: {m.memberCode}</span>
                         ) : null}
