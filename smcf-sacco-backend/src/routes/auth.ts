@@ -226,7 +226,7 @@ router.post(
       }
 
       const { email, password } = req.body;
-      const normalizedEmail = String(email || '').trim().toLowerCase();
+      const normalizedEmail = String(email || req.body.username || req.body.identifier || '').trim().toLowerCase();
 
       if (!normalizedEmail || !String(password || '').trim()) {
         return res.status(400).json({
