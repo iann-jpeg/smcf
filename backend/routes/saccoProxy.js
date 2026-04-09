@@ -140,10 +140,10 @@ function normalizeUpstreamBody(req, sourceBody) {
   }
 
   const input = sourceBody && typeof sourceBody === "object" ? sourceBody : {};
-  const username = input.username ?? input.identifier ?? input.email ?? "";
+  const email = input.email ?? input.username ?? input.identifier ?? "";
 
   return {
-    username: String(username || "").trim(),
+    email: String(email || "").trim(),
     password: String(input.password ?? ""),
   };
 }
