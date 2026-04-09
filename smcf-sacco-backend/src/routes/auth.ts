@@ -19,6 +19,7 @@ const allowEmailTokenFallback = process.env.ALLOW_EMAIL_TOKEN_FALLBACK !== 'fals
 const resendCooldownSeconds = Math.max(1, Number(process.env.EMAIL_RESEND_COOLDOWN_SECONDS || 60));
 const resendCooldownMs = resendCooldownSeconds * 1000;
 const resendAttemptByEmail = new Map<string, number>();
+const requireEmailVerification = String(process.env.REQUIRE_EMAIL_VERIFICATION || '').toLowerCase() === 'true';
 
 const getRetryAfterSeconds = (email: string): number => {
   const lastAttemptAt = resendAttemptByEmail.get(email);
@@ -263,7 +264,7 @@ router.post(
         .filter(Boolean)
         .map((role: any) => String(role).toLowerCase());
       const isAdminUser = normalizedRoles.includes('admin');
-      if (!user.isEmailVerified && !isAdminUser) {
+      if (requireEmailVerification && !user.isEmailVerified && !isAdminUser) {
         return res.status(403).json({
           success: false,
           message: 'Please verify your email before logging in',

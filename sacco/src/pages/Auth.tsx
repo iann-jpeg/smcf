@@ -47,9 +47,6 @@ const getLoginErrorMessage = (status: number, data: Record<string, unknown>): st
   }
 
   if (status === 403) {
-    if (/captcha|cloudflare|attention required/i.test(rawMessage)) {
-      return "Login is temporarily blocked. Please try again in a moment.";
-    }
     return rawMessage || "Login request was blocked. Please try again.";
   }
 

@@ -87,14 +87,33 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 // Rate limiting
+const isDev = process.env.NODE_ENV === 'development';
+const rateLimitWindowMs = Number(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000; // 15 minutes
+const rateLimitMaxRequests = Number(process.env.RATE_LIMIT_MAX_REQUESTS) || 100;
+const authLoginMaxRequests =
+  Number(process.env.RATE_LIMIT_AUTH_LOGIN_MAX) || (isDev ? 1000 : rateLimitMaxRequests);
+const disableAuthLoginLimiter =
+  isDev && String(process.env.RATE_LIMIT_AUTH_LOGIN_DISABLED || '').toLowerCase() === 'true';
+
+const authLoginLimiter = rateLimit({
+  windowMs: rateLimitWindowMs,
+  max: authLoginMaxRequests,
+  message: 'Too many login attempts, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => disableAuthLoginLimiter,
+});
+
 const limiter = rateLimit({
-  windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: Number(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
+  windowMs: rateLimitWindowMs,
+  max: rateLimitMaxRequests,
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => req.path === '/auth/login',
 });
 
+app.use('/api/auth/login', authLoginLimiter);
 app.use('/api/', limiter);
 
 // Health check

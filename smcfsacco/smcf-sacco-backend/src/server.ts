@@ -87,8 +87,13 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 // Rate limiting
+const isDev = process.env.NODE_ENV === 'development';
 const rateLimitWindowMs = Number(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000;
 const rateLimitMaxRequests = Number(process.env.RATE_LIMIT_MAX_REQUESTS) || 100;
+const authLoginMaxRequests =
+  Number(process.env.RATE_LIMIT_AUTH_LOGIN_MAX) || (isDev ? 1000 : rateLimitMaxRequests);
+const disableAuthLoginLimiter =
+  isDev && String(process.env.RATE_LIMIT_AUTH_LOGIN_DISABLED || '').toLowerCase() === 'true';
 
 const getClientIp = (req: Request): string => {
   const forwardedFor = req.headers['x-forwarded-for'];
@@ -107,28 +112,41 @@ const getClientIp = (req: Request): string => {
   return req.ip;
 };
 
+const rateLimitHandler = (req: Request, res: Response) => {
+  const rateLimitInfo = (req as { rateLimit?: { resetTime?: Date } }).rateLimit;
+  const resetTimeMs = rateLimitInfo?.resetTime?.getTime();
+  const retryAfterSeconds = resetTimeMs
+    ? Math.max(1, Math.ceil((resetTimeMs - Date.now()) / 1000))
+    : Math.ceil(rateLimitWindowMs / 1000);
+
+  res.status(429).json({
+    success: false,
+    message: 'Too many requests from this IP, please try again later.',
+    retryAfterSeconds,
+  });
+};
+
+const authLoginLimiter = rateLimit({
+  windowMs: rateLimitWindowMs,
+  max: authLoginMaxRequests,
+  keyGenerator: (req) => getClientIp(req),
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => disableAuthLoginLimiter,
+  handler: rateLimitHandler,
+});
+
 const limiter = rateLimit({
   windowMs: rateLimitWindowMs,
   max: rateLimitMaxRequests,
   keyGenerator: (req) => getClientIp(req),
-  skip: (req) => req.path === '/health',
+  skip: (req) => req.path === '/health' || req.path === '/auth/login',
   standardHeaders: true,
   legacyHeaders: false,
-  handler: (req, res) => {
-    const rateLimitInfo = (req as { rateLimit?: { resetTime?: Date } }).rateLimit;
-    const resetTimeMs = rateLimitInfo?.resetTime?.getTime();
-    const retryAfterSeconds = resetTimeMs
-      ? Math.max(1, Math.ceil((resetTimeMs - Date.now()) / 1000))
-      : Math.ceil(rateLimitWindowMs / 1000);
-
-    res.status(429).json({
-      success: false,
-      message: 'Too many requests from this IP, please try again later.',
-      retryAfterSeconds,
-    });
-  },
+  handler: rateLimitHandler,
 });
 
+app.use('/api/auth/login', authLoginLimiter);
 app.use('/api/', limiter);
 
 // Health check

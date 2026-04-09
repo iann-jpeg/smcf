@@ -1,5 +1,7 @@
 export const BASE = import.meta.env.VITE_SACCO_API_URL as string;
 
+const FALLBACK_BASES = ["/_/backend", "", "/sacco-api"];
+
 function normalizeBase(raw: string | undefined): string {
   const value = String(raw || "").trim().replace(/\/+$/, "");
   if (!value) return "";
@@ -23,32 +25,92 @@ function normalizeApiPath(path: string): string {
 }
 
 const saccoBase = normalizeBase(BASE);
-let activeBase = saccoBase;
+let activeBase: string | undefined = saccoBase || undefined;
 
 export function getSaccoApiBaseCandidates(): string[] {
-  return saccoBase ? [saccoBase] : [];
+  const candidates: string[] = [];
+  const addCandidate = (base: string) => {
+    if (!candidates.includes(base)) {
+      candidates.push(base);
+    }
+  };
+
+  if (saccoBase) {
+    addCandidate(saccoBase);
+  }
+
+  for (const base of FALLBACK_BASES) {
+    addCandidate(normalizeBase(base));
+  }
+
+  return candidates;
 }
 
 export function getPreferredSaccoApiBase(): string {
-  return activeBase || saccoBase;
+  if (activeBase !== undefined) {
+    return activeBase;
+  }
+  const [firstCandidate] = getSaccoApiBaseCandidates();
+  return firstCandidate ?? "";
 }
 
 export function getActiveSaccoApiBase(): string {
   return getPreferredSaccoApiBase();
 }
 
+function buildSaccoApiUrl(base: string, path: string): string {
+  const apiPath = normalizeApiPath(path);
+  return base ? `${base}${apiPath}` : apiPath;
+}
+
+async function shouldTryNextBase(res: Response): Promise<boolean> {
+  if (res.status === 404 || res.status === 405) {
+    return true;
+  }
+
+  if (res.status === 403) {
+    const contentType = res.headers.get("content-type") || "";
+    if (contentType.includes("text/html")) {
+      const body = await res.clone().text();
+      if (/cloudflare|attention required|captcha/i.test(body)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 export async function fetchFromSaccoApi(path: string, init?: RequestInit): Promise<Response> {
-  const base = getPreferredSaccoApiBase();
-  if (!base) {
+  const candidates = getSaccoApiBaseCandidates();
+  if (candidates.length === 0) {
     throw new Error("VITE_SACCO_API_URL is not configured");
   }
 
-  const url = `${base}${normalizeApiPath(path)}`;
-  const res = await fetch(url, init);
-  if (res.ok) {
+  let lastResponse: Response | undefined;
+
+  for (const base of candidates) {
+    const url = buildSaccoApiUrl(base, path);
+    const res = await fetch(url, init);
+    if (res.ok) {
+      activeBase = base;
+      return res;
+    }
+
+    if (await shouldTryNextBase(res)) {
+      lastResponse = res;
+      continue;
+    }
+
     activeBase = base;
+    return res;
   }
-  return res;
+
+  if (lastResponse) {
+    return lastResponse;
+  }
+
+  throw new Error("Unable to reach SACCO API");
 }
 
 export function getSaccoHealthProbeUrls(): string[] {
