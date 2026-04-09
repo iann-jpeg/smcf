@@ -235,7 +235,12 @@ router.post(
         });
       }
 
-      const user = await User.findOne({ email: normalizedEmail }).select('+password');
+      const user = await User.findOne({
+        $or: [
+          { email: normalizedEmail },
+          { username: normalizedEmail }
+        ]
+      }).select('+password');
 
       if (!user) {
         return res.status(401).json({
