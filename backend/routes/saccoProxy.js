@@ -141,9 +141,12 @@ function normalizeUpstreamBody(req, sourceBody) {
 
   const input = sourceBody && typeof sourceBody === "object" ? sourceBody : {};
   const email = input.email ?? input.username ?? input.identifier ?? "";
+  const normalizedIdentity = String(email || "").trim();
 
   return {
-    email: String(email || "").trim(),
+    email: normalizedIdentity,
+    username: normalizedIdentity,
+    identifier: normalizedIdentity,
     password: String(input.password ?? ""),
   };
 }
