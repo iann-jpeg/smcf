@@ -8,6 +8,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "seed": "tsx src/scripts/seedData.ts",
+    "reset:loans": "tsx src/scripts/resetLoans.ts",
     "lint": "eslint src --ext .ts",
     "test": "jest"
   },
