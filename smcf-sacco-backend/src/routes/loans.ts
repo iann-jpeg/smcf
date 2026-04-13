@@ -7,6 +7,8 @@ import Member from '../models/Member';
 import RepaymentRecord from '../models/RepaymentRecord';
 import SystemConfig from '../models/SystemConfig';
 import User from '../models/User';
+import Shareholder from '../models/Shareholder';
+import Transaction from '../models/Transaction';
 import { protect, authorize, AuthRequest } from '../middleware/auth';
 import { auditLog } from '../middleware/auditLog';
 import { notifyMember, notifyStaff } from '../utils/notify';
@@ -133,6 +135,58 @@ router.get('/:id', protect, async (req, res, next) => {
     next(error);
   }
 });
+
+// @route   DELETE /api/loans/:id
+// @desc    Delete a loan and related records (admin only)
+// @access  Private (Admin only)
+router.delete(
+  '/:id',
+  protect,
+  authorize('admin'),
+  auditLog('loans', 'delete'),
+  async (req: AuthRequest, res, next) => {
+    try {
+      const loan = await Loan.findById(req.params.id);
+      if (!loan) {
+        return res.status(404).json({ success: false, message: 'Loan not found' });
+      }
+
+      const loanId = loan._id;
+      const memberId = loan.memberId;
+
+      await Promise.all([
+        Loan.deleteOne({ _id: loanId }),
+        LoanApproval.deleteMany({ loanId }),
+        LoanGuarantor.deleteMany({ loanId }),
+        RepaymentRecord.deleteMany({ loanId }),
+        Transaction.deleteMany({ loanId: String(loanId) }),
+      ]);
+
+      const [remainingBalanceAgg, memberDoc] = await Promise.all([
+        Loan.aggregate([
+          { $match: { memberId, status: { $in: ['active', 'disbursed'] } } },
+          { $group: { _id: null, total: { $sum: '$balance' } } }
+        ]),
+        Member.findById(memberId).select('memberId').lean(),
+      ]);
+
+      const remainingBalance = remainingBalanceAgg[0]?.total || 0;
+      await Member.findByIdAndUpdate(memberId, { $set: { loanBalance: remainingBalance } });
+
+      const memberCode = (memberDoc as any)?.memberId;
+      if (memberCode) {
+        await Shareholder.findOneAndUpdate(
+          { memberId: memberCode },
+          { $set: { loanBalance: remainingBalance } }
+        );
+      }
+
+      res.json({ success: true, message: 'Loan deleted', data: { id: String(loanId) } });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 // @route   GET /api/loans/:id/approvals
 // @desc    Get approvals for a loan
