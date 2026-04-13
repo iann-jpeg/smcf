@@ -1,5 +1,9 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { Plus, Gavel, CreditCard, Loader2, CheckCircle2, Trash2 } from "lucide-react";
 import { useLoans } from "@/hooks/useLoans";
+import { useAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -10,17 +14,20 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Plus, Gavel, CreditCard, Loader2, CheckCircle2 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 
 function statusBadge(status: string) {
   const map: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-    pending: "outline", approved: "secondary", disbursed: "secondary",
-    repaying: "default", cleared: "default", defaulted: "destructive", rejected: "destructive",
-    active: "default", completed: "default",
+    pending: "outline",
+    approved: "secondary",
+    disbursed: "secondary",
+    repaying: "default",
+    cleared: "default",
+    defaulted: "destructive",
+    rejected: "destructive",
+    active: "default",
+    completed: "default",
   };
   return map[status] || "secondary";
 }
@@ -32,23 +39,25 @@ function riskBadge(risk: string) {
 }
 
 const PAYMENT_METHODS = [
-  { value: "cash",          label: "Cash" },
+  { value: "cash", label: "Cash" },
   { value: "bank_transfer", label: "Bank Transfer" },
-  { value: "mpesa",         label: "M-Pesa (Manual)" },
-  { value: "cheque",        label: "Cheque" },
+  { value: "mpesa", label: "M-Pesa (Manual)" },
+  { value: "cheque", label: "Cheque" },
 ];
 
 export default function Loans() {
   const navigate = useNavigate();
   const { data: loans = [], isLoading } = useLoans();
+  const { hasRole } = useAuth();
   const qc = useQueryClient();
 
-  const [payLoan,  setPayLoan]  = useState<any | null>(null);
-  const [amount,   setAmount]   = useState("");
-  const [method,   setMethod]   = useState("cash");
-  const [note,     setNote]     = useState("");
-  const [saving,   setSaving]   = useState(false);
-  const [success,  setSuccess]  = useState(false);
+  const [payLoan, setPayLoan] = useState<any | null>(null);
+  const [amount, setAmount] = useState("");
+  const [method, setMethod] = useState("cash");
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   function openPayDialog(loan: any) {
     setPayLoan(loan);
@@ -65,8 +74,14 @@ export default function Loans() {
 
   async function handleRecordPayment() {
     const num = Number(amount);
-    if (!num || num < 1) { toast.error("Enter a valid amount"); return; }
-    if (num > Number(payLoan.balance)) { toast.error(`Amount exceeds outstanding balance KES ${Number(payLoan.balance).toLocaleString()}`); return; }
+    if (!num || num < 1) {
+      toast.error("Enter a valid amount");
+      return;
+    }
+    if (num > Number(payLoan.balance)) {
+      toast.error(`Amount exceeds outstanding balance KES ${Number(payLoan.balance).toLocaleString()}`);
+      return;
+    }
     setSaving(true);
     try {
       await api.post(`/repayments/loan/${payLoan.id}/pay`, { amount: num, method, note });
@@ -82,6 +97,30 @@ export default function Loans() {
     }
   }
 
+  async function handleDeleteLoan(loan: any) {
+    if (!hasRole("admin")) return;
+    const label = loan?.loan_number ? `Loan ${loan.loan_number}` : "this loan";
+    const confirmed = window.confirm(`Delete ${label}? This cannot be undone.`);
+    if (!confirmed) return;
+
+    setDeletingId(String(loan.id));
+    try {
+      await api.del(`/loans/${loan.id}`);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["loans"] }),
+        qc.invalidateQueries({ queryKey: ["members"] }),
+        qc.invalidateQueries({ queryKey: ["repayments"] }),
+        qc.invalidateQueries({ queryKey: ["transactions"] }),
+        qc.invalidateQueries({ queryKey: ["dashboard-stats"] }),
+      ]);
+      toast.success("Loan deleted successfully.");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to delete loan");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -90,10 +129,12 @@ export default function Loans() {
           <p className="text-muted-foreground text-sm">{loans.length} total loans</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="gap-2" onClick={() => navigate("/loans/approvals")}>
+          <Button variant="outline" className="gap-2" onClick={() => navigate("/loans/approvals")}
+            >
             <Gavel className="h-4 w-4" /> Approvals
           </Button>
-          <Button className="gap-2" onClick={() => navigate("/loans/apply")}>
+          <Button className="gap-2" onClick={() => navigate("/loans/apply")}
+            >
             <Plus className="h-4 w-4" /> New Loan Application
           </Button>
         </div>
@@ -103,10 +144,14 @@ export default function Loans() {
         <CardContent className="pt-6">
           {isLoading ? (
             <div className="space-y-3">
-              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
             </div>
           ) : loans.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">No loans found. Create your first loan application to get started.</p>
+            <p className="text-center text-muted-foreground py-8">
+              No loans found. Create your first loan application to get started.
+            </p>
           ) : (
             <Table>
               <TableHeader>
@@ -136,17 +181,31 @@ export default function Loans() {
                     <TableCell><Badge variant={riskBadge(loan.risk_rating ?? "medium")}>{loan.risk_rating ?? "medium"}</Badge></TableCell>
                     <TableCell><Badge variant={statusBadge(loan.status)}>{loan.status}</Badge></TableCell>
                     <TableCell>
-                      {["active", "disbursed", "repaying"].includes(loan.status) && Number(loan.balance) > 0 && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="gap-1.5 text-xs border-blue-400 text-blue-600 hover:bg-blue-50 hover:text-blue-700 whitespace-nowrap"
-                          onClick={() => openPayDialog(loan)}
-                        >
-                          <CreditCard className="h-3.5 w-3.5" />
-                          Record Payment
-                        </Button>
-                      )}
+                      <div className="flex flex-wrap gap-2">
+                        {['active', 'disbursed', 'repaying'].includes(loan.status) && Number(loan.balance) > 0 && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5 text-xs border-blue-400 text-blue-600 hover:bg-blue-50 hover:text-blue-700 whitespace-nowrap"
+                            onClick={() => openPayDialog(loan)}
+                          >
+                            <CreditCard className="h-3.5 w-3.5" />
+                            Record Payment
+                          </Button>
+                        )}
+                        {hasRole("admin") && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5 text-xs border-red-400 text-red-600 hover:bg-red-50 hover:text-red-700 whitespace-nowrap"
+                            onClick={() => handleDeleteLoan(loan)}
+                            disabled={deletingId === String(loan.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            {deletingId === String(loan.id) ? "Deleting…" : "Delete Loan"}
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -212,7 +271,15 @@ export default function Loans() {
                   <Label htmlFor="admin-pay-amount">Amount (KES)</Label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm select-none">KES</span>
-                    <Input id="admin-pay-amount" type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} className="pl-12 text-base font-bold" placeholder="0" />
+                    <Input
+                      id="admin-pay-amount"
+                      type="number"
+                      min={1}
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      className="pl-12 text-base font-bold"
+                      placeholder="0"
+                    />
                   </div>
                 </div>
 
@@ -230,7 +297,13 @@ export default function Loans() {
 
                 <div className="space-y-1.5">
                   <Label htmlFor="admin-pay-note">Note / Reference (optional)</Label>
-                  <Textarea id="admin-pay-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Bank ref #001234, collected by treasurer..." rows={2} />
+                  <Textarea
+                    id="admin-pay-note"
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    placeholder="e.g. Bank ref #001234, collected by treasurer..."
+                    rows={2}
+                  />
                 </div>
               </div>
 
