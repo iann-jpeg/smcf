@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Plus, Gavel, CreditCard, Loader2, CheckCircle2, ArrowRight, Download, History } from "lucide-react";
+import { Plus, Gavel, CreditCard, Loader2, CheckCircle2, ArrowRight, Download, History, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -70,7 +70,7 @@ function getLoanProgress(loan: any) {
 
 export default function Loans() {
   const navigate = useNavigate();
-  const { isStaff } = useAuth();
+  const { isStaff, hasRole } = useAuth();
   const { data: loans = [], isLoading } = useLoans();
   const qc = useQueryClient();
 
@@ -82,6 +82,7 @@ export default function Loans() {
   const [success,  setSuccess]  = useState(false);
   const [disbursing, setDisbursing] = useState(false);
   const [historyLoan, setHistoryLoan] = useState<any | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const { data: historyData, isLoading: historyLoading } = useQuery({
     queryKey: ["repayment-history", historyLoan?.id],
@@ -138,6 +139,29 @@ export default function Loans() {
       toast.error(err.message || "Failed to record payment");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDeleteLoan(loan: any) {
+    if (!hasRole("admin")) return;
+    const label = loan?.loan_number ? `Loan ${loan.loan_number}` : "this loan";
+    if (!confirm(`Delete ${label}? This cannot be undone.`)) return;
+
+    setDeletingId(String(loan.id));
+    try {
+      await api.del(`/loans/${loan.id}`);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["loans"] }),
+        qc.invalidateQueries({ queryKey: ["members"] }),
+        qc.invalidateQueries({ queryKey: ["repayments"] }),
+        qc.invalidateQueries({ queryKey: ["transactions"] }),
+        qc.invalidateQueries({ queryKey: ["dashboard-stats"] }),
+      ]);
+      toast.success("Loan deleted successfully.");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to delete loan");
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -262,6 +286,18 @@ export default function Loans() {
                           >
                             <CreditCard className="h-3.5 w-3.5" />
                             Record Payment
+                          </Button>
+                        )}
+                        {hasRole("admin") && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5 text-xs border-red-400 text-red-600 hover:bg-red-50 hover:text-red-700 whitespace-nowrap"
+                            onClick={() => handleDeleteLoan(loan)}
+                            disabled={deletingId === String(loan.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            {deletingId === String(loan.id) ? "Deleting..." : "Delete Loan"}
                           </Button>
                         )}
                         <Button
