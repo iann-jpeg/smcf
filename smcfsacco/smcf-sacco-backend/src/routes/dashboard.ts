@@ -36,6 +36,10 @@ router.get('/stats', protect, authorize('admin', 'credit_officer', 'treasurer', 
       const totalDisbursed = await Loan.countDocuments({ status: { $in: ['disbursed', 'active', 'completed', 'defaulted'] } });
       const defaultedLoans = await Loan.countDocuments({ status: 'defaulted' });
       const pendingLoans = await Loan.countDocuments({ status: 'pending' });
+      const recentTransactions = await Transaction.find()
+        .populate('memberId', 'name memberId')
+        .sort({ processedAt: -1 })
+        .limit(5);
 
       return res.json({
         success: true,
@@ -49,6 +53,7 @@ router.get('/stats', protect, authorize('admin', 'credit_officer', 'treasurer', 
           pendingLoans,
           defaultRate: totalDisbursed > 0 ? Math.round((defaultedLoans / totalDisbursed) * 100 * 10) / 10 : 0,
           activeGuarantees: await LoanGuarantor.countDocuments(),
+          recentTransactions,
         }
       });
     }
