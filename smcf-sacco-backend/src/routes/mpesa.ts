@@ -22,6 +22,7 @@ import { protect, authorize, AuthRequest } from '../middleware/auth';
 import { processRepayment } from './repayments';
 import { notifyStaff } from '../utils/notify';
 import { recalculateMemberRiskScore } from '../utils/riskScore';
+import { recordSavingsDeposit } from '../utils/depositLedger';
 
 const router = Router();
 
@@ -203,16 +204,15 @@ async function pollSACCOPayment(
       const confirmedAmount = paidAmt || amount;
       try {
         if (type === 'deposit') {
-          // Update placeholder transaction → completed
-          await Transaction.findByIdAndUpdate(pendingTxnId, {
-            status: 'completed',
-            mpesaRef: mpesaReceiptNumber,
+          await settlePendingDeposit({
+            checkoutRequestId,
+            memberId,
             amount: confirmedAmount,
-            description: `M-Pesa Savings Deposit — Ref: ${mpesaReceiptNumber} — ${phone}`,
+            phone,
+            mpesaRef: mpesaReceiptNumber,
+            sourceLabel: 'M-Pesa STK',
             processedAt: new Date(),
-            depositProcessed: true,
           });
-          await Member.findByIdAndUpdate(memberId, { $inc: { savings: confirmedAmount } });
           const d = pendingDeposits.get(checkoutRequestId);
           if (d) { d.status = 'success'; d.mpesaRef = mpesaReceiptNumber; d.amount = confirmedAmount; pendingDeposits.set(checkoutRequestId, d); }
 
@@ -566,6 +566,72 @@ async function settleRegistrationFeePayment(params: {
   return { updated: true, alreadyPaid: false, duplicate: false };
 }
 
+async function settlePendingDeposit(params: {
+  checkoutRequestId: string;
+  memberId: string;
+  amount: number;
+  phone?: string;
+  mpesaRef: string;
+  sourceLabel: string;
+  processedAt?: Date;
+}) {
+  const amount = Math.round(Number(params.amount));
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error('Deposit amount must be a positive number');
+  }
+
+  const processedAt = params.processedAt ?? new Date();
+  const completedTxn = await Transaction.findOne({
+    type: 'deposit',
+    mpesaRef: params.mpesaRef,
+    status: 'completed',
+  }).select('_id checkoutRequestId depositProcessed');
+
+  const pendingTxn = await Transaction.findOne({
+    checkoutRequestId: params.checkoutRequestId,
+    type: 'deposit',
+  }).select('_id status depositProcessed');
+
+  if (completedTxn) {
+    if (pendingTxn && String(pendingTxn._id) !== String(completedTxn._id) && pendingTxn.status !== 'completed') {
+      await Transaction.findByIdAndUpdate(pendingTxn._id, {
+        status: 'completed',
+        mpesaRef: params.mpesaRef,
+        amount,
+        description: `M-Pesa Savings Deposit — Ref: ${params.mpesaRef} — ${params.phone || 'unknown'}`,
+        processedAt,
+        depositProcessed: true,
+      });
+    }
+    return { applied: false, duplicate: true };
+  }
+
+  if (!pendingTxn) {
+    throw new Error('Pending deposit transaction not found');
+  }
+
+  await Transaction.findByIdAndUpdate(pendingTxn._id, {
+    status: 'completed',
+    mpesaRef: params.mpesaRef,
+    amount,
+    description: `M-Pesa Savings Deposit — Ref: ${params.mpesaRef} — ${params.phone || 'unknown'}`,
+    processedAt,
+    depositProcessed: true,
+  });
+
+  await recordSavingsDeposit({
+    memberId: params.memberId,
+    amount,
+    reference: params.mpesaRef,
+    sourceLabel: params.sourceLabel,
+    processedAt,
+    note: params.phone ? `Phone: ${params.phone}` : undefined,
+    notificationPath: '/accounts',
+  });
+
+  return { applied: true, duplicate: false };
+}
+
 async function recordDeposit(memberId: string, amount: number, phone: string, mpesaRef: string) {
   const count = await Transaction.countDocuments();
   const transactionRef = `TXN${new Date().getFullYear()}${String(count + 1).padStart(8, '0')}`;
@@ -578,17 +644,16 @@ async function recordDeposit(memberId: string, amount: number, phone: string, mp
     status: 'completed',
     createdBy: null,
   });
-  await Member.findByIdAndUpdate(memberId, { $inc: { savings: amount } });
 
-  const member = await Member.findById(memberId).select('name memberId');
-  const displayName = member?.name || member?.memberId || 'Member';
-
-  void notifyStaff(
-    'Incoming Deposit Received',
-    `${displayName} deposited KES ${Number(amount).toLocaleString()} via M-Pesa. Ref: ${mpesaRef}.`,
-    'info',
-    '/accounts'
-  );
+  await recordSavingsDeposit({
+    memberId,
+    amount,
+    reference: mpesaRef,
+    sourceLabel: 'M-Pesa',
+    processedAt: new Date(),
+    note: phone ? `Phone: ${phone}` : undefined,
+    notificationPath: '/accounts',
+  });
 }
 
 // ─── GET /api/mpesa/provider-diagnostics ─────────────────────────────────────
@@ -1002,21 +1067,47 @@ router.post('/callback', async (req: Request, res: Response) => {
 
     const mpesaRef = get('MpesaReceiptNumber') as string || `MPESA${Date.now()}`;
     const paidAmt  = Number(get('Amount'));
+    const depositTxn = await Transaction.findOne({ checkoutRequestId: CheckoutRequestID, type: 'deposit' })
+      .select('memberId amount description');
 
     // ── Savings deposit ──────────────────────────────────────────────────
     const deposit = pendingDeposits.get(CheckoutRequestID);
-    if (deposit) {
+    if (deposit || depositTxn) {
       if (ResultCode !== 0) {
-        deposit.status    = 'failed';
-        deposit.resultDesc = ResultDesc || 'Payment cancelled or failed';
+        if (deposit) {
+          deposit.status = 'failed';
+          deposit.resultDesc = ResultDesc || 'Payment cancelled or failed';
+          pendingDeposits.set(CheckoutRequestID, deposit);
+        }
+        await Transaction.findOneAndUpdate(
+          { checkoutRequestId: CheckoutRequestID, type: 'deposit' },
+          { status: 'failed', processedAt: new Date() }
+        ).catch(() => {});
       } else {
-        const amt = paidAmt || deposit.amount;
-        await recordDeposit(deposit.memberId, amt, deposit.phone, mpesaRef);
-        deposit.status   = 'success';
-        deposit.mpesaRef = mpesaRef;
-        deposit.amount   = amt;
+        const amt = paidAmt || deposit?.amount || Number(depositTxn?.amount) || 0;
+        const memberId = deposit?.memberId || String(depositTxn?.memberId || '');
+        const phone = deposit?.phone || '';
+        if (!memberId) {
+          throw new Error('Unable to resolve member for deposit callback');
+        }
+
+        await settlePendingDeposit({
+          checkoutRequestId: CheckoutRequestID,
+          memberId,
+          amount: amt,
+          phone,
+          mpesaRef,
+          sourceLabel: 'M-Pesa STK',
+          processedAt: new Date(),
+        });
+
+        if (deposit) {
+          deposit.status = 'success';
+          deposit.mpesaRef = mpesaRef;
+          deposit.amount = amt;
+          pendingDeposits.set(CheckoutRequestID, deposit);
+        }
       }
-      pendingDeposits.set(CheckoutRequestID, deposit);
       return;
     }
 
@@ -1436,9 +1527,26 @@ router.post('/payment-confirm', protect, async (req: AuthRequest, res: Response,
           status: 'completed',
           description: `M-Pesa Savings Deposit via Lipia Online — Member confirmed`,
           processedAt: new Date(),
+          depositProcessed: true,
         }
       );
-      await Member.findByIdAndUpdate(pending.memberId, { $inc: { savings: pending.amount } });
+      try {
+        await recordSavingsDeposit({
+          memberId: pending.memberId,
+          amount: pending.amount,
+          reference: mpesaRef,
+          sourceLabel: 'Lipia payment link',
+          processedAt: new Date(),
+          note: `Transaction ${transactionRef}`,
+          notificationPath: '/accounts',
+        });
+      } catch (depositError) {
+        await Transaction.findOneAndUpdate(
+          { transactionRef },
+          { status: 'failed', processedAt: new Date() }
+        ).catch(() => {});
+        throw depositError;
+      }
 
     } else if (pending.type === 'loan_repay' && pending.loanId) {
       // Delete the pending placeholder transaction — processRepayment creates the real one

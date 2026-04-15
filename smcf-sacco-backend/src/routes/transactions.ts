@@ -8,6 +8,7 @@ import { auditLog } from '../middleware/auditLog';
 import { processRepayment } from './repayments';
 import { notifyMember } from '../utils/notify';
 import { recalculateMemberRiskScore } from '../utils/riskScore';
+import { recordSavingsDeposit } from '../utils/depositLedger';
 
 const router = Router();
 
@@ -103,28 +104,41 @@ router.post(
         amount,
         description,
         status: 'completed',
+        depositProcessed: type === 'deposit',
         createdBy: req.userId
       });
 
       // Update member balance based on transaction type
-      const updateField: any = {};
       if (type === 'deposit') {
-        updateField.$inc = { savings: amount };
+        try {
+          await recordSavingsDeposit({
+            memberId: String(memberId),
+            amount: Number(amount),
+            reference: transactionRef,
+            sourceLabel: 'manual deposit',
+            processedAt: new Date(),
+            note: description ? String(description).trim() : undefined,
+            notificationPath: '/accounts',
+          });
+        } catch (depositError) {
+          await Transaction.findByIdAndUpdate(transaction._id, {
+            status: 'failed',
+            processedAt: new Date(),
+          }).catch(() => {});
+          throw depositError;
+        }
       } else if (type === 'withdrawal') {
-        updateField.$inc = { savings: -amount };
+        await Member.findByIdAndUpdate(memberId, { $inc: { savings: -amount } });
       } else if (type === 'share_purchase') {
-        updateField.$inc = { shares: amount };
+        await Member.findByIdAndUpdate(memberId, { $inc: { shares: amount } });
       } else if (type === 'savings_interest') {
-        updateField.$inc = { savings: amount };
+        await Member.findByIdAndUpdate(memberId, { $inc: { savings: amount } });
       } else if (type === 'loan_repayment') {
-        updateField.$inc = { loanBalance: -amount };
+        await Member.findByIdAndUpdate(memberId, { $inc: { loanBalance: -amount } });
       }
 
-      if (Object.keys(updateField).length > 0) {
-        await Member.findByIdAndUpdate(memberId, updateField);
-        if (type === 'share_purchase') {
-          await recalculateMemberRiskScore(String(memberId));
-        }
+      if (type === 'share_purchase') {
+        await recalculateMemberRiskScore(String(memberId));
       }
 
       res.status(201).json({
@@ -187,13 +201,30 @@ router.patch(
       }
 
       if (txn.type === 'deposit') {
-        // Update savings balance
-        await Member.findByIdAndUpdate(txn.memberId, { $inc: { savings: txn.amount } });
         await Transaction.findByIdAndUpdate(txn._id, {
           status: 'completed',
           processedAt: new Date(),
+          depositProcessed: true,
           description: txn.description?.replace('Pending admin confirmation', `Confirmed by admin — ${new Date().toLocaleDateString('en-KE')}`),
         });
+
+        try {
+          await recordSavingsDeposit({
+            memberId: String(txn.memberId),
+            amount: Number(txn.amount),
+            reference: txn.transactionRef,
+            sourceLabel: 'admin confirmation',
+            processedAt: new Date(),
+            note: 'Pending payment confirmed by staff',
+            notificationPath: '/accounts',
+          });
+        } catch (depositError) {
+          await Transaction.findByIdAndUpdate(txn._id, {
+            status: 'failed',
+            processedAt: new Date(),
+          }).catch(() => {});
+          throw depositError;
+        }
 
         // Notify the member their deposit was confirmed
         notifyMember(
