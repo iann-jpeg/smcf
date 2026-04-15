@@ -85,7 +85,7 @@ export function ShareSubscriptionDialog({ open, onClose, memberId, memberPhone, 
       } catch {
         // transient network issue, keep polling
       }
-    }, 3000);
+    }, 10_000);
 
     timeoutRef.current = setTimeout(() => {
       stopPolling();

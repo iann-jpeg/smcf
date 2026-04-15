@@ -227,7 +227,7 @@ export default function MyAccount() {
         } catch {
           // keep polling on transient errors
         }
-      }, 3000);
+      }, 10_000);
 
       regFeeTimeoutRef.current = setTimeout(() => {
         stopRegFeePolling();

@@ -74,7 +74,7 @@ const extractList = <T,>(res: unknown): T[] => {
 };
 
 function ProtectedRoutes() {
-  const { user, loading } = useAuth();
+  const { user, loading, isStaff } = useAuth();
   const queryClient = useQueryClient();
 
   useConnectivityNotifications(!!user);
@@ -84,7 +84,6 @@ function ProtectedRoutes() {
   // in-flight before the user even clicks the Dashboard link.
   useEffect(() => {
     if (!user) return;
-    queryClient.prefetchQuery({ queryKey: DASHBOARD_STATS_KEY, queryFn: fetchDashboardStats });
     queryClient.prefetchQuery({
       queryKey: ["notifications"],
       queryFn: async () => {
@@ -93,7 +92,10 @@ function ProtectedRoutes() {
         return arr.map(normalizeNotification);
       },
     });
-  }, [user, queryClient]);
+    if (isStaff) {
+      queryClient.prefetchQuery({ queryKey: DASHBOARD_STATS_KEY, queryFn: fetchDashboardStats });
+    }
+  }, [user, isStaff, queryClient]);
 
   if (loading) {
     return (

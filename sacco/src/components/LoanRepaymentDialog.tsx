@@ -82,7 +82,7 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
       } catch {
         // network hiccup — keep polling
       }
-    }, 3000);
+    }, 10_000);
 
     timeoutRef.current = setTimeout(() => {
       stopPolling();
