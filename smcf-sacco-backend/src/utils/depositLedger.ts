@@ -17,6 +17,27 @@ function getSavingsHistoryMonthKey(date = new Date()): string {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)).toISOString();
 }
 
+async function upsertSavingsHistory(memberId: string, month: string, amount: number) {
+  try {
+    return await SavingsHistory.findOneAndUpdate(
+      { memberId, month },
+      { $inc: { amount } },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+  } catch (error: any) {
+    if (error?.code !== 11000) {
+      throw error;
+    }
+
+    await SavingsHistory.updateOne(
+      { memberId, month },
+      { $inc: { amount } }
+    );
+
+    return SavingsHistory.findOne({ memberId, month });
+  }
+}
+
 export async function recordSavingsDeposit(params: RecordSavingsDepositParams) {
   const amount = Math.round(Number(params.amount));
   if (!Number.isFinite(amount) || amount <= 0) {
@@ -35,11 +56,7 @@ export async function recordSavingsDeposit(params: RecordSavingsDepositParams) {
   }
 
   const month = getSavingsHistoryMonthKey(processedAt);
-  const savingsHistory = await SavingsHistory.findOneAndUpdate(
-    { memberId: params.memberId, month },
-    { $inc: { amount } },
-    { new: true, upsert: true, setDefaultsOnInsert: true }
-  );
+  const savingsHistory = await upsertSavingsHistory(params.memberId, month, amount);
 
   const memberLabel = (member as any)?.name || (member as any)?.memberId || 'Member';
   const noteSuffix = params.note ? ` ${params.note}` : '';

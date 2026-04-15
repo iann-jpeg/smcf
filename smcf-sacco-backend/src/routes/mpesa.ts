@@ -15,7 +15,6 @@
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
-import { randomUUID } from 'node:crypto';
 import Transaction from '../models/Transaction';
 import Member from '../models/Member';
 import Loan from '../models/Loan';
@@ -24,6 +23,7 @@ import { processRepayment } from './repayments';
 import { notifyStaff } from '../utils/notify';
 import { recalculateMemberRiskScore } from '../utils/riskScore';
 import { recordSavingsDeposit } from '../utils/depositLedger';
+import { createTransactionRef } from '../utils/transactionRef';
 
 const router = Router();
 
@@ -103,14 +103,6 @@ setInterval(() => {
   }
 }, 10 * 60 * 1000);
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-function createTransactionRef(): string {
-  const year = new Date().getFullYear();
-  const suffix = randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase();
-  return `TXN${year}${suffix}`;
-}
-
 /** Query Lipia Online for the current status of an STK push by its CheckoutRequestID / reference */
 async function queryLipiaStatus(checkoutRequestId: string): Promise<{
   success: boolean;
@@ -167,11 +159,6 @@ async function queryLipiaStatus(checkoutRequestId: string): Promise<{
   }
 }
 
-/**
- * Server-side polling: queries Lipia every 3 s for up to 90 s.
- * On confirmation, auto-creates the transaction record and updates balances.
- * Updates in-memory Map so the frontend's /status poll picks it up immediately.
- */
 async function pollSACCOPayment(
   type: 'deposit' | 'loan_repay' | 'share_purchase' | 'registration_fee',
   checkoutRequestId: string,
@@ -555,8 +542,7 @@ async function settleRegistrationFeePayment(params: {
   }).select('_id');
 
   if (!existingTxn) {
-    const count = await Transaction.countDocuments();
-    const transactionRef = `TXN${new Date().getFullYear()}${String(count + 1).padStart(8, '0')}`;
+    const transactionRef = createTransactionRef();
     await Transaction.create({
       transactionRef,
       memberId,
@@ -588,43 +574,47 @@ async function settlePendingDeposit(params: {
   }
 
   const processedAt = params.processedAt ?? new Date();
-  const completedTxn = await Transaction.findOne({
+  const existingCompletedTxn = await Transaction.findOne({
     type: 'deposit',
     mpesaRef: params.mpesaRef,
     status: 'completed',
-  }).select('_id checkoutRequestId depositProcessed');
+  }).select('_id');
 
-  const pendingTxn = await Transaction.findOne({
-    checkoutRequestId: params.checkoutRequestId,
-    type: 'deposit',
-  }).select('_id status depositProcessed');
+  if (existingCompletedTxn) {
+    return { applied: false, duplicate: true };
+  }
 
-  if (completedTxn) {
-    if (pendingTxn && String(pendingTxn._id) !== String(completedTxn._id) && pendingTxn.status !== 'completed') {
-      await Transaction.findByIdAndUpdate(pendingTxn._id, {
+  const claimedTxn = await Transaction.findOneAndUpdate(
+    {
+      checkoutRequestId: params.checkoutRequestId,
+      type: 'deposit',
+      depositProcessed: { $ne: true },
+    },
+    {
+      $set: {
         status: 'completed',
         mpesaRef: params.mpesaRef,
         amount,
         description: `M-Pesa Savings Deposit — Ref: ${params.mpesaRef} — ${params.phone || 'unknown'}`,
         processedAt,
         depositProcessed: true,
-      });
-    }
-    return { applied: false, duplicate: true };
-  }
+      },
+    },
+    { new: true }
+  ).select('_id status depositProcessed');
 
-  if (!pendingTxn) {
+  if (!claimedTxn) {
+    const pendingTxn = await Transaction.findOne({
+      checkoutRequestId: params.checkoutRequestId,
+      type: 'deposit',
+    }).select('_id status depositProcessed');
+
+    if (pendingTxn) {
+      return { applied: false, duplicate: true };
+    }
+
     throw new Error('Pending deposit transaction not found');
   }
-
-  await Transaction.findByIdAndUpdate(pendingTxn._id, {
-    status: 'completed',
-    mpesaRef: params.mpesaRef,
-    amount,
-    description: `M-Pesa Savings Deposit — Ref: ${params.mpesaRef} — ${params.phone || 'unknown'}`,
-    processedAt,
-    depositProcessed: true,
-  });
 
   await recordSavingsDeposit({
     memberId: params.memberId,
@@ -638,6 +628,140 @@ async function settlePendingDeposit(params: {
 
   return { applied: true, duplicate: false };
 }
+
+// ─── GET /api/mpesa/provider-diagnostics ─────────────────────────────────────
+// Admin diagnostics endpoint: returns masked provider config to compare environments
+
+router.get('/provider-diagnostics', protect, authorize('admin', 'treasurer'), async (_req: AuthRequest, res: Response) => {
+  const apiKey = process.env.LIPIA_API_KEY;
+  const appId = process.env.LIPIA_APP_ID;
+  const appName = process.env.LIPIA_APP_NAME;
+  const callbackUrl = process.env.MPESA_CALLBACK_URL;
+  const apiUrl = process.env.LIPIA_API_URL || 'https://lipia-api.kreativelabske.com/api/v2';
+
+  return res.json({
+    success: true,
+    data: {
+      configured: {
+        apiKey: !!apiKey,
+        appId: !!appId,
+        appName: !!appName,
+        callbackUrl: !!callbackUrl,
+      },
+      values: {
+        apiUrl,
+        callbackUrl,
+        appName,
+        apiKeyMasked: maskSecret(apiKey),
+        appIdMasked: maskSecret(appId),
+      },
+      fingerprints: {
+        apiKey: envFingerprint(apiKey),
+        appId: envFingerprint(appId),
+      },
+      notes: 'Use fingerprints to confirm both services are using the same Lipia credentials without exposing secrets.',
+    },
+  });
+});
+
+// ─── POST /api/mpesa/deposit ─────────────────────────────────────────────────
+// Initiates an STK Push to the member's phone.
+// Body: { memberId: string, amount: number, phone: string }
+
+router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { memberId, amount, phone } = req.body;
+
+    if (!memberId) return res.status(400).json({ success: false, message: 'memberId is required' });
+    if (!phone)    return res.status(400).json({ success: false, message: 'Phone number is required' });
+    if (!amount || Number(amount) < 10)
+      return res.status(400).json({ success: false, message: 'Minimum deposit is KES 10' });
+
+    const mpesaPhone = normalizePhone(phone);
+    const numAmount  = Math.round(Number(amount));
+
+    // ── Simulation mode (no credentials set) ──────────────────────────────
+    const hasCredentials = !!(process.env.LIPIA_API_KEY);
+
+    if (!hasCredentials) {
+      const simId = `SIM-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+
+      pendingDeposits.set(simId, {
+        memberId,
+        amount: numAmount,
+        phone: mpesaPhone,
+        status: 'pending',
+        createdAt: Date.now(),
+      });
+
+      // Auto-complete after 5 s (simulate customer entering PIN)
+      setTimeout(async () => {
+        const d = pendingDeposits.get(simId);
+        if (!d || d.status !== 'pending') return;
+        try {
+          const ref = `SIM${Date.now()}`;
+          await recordDeposit(d.memberId, d.amount, d.phone, ref);
+          d.status = 'success';
+          d.mpesaRef = ref;
+        } catch {
+          d.status = 'failed';
+          d.resultDesc = 'Simulation internal error';
+        }
+        pendingDeposits.set(simId, d!);
+      }, 5000);
+
+      return res.json({
+        success: true,
+        simulated: true,
+        data: { checkoutRequestId: simId },
+      });
+    }
+
+    // ── Real STK Push via Lipia Online ────────────────────────────────────
+    const stkData = await sendLipiaSTK(mpesaPhone, numAmount, 'SMCF-SAVINGS', 'SMCF SACCO Savings Deposit');
+
+    // Lipia proxies the Safaricom response — CheckoutRequestID may be top-level
+    // or nested under data depending on the Lipia version.
+    const checkoutRequestId = extractCheckoutRequestId(stkData);
+
+    if (!checkoutRequestId) {
+      return res.status(400).json({
+        success: false,
+        message: stkData.message || stkData.error || 'STK Push failed. Payment service did not return a checkout request ID.',
+      });
+    }
+
+    // Create a DB record immediately so we survive server restarts
+    const txnRef   = createTransactionRef();
+    const txnDoc   = await Transaction.create({
+      transactionRef: txnRef,
+      memberId,
+      type: 'deposit',
+      amount: numAmount,
+      description: `M-Pesa Savings Deposit — STK Pending — ${mpesaPhone}`,
+      status: 'pending',
+      checkoutRequestId,
+      createdBy: null,
+    });
+
+    pendingDeposits.set(checkoutRequestId, {
+      memberId,
+      amount: numAmount,
+      phone: mpesaPhone,
+      status: 'pending',
+      createdAt: Date.now(),
+    });
+
+    // Start server-side Lipia polling — no callback dependency
+    pollSACCOPayment('deposit', checkoutRequestId, String(txnDoc._id), memberId, numAmount, mpesaPhone).catch(
+      (err) => console.error('[pollSACCOPayment deposit]', err)
+    );
+
+    return res.json({ success: true, data: { checkoutRequestId } });
+  } catch (err) {
+    next(err);
+  }
+});
 
 async function recordDeposit(memberId: string, amount: number, phone: string, mpesaRef: string) {
   const transactionRef = createTransactionRef();

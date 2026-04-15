@@ -8,6 +8,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "seed": "tsx src/scripts/seedData.ts",
+    "backfill:savings-history": "tsx src/scripts/backfillSavingsHistory.ts",
     "lint": "eslint src --ext .ts",
     "test": "jest"
   },

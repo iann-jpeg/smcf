@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, normalizeMember, normalizeLoan, normalizeTransaction } from "@/lib/api";
 import { useAuth } from "./useAuth";
+import { useRealtimeSubscription } from "./useRealtimeQuery";
 
 /** Member profile linked to current user */
 export function useMyMember() {
@@ -49,14 +50,18 @@ export function useMyRepayments(memberId: string | undefined) {
 }
 
 export function useMyTransactions(memberId: string | undefined) {
+  const queryKey = ["my-transactions", memberId ?? ""];
+  useRealtimeSubscription("transactions", queryKey, 15_000);
+
   return useQuery({
-    queryKey: ["my-transactions", memberId],
+    queryKey,
     queryFn: async () => {
       const res = await api.get(`/transactions?memberId=${memberId}&limit=20`);
       const arr = Array.isArray(res) ? res : (res as any).data ?? [];
       return arr.map(normalizeTransaction);
     },
     enabled: !!memberId,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -83,8 +88,11 @@ export function useMyShareSummary(memberId: string | undefined) {
 }
 
 export function useMySavingsHistory(memberId: string | undefined) {
+  const queryKey = ["my-savings-history", memberId ?? ""];
+  useRealtimeSubscription("savings-history", queryKey, 15_000);
+
   return useQuery({
-    queryKey: ["my-savings-history", memberId],
+    queryKey,
     queryFn: async () => {
       const res = await api.get(`/savings-history?memberId=${memberId}`);
       const arr = Array.isArray(res) ? res : (res as any).data ?? [];
@@ -96,6 +104,7 @@ export function useMySavingsHistory(memberId: string | undefined) {
       }));
     },
     enabled: !!memberId,
+    refetchOnWindowFocus: true,
   });
 }
 

@@ -6,12 +6,67 @@ import LoanGuarantor from '../models/LoanGuarantor';
 import AuditLog from '../models/AuditLog';
 import { protect, authorize, AuthRequest } from '../middleware/auth';
 
+async function loadFinancialDashboardSummary() {
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  const [
+    totalMembers,
+    savingsResult,
+    sharesResult,
+    loanBalanceResult,
+    activeLoans,
+    pendingLoans,
+    totalDisbursed,
+    defaultedLoans,
+    activeGuarantees,
+    monthlyTransactionsResult,
+    recentTransactions,
+  ] = await Promise.all([
+    Member.countDocuments({ status: 'active' }),
+    Member.aggregate([{ $match: { status: 'active' } }, { $group: { _id: null, total: { $sum: '$savings' } } }]),
+    Member.aggregate([{ $match: { status: 'active' } }, { $group: { _id: null, total: { $sum: '$shares' } } }]),
+    Member.aggregate([{ $match: { status: 'active', loanBalance: { $gt: 0 } } }, { $group: { _id: null, total: { $sum: '$loanBalance' } } }]),
+    Loan.countDocuments({ status: { $in: ['approved', 'disbursed', 'active'] } }),
+    Loan.countDocuments({ status: 'pending' }),
+    Loan.countDocuments({ status: { $in: ['disbursed', 'active', 'completed', 'defaulted'] } }),
+    Loan.countDocuments({ status: 'defaulted' }),
+    LoanGuarantor.countDocuments(),
+    Transaction.aggregate([
+      { $match: { processedAt: { $gte: thirtyDaysAgo } } },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]),
+    Transaction.find()
+      .populate('memberId', 'name memberId')
+      .sort({ processedAt: -1 })
+      .limit(10),
+  ]);
+
+  const totalSavings = savingsResult[0]?.total || 0;
+  const totalShares = sharesResult[0]?.total || 0;
+  const totalLoanBalance = loanBalanceResult[0]?.total || 0;
+  const monthlyTransactions = monthlyTransactionsResult[0]?.total || 0;
+  const defaultRate = totalDisbursed > 0 ? Math.round((defaultedLoans / totalDisbursed) * 100 * 10) / 10 : 0;
+
+  return {
+    totalMembers,
+    totalSavings,
+    totalShares,
+    totalLoanBalance,
+    activeLoans,
+    pendingLoans,
+    defaultRate,
+    activeGuarantees,
+    monthlyTransactions,
+    recentTransactions,
+  };
+}
+
 const router = Router();
 
 // @route   GET /api/dashboard/stats
 // @desc    Get dashboard statistics (ROLE-BASED)
 // @access  Private (Staff only) - Returns different data based on user role
-router.get('/stats', protect, authorize('admin', 'credit_officer', 'treasurer', 'credit_committee', 'auditor'), async (req: AuthRequest, res, next) => {
+router.get('/stats', protect, async (req: AuthRequest, res, next) => {
   try {
     const userRoles = (req.user as any)?.roles || [];
     const isAdmin = userRoles.includes('admin');
@@ -19,36 +74,42 @@ router.get('/stats', protect, authorize('admin', 'credit_officer', 'treasurer', 
     const isCreditCommittee = userRoles.includes('credit_committee');
     const isTreasurer = userRoles.includes('treasurer');
     const isAuditor = userRoles.includes('auditor');
+    const isStaff = isAdmin || isCreditOfficer || isCreditCommittee || isTreasurer || isAuditor;
+
+    if (!isStaff) {
+      return res.json({
+        success: true,
+        role: 'member',
+        data: {
+          totalMembers: 0,
+          totalSavings: 0,
+          totalShares: 0,
+          totalLoanBalance: 0,
+          activeLoans: 0,
+          availableLiquidity: 0,
+          liquidityRatio: 0,
+          pendingApprovals: 0,
+          defaultRate: 0,
+          par30: 0,
+          capitalAdequacy: 0,
+          interestIncome: 0,
+          activeGuarantees: 0,
+          recentTransactions: [],
+        },
+      });
+    }
 
     // ============================================================================
     // ADMIN DASHBOARD - ALL DATA
     // ============================================================================
     if (isAdmin) {
-      const totalMembers = await Member.countDocuments({ status: 'active' });
-      const [savingsResult, sharesResult, memberLoanResult] = await Promise.all([
-        Member.aggregate([{ $match: { status: 'active' } }, { $group: { _id: null, total: { $sum: '$savings' } } }]),
-        Member.aggregate([{ $match: { status: 'active' } }, { $group: { _id: null, total: { $sum: '$shares' } } }]),
-        Member.aggregate([{ $match: { status: 'active', loanBalance: { $gt: 0 } } }, { $group: { _id: null, total: { $sum: '$loanBalance' } } }]),
-      ]);
-
-      const activeLoans = await Loan.countDocuments({ status: { $in: ['approved', 'disbursed', 'active'] } });
-      const memberTotalLoan = memberLoanResult[0]?.total || 0;
-      const totalDisbursed = await Loan.countDocuments({ status: { $in: ['disbursed', 'active', 'completed', 'defaulted'] } });
-      const defaultedLoans = await Loan.countDocuments({ status: 'defaulted' });
-      const pendingLoans = await Loan.countDocuments({ status: 'pending' });
+      const financialSummary = await loadFinancialDashboardSummary();
 
       return res.json({
         success: true,
         role: 'admin',
         data: {
-          totalMembers,
-          totalSavings: savingsResult[0]?.total || 0,
-          totalShares: sharesResult[0]?.total || 0,
-          activeLoans,
-          totalLoanBalance: memberTotalLoan,
-          pendingLoans,
-          defaultRate: totalDisbursed > 0 ? Math.round((defaultedLoans / totalDisbursed) * 100 * 10) / 10 : 0,
-          activeGuarantees: await LoanGuarantor.countDocuments(),
+          ...financialSummary,
         }
       });
     }
@@ -112,32 +173,13 @@ router.get('/stats', protect, authorize('admin', 'credit_officer', 'treasurer', 
     // TREASURER DASHBOARD - FINANCIAL DATA
     // ============================================================================
     if (isTreasurer) {
-      const [savingsResult, sharesResult, transactionsResult] = await Promise.all([
-        Member.aggregate([{ $match: { status: 'active' } }, { $group: { _id: null, total: { $sum: '$savings' } } }]),
-        Member.aggregate([{ $match: { status: 'active' } }, { $group: { _id: null, total: { $sum: '$shares' } } }]),
-        Transaction.aggregate([
-          { $match: { processedAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } } },
-          { $group: { _id: null, total: { $sum: '$amount' } } }
-        ])
-      ]);
-
-      const totalSavings = savingsResult[0]?.total || 0;
-      const totalShares = sharesResult[0]?.total || 0;
-      const monthlyTransactions = transactionsResult[0]?.total || 0;
-
-      const recentTransactions = await Transaction.find()
-        .populate('memberId', 'name memberId')
-        .sort({ processedAt: -1 })
-        .limit(10);
+      const financialSummary = await loadFinancialDashboardSummary();
 
       return res.json({
         success: true,
         role: 'treasurer',
         data: {
-          totalSavings,
-          totalShares,
-          monthlyTransactions,
-          recentTransactions,
+          ...financialSummary,
           message: 'Manage accounts, ledger, and financial transactions'
         }
       });

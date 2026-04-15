@@ -8,15 +8,9 @@ import SystemConfig from '../models/SystemConfig';
 import { protect, authorize, AuthRequest } from '../middleware/auth';
 import { auditLog } from '../middleware/auditLog';
 import { notifyMember } from '../utils/notify';
+import { createTransactionRef } from '../utils/transactionRef';
 
 const router = Router();
-
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-async function generateTxnRef(): Promise<string> {
-  const count = await Transaction.countDocuments();
-  return `TXN${new Date().getFullYear()}${String(count + 1).padStart(8, '0')}`;
-}
 
 /**
  * Core atomic repayment logic.
@@ -82,7 +76,7 @@ async function processRepayment(
   const paid = Math.min(amount, effectiveBalance); // can't overpay
 
   // 2. Create transaction record
-  const txnRef = await generateTxnRef();
+  const txnRef = createTransactionRef();
   const transaction = await Transaction.create({
     transactionRef: txnRef,
     memberId: loan.memberId,

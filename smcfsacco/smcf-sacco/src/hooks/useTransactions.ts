@@ -4,7 +4,7 @@ import { useRealtimeSubscription } from "./useRealtimeQuery";
 
 export function useTransactions(limit = 50) {
   const queryKey = ["transactions"];
-  useRealtimeSubscription("transactions", queryKey);
+  useRealtimeSubscription("transactions", queryKey, 15_000);
 
   return useQuery({
     queryKey,
@@ -13,17 +13,22 @@ export function useTransactions(limit = 50) {
       const arr = Array.isArray(res) ? res : (res as any).data ?? [];
       return arr.map(normalizeTransaction);
     },
+    refetchOnWindowFocus: true,
   });
 }
 
 export function useTransactionsByMember(memberId: string) {
+  const queryKey = ["transactions", "member", memberId];
+  useRealtimeSubscription("transactions", queryKey, 15_000);
+
   return useQuery({
-    queryKey: ["transactions", "member", memberId],
+    queryKey,
     queryFn: async () => {
       const res = await api.get(`/transactions?memberId=${memberId}`);
       const arr = Array.isArray(res) ? res : (res as any).data ?? [];
       return arr.map(normalizeTransaction);
     },
     enabled: !!memberId,
+    refetchOnWindowFocus: true,
   });
 }

@@ -45,10 +45,11 @@ export const DASHBOARD_STATS_KEY = ["dashboard-stats"] as const;
 
 export function useDashboardStats() {
   // One subscription is enough — all three tables feed the same endpoint/key.
-  useRealtimeSubscription("transactions", DASHBOARD_STATS_KEY as unknown as string[]);
+  useRealtimeSubscription("transactions", DASHBOARD_STATS_KEY as unknown as string[], 15_000);
 
   return useQuery({
     queryKey: DASHBOARD_STATS_KEY,
     queryFn: fetchDashboardStats,
+    refetchOnWindowFocus: true,
   });
 }

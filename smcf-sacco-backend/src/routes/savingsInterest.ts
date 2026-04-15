@@ -7,6 +7,7 @@ import { protect, authorize, AuthRequest } from '../middleware/auth';
 import { auditLog } from '../middleware/auditLog';
 import { notifyMember, notifyStaff } from '../utils/notify';
 import { recalculateMemberRiskScore } from '../utils/riskScore';
+import { createTransactionRef } from '../utils/transactionRef';
 
 const router = Router();
 
@@ -155,13 +156,9 @@ router.post(
         distributionId,
       });
 
-      const txnCount = await Transaction.countDocuments();
-      let seqOffset = 0;
-
       for (const row of preview.rows) {
         if (row.interest <= 0) continue;
-        const ref = `TXN${year}${String(txnCount + seqOffset + 1).padStart(8, '0')}`;
-        seqOffset++;
+        const ref = createTransactionRef();
 
         await Transaction.create({
           transactionRef: ref,

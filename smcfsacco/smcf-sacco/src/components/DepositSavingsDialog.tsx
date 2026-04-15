@@ -71,6 +71,7 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone }: P
           queryClient.invalidateQueries({ queryKey: ["my-savings-history"] });
           queryClient.invalidateQueries({ queryKey: ["members"] });
           queryClient.invalidateQueries({ queryKey: ["transactions"] });
+          queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
         } else if (d.status === "failed") {
           stopPolling();
           setFailReason(d.resultDesc || "Payment cancelled or failed. Please try again.");

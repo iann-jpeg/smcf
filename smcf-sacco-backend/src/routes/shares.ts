@@ -12,6 +12,7 @@ import { protect, authorize, AuthRequest } from '../middleware/auth';
 import { auditLog } from '../middleware/auditLog';
 import { notifyMember, notifyStaff } from '../utils/notify';
 import { recalculateMemberRiskScore } from '../utils/riskScore';
+import { createTransactionRef } from '../utils/transactionRef';
 
 const router = Router();
 
@@ -57,11 +58,9 @@ router.post(
         return res.status(400).json({ success: false, message: 'Cannot transfer shares to yourself' });
       }
 
-      // Generate two sequential transaction refs
-      const count = await Transaction.countDocuments();
-      const year  = new Date().getFullYear();
-      const senderRef    = `TXN${year}${String(count + 1).padStart(8, '0')}`;
-      const recipientRef = `TXN${year}${String(count + 2).padStart(8, '0')}`;
+      // Generate unique transaction refs for both legs of the transfer
+      const senderRef = createTransactionRef();
+      const recipientRef = createTransactionRef();
 
       // Debit — sender
       await Transaction.create({
@@ -223,21 +222,17 @@ router.post(
       }
 
       const totalShares = members.reduce((sum, m) => sum + m.shares, 0);
-      const count = await Transaction.countDocuments();
-      const year  = new Date().getFullYear();
 
       const distributions: {
         memberId: string; name: string; shares: number; proportion: number; dividend: number; ref: string;
       }[] = [];
 
-      let seqOffset = 0;
       for (const member of members) {
         const proportion = member.shares / totalShares;
         const dividend   = Math.round(proportion * numTotal);
         if (dividend <= 0) continue;
 
-        const ref = `TXN${year}${String(count + seqOffset + 1).padStart(8, '0')}`;
-        seqOffset++;
+        const ref = createTransactionRef();
 
         await Transaction.create({
           transactionRef: ref,

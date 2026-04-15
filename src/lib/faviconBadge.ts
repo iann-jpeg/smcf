@@ -4,7 +4,7 @@
 let originalFavicon: string | null = null;
 let faviconCanvas: HTMLCanvasElement | null = null;
 let faviconCtx: CanvasRenderingContext2D | null = null;
-const FALLBACK_FAVICON = '/favicon.png';
+const FALLBACK_FAVICON = '/favicon.ico';
 
 // Initialize canvas for favicon manipulation
 function initFaviconCanvas(): void {
@@ -19,7 +19,7 @@ function initFaviconCanvas(): void {
 // Get the original favicon
 function getOriginalFavicon(): string {
   if (!originalFavicon) {
-    const link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
+    const link = document.querySelector("link[rel~='icon'], link[rel='shortcut icon']") as HTMLLinkElement;
     originalFavicon = link?.href || FALLBACK_FAVICON;
   }
   return originalFavicon;
@@ -115,7 +115,7 @@ export function updateFaviconBadge(count: number): void {
 
 // Update the favicon link element
 function updateFaviconElement(dataUrl: string): void {
-  const links = Array.from(document.querySelectorAll("link[rel~='icon']")) as HTMLLinkElement[];
+  const links = Array.from(document.querySelectorAll("link[rel~='icon'], link[rel='shortcut icon']")) as HTMLLinkElement[];
 
   if (links.length === 0) {
     const link = document.createElement('link');

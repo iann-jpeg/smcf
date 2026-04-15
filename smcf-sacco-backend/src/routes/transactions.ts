@@ -9,6 +9,7 @@ import { processRepayment } from './repayments';
 import { notifyMember } from '../utils/notify';
 import { recalculateMemberRiskScore } from '../utils/riskScore';
 import { recordSavingsDeposit } from '../utils/depositLedger';
+import { createTransactionRef } from '../utils/transactionRef';
 
 const router = Router();
 
@@ -92,9 +93,7 @@ router.post(
 
       const { memberId, type, amount, description } = req.body;
 
-      // Generate transaction reference
-      const count = await Transaction.countDocuments();
-      const transactionRef = `TXN${new Date().getFullYear()}${String(count + 1).padStart(8, '0')}`;
+      const transactionRef = createTransactionRef();
 
       // Create transaction
       const transaction = await Transaction.create({
