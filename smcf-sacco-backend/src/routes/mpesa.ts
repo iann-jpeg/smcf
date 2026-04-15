@@ -15,6 +15,7 @@
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
+import { randomUUID } from 'node:crypto';
 import Transaction from '../models/Transaction';
 import Member from '../models/Member';
 import Loan from '../models/Loan';
@@ -103,6 +104,12 @@ setInterval(() => {
 }, 10 * 60 * 1000);
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
+
+function createTransactionRef(): string {
+  const year = new Date().getFullYear();
+  const suffix = randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase();
+  return `TXN${year}${suffix}`;
+}
 
 /** Query Lipia Online for the current status of an STK push by its CheckoutRequestID / reference */
 async function queryLipiaStatus(checkoutRequestId: string): Promise<{
@@ -633,8 +640,7 @@ async function settlePendingDeposit(params: {
 }
 
 async function recordDeposit(memberId: string, amount: number, phone: string, mpesaRef: string) {
-  const count = await Transaction.countDocuments();
-  const transactionRef = `TXN${new Date().getFullYear()}${String(count + 1).padStart(8, '0')}`;
+  const transactionRef = createTransactionRef();
   await Transaction.create({
     transactionRef,
     memberId,
@@ -759,8 +765,7 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
     }
 
     // Create a DB record immediately so we survive server restarts
-    const txnCount = await Transaction.countDocuments();
-    const txnRef   = `TXN${new Date().getFullYear()}${String(txnCount + 1).padStart(8, '0')}`;
+    const txnRef   = createTransactionRef();
     const txnDoc   = await Transaction.create({
       transactionRef: txnRef,
       memberId,

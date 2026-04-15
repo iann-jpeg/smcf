@@ -92,6 +92,7 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone }: P
     const num = Number(amount);
     if (!num || num < 1) { toast.error("Enter a deposit amount"); return; }
     if (!phone.trim()) { toast.error("Enter your M-Pesa phone number"); return; }
+    if (!memberId.trim()) { toast.error("Member profile is still loading. Please try again."); return; }
 
     setLoading(true);
     try {

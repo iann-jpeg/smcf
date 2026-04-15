@@ -43,27 +43,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { z } from "zod";
 import { GrowthInsightsPopup } from "@/components/GrowthInsightsPopup";
-    id: "constitution-clause-shares",
-    title: "Constitution Clause (Shares)",
-    subtitle: "Official constitution text",
-    fileName: "SMCF_Constitution_Clause_Shares.pdf",
-    lines: ["CONSTITUTION CLAUSE (SHARES)", "Each member shall purchase a minimum of 10 shares valued at KES 1,000 each. Shares determine ownership and dividends but not voting rights."],
-  },
-  {
-    id: "dividend-resolution-letter",
-    title: "Dividend Resolution Letter",
-    subtitle: "Resolution template for dividend declaration",
-    fileName: "SMCF_Dividend_Resolution_Letter_Template.pdf",
-    lines: ["RESOLUTION", "", "We, the members of SMART MOVES CASHFLOW, resolve to distribute dividends as per approved policy.", "", "Chairperson: __________", "Secretary: __________"],
-  },
-  {
-    id: "exit-settlement-letter",
-    title: "Exit Settlement Letter",
-    subtitle: "Member exit settlement template",
-    fileName: "SMCF_Exit_Settlement_Letter_Template.pdf",
-    lines: ["EXIT LETTER", "", "This confirms that:", "", "Member: __________", "", "Has exited and is entitled to:", "", "Shares Value: ______", "Final Settlement: ______"],
-  },
-];
 
 export default function MyAccount() {
   const { data: member, isLoading: memberLoading } = useMyMember();

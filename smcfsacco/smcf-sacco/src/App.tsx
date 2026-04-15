@@ -94,6 +94,7 @@ function ProtectedRoutes() {
   const { user, loading, roles } = useAuth();
   const queryClient = useQueryClient();
   const location = useLocation();
+  const isStaff = roles.some((role) => STAFF_ROLES.includes(role as StaffRole));
 
   const canAccess = (allowedRoles: StaffRole[]) => {
     if (roles.includes("admin")) return true;
@@ -111,7 +112,7 @@ function ProtectedRoutes() {
   // synchronously), kick off background prefetches so dashboard data is already
   // in-flight before the user even clicks the Dashboard link.
   useEffect(() => {
-    if (!user) return;
+    if (!user || !isStaff) return;
     queryClient.prefetchQuery({ queryKey: DASHBOARD_STATS_KEY, queryFn: fetchDashboardStats });
     queryClient.prefetchQuery({
       queryKey: ["notifications"],
@@ -121,7 +122,7 @@ function ProtectedRoutes() {
         return arr.map(normalizeNotification);
       },
     });
-  }, [user, queryClient]);
+  }, [user, isStaff, queryClient]);
 
   if (loading) {
     return (

@@ -4,6 +4,7 @@
 let originalFavicon: string | null = null;
 let faviconCanvas: HTMLCanvasElement | null = null;
 let faviconCtx: CanvasRenderingContext2D | null = null;
+const FALLBACK_FAVICON = '/favicon.png';
 
 // Initialize canvas for favicon manipulation
 function initFaviconCanvas(): void {
@@ -18,8 +19,8 @@ function initFaviconCanvas(): void {
 // Get the original favicon
 function getOriginalFavicon(): string {
   if (!originalFavicon) {
-    const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
-    originalFavicon = link?.href || '/favicon.ico';
+    const link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
+    originalFavicon = link?.href || FALLBACK_FAVICON;
   }
   return originalFavicon;
 }
@@ -114,20 +115,25 @@ export function updateFaviconBadge(count: number): void {
 
 // Update the favicon link element
 function updateFaviconElement(dataUrl: string): void {
-  let link = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
-  
-  if (!link) {
-    link = document.createElement('link');
+  const links = Array.from(document.querySelectorAll("link[rel~='icon']")) as HTMLLinkElement[];
+
+  if (links.length === 0) {
+    const link = document.createElement('link');
     link.rel = 'icon';
+    link.type = 'image/png';
+    link.href = dataUrl;
     document.head.appendChild(link);
+    return;
   }
-  
-  link.href = dataUrl;
+
+  links.forEach((link) => {
+    link.href = dataUrl;
+  });
 }
 
 // Reset favicon to original (no badge)
 export function resetFavicon(): void {
-  const original = getOriginalFavicon();
+  const original = originalFavicon || getOriginalFavicon() || FALLBACK_FAVICON;
   updateFaviconElement(original);
 }
 
