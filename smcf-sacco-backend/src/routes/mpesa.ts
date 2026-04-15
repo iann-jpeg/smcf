@@ -951,8 +951,7 @@ router.post('/share-purchase', protect, async (req: AuthRequest, res: Response, 
         if (!s || s.status !== 'pending') return;
         try {
           const ref = `SHRSIM${Date.now()}`;
-          const txnCount = await Transaction.countDocuments();
-          const txnRef   = `TXN${new Date().getFullYear()}${String(txnCount + 1).padStart(8, '0')}`;
+          const txnRef = createTransactionRef();
           await Transaction.create({
             transactionRef: txnRef,
             memberId,
@@ -991,8 +990,7 @@ router.post('/share-purchase', protect, async (req: AuthRequest, res: Response, 
       });
     }
 
-    const txnCount = await Transaction.countDocuments();
-    const txnRef   = `TXN${new Date().getFullYear()}${String(txnCount + 1).padStart(8, '0')}`;
+    const txnRef = createTransactionRef();
     const txnDoc   = await Transaction.create({
       transactionRef: txnRef,
       memberId,
@@ -1063,8 +1061,7 @@ router.post('/registration-fee/initiate', protect, async (req: AuthRequest, res:
         },
       });
 
-      const txnCount = await Transaction.countDocuments();
-      const txnRef = `TXN${new Date().getFullYear()}${String(txnCount + 1).padStart(8, '0')}`;
+      const txnRef = createTransactionRef();
       await Transaction.create({
         transactionRef: txnRef,
         memberId,
@@ -1112,8 +1109,7 @@ router.post('/registration-fee/initiate', protect, async (req: AuthRequest, res:
       });
     }
 
-    const txnCount = await Transaction.countDocuments();
-    const txnRef = `TXN${new Date().getFullYear()}${String(txnCount + 1).padStart(8, '0')}`;
+    const txnRef = createTransactionRef();
     const txnDoc = await Transaction.create({
       transactionRef: txnRef,
       memberId,
@@ -1501,8 +1497,7 @@ router.post('/loan-repay', protect, async (req: AuthRequest, res: Response, next
     const memberId = String(loan.memberId);
 
     // Create a DB placeholder so we survive restarts
-    const txnCount = await Transaction.countDocuments();
-    const txnRef   = `TXN${new Date().getFullYear()}${String(txnCount + 1).padStart(8, '0')}`;
+    const txnRef = createTransactionRef();
     const txnDoc   = await Transaction.create({
       transactionRef: txnRef,
       memberId,
@@ -1600,8 +1595,7 @@ router.post('/payment-initiated', protect, async (req: AuthRequest, res: Respons
     const txnType   = type === 'loan_repay' ? 'loan_repayment' : type === 'share_subscribe' ? 'share_purchase' : 'deposit';
     const loanTag   = (type === 'loan_repay' && loanId) ? ` [loanId:${loanId}]` : '';
 
-    const count  = await Transaction.countDocuments();
-    const txnRef = `TXN${new Date().getFullYear()}${String(count + 1).padStart(8, '0')}`;
+    const txnRef = createTransactionRef();
 
     await Transaction.create({
       transactionRef: txnRef,

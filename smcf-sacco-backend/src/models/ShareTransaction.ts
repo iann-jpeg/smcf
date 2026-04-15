@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import mongoose, { Schema, Document } from 'mongoose';
 
 export type TransactionType = 'purchase' | 'transfer_in' | 'transfer_out' | 'adjustment' | 'exit_settlement';
@@ -120,8 +121,8 @@ const ShareTransactionSchema = new Schema<IShareTransaction>({
 ShareTransactionSchema.pre('save', async function(next) {
   if (!this.transactionId) {
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const count = await mongoose.model('ShareTransaction').countDocuments({ createdAt: { $gte: new Date().setHours(0, 0, 0, 0) } });
-    this.transactionId = `TXN-${date}-${String(count + 1).padStart(5, '0')}`;
+    const suffix = randomUUID().replace(/-/g, '').slice(0, 10).toUpperCase();
+    this.transactionId = `TXN-${date}-${suffix}`;
   }
   next();
 });
