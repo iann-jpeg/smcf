@@ -89,6 +89,39 @@ interface PendingRegistrationFee {
 
 const pendingRegistrationFees = new Map<string, PendingRegistrationFee>();
 
+type LooseRecord = Record<string, unknown>;
+
+type LipiaStkResponse = LooseRecord & {
+  CheckoutRequestID: string;
+  checkoutRequestId: string;
+  message?: unknown;
+  error?: unknown;
+};
+
+function asRecord(value: unknown): LooseRecord | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  return value as LooseRecord;
+}
+
+function getPathValue(input: unknown, path: string[]): unknown {
+  let current: unknown = input;
+  for (const key of path) {
+    const record = asRecord(current);
+    if (!record) return undefined;
+    current = record[key];
+  }
+  return current;
+}
+
+function toErrorMessage(err: unknown, fallback = 'Unknown error'): string {
+  if (typeof err === 'string' && err.trim()) return err;
+  const message = asRecord(err)?.message;
+  if (typeof message === 'string' && message.trim()) return message;
+  return fallback;
+}
+
 // Purge stale entries every 10 min
 setInterval(() => {
   const cutoff = Date.now() - 10 * 60 * 1000;
@@ -122,36 +155,47 @@ async function queryLipiaStatus(checkoutRequestId: string): Promise<{
       `${baseUrl}/request/status?reference=${encodeURIComponent(checkoutRequestId)}`,
     ];
 
-    let data: any = null;
+    let data: unknown = null;
     let ok = false;
     for (const url of urls) {
       const res = await fetch(url, { headers: { 'Authorization': `Bearer ${apiKey}` } });
       if (!res.ok) continue;
       ok = true;
-      data = (await res.json().catch(() => ({}))) as any;
+      data = await res.json().catch(() => ({}));
       break;
     }
 
     if (!ok || !data) return { success: false, status: 'pending' };
 
-    const payload = data?.data?.response ?? data?.data ?? data;
-    const resultCode  = payload?.ResultCode ?? payload?.resultCode ?? data?.ResultCode ?? data?.resultCode;
-    const receipt     = payload?.MpesaReceiptNumber ?? payload?.mpesaReceiptNumber ?? payload?.TransactionID ?? payload?.transactionId;
-    const resultDesc  = payload?.ResultDesc ?? payload?.resultDesc ?? payload?.ResultDescription ?? data?.message;
-    const rawAmount   = payload?.Amount ?? payload?.amount;
+    const dataRecord = asRecord(data);
+    if (!dataRecord) return { success: false, status: 'pending' };
 
-    const isSuccess = (String(resultCode) === '0' || String(payload?.status).toLowerCase() === 'success') && !!receipt;
+    const payload = asRecord(getPathValue(dataRecord, ['data', 'response']))
+      ?? asRecord(dataRecord.data)
+      ?? dataRecord;
+
+    const rawResultCode = payload['ResultCode'] ?? payload['resultCode'] ?? dataRecord['ResultCode'] ?? dataRecord['resultCode'];
+    const resultCode =
+      typeof rawResultCode === 'string' || typeof rawResultCode === 'number'
+        ? rawResultCode
+        : undefined;
+    const receipt = payload['MpesaReceiptNumber'] ?? payload['mpesaReceiptNumber'] ?? payload['TransactionID'] ?? payload['transactionId'];
+    const resultDesc = payload['ResultDesc'] ?? payload['resultDesc'] ?? payload['ResultDescription'] ?? dataRecord['message'];
+    const rawAmount = payload['Amount'] ?? payload['amount'];
+    const payloadStatus = payload['status'];
+
+    const isSuccess = (String(resultCode) === '0' || String(payloadStatus).toLowerCase() === 'success') && !!receipt;
     const isFailed  = !isSuccess && (
       (resultCode !== undefined && String(resultCode) !== '0' && String(resultCode) !== 'pending') ||
-      ['failed', 'cancelled'].includes(String(payload?.status).toLowerCase())
+      ['failed', 'cancelled'].includes(String(payloadStatus).toLowerCase())
     );
 
     return {
       success: true,
       status: isSuccess ? 'success' : isFailed ? 'failed' : 'pending',
-      mpesaReceiptNumber: receipt,
+      mpesaReceiptNumber: typeof receipt === 'string' ? receipt : String(receipt || ''),
       resultCode,
-      resultDesc,
+      resultDesc: typeof resultDesc === 'string' ? resultDesc : undefined,
       amount: rawAmount ? Number(rawAmount) : undefined,
     };
   } catch {
@@ -302,7 +346,7 @@ async function pollSACCOPayment(
 }
 
 /** Send STK push via Lipia Online to till 6938069 */
-async function sendLipiaSTK(phone: string, amount: number, reference: string, description: string) {
+async function sendLipiaSTK(phone: string, amount: number, reference: string, description: string): Promise<LipiaStkResponse> {
   const apiKey  = process.env.LIPIA_API_KEY!;
   const baseUrl = process.env.LIPIA_API_URL || 'https://lipia-api.kreativelabske.com/api/v2';
   const callbackUrl = process.env.MPESA_CALLBACK_URL || 'https://smcf-sacco-backend.onrender.com/api/mpesa/callback';
@@ -345,16 +389,24 @@ async function sendLipiaSTK(phone: string, amount: number, reference: string, de
     });
 
     const responseText = await res.text().catch(() => '');
-    let data: any = {};
+    let data: unknown = {};
     try {
       data = responseText ? JSON.parse(responseText) : {};
     } catch {
       data = { message: responseText || 'Unexpected response from payment service' };
     }
 
+    const dataRecord = asRecord(data);
+    const errorRecord = asRecord(dataRecord?.error);
+    const mpesaErrorRecord = asRecord(errorRecord?.mpesaError);
+
     if (!res.ok) {
       lastStatus = res.status;
-      lastReason = typeof data === 'string' ? data : (data?.error?.message || data?.message || data?.error || 'Unknown error');
+      const rawReason =
+        typeof data === 'string'
+          ? data
+          : (errorRecord?.message ?? dataRecord?.message ?? dataRecord?.error);
+      lastReason = typeof rawReason === 'string' ? rawReason : 'Unknown error';
 
       // Some provider responses indicate suspension in body text even when status is not 403.
       if (looksLikeSuspended(lastReason)) {
@@ -363,9 +415,13 @@ async function sendLipiaSTK(phone: string, amount: number, reference: string, de
       continue;
     }
 
-    if (data?.success === false) {
+    if (dataRecord?.success === false) {
       lastStatus = 400;
-      lastReason = data?.error?.mpesaError?.errorMessage || data?.error?.message || data?.message || 'Payment initiation failed';
+      const rawReason =
+        mpesaErrorRecord?.errorMessage
+        ?? errorRecord?.message
+        ?? dataRecord?.message;
+      lastReason = typeof rawReason === 'string' ? rawReason : 'Payment initiation failed';
 
       // Treat policy suspension as service-unavailable for clearer API semantics.
       if (looksLikeSuspended(lastReason)) {
@@ -385,7 +441,7 @@ async function sendLipiaSTK(phone: string, amount: number, reference: string, de
     }
 
     return {
-      ...data,
+      ...(dataRecord || {}),
       CheckoutRequestID: checkoutRequestId,
       checkoutRequestId,
     };
@@ -413,21 +469,29 @@ function looksLikeSuspended(message: string): boolean {
   return m.includes('suspended') || m.includes('policy violation');
 }
 
-function extractCheckoutRequestId(payload: any): string | undefined {
-  return (
-    payload?.data?.TransactionReference ||
-    payload?.data?.CheckoutRequestID ||
-    payload?.data?.checkoutRequestId ||
-    payload?.data?.checkout_request_id ||
-    payload?.data?.checkoutRequestID ||
-    payload?.data?.requestId ||
-    payload?.data?.reference ||
-    payload?.CheckoutRequestID ||
-    payload?.checkoutRequestId ||
-    payload?.checkout_request_id ||
-    payload?.transactionReference ||
-    payload?.reference
-  );
+function extractCheckoutRequestId(payload: unknown): string | undefined {
+  const candidates = [
+    getPathValue(payload, ['data', 'TransactionReference']),
+    getPathValue(payload, ['data', 'CheckoutRequestID']),
+    getPathValue(payload, ['data', 'checkoutRequestId']),
+    getPathValue(payload, ['data', 'checkout_request_id']),
+    getPathValue(payload, ['data', 'checkoutRequestID']),
+    getPathValue(payload, ['data', 'requestId']),
+    getPathValue(payload, ['data', 'reference']),
+    getPathValue(payload, ['CheckoutRequestID']),
+    getPathValue(payload, ['checkoutRequestId']),
+    getPathValue(payload, ['checkout_request_id']),
+    getPathValue(payload, ['transactionReference']),
+    getPathValue(payload, ['reference']),
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate;
+    }
+  }
+
+  return undefined;
 }
 
 function normalizePhone(raw: string): string {
@@ -470,7 +534,7 @@ async function findMemberByPhoneForRegistration(phone: string) {
     .select('_id phone registrationFeePaid')
     .limit(2000);
 
-  return allCandidates.find((m: any) => isSamePhone(String(m.phone || ''), normalized)) || null;
+  return allCandidates.find((m) => isSamePhone(String((m as { phone?: unknown }).phone || ''), normalized)) || null;
 }
 
 async function settleRegistrationFeePayment(params: {
@@ -629,161 +693,102 @@ async function settlePendingDeposit(params: {
   return { applied: true, duplicate: false };
 }
 
-// ─── GET /api/mpesa/provider-diagnostics ─────────────────────────────────────
-// Admin diagnostics endpoint: returns masked provider config to compare environments
+function isDuplicateKeyError(err: unknown): err is { code?: number; keyValue?: Record<string, unknown>; keyPattern?: Record<string, unknown> } {
+  if (!err || typeof err !== 'object') return false;
+  return (err as { code?: number }).code === 11000;
+}
 
-router.get('/provider-diagnostics', protect, authorize('admin', 'treasurer'), async (_req: AuthRequest, res: Response) => {
-  const apiKey = process.env.LIPIA_API_KEY;
-  const appId = process.env.LIPIA_APP_ID;
-  const appName = process.env.LIPIA_APP_NAME;
-  const callbackUrl = process.env.MPESA_CALLBACK_URL;
-  const apiUrl = process.env.LIPIA_API_URL || 'https://lipia-api.kreativelabske.com/api/v2';
+function getDuplicateFields(err: { keyValue?: Record<string, unknown>; keyPattern?: Record<string, unknown> }): string[] {
+  const fromKeyValue = Object.keys(err.keyValue || {});
+  if (fromKeyValue.length > 0) return fromKeyValue;
+  return Object.keys(err.keyPattern || {});
+}
 
-  return res.json({
-    success: true,
-    data: {
-      configured: {
-        apiKey: !!apiKey,
-        appId: !!appId,
-        appName: !!appName,
-        callbackUrl: !!callbackUrl,
-      },
-      values: {
-        apiUrl,
-        callbackUrl,
-        appName,
-        apiKeyMasked: maskSecret(apiKey),
-        appIdMasked: maskSecret(appId),
-      },
-      fingerprints: {
-        apiKey: envFingerprint(apiKey),
-        appId: envFingerprint(appId),
-      },
-      notes: 'Use fingerprints to confirm both services are using the same Lipia credentials without exposing secrets.',
-    },
-  });
-});
+function escapeRegex(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
-// ─── POST /api/mpesa/deposit ─────────────────────────────────────────────────
-// Initiates an STK Push to the member's phone.
-// Body: { memberId: string, amount: number, phone: string }
+async function findReusablePendingDepositTransaction(params: {
+  memberId: string;
+  amount: number;
+  phone: string;
+}) {
+  const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
 
-router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try {
-    const { memberId, amount, phone } = req.body;
-
-    if (!memberId) return res.status(400).json({ success: false, message: 'memberId is required' });
-    if (!phone)    return res.status(400).json({ success: false, message: 'Phone number is required' });
-    if (!amount || Number(amount) < 10)
-      return res.status(400).json({ success: false, message: 'Minimum deposit is KES 10' });
-
-    const mpesaPhone = normalizePhone(phone);
-    const numAmount  = Math.round(Number(amount));
-
-    // ── Simulation mode (no credentials set) ──────────────────────────────
-    const hasCredentials = !!(process.env.LIPIA_API_KEY);
-
-    if (!hasCredentials) {
-      const simId = `SIM-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-
-      pendingDeposits.set(simId, {
-        memberId,
-        amount: numAmount,
-        phone: mpesaPhone,
-        status: 'pending',
-        createdAt: Date.now(),
-      });
-
-      // Auto-complete after 5 s (simulate customer entering PIN)
-      setTimeout(async () => {
-        const d = pendingDeposits.get(simId);
-        if (!d || d.status !== 'pending') return;
-        try {
-          const ref = `SIM${Date.now()}`;
-          await recordDeposit(d.memberId, d.amount, d.phone, ref);
-          d.status = 'success';
-          d.mpesaRef = ref;
-        } catch {
-          d.status = 'failed';
-          d.resultDesc = 'Simulation internal error';
-        }
-        pendingDeposits.set(simId, d!);
-      }, 5000);
-
-      return res.json({
-        success: true,
-        simulated: true,
-        data: { checkoutRequestId: simId },
-      });
-    }
-
-    // ── Real STK Push via Lipia Online ────────────────────────────────────
-    const stkData = await sendLipiaSTK(mpesaPhone, numAmount, 'SMCF-SAVINGS', 'SMCF SACCO Savings Deposit');
-
-    // Lipia proxies the Safaricom response — CheckoutRequestID may be top-level
-    // or nested under data depending on the Lipia version.
-    const checkoutRequestId = extractCheckoutRequestId(stkData);
-
-    if (!checkoutRequestId) {
-      return res.status(400).json({
-        success: false,
-        message: stkData.message || stkData.error || 'STK Push failed. Payment service did not return a checkout request ID.',
-      });
-    }
-
-    // Create a DB record immediately so we survive server restarts
-    const txnRef   = createTransactionRef();
-    const txnDoc   = await Transaction.create({
-      transactionRef: txnRef,
-      memberId,
-      type: 'deposit',
-      amount: numAmount,
-      description: `M-Pesa Savings Deposit — STK Pending — ${mpesaPhone}`,
-      status: 'pending',
-      checkoutRequestId,
-      createdBy: null,
-    });
-
-    pendingDeposits.set(checkoutRequestId, {
-      memberId,
-      amount: numAmount,
-      phone: mpesaPhone,
-      status: 'pending',
-      createdAt: Date.now(),
-    });
-
-    // Start server-side Lipia polling — no callback dependency
-    pollSACCOPayment('deposit', checkoutRequestId, String(txnDoc._id), memberId, numAmount, mpesaPhone).catch(
-      (err) => console.error('[pollSACCOPayment deposit]', err)
-    );
-
-    return res.json({ success: true, data: { checkoutRequestId } });
-  } catch (err) {
-    next(err);
-  }
-});
-
-async function recordDeposit(memberId: string, amount: number, phone: string, mpesaRef: string) {
-  const transactionRef = createTransactionRef();
-  await Transaction.create({
-    transactionRef,
-    memberId,
+  return Transaction.findOne({
+    memberId: params.memberId,
     type: 'deposit',
-    amount,
-    description: `M-Pesa Savings Deposit — Ref: ${mpesaRef} — ${phone}`,
-    status: 'completed',
-    createdBy: null,
-  });
+    status: 'pending',
+    depositProcessed: { $ne: true },
+    amount: params.amount,
+    checkoutRequestId: { $exists: true, $nin: [null, ''] },
+    createdAt: { $gte: fifteenMinutesAgo },
+    description: { $regex: new RegExp(escapeRegex(params.phone)) },
+  })
+    .sort({ createdAt: -1 })
+    .select('_id checkoutRequestId memberId amount status depositProcessed');
+}
 
-  await recordSavingsDeposit({
-    memberId,
-    amount,
-    reference: mpesaRef,
-    sourceLabel: 'M-Pesa',
-    processedAt: new Date(),
-    note: phone ? `Phone: ${phone}` : undefined,
-    notificationPath: '/accounts',
-  });
+async function createOrGetPendingDepositTransaction(params: {
+  memberId: string;
+  amount: number;
+  phone: string;
+  checkoutRequestId: string;
+}) {
+  const description = `M-Pesa Savings Deposit — STK Pending — ${params.phone}`;
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const txnRef = createTransactionRef();
+
+    try {
+      const txnDoc = await Transaction.findOneAndUpdate(
+        {
+          checkoutRequestId: params.checkoutRequestId,
+          type: 'deposit',
+        },
+        {
+          $setOnInsert: {
+            transactionRef: txnRef,
+            memberId: params.memberId,
+            type: 'deposit',
+            amount: params.amount,
+            description,
+            status: 'pending',
+            checkoutRequestId: params.checkoutRequestId,
+            createdBy: null,
+          },
+        },
+        { upsert: true, new: true }
+      ).select('_id checkoutRequestId memberId amount status mpesaRef depositProcessed');
+
+      if (txnDoc) {
+        return txnDoc;
+      }
+    } catch (err) {
+      if (!isDuplicateKeyError(err)) {
+        throw err;
+      }
+
+      const duplicateFields = getDuplicateFields(err);
+
+      if (duplicateFields.includes('checkoutRequestId')) {
+        const existingTxn = await Transaction.findOne({
+          checkoutRequestId: params.checkoutRequestId,
+          type: 'deposit',
+        }).select('_id checkoutRequestId memberId amount status mpesaRef depositProcessed');
+
+        if (existingTxn) {
+          return existingTxn;
+        }
+      }
+
+      if (!duplicateFields.includes('transactionRef')) {
+        throw err;
+      }
+    }
+  }
+
+  throw new Error('Failed to create pending deposit transaction after retries');
 }
 
 // ─── GET /api/mpesa/provider-diagnostics ─────────────────────────────────────
@@ -837,6 +842,36 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
     const mpesaPhone = normalizePhone(phone);
     const numAmount  = Math.round(Number(amount));
 
+    const reusablePendingTxn = await findReusablePendingDepositTransaction({
+      memberId,
+      amount: numAmount,
+      phone: mpesaPhone,
+    });
+
+    if (reusablePendingTxn?.checkoutRequestId) {
+      const existingCheckoutRequestId = String(reusablePendingTxn.checkoutRequestId);
+
+      pendingDeposits.set(existingCheckoutRequestId, {
+        memberId,
+        amount: numAmount,
+        phone: mpesaPhone,
+        status: 'pending',
+        createdAt: Date.now(),
+      });
+
+      pollSACCOPayment('deposit', existingCheckoutRequestId, String(reusablePendingTxn._id), memberId, numAmount, mpesaPhone).catch(
+        (err) => console.error('[pollSACCOPayment deposit reuse]', err)
+      );
+
+      return res.json({
+        success: true,
+        data: {
+          checkoutRequestId: existingCheckoutRequestId,
+          reused: true,
+        },
+      });
+    }
+
     // ── Simulation mode (no credentials set) ──────────────────────────────
     const hasCredentials = !!(process.env.LIPIA_API_KEY);
 
@@ -888,37 +923,61 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
       });
     }
 
-    // Create a DB record immediately so we survive server restarts
-    const txnRef   = createTransactionRef();
-    const txnDoc   = await Transaction.create({
-      transactionRef: txnRef,
+    // Create (or reuse) DB record immediately so retries remain idempotent.
+    const txnDoc = await createOrGetPendingDepositTransaction({
       memberId,
-      type: 'deposit',
       amount: numAmount,
-      description: `M-Pesa Savings Deposit — STK Pending — ${mpesaPhone}`,
-      status: 'pending',
+      phone: mpesaPhone,
       checkoutRequestId,
-      createdBy: null,
     });
+
+    const mapStatus: PendingDeposit['status'] =
+      txnDoc.status === 'completed' ? 'success' : txnDoc.status === 'failed' ? 'failed' : 'pending';
 
     pendingDeposits.set(checkoutRequestId, {
       memberId,
       amount: numAmount,
       phone: mpesaPhone,
-      status: 'pending',
+      status: mapStatus,
+      mpesaRef: txnDoc.mpesaRef || undefined,
       createdAt: Date.now(),
     });
 
     // Start server-side Lipia polling — no callback dependency
-    pollSACCOPayment('deposit', checkoutRequestId, String(txnDoc._id), memberId, numAmount, mpesaPhone).catch(
-      (err) => console.error('[pollSACCOPayment deposit]', err)
-    );
+    if (txnDoc.status === 'pending' && txnDoc.depositProcessed !== true) {
+      pollSACCOPayment('deposit', checkoutRequestId, String(txnDoc._id), memberId, numAmount, mpesaPhone).catch(
+        (err) => console.error('[pollSACCOPayment deposit]', err)
+      );
+    }
 
     return res.json({ success: true, data: { checkoutRequestId } });
   } catch (err) {
     next(err);
   }
 });
+
+async function recordDeposit(memberId: string, amount: number, phone: string, mpesaRef: string) {
+  const transactionRef = createTransactionRef();
+  await Transaction.create({
+    transactionRef,
+    memberId,
+    type: 'deposit',
+    amount,
+    description: `M-Pesa Savings Deposit — Ref: ${mpesaRef} — ${phone}`,
+    status: 'completed',
+    createdBy: null,
+  });
+
+  await recordSavingsDeposit({
+    memberId,
+    amount,
+    reference: mpesaRef,
+    sourceLabel: 'M-Pesa',
+    processedAt: new Date(),
+    note: phone ? `Phone: ${phone}` : undefined,
+    notificationPath: '/accounts',
+  });
+}
 
 // ─── POST /api/mpesa/share-purchase ─────────────────────────────────────────
 // Initiates STK Push for share purchase and records a pending transaction.
@@ -1161,16 +1220,18 @@ router.post('/registration-fee/reconcile-manual', protect, authorize('admin', 't
     const member = await findMemberByPhoneForRegistration(String(phone || ''));
     if (!member) return res.status(404).json({ success: false, message: 'No unpaid member found for the provided phone' });
 
+    const memberDoc = member as { _id: unknown; phone?: unknown };
+
     await settleRegistrationFeePayment({
-      memberId: String((member as any)._id),
+      memberId: String(memberDoc._id),
       amount: REGISTRATION_FEE_AMOUNT,
-      phone: String((member as any).phone || phone),
+      phone: String(memberDoc.phone || phone),
       mpesaRef: normalizedRef,
       checkoutRequestId: normalizedRef,
       source: 'reconcile',
     });
 
-    return res.json({ success: true, data: { memberId: String((member as any)._id), mpesaRef: normalizedRef } });
+    return res.json({ success: true, data: { memberId: String(memberDoc._id), mpesaRef: normalizedRef } });
   } catch (err) {
     next(err);
   }
@@ -1187,8 +1248,9 @@ router.post('/callback', async (req: Request, res: Response) => {
     if (!cb) return;
 
     const { ResultCode, ResultDesc, CheckoutRequestID, CallbackMetadata } = cb;
-    const items: { Name: string; Value: any }[] = CallbackMetadata?.Item || [];
-    const get = (n: string) => items.find((i: any) => i.Name === n)?.Value;
+    type CallbackItem = { Name?: string; Value?: unknown };
+    const items: CallbackItem[] = Array.isArray(CallbackMetadata?.Item) ? CallbackMetadata.Item : [];
+    const get = (n: string): unknown => items.find((i) => i.Name === n)?.Value;
 
     const mpesaRef = get('MpesaReceiptNumber') as string || `MPESA${Date.now()}`;
     const paidAmt  = Number(get('Amount'));
@@ -1470,9 +1532,9 @@ router.post('/loan-repay', protect, async (req: AuthRequest, res: Response, next
           r.status = 'success';
           r.mpesaRef = ref;
           r.loanCompleted = result.loanCompleted;
-        } catch (e: any) {
+        } catch (e: unknown) {
           r.status = 'failed';
-          r.resultDesc = e.message || 'Simulation error';
+          r.resultDesc = toErrorMessage(e, 'Simulation error');
         }
         pendingRepayments.set(simId, r);
       }, 5000);

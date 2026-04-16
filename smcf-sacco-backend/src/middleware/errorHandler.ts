@@ -3,8 +3,10 @@ import { Request, Response, NextFunction } from 'express';
 interface ErrorResponse extends Error {
   statusCode?: number;
   code?: number;
-  keyValue?: any;
-  errors?: any;
+  keyValue?: Record<string, unknown>;
+  keyPattern?: Record<string, unknown>;
+  errors?: Record<string, unknown>;
+  duplicateFields?: string[];
 }
 
 const errorHandler = (err: ErrorResponse, req: Request, res: Response, next: NextFunction) => {
@@ -22,23 +24,40 @@ const errorHandler = (err: ErrorResponse, req: Request, res: Response, next: Nex
 
   // Mongoose duplicate key
   if (err.code === 11000) {
-    const message = 'Duplicate field value entered';
-    error = { ...error, statusCode: 400, message };
+    const duplicateFields = Object.keys(err.keyValue || err.keyPattern || {});
+    const fieldMessage = duplicateFields.length ? ` (${duplicateFields.join(', ')})` : '';
+    const message = `Duplicate field value entered${fieldMessage}`;
+    error = { ...error, statusCode: 400, message, duplicateFields };
   }
 
   // Mongoose validation error
   if (err.name === 'ValidationError') {
     const message = Object.values(err.errors || {})
-      .map((val: any) => val.message)
+      .map((val) => {
+        if (val && typeof val === 'object' && 'message' in val) {
+          const maybeMessage = (val as { message?: unknown }).message;
+          if (typeof maybeMessage === 'string') {
+            return maybeMessage;
+          }
+        }
+        return '';
+      })
+      .filter(Boolean)
       .join(', ');
     error = { ...error, statusCode: 400, message };
   }
 
-  res.status(error.statusCode || 500).json({
+  const response: Record<string, unknown> = {
     success: false,
     message: error.message || 'Server Error',
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
-  });
+  };
+
+  if (Array.isArray(error.duplicateFields) && error.duplicateFields.length > 0) {
+    response.duplicateFields = error.duplicateFields;
+  }
+
+  res.status(error.statusCode || 500).json(response);
 };
 
 export default errorHandler;
