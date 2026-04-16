@@ -4,7 +4,7 @@
 let originalFavicon: string | null = null;
 let faviconCanvas: HTMLCanvasElement | null = null;
 let faviconCtx: CanvasRenderingContext2D | null = null;
-const FALLBACK_FAVICON = '/favicon.ico';
+const FALLBACK_FAVICON = '/favicon.png';
 
 // Initialize canvas for favicon manipulation
 function initFaviconCanvas(): void {
