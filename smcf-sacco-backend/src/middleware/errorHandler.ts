@@ -24,7 +24,18 @@ const errorHandler = (err: ErrorResponse, req: Request, res: Response, next: Nex
 
   // Mongoose duplicate key
   if (err.code === 11000) {
-    const duplicateFields = Object.keys(err.keyValue || err.keyPattern || {});
+    let duplicateFields = Object.keys(err.keyValue || err.keyPattern || {});
+
+    if (duplicateFields.length === 0) {
+      const match = String(err.message || '').match(/index:\s*([^\s]+)\s*dup key/i);
+      if (match?.[1]) {
+        duplicateFields = match[1]
+          .replace(/_1/g, '')
+          .split('_')
+          .filter(Boolean);
+      }
+    }
+
     const fieldMessage = duplicateFields.length ? ` (${duplicateFields.join(', ')})` : '';
     const message = `Duplicate field value entered${fieldMessage}`;
     error = { ...error, statusCode: 400, message, duplicateFields };

@@ -698,10 +698,20 @@ function isDuplicateKeyError(err: unknown): err is { code?: number; keyValue?: R
   return (err as { code?: number }).code === 11000;
 }
 
-function getDuplicateFields(err: { keyValue?: Record<string, unknown>; keyPattern?: Record<string, unknown> }): string[] {
+function getDuplicateFields(err: { keyValue?: Record<string, unknown>; keyPattern?: Record<string, unknown>; message?: string }): string[] {
   const fromKeyValue = Object.keys(err.keyValue || {});
   if (fromKeyValue.length > 0) return fromKeyValue;
-  return Object.keys(err.keyPattern || {});
+
+  const fromKeyPattern = Object.keys(err.keyPattern || {});
+  if (fromKeyPattern.length > 0) return fromKeyPattern;
+
+  const message = String(err.message || '');
+  const indexMatch = message.match(/index:\s*([^\s]+)\s*dup key/i);
+  if (!indexMatch?.[1]) return [];
+
+  const indexName = indexMatch[1];
+  const normalized = indexName.replace(/_1/g, '');
+  return normalized.split('_').filter(Boolean);
 }
 
 function escapeRegex(input: string): string {
@@ -769,20 +779,39 @@ async function createOrGetPendingDepositTransaction(params: {
         throw err;
       }
 
-      const duplicateFields = getDuplicateFields(err);
+      const duplicateFields = getDuplicateFields(err as { keyValue?: Record<string, unknown>; keyPattern?: Record<string, unknown>; message?: string });
 
-      if (duplicateFields.includes('checkoutRequestId')) {
-        const existingTxn = await Transaction.findOne({
-          checkoutRequestId: params.checkoutRequestId,
-          type: 'deposit',
-        }).select('_id checkoutRequestId memberId amount status mpesaRef depositProcessed');
+      const existingByCheckout = await Transaction.findOne({
+        checkoutRequestId: params.checkoutRequestId,
+        type: 'deposit',
+      }).select('_id checkoutRequestId memberId amount status mpesaRef depositProcessed');
 
-        if (existingTxn) {
-          return existingTxn;
+      if (existingByCheckout) {
+        return existingByCheckout;
+      }
+
+      const existingSimilarPending = await findReusablePendingDepositTransaction({
+        memberId: params.memberId,
+        amount: params.amount,
+        phone: params.phone,
+      });
+
+      if (existingSimilarPending?.checkoutRequestId) {
+        const hydratedSimilarTxn = await Transaction.findById(existingSimilarPending._id)
+          .select('_id checkoutRequestId memberId amount status mpesaRef depositProcessed');
+
+        if (hydratedSimilarTxn) {
+          return hydratedSimilarTxn;
         }
       }
 
-      if (!duplicateFields.includes('transactionRef')) {
+      // If duplicate metadata is unclear, retry as a transient race condition.
+      if (duplicateFields.length === 0) {
+        continue;
+      }
+
+      // Retry transactionRef collisions; any other field collision should bubble.
+      if (!duplicateFields.includes('transactionRef') && !duplicateFields.includes('checkoutRequestId')) {
         throw err;
       }
     }
