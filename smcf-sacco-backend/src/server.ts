@@ -91,10 +91,21 @@ if (process.env.NODE_ENV === 'development') {
 const isDev = process.env.NODE_ENV === 'development';
 const rateLimitWindowMs = Number(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000; // 15 minutes
 const rateLimitMaxRequests = Number(process.env.RATE_LIMIT_MAX_REQUESTS) || 100;
+const authenticatedRateLimitMaxRequests =
+  Number(process.env.RATE_LIMIT_AUTH_MAX_REQUESTS) || (isDev ? 5000 : 1500);
 const authLoginMaxRequests =
   Number(process.env.RATE_LIMIT_AUTH_LOGIN_MAX) || (isDev ? 1000 : rateLimitMaxRequests);
 const disableAuthLoginLimiter =
   isDev && String(process.env.RATE_LIMIT_AUTH_LOGIN_DISABLED || '').toLowerCase() === 'true';
+
+const isAuthenticatedRequest = (req: Request) =>
+  Boolean(req.headers.authorization && req.headers.authorization.startsWith('Bearer '));
+
+const extractAuthToken = (req: Request) => {
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith('Bearer ')) return null;
+  return header.slice('Bearer '.length).trim();
+};
 
 const authLoginLimiter = rateLimit({
   windowMs: rateLimitWindowMs,
@@ -111,11 +122,28 @@ const limiter = rateLimit({
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => req.path === '/auth/login',
+  // Public/anonymous limiter only.
+  skip: (req) => req.path === '/auth/login' || isAuthenticatedRequest(req),
+});
+
+const authenticatedLimiter = rateLimit({
+  windowMs: rateLimitWindowMs,
+  max: authenticatedRateLimitMaxRequests,
+  message: 'Too many requests for this account, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => !isAuthenticatedRequest(req),
+  // Use token-based key first so users behind shared proxies don't throttle each other.
+  keyGenerator: (req) => {
+    const token = extractAuthToken(req);
+    if (token) return `auth:${token.slice(0, 24)}`;
+    return `ip:${req.ip}`;
+  },
 });
 
 app.use('/api/auth/login', authLoginLimiter);
 app.use('/api/', limiter);
+app.use('/api/', authenticatedLimiter);
 
 // Health check
 app.get('/health', (req: Request, res: Response) => {
