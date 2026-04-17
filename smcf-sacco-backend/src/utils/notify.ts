@@ -6,6 +6,27 @@ import User from '../models/User';
 import Member from '../models/Member';
 import mongoose from 'mongoose';
 
+const DUPLICATE_LOOKBACK_HOURS = 24;
+
+async function hasRecentDuplicate(
+  userId: string | mongoose.Types.ObjectId,
+  title: string,
+  message: string,
+  type: 'info' | 'approval' | 'rejection',
+  link: string | null
+) {
+  const since = new Date(Date.now() - DUPLICATE_LOOKBACK_HOURS * 60 * 60 * 1000);
+  const existing = await Notification.findOne({
+    userId,
+    title,
+    message,
+    type,
+    link,
+    createdAt: { $gte: since },
+  }).select('_id');
+  return !!existing;
+}
+
 /** Notify a specific user by their userId */
 export async function notifyUser(
   userId: string | mongoose.Types.ObjectId,
@@ -15,6 +36,9 @@ export async function notifyUser(
   link: string | null = null
 ) {
   try {
+    if (await hasRecentDuplicate(userId, title, message, type, link)) {
+      return;
+    }
     await Notification.create({ userId, title, message, type, link });
   } catch (err) {
     console.error('[notify] notifyUser error:', err);
@@ -32,6 +56,9 @@ export async function notifyMember(
   try {
     const member = await Member.findById(memberId).select('userId');
     if (member?.userId) {
+      if (await hasRecentDuplicate(member.userId as any, title, message, type, link)) {
+        return;
+      }
       await Notification.create({ userId: member.userId, title, message, type, link });
     }
   } catch (err) {
@@ -53,9 +80,24 @@ export async function notifyStaff(
 
     if (staffUsers.length === 0) return;
 
-    await Notification.insertMany(
-      staffUsers.map((u) => ({ userId: u._id, title, message, type, link }))
-    );
+    const since = new Date(Date.now() - DUPLICATE_LOOKBACK_HOURS * 60 * 60 * 1000);
+    const existing = await Notification.find({
+      userId: { $in: staffUsers.map((u) => u._id) },
+      title,
+      message,
+      type,
+      link,
+      createdAt: { $gte: since },
+    }).select('userId');
+
+    const existingUserIds = new Set(existing.map((n: any) => String(n.userId)));
+    const toInsert = staffUsers
+      .filter((u) => !existingUserIds.has(String(u._id)))
+      .map((u) => ({ userId: u._id, title, message, type, link }));
+
+    if (toInsert.length > 0) {
+      await Notification.insertMany(toInsert);
+    }
   } catch (err) {
     console.error('[notify] notifyStaff error:', err);
   }

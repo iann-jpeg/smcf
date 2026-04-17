@@ -256,14 +256,21 @@ router.post(
             ? true
             : required.every((l) => approvedLevels.includes(l) || l === approvalLevel);
           if (allDone) {
-            await Loan.findByIdAndUpdate(loanId, { status: 'approved', approvedAt: new Date(), approvedBy: req.userId });
-            notifyMember(
-              loan.memberId,
-              'Loan Approved ✅',
-              `Your loan application ${loan.loanNumber} for KES ${Number(loan.principal).toLocaleString()} has been fully approved.`,
-              'approval',
-              '/loans'
+            const transitioned = await Loan.findOneAndUpdate(
+              { _id: loanId, status: { $ne: 'approved' } },
+              { status: 'approved', approvedAt: new Date(), approvedBy: req.userId },
+              { new: true }
             );
+
+            if (transitioned) {
+              notifyMember(
+                loan.memberId,
+                'Loan Approved ✅',
+                `Your loan application ${loan.loanNumber} for KES ${Number(loan.principal).toLocaleString()} has been fully approved.`,
+                'approval',
+                '/loans'
+              );
+            }
           }
         }
       }
@@ -411,8 +418,16 @@ router.put(
   auditLog('loans', 'approve'),
   async (req: AuthRequest, res, next) => {
     try {
-      const loan = await Loan.findByIdAndUpdate(
-        req.params.id,
+      const existingLoan = await Loan.findById(req.params.id);
+      if (!existingLoan) {
+        return res.status(404).json({
+          success: false,
+          message: 'Loan not found'
+        });
+      }
+
+      const loan = await Loan.findOneAndUpdate(
+        { _id: req.params.id, status: { $ne: 'approved' } },
         {
           status: 'approved',
           approvedAt: new Date(),
@@ -422,9 +437,10 @@ router.put(
       );
 
       if (!loan) {
-        return res.status(404).json({
-          success: false,
-          message: 'Loan not found'
+        return res.json({
+          success: true,
+          data: existingLoan,
+          message: 'Loan already approved'
         });
       }
 
@@ -601,24 +617,37 @@ router.put(
   auditLog('loans', 'disburse'),
   async (req: AuthRequest, res, next) => {
     try {
-      const loan = await Loan.findById(req.params.id);
-      if (!loan) {
+      const currentLoan = await Loan.findById(req.params.id);
+      if (!currentLoan) {
         return res.status(404).json({ success: false, message: 'Loan not found' });
       }
 
-      if (!['approved', 'pending'].includes(loan.status)) {
+      if (!['approved', 'pending'].includes(currentLoan.status)) {
         return res.status(400).json({
           success: false,
-          message: `Loan cannot be disbursed from status: ${loan.status}`
+          message: `Loan cannot be disbursed from status: ${currentLoan.status}`
         });
       }
 
-      // Update loan to active status (ready for repayments)
-      loan.status = 'active';
-      loan.disbursedDate = new Date();
-      if (loan.approvedAt == null) loan.approvedAt = new Date();
-      if (loan.approvedBy == null) loan.approvedBy = req.userId as any;
-      await loan.save();
+      // Idempotent transition: only first request can move approved/pending -> active
+      const loan = await Loan.findOneAndUpdate(
+        { _id: req.params.id, status: { $in: ['approved', 'pending'] } },
+        {
+          status: 'active',
+          disbursedDate: new Date(),
+          approvedAt: currentLoan.approvedAt ?? new Date(),
+          approvedBy: currentLoan.approvedBy ?? (req.userId as any),
+        },
+        { new: true }
+      );
+
+      if (!loan) {
+        return res.json({
+          success: true,
+          data: currentLoan,
+          message: 'Loan already disbursed'
+        });
+      }
 
       await createRepaymentSchedule(loan, loan.disbursedDate);
 

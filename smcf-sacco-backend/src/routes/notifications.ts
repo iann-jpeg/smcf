@@ -10,8 +10,17 @@ const router = Router();
 // @access  Private
 router.get('/', protect, async (req: AuthRequest, res, next) => {
   try {
-    const notifications = await Notification.find({ userId: req.userId })
+    const rawNotifications = await Notification.find({ userId: req.userId })
       .sort({ createdAt: -1 });
+
+    // Collapse exact duplicates (same title/message/type/link) and keep the newest item.
+    const seen = new Set<string>();
+    const notifications = rawNotifications.filter((n) => {
+      const key = `${n.title}::${n.message}::${n.type}::${n.link || ''}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 
     const unreadCount = notifications.filter(n => !n.read).length;
 
