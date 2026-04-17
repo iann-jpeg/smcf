@@ -286,22 +286,33 @@ router.post("/query-status", protect, async (req, res) => {
           
           // Wallet deposit - create Saving record
           const Saving = (await import("../models/Saving.js")).default;
+          const paymentReceiptRef =
+            result.mpesaReceiptNumber ||
+            result.transactionId ||
+            checkoutRequestID ||
+            payment.checkout_request_id ||
+            payment.transaction_reference ||
+            "";
 
           // Check if this transaction already exists (prevent duplicates)
           const existingSaving = await Saving.findOne({
             member_id: payment.member_id,
-            transaction_ref: result.mpesaReceiptNumber,
+            transaction_ref: paymentReceiptRef,
             transaction_type: "deposit"
           });
 
           if (existingSaving) {
             console.log("⚠️ Deposit already recorded for transaction:", result.mpesaReceiptNumber);
+            // Reconcile member wallet balance from ledger in case an earlier path skipped wallet_balance update.
+            await Member.findByIdAndUpdate(payment.member_id, {
+              $set: { wallet_balance: existingSaving.balance_after },
+            });
             return res.json({
               success: true,
               status: "completed",
               ResultCode: "0",
               ResultDescription: "Transaction already processed",
-              MpesaReceiptNumber: result.mpesaReceiptNumber,
+              MpesaReceiptNumber: paymentReceiptRef,
             });
           }
 
@@ -335,8 +346,8 @@ router.post("/query-status", protect, async (req, res) => {
               balance_after: balanceAfter,
               status: "completed",
               payment_method: "mpesa",
-              transaction_ref: result.mpesaReceiptNumber,
-              notes: `Wallet deposit via M-Pesa - ${result.mpesaReceiptNumber}${lockPeriod > 0 ? ` | Locked for ${lockPeriod} months` : ''}`,
+              transaction_ref: paymentReceiptRef,
+              notes: `Wallet deposit via M-Pesa - ${paymentReceiptRef}${lockPeriod > 0 ? ` | Locked for ${lockPeriod} months` : ''}`,
               lock_period_months: lockPeriod,
               unlock_date: unlockDate,
               maturity_status: lockPeriod > 0 ? "locked" : "none",
@@ -366,6 +377,7 @@ router.post("/query-status", protect, async (req, res) => {
 
           await Member.findByIdAndUpdate(payment.member_id, {
             $inc: { total_savings: depositAmount },
+            $set: { wallet_balance: balanceAfter },
           });
 
           console.log("✅ Wallet deposit completed:", {
@@ -381,7 +393,7 @@ router.post("/query-status", protect, async (req, res) => {
             io.emit("payment:completed", {
               memberId: payment.member_id.toString(),
               checkoutRequestID: payment.checkout_request_id,
-              mpesaReceiptNumber: result.mpesaReceiptNumber,
+              mpesaReceiptNumber: paymentReceiptRef,
               payment: {
                 _id: payment._id,
                 amount: payment.amount,
@@ -1150,16 +1162,26 @@ router.post("/callback", async (req, res) => {
         
         // Wallet deposit - create Saving record
         const Saving = (await import("../models/Saving.js")).default;
+        const paymentReceiptRef =
+          callbackData.mpesaReceiptNumber ||
+          callbackData.transactionId ||
+          callbackData.checkoutRequestID ||
+          payment.checkout_request_id ||
+          payment.transaction_reference ||
+          "";
 
         // Double-check if this transaction already exists (belt and suspenders)
         const existingSaving = await Saving.findOne({
           member_id: payment.member_id,
-          transaction_ref: callbackData.mpesaReceiptNumber,
+          transaction_ref: paymentReceiptRef,
           transaction_type: "deposit"
         });
 
         if (existingSaving) {
           console.log("⚠️ Deposit already recorded via callback for transaction:", callbackData.mpesaReceiptNumber);
+          await Member.findByIdAndUpdate(payment.member_id, {
+            $set: { wallet_balance: existingSaving.balance_after },
+          });
           return res.json({
             success: true,
             ResultCode: "0",
@@ -1197,8 +1219,8 @@ router.post("/callback", async (req, res) => {
             balance_after: balanceAfter,
             status: "completed",
             payment_method: "mpesa",
-            transaction_ref: callbackData.mpesaReceiptNumber,
-            notes: `Wallet deposit via M-Pesa - ${callbackData.mpesaReceiptNumber}${lockPeriod > 0 ? ` | Locked for ${lockPeriod} months` : ''}`,
+            transaction_ref: paymentReceiptRef,
+            notes: `Wallet deposit via M-Pesa - ${paymentReceiptRef}${lockPeriod > 0 ? ` | Locked for ${lockPeriod} months` : ''}`,
             lock_period_months: lockPeriod,
             unlock_date: unlockDate,
             maturity_status: lockPeriod > 0 ? "locked" : "none",
@@ -1226,6 +1248,7 @@ router.post("/callback", async (req, res) => {
 
         await Member.findByIdAndUpdate(payment.member_id, {
           $inc: { total_savings: depositAmount },
+          $set: { wallet_balance: balanceAfter },
         });
 
         console.log("✅ Wallet deposit completed via callback:", {
@@ -1241,7 +1264,7 @@ router.post("/callback", async (req, res) => {
           io.emit("payment:completed", {
             memberId: payment.member_id.toString(),
             checkoutRequestID: payment.checkout_request_id,
-            mpesaReceiptNumber: callbackData.mpesaReceiptNumber,
+            mpesaReceiptNumber: paymentReceiptRef,
             payment: {
               _id: payment._id,
               amount: payment.amount,
