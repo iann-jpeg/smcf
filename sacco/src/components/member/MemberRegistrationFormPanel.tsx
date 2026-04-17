@@ -75,6 +75,122 @@ type FormState = {
   };
 };
 
+function buildLocalDefaultForm(member: MemberLike): FormState {
+  return {
+    personalDetails: {
+      fullName: String(member?.name || ""),
+      nationalIdOrPassportNo: "",
+      dateOfBirth: "",
+      gender: "",
+      maritalStatus: "",
+      nationality: "Kenyan",
+      placeOfBirth: "",
+    },
+    residentialAddress: {
+      physicalAddress: "",
+      townCity: "",
+      county: "",
+      country: "Kenya",
+      poBox: "",
+      postalCode: "",
+    },
+    contactInformation: {
+      primaryMobileMpesa: String(member?.phone || ""),
+      alternativePhone: String(member?.phone || ""),
+      emailAddress: String(member?.email || ""),
+    },
+    employmentBusinessDetails: {
+      occupationJobTitle: "",
+      monthlyGrossIncomeKes: "",
+      employerBusinessName: "",
+      workPhoneNo: "",
+      employmentStatus: "",
+      sourceOfFunds: "",
+    },
+    bankingDetails: {
+      bankName: "",
+      branchName: "",
+      accountNumber: "",
+    },
+    shareSubscriptionSavings: {
+      noOfSharesSubscribed: "",
+      totalShareCapitalKes: "",
+      initialSavingsDepositKes: "",
+    },
+    nextOfKinBeneficiary: {
+      fullName: "",
+      relationship: "",
+      phoneNumber: "",
+      nationalIdNo: "",
+      physicalAddress: "",
+      emailIfAny: "",
+    },
+    declarationSignature: {
+      applicantSignatureName: String(member?.name || ""),
+      dateSigned: new Date().toISOString().split("T")[0],
+    },
+  };
+}
+
+function normalizeFormState(candidate: any, member: MemberLike): FormState {
+  const local = buildLocalDefaultForm(member);
+  const c = candidate || {};
+  return {
+    personalDetails: {
+      fullName: String(c?.personalDetails?.fullName ?? local.personalDetails.fullName),
+      nationalIdOrPassportNo: String(c?.personalDetails?.nationalIdOrPassportNo ?? local.personalDetails.nationalIdOrPassportNo),
+      dateOfBirth: String(c?.personalDetails?.dateOfBirth ?? local.personalDetails.dateOfBirth),
+      gender: String(c?.personalDetails?.gender ?? local.personalDetails.gender),
+      maritalStatus: String(c?.personalDetails?.maritalStatus ?? local.personalDetails.maritalStatus),
+      nationality: String(c?.personalDetails?.nationality ?? local.personalDetails.nationality),
+      placeOfBirth: String(c?.personalDetails?.placeOfBirth ?? local.personalDetails.placeOfBirth),
+    },
+    residentialAddress: {
+      physicalAddress: String(c?.residentialAddress?.physicalAddress ?? local.residentialAddress.physicalAddress),
+      townCity: String(c?.residentialAddress?.townCity ?? local.residentialAddress.townCity),
+      county: String(c?.residentialAddress?.county ?? local.residentialAddress.county),
+      country: String(c?.residentialAddress?.country ?? local.residentialAddress.country),
+      poBox: String(c?.residentialAddress?.poBox ?? local.residentialAddress.poBox),
+      postalCode: String(c?.residentialAddress?.postalCode ?? local.residentialAddress.postalCode),
+    },
+    contactInformation: {
+      primaryMobileMpesa: String(c?.contactInformation?.primaryMobileMpesa ?? local.contactInformation.primaryMobileMpesa),
+      alternativePhone: String(c?.contactInformation?.alternativePhone ?? local.contactInformation.alternativePhone),
+      emailAddress: String(c?.contactInformation?.emailAddress ?? local.contactInformation.emailAddress),
+    },
+    employmentBusinessDetails: {
+      occupationJobTitle: String(c?.employmentBusinessDetails?.occupationJobTitle ?? local.employmentBusinessDetails.occupationJobTitle),
+      monthlyGrossIncomeKes: String(c?.employmentBusinessDetails?.monthlyGrossIncomeKes ?? local.employmentBusinessDetails.monthlyGrossIncomeKes),
+      employerBusinessName: String(c?.employmentBusinessDetails?.employerBusinessName ?? local.employmentBusinessDetails.employerBusinessName),
+      workPhoneNo: String(c?.employmentBusinessDetails?.workPhoneNo ?? local.employmentBusinessDetails.workPhoneNo),
+      employmentStatus: String(c?.employmentBusinessDetails?.employmentStatus ?? local.employmentBusinessDetails.employmentStatus),
+      sourceOfFunds: String(c?.employmentBusinessDetails?.sourceOfFunds ?? local.employmentBusinessDetails.sourceOfFunds),
+    },
+    bankingDetails: {
+      bankName: String(c?.bankingDetails?.bankName ?? local.bankingDetails.bankName),
+      branchName: String(c?.bankingDetails?.branchName ?? local.bankingDetails.branchName),
+      accountNumber: String(c?.bankingDetails?.accountNumber ?? local.bankingDetails.accountNumber),
+    },
+    shareSubscriptionSavings: {
+      noOfSharesSubscribed: String(c?.shareSubscriptionSavings?.noOfSharesSubscribed ?? local.shareSubscriptionSavings.noOfSharesSubscribed),
+      totalShareCapitalKes: String(c?.shareSubscriptionSavings?.totalShareCapitalKes ?? local.shareSubscriptionSavings.totalShareCapitalKes),
+      initialSavingsDepositKes: String(c?.shareSubscriptionSavings?.initialSavingsDepositKes ?? local.shareSubscriptionSavings.initialSavingsDepositKes),
+    },
+    nextOfKinBeneficiary: {
+      fullName: String(c?.nextOfKinBeneficiary?.fullName ?? local.nextOfKinBeneficiary.fullName),
+      relationship: String(c?.nextOfKinBeneficiary?.relationship ?? local.nextOfKinBeneficiary.relationship),
+      phoneNumber: String(c?.nextOfKinBeneficiary?.phoneNumber ?? local.nextOfKinBeneficiary.phoneNumber),
+      nationalIdNo: String(c?.nextOfKinBeneficiary?.nationalIdNo ?? local.nextOfKinBeneficiary.nationalIdNo),
+      physicalAddress: String(c?.nextOfKinBeneficiary?.physicalAddress ?? local.nextOfKinBeneficiary.physicalAddress),
+      emailIfAny: String(c?.nextOfKinBeneficiary?.emailIfAny ?? local.nextOfKinBeneficiary.emailIfAny),
+    },
+    declarationSignature: {
+      applicantSignatureName: String(c?.declarationSignature?.applicantSignatureName ?? local.declarationSignature.applicantSignatureName),
+      dateSigned: String(c?.declarationSignature?.dateSigned ?? local.declarationSignature.dateSigned),
+    },
+  };
+}
+
 function toDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -135,16 +251,29 @@ export default function MemberRegistrationFormPanel({ member }: { member: Member
   const [submitting, setSubmitting] = useState(false);
   const [initialised, setInitialised] = useState(false);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ["member-registration-form-me"],
     queryFn: async () => api.get("/registration-forms/me") as any,
+    retry: false,
   });
 
   useEffect(() => {
-    if (!data || initialised) return;
+    if (initialised) return;
 
-    const defaults = (data?.formDefaults || {}) as FormState;
-    const existingForm = (data?.submission?.form || null) as FormState | null;
+    if (isError) {
+      setForm(normalizeFormState(null, member));
+      setPassportPhoto(String(member?.profile_photo || member?.doc_passport_photo || ""));
+      setTermsAccepted(false);
+      setInitialised(true);
+      return;
+    }
+
+    if (!data) return;
+
+    const defaults = normalizeFormState(data?.formDefaults || null, member);
+    const existingForm = data?.submission?.form
+      ? normalizeFormState(data.submission.form, member)
+      : null;
 
     setForm(existingForm || defaults);
     setPassportPhoto(
@@ -158,7 +287,7 @@ export default function MemberRegistrationFormPanel({ member }: { member: Member
     );
     setTermsAccepted(Boolean(data?.submission?.termsAccepted));
     setInitialised(true);
-  }, [data, initialised, member?.doc_passport_photo, member?.profile_photo]);
+  }, [data, initialised, isError, member]);
 
   const hasSubmitted = Boolean(data?.hasSubmitted);
   const submittedAt = data?.submission?.submittedAt ? new Date(data.submission.submittedAt).toLocaleString() : null;
@@ -172,7 +301,7 @@ export default function MemberRegistrationFormPanel({ member }: { member: Member
 
   const sectionCardClass = "border border-border/70";
 
-  if (isLoading || !form) {
+  if ((isLoading && !initialised) || !form) {
     return (
       <Card>
         <CardContent className="py-12 flex items-center justify-center gap-3 text-muted-foreground">
@@ -183,7 +312,17 @@ export default function MemberRegistrationFormPanel({ member }: { member: Member
     );
   }
 
+  const backendUnavailable = isError;
+  const backendErrorMessage = backendUnavailable
+    ? (error as Error)?.message || "Registration form service unavailable"
+    : null;
+
   const submitForm = async () => {
+    if (backendUnavailable) {
+      toast.error("Registration form backend endpoint is not live yet. Please try again after backend deployment.");
+      return;
+    }
+
     const missing = collectMissingFields(form);
     if (missing.length > 0) {
       toast.error(`Please complete all required fields. Missing: ${missing[0]}`);
@@ -227,6 +366,12 @@ export default function MemberRegistrationFormPanel({ member }: { member: Member
           </p>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
+          {backendUnavailable && (
+            <div className="rounded-lg border border-blue-300 bg-blue-50 px-4 py-3 text-blue-800 text-xs">
+              Backend sync endpoint is not available yet ({backendErrorMessage}). You can fill the form now,
+              but submit will work after SACCO backend deployment updates.
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <p className="text-muted-foreground">Member Name</p>
