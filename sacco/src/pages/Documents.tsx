@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { FileText, FileCheck, FileClock, Download, Upload, Loader2, ClipboardList, CheckCircle2, Eye, RefreshCw, UserCheck, XCircle, ShieldAlert } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { downloadBrandedPolicyDocument, downloadMembershipForm, downloadProjectProposal } from "@/lib/pdf-export";
@@ -1244,6 +1245,10 @@ export default function Documents() {
 
   const [uploading, setUploading] = useState(false);
   const [uploaded, setUploaded] = useState(false);
+  const [selectedGeneratorTemplateId, setSelectedGeneratorTemplateId] = useState<string>("shareholder-onboarding-form");
+  const [generatorTitle, setGeneratorTitle] = useState("Custom Membership Form");
+  const [generatorFileName, setGeneratorFileName] = useState("SMCF_Custom_Membership_Form.pdf");
+  const [generatorPastedContent, setGeneratorPastedContent] = useState("");
   const [kycSearch, setKycSearch] = useState("");
   const [kycCategory, setKycCategory] = useState<KycFieldKey | "all">("all");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1368,6 +1373,64 @@ export default function Documents() {
     repaymentSchedules: activeLoans.length,
     memberStatements: members.length,
   }), [loans, guarantors, activeLoans, members]);
+
+  const generatorTemplates = useMemo(
+    () =>
+      ADMIN_POLICY_TEMPLATES.filter((template) =>
+        /(form|template|statement|register)/i.test(template.title)
+      ),
+    []
+  );
+
+  function buildGeneratedDocumentLines(templateId: string, pastedContent: string) {
+    const template = ADMIN_POLICY_TEMPLATES.find((item) => item.id === templateId);
+    const baseLines = template?.lines ?? [];
+    const contentLines = pastedContent
+      .split(/\r?\n/)
+      .map((line) => line.trimEnd())
+      .filter((line) => line.length > 0);
+
+    if (contentLines.length === 0) {
+      return baseLines;
+    }
+
+    return [
+      ...baseLines,
+      "",
+      "ADMIN PROVIDED CONTENT",
+      "",
+      ...contentLines,
+    ];
+  }
+
+  function handleGenerateCustomDocument() {
+    const title = generatorTitle.trim();
+    const fileNameRaw = generatorFileName.trim();
+
+    if (!title) {
+      toast.error("Please enter a document title.");
+      return;
+    }
+
+    if (!generatorPastedContent.trim()) {
+      toast.error("Please paste content before generating the document.");
+      return;
+    }
+
+    const normalizedFileName = fileNameRaw
+      ? fileNameRaw.endsWith(".pdf")
+        ? fileNameRaw
+        : `${fileNameRaw}.pdf`
+      : `${title.replace(/\s+/g, "_")}.pdf`;
+
+    const lines = buildGeneratedDocumentLines(
+      selectedGeneratorTemplateId,
+      generatorPastedContent
+    );
+
+    downloadBrandedPolicyDocument(title, normalizedFileName, lines);
+    toast.success("Document generated and download started.");
+  }
 
   async function handleFormUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -1599,42 +1662,107 @@ export default function Documents() {
         )}
 
         <TabsContent value="admin-docs" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-heading">SACCO Documents</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                15 branded policy and form templates available for members and admin to view and download.
-              </p>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {ADMIN_POLICY_TEMPLATES.map((template) => (
-                  <Card key={template.id} className="border border-border/60">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-base font-heading">{template.title}</CardTitle>
-                      <p className="text-xs text-muted-foreground">{template.subtitle}</p>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      <Button
-                        className="w-full gap-2"
-                        variant="outline"
-                        onClick={() =>
-                          downloadBrandedPolicyDocument(
-                            template.title,
-                            template.fileName,
-                            template.lines
-                          )
-                        }
-                      >
-                        <Download className="h-4 w-4" />
-                        Download
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-heading">Form Template Generator (Admin)</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Paste content, apply a forms-format template, and generate a branded PDF in one click.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">Template</label>
+                    <select
+                      title="Form template"
+                      className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                      value={selectedGeneratorTemplateId}
+                      onChange={(e) => setSelectedGeneratorTemplateId(e.target.value)}
+                    >
+                      {generatorTemplates.map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {template.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">Document Title</label>
+                    <Input
+                      value={generatorTitle}
+                      onChange={(e) => setGeneratorTitle(e.target.value)}
+                      placeholder="Enter output title"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">File Name</label>
+                    <Input
+                      value={generatorFileName}
+                      onChange={(e) => setGeneratorFileName(e.target.value)}
+                      placeholder="SMCF_Custom_Form.pdf"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Paste Content</label>
+                  <Textarea
+                    value={generatorPastedContent}
+                    onChange={(e) => setGeneratorPastedContent(e.target.value)}
+                    placeholder="Paste your form content here. Each new line will be preserved in the generated document."
+                    className="min-h-[220px]"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end">
+                  <Button className="gap-2" onClick={handleGenerateCustomDocument}>
+                    <Download className="h-4 w-4" />
+                    Generate & Download PDF
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-heading">SACCO Documents</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  15 branded policy and form templates available for members and admin to view and download.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {ADMIN_POLICY_TEMPLATES.map((template) => (
+                    <Card key={template.id} className="border border-border/60">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-base font-heading">{template.title}</CardTitle>
+                        <p className="text-xs text-muted-foreground">{template.subtitle}</p>
+                      </CardHeader>
+                      <CardContent className="pt-0">
+                        <Button
+                          className="w-full gap-2"
+                          variant="outline"
+                          onClick={() =>
+                            downloadBrandedPolicyDocument(
+                              template.title,
+                              template.fileName,
+                              template.lines
+                            )
+                          }
+                        >
+                          <Download className="h-4 w-4" />
+                          Download
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="forms" className="mt-4" onAnimationStart={isStaff ? loadSubmissions : undefined}>

@@ -137,6 +137,12 @@ export default function MyAccount() {
     queryFn: async () => api.get("/config"),
   });
 
+  const { data: shareCapitalDividendsData } = useQuery({
+    queryKey: ["my-share-capital-dividends", member?.id],
+    queryFn: async () => api.get("/share-capital-dividends/member/me"),
+    enabled: !!member?.id,
+  });
+
   const stopRegFeePolling = () => {
     if (regFeePollRef.current) {
       clearInterval(regFeePollRef.current);
@@ -437,6 +443,17 @@ export default function MyAccount() {
   const upcomingRepayments = repayments.filter((r: any) => r.status === "pending");
   const overdueRepayments = repayments.filter((r: any) => r.status === "overdue");
   const historyLoan = historyLoanId ? loans.find((l: any) => l.id === historyLoanId) : null;
+  const memberShareData = (shareCapitalDividendsData as any) || {};
+  const memberSharesOwned = Number(memberShareData.numberOfSharesOwned ?? Number(member?.shares || 0) / 100);
+  const memberTotalShareCapital = Number(memberShareData.totalShareCapital ?? member?.shares ?? 0);
+  const memberShareProgress = Number(memberShareData.progressTowardMinimumShareCapital ?? Math.min(100, (memberTotalShareCapital / 10000) * 100));
+  const memberCurrentDividend = Number(memberShareData.dividendEarnedCurrentPeriod ?? 0);
+  const memberContributionHistory = Array.isArray(memberShareData.shareContributionHistory)
+    ? memberShareData.shareContributionHistory
+    : [];
+  const memberDividendHistory = Array.isArray(memberShareData.dividendHistory)
+    ? memberShareData.dividendHistory
+    : [];
 
   return (
     <div className="space-y-6">
@@ -589,6 +606,101 @@ export default function MyAccount() {
           subtitle={pendingLoans.length > 0 ? `${pendingLoans.length} pending` : undefined}
         />
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base font-heading">Share Capital & Dividends</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Number of Shares Owned</p>
+              <p className="font-semibold">{memberSharesOwned.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Total Share Capital</p>
+              <p className="font-semibold">KES {memberTotalShareCapital.toLocaleString()}</p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Progress to Minimum (KES 10,000)</p>
+              <p className="font-semibold">{memberShareProgress.toFixed(1)}%</p>
+              <Progress className="mt-2 h-2" value={Math.min(100, memberShareProgress)} />
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Current Period Dividend</p>
+              <p className="font-semibold">KES {memberCurrentDividend.toLocaleString()}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Share Contribution History</CardTitle>
+              </CardHeader>
+              <CardContent className="max-h-56 overflow-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {memberContributionHistory.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={3} className="text-center text-muted-foreground">No share contributions found.</TableCell>
+                      </TableRow>
+                    ) : (
+                      memberContributionHistory.slice(0, 10).map((item: any) => (
+                        <TableRow key={item._id || `${item.contributionDate}-${item.amount}`}>
+                          <TableCell>{item.contributionDate ? new Date(item.contributionDate).toLocaleDateString() : "-"}</TableCell>
+                          <TableCell className="text-right">KES {Number(item.amount || 0).toLocaleString()}</TableCell>
+                          <TableCell>
+                            <Badge variant={item.status === "approved" ? "default" : "outline"}>{item.status || "pending"}</Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Dividend History</CardTitle>
+              </CardHeader>
+              <CardContent className="max-h-56 overflow-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Period</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead>Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {memberDividendHistory.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={3} className="text-center text-muted-foreground">No dividends distributed yet.</TableCell>
+                      </TableRow>
+                    ) : (
+                      memberDividendHistory.slice(0, 10).map((item: any) => (
+                        <TableRow key={item._id || `${item.distributionPeriod}-${item.approvedAt}`}>
+                          <TableCell>{item.distributionPeriod || "-"}</TableCell>
+                          <TableCell className="text-right">KES {Number(item.dividendAmount || 0).toLocaleString()}</TableCell>
+                          <TableCell>{item.approvedAt ? new Date(item.approvedAt).toLocaleDateString() : "-"}</TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className={registrationFeePaid ? 'border-green-200 bg-green-50/40' : 'border-green-200 bg-green-50/40'}>
         <CardHeader className="pb-3">

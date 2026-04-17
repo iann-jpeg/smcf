@@ -78,6 +78,7 @@ import ReportsTab from "./admin/ReportsTab";
 import TrafficDashboard from "./admin/TrafficDashboard";
 import AdminGuarantorManagement from "./admin/AdminGuarantorManagement";
 import MemberMessagesTab from "./admin/MemberMessagesTab";
+import ShareCapitalDividendsTab from "./admin/ShareCapitalDividendsTab";
 
 
 interface AdminDashboardProps {
@@ -3018,6 +3019,11 @@ Thank you for your cooperation! ðŸ™`;
               Reports
             </TabsTrigger>
             <TabsTrigger
+              value="share-capital-dividends"
+              className="text-xs sm:text-sm whitespace-nowrap">
+              Share Capital & Dividends
+            </TabsTrigger>
+            <TabsTrigger
               value="member-messages"
               className="text-xs sm:text-sm whitespace-nowrap">
               Member Messages
@@ -4170,6 +4176,10 @@ Thank you for your cooperation! ðŸ™`;
 
         <TabsContent value="reports" className="space-y-6">
           <ReportsTab />
+        </TabsContent>
+
+        <TabsContent value="share-capital-dividends" className="space-y-6">
+          <ShareCapitalDividendsTab isReadOnly={isReadOnly} />
         </TabsContent>
 
         <TabsContent value="member-messages" className="space-y-6">
