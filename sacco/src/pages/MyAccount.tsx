@@ -50,6 +50,7 @@ import { DepositSavingsDialog } from "@/components/DepositSavingsDialog";
 import { LoanRepaymentDialog } from "@/components/LoanRepaymentDialog";
 import { ShareSubscriptionDialog } from "@/components/ShareSubscriptionDialog";
 import { ShareTransferDialog } from "@/components/ShareTransferDialog";
+import MemberRegistrationFormPanel from "@/components/member/MemberRegistrationFormPanel";
 
 function statusVariant(status: string) {
   switch (status) {
@@ -857,6 +858,11 @@ export default function MyAccount() {
             <span className="sm:hidden">Guar</span>
             {pendingGuarantorCount > 0 && <Badge variant="outline" className="ml-1 text-[10px] border-current">{pendingGuarantorCount}</Badge>}
           </TabsTrigger>
+          <TabsTrigger value="registration-form" className="rounded-lg px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-foreground/60 transition-all hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm flex-1 sm:flex-none">
+            <FileText className="mr-1 h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Registration Form</span>
+            <span className="sm:hidden">Form</span>
+          </TabsTrigger>
         </TabsList>
 
         {/* Repayments */}
@@ -1236,6 +1242,11 @@ export default function MyAccount() {
           <GrowthDashboardTab member={member} savingsHistory={savingsHistory} />
         </TabsContent>
 
+        {/* Digital Membership Registration Form */}
+        <TabsContent value="registration-form">
+          <MemberRegistrationFormPanel member={member} />
+        </TabsContent>
+
         {/* Profile */}
         <TabsContent value="profile">
           <div className="space-y-6">
@@ -1502,11 +1513,21 @@ export default function MyAccount() {
                 <div className="flex items-center justify-between rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-900/10 px-4 py-3 gap-3">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-foreground">Membership Application Form</p>
-                    <p className="text-xs text-muted-foreground">Download, print, fill in, sign and upload below under "Signed Membership Form".</p>
+                    <p className="text-xs text-muted-foreground">Complete your form digitally in this account under "Registration Form". Download/print remains optional.</p>
                   </div>
-                  <Button size="sm" variant="outline" className="shrink-0 gap-1.5 border-blue-300 dark:border-blue-700" onClick={() => downloadMembershipForm()}>
-                    <Download className="h-3.5 w-3.5" /> Download Form
-                  </Button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                      size="sm"
+                      variant="default"
+                      className="gap-1.5"
+                      onClick={() => setSearchParams({ tab: "registration-form" }, { replace: true })}
+                    >
+                      <FileText className="h-3.5 w-3.5" /> Open Digital Form
+                    </Button>
+                    <Button size="sm" variant="outline" className="gap-1.5 border-blue-300 dark:border-blue-700" onClick={() => downloadMembershipForm()}>
+                      <Download className="h-3.5 w-3.5" /> Download PDF
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

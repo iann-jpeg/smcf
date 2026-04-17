@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useLoans } from "@/hooks/useLoans";
 import { useGuarantors } from "@/hooks/useGuarantors";
 import { useMembers } from "@/hooks/useMembers";
@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { FileText, FileCheck, FileClock, Download, Upload, Loader2, ClipboardList, CheckCircle2, Eye, RefreshCw, UserCheck, XCircle, ShieldAlert } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { downloadBrandedPolicyDocument, downloadMembershipForm, downloadProjectProposal } from "@/lib/pdf-export";
+import { api } from "@/lib/api";
 import { toast } from "sonner";
 
 type KycFieldKey =
@@ -1268,6 +1269,11 @@ export default function Documents() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loadingSubs, setLoadingSubs] = useState(false);
   const [statuses, setStatuses] = useState<Record<string, SubmissionStatus>>({});
+  const [digitalSubmissions, setDigitalSubmissions] = useState<any[]>([]);
+  const [loadingDigitalSubmissions, setLoadingDigitalSubmissions] = useState(false);
+  const [selectedDigitalSubmission, setSelectedDigitalSubmission] = useState<any | null>(null);
+  const [loadingDigitalDetail, setLoadingDigitalDetail] = useState(false);
+  const [updatingDigitalStatusId, setUpdatingDigitalStatusId] = useState<string | null>(null);
 
   async function loadSubmissions() {
     setLoadingSubs(true);
@@ -1324,6 +1330,52 @@ export default function Documents() {
   function setStatus(path: string, status: SubmissionStatus) {
     setStatuses((prev) => ({ ...prev, [path]: status }));
   }
+
+  async function loadDigitalSubmissions() {
+    setLoadingDigitalSubmissions(true);
+    try {
+      const data = await api.get('/registration-forms');
+      setDigitalSubmissions(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to load digital registration forms');
+    } finally {
+      setLoadingDigitalSubmissions(false);
+    }
+  }
+
+  async function openDigitalSubmission(id: string) {
+    setLoadingDigitalDetail(true);
+    try {
+      const detail = await api.get(`/registration-forms/${id}`);
+      setSelectedDigitalSubmission(detail);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to load registration form details');
+    } finally {
+      setLoadingDigitalDetail(false);
+    }
+  }
+
+  async function updateDigitalSubmissionStatus(id: string, status: string) {
+    setUpdatingDigitalStatusId(id);
+    try {
+      await api.patch(`/registration-forms/${id}/status`, { status });
+      toast.success(`Form marked as ${status.replace('_', ' ')}`);
+      if (selectedDigitalSubmission && String(selectedDigitalSubmission._id) === id) {
+        setSelectedDigitalSubmission({ ...selectedDigitalSubmission, status });
+      }
+      loadDigitalSubmissions();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to update status');
+    } finally {
+      setUpdatingDigitalStatusId(null);
+    }
+  }
+
+  useEffect(() => {
+    if (isStaff) {
+      loadDigitalSubmissions();
+    }
+  }, [isStaff]);
 
   const activeLoans = loans.filter((l: any) => ["repaying", "disbursed", "approved"].includes(l.status));
 
@@ -1909,6 +1961,141 @@ export default function Documents() {
           {/* ── Admin: Submitted Application Forms ──────────────────── */}
           {isStaff && (
             <div className="mt-8 space-y-4">
+              <Card>
+                <CardHeader className="space-y-1">
+                  <CardTitle className="font-heading">Digital Registration Form Submissions</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    View exactly what members submitted through the in-system registration form and review each entry.
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="secondary">
+                      {digitalSubmissions.length} digital submission{digitalSubmissions.length !== 1 ? "s" : ""}
+                    </Badge>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={loadDigitalSubmissions}
+                      disabled={loadingDigitalSubmissions}
+                      className="gap-2"
+                    >
+                      {loadingDigitalSubmissions ? (
+                        <><Loader2 className="h-3.5 w-3.5 animate-spin" />Loading…</>
+                      ) : (
+                        <><RefreshCw className="h-3.5 w-3.5" />Refresh</>
+                      )}
+                    </Button>
+                  </div>
+
+                  {loadingDigitalSubmissions ? (
+                    <div className="text-sm text-muted-foreground py-8 text-center">Loading digital submissions...</div>
+                  ) : digitalSubmissions.length === 0 ? (
+                    <div className="text-sm text-muted-foreground py-8 text-center">No digital registration submissions yet.</div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Member</TableHead>
+                          <TableHead>Member ID</TableHead>
+                          <TableHead>Submitted On</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {digitalSubmissions.map((sub: any) => (
+                          <TableRow key={sub.id}>
+                            <TableCell className="font-medium">{sub.memberName}</TableCell>
+                            <TableCell>{sub.saccoMemberId}</TableCell>
+                            <TableCell>{sub.submittedAt ? new Date(sub.submittedAt).toLocaleString() : "-"}</TableCell>
+                            <TableCell>
+                              <Badge variant={sub.status === 'approved' ? 'default' : sub.status === 'rejected' ? 'destructive' : 'secondary'}>
+                                {String(sub.status || 'submitted').replace('_', ' ')}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-2">
+                                <Button variant="ghost" size="sm" onClick={() => openDigitalSubmission(sub.id)}>
+                                  <Eye className="h-3.5 w-3.5 mr-1" />View
+                                </Button>
+                                {isAdmin && (
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      disabled={updatingDigitalStatusId === sub.id}
+                                      onClick={() => updateDigitalSubmissionStatus(sub.id, 'under_review')}
+                                    >
+                                      Review
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-green-600 hover:text-green-700"
+                                      disabled={updatingDigitalStatusId === sub.id}
+                                      onClick={() => updateDigitalSubmissionStatus(sub.id, 'approved')}
+                                    >
+                                      Approve
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-destructive"
+                                      disabled={updatingDigitalStatusId === sub.id}
+                                      onClick={() => updateDigitalSubmissionStatus(sub.id, 'rejected')}
+                                    >
+                                      Reject
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+
+                  {selectedDigitalSubmission && (
+                    <Card className="border border-border/70">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-base font-heading flex items-center justify-between">
+                          <span>Submission Details: {selectedDigitalSubmission.memberName}</span>
+                          <Badge variant={selectedDigitalSubmission.status === 'approved' ? 'default' : selectedDigitalSubmission.status === 'rejected' ? 'destructive' : 'secondary'}>
+                            {String(selectedDigitalSubmission.status || 'submitted').replace('_', ' ')}
+                          </Badge>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {loadingDigitalDetail ? (
+                          <div className="py-6 text-sm text-muted-foreground">Loading details...</div>
+                        ) : (
+                          <div className="space-y-3 text-sm">
+                            <p><span className="font-semibold">Member ID:</span> {selectedDigitalSubmission.saccoMemberId}</p>
+                            <p><span className="font-semibold">Submitted:</span> {selectedDigitalSubmission.submittedAt ? new Date(selectedDigitalSubmission.submittedAt).toLocaleString() : '-'}</p>
+                            {selectedDigitalSubmission.passportPhoto && (
+                              <div>
+                                <p className="font-semibold mb-1">Passport Photo</p>
+                                <img
+                                  src={selectedDigitalSubmission.passportPhoto}
+                                  alt="Passport"
+                                  className="h-24 w-24 rounded-md object-cover border"
+                                />
+                              </div>
+                            )}
+                            <div className="rounded-md border p-3 space-y-2">
+                              <p className="font-semibold">Form Data (as submitted)</p>
+                              <pre className="text-xs whitespace-pre-wrap overflow-x-auto">{JSON.stringify(selectedDigitalSubmission.form, null, 2)}</pre>
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
+                </CardContent>
+              </Card>
+
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <ShieldAlert className="h-5 w-5 text-amber-500" />
