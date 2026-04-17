@@ -73,13 +73,27 @@ export interface NormalizedMember extends DbDocument {
   updated_at: unknown;
 }
 
-async function handle<T>(res: Response): Promise<T> {
+function shouldForceSignOutOn401(path: string): boolean {
+  const clean = path.startsWith("/") ? path : `/${path}`;
+
+  // Registration form calls can hit fallback base edge-cases during deployment/proxy drift.
+  // Avoid force-signout loops for this path family and let caller show actionable error.
+  if (clean.startsWith("/registration-forms")) {
+    return false;
+  }
+
+  return true;
+}
+
+async function handle<T>(res: Response, path: string): Promise<T> {
   if (res.status === 401) {
-    // Token expired / invalid – clear session and redirect to login
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem("smcf_auth_user");
-    if (window.location.pathname !== "/sacco/auth") {
-      window.location.href = "/sacco/auth";
+    if (shouldForceSignOutOn401(path)) {
+      // Token expired / invalid – clear session and redirect to login
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem("smcf_auth_user");
+      if (window.location.pathname !== "/sacco/auth") {
+        window.location.href = "/sacco/auth";
+      }
     }
     throw new Error("Unauthorized");
   }
@@ -90,34 +104,34 @@ async function handle<T>(res: Response): Promise<T> {
 
 export const api = {
   get<T = unknown>(path: string): Promise<T> {
-    return fetchFromSaccoApi(path, { headers: authHeaders() }).then((r) => handle<T>(r));
+    return fetchFromSaccoApi(path, { headers: authHeaders() }).then((r) => handle<T>(r, path));
   },
   post<T = unknown>(path: string, body: unknown): Promise<T> {
     return fetchFromSaccoApi(path, {
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify(body),
-    }).then((r) => handle<T>(r));
+    }).then((r) => handle<T>(r, path));
   },
   put<T = unknown>(path: string, body: unknown = {}): Promise<T> {
     return fetchFromSaccoApi(path, {
       method: "PUT",
       headers: authHeaders(),
       body: JSON.stringify(body),
-    }).then((r) => handle<T>(r));
+    }).then((r) => handle<T>(r, path));
   },
   patch<T = unknown>(path: string, body: unknown = {}): Promise<T> {
     return fetchFromSaccoApi(path, {
       method: "PATCH",
       headers: authHeaders(),
       body: JSON.stringify(body),
-    }).then((r) => handle<T>(r));
+    }).then((r) => handle<T>(r, path));
   },
   del<T = unknown>(path: string): Promise<T> {
     return fetchFromSaccoApi(path, {
       method: "DELETE",
       headers: authHeaders(),
-    }).then((r) => handle<T>(r));
+    }).then((r) => handle<T>(r, path));
   },
 };
 

@@ -1,6 +1,6 @@
 export const BASE = import.meta.env.VITE_SACCO_API_URL as string;
 
-const FALLBACK_BASES = ["/_/backend", "", "/sacco-api"];
+const FALLBACK_BASES = ["/_/backend", "/sacco-api", ""];
 
 function normalizeBase(raw: string | undefined): string {
   const value = String(raw || "").trim().replace(/\/+$/, "");

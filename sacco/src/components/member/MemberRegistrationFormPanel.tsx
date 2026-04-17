@@ -254,7 +254,8 @@ export default function MemberRegistrationFormPanel({ member }: { member: Member
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["member-registration-form-me"],
     queryFn: async () => api.get("/registration-forms/me") as any,
-    retry: false,
+    retry: 2,
+    retryDelay: 800,
   });
 
   useEffect(() => {
