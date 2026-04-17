@@ -27,18 +27,12 @@ const MemberCycleChart = () => {
         const userData = authService.getUser();
         const userId = userData?._id || userData?.id;
         
-        console.log('📊 Member Cycle Chart - User ID:', userId);
-        console.log('📊 Total payments fetched:', paymentsArray.length);
-        
         // Filter payments for this member only
         const memberPayments = paymentsArray.filter((payment: any) => {
           const paymentMemberId = payment.member_id?._id || payment.member_id;
           const matches = String(paymentMemberId) === String(userId) && payment.status === 'completed';
           return matches;
         });
-        
-        console.log('📊 Member payments found:', memberPayments.length);
-        console.log('📊 Sample payment:', memberPayments[0]);
 
         // Group by cycle
         const cycleMap = new Map();
@@ -73,7 +67,6 @@ const MemberCycleChart = () => {
           })
           .slice(-10); // Last 10 cycles
 
-        console.log('📊 Processed cycle data:', processedData);
         setChartData(processedData);
       }
     } catch (error) {

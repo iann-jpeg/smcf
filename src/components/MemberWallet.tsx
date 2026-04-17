@@ -197,33 +197,11 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
             .slice(0, 5)
             .map((m: any) => `${m.name} (${m.member_id}): KES ${(m.totalDeposits || 0).toLocaleString()}`);
           
-          console.log("🏆 Top Saver Check:", {
-            topSaverId: topSaverIdStr,
-            topSaverMemberId: topSaverMemberId,
-            topSaverName: topSaver.name,
-            topSaverDeposits: topSaver.totalDeposits,
-            currentUserId: userIdStr,
-            currentUserMemberId: userMemberId,
-            currentUserName: userData.name,
-            currentUserDeposits: summaryData.data.totalDeposits,
-            isMatchById: topSaverIdStr === userIdStr,
-            isMatchByMemberId: topSaverMemberId === userMemberId,
-            totalMembersWithDeposits: members.length,
-            topFive
-          });
-          
           // Check both _id and member_id
           const isTop = ((topSaverIdStr === userIdStr) || (topSaverMemberId && topSaverMemberId === userMemberId)) 
                         && summaryData.data.totalDeposits > 0;
           setIsTopSaver(isTop);
-          
-          if (isTop) {
-            console.log("✅ YOU ARE THE TOP SAVER!");
-          } else {
-            console.log("❌ Not the top saver");
-          }
         } else {
-          console.log("ℹ️ No members with deposits found");
           setIsTopSaver(false);
         }
       }
@@ -966,8 +944,6 @@ ${getSmcfPrintStampStyles()}
       </Badge>
     );
   };
-
-  console.log("🎨 Rendering MemberWallet, isTopSaver:", isTopSaver);
 
   return (
     <div className="space-y-6">

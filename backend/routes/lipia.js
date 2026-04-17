@@ -176,13 +176,10 @@ router.post("/query-status", protect, async (req, res) => {
         checkoutRequestID
       );
 
-      // Use atomic update with condition to prevent race conditions
-      // Only update if deposit_processed is false (hasn't been processed yet)
+      // Do not mark deposit_processed yet. We only set it after the wallet ledger
+      // and member balance updates are completed successfully.
       const payment = await Payment.findOneAndUpdate(
-        { 
-          checkout_request_id: checkoutRequestID,
-          deposit_processed: { $ne: true } // Only process if not already processed
-        },
+        { checkout_request_id: checkoutRequestID },
         {
           status: "completed",
           mpesa_transaction_id:
@@ -190,7 +187,6 @@ router.post("/query-status", protect, async (req, res) => {
             result.transactionId ||
             checkoutRequestID,
           transaction_date: result.transactionDate || new Date(),
-          deposit_processed: true, // Mark as processed atomically
         },
         { new: true }
       );
@@ -307,6 +303,7 @@ router.post("/query-status", protect, async (req, res) => {
             await Member.findByIdAndUpdate(payment.member_id, {
               $set: { wallet_balance: existingSaving.balance_after },
             });
+            await Payment.findByIdAndUpdate(payment._id, { $set: { deposit_processed: true } });
             return res.json({
               success: true,
               status: "completed",
@@ -357,6 +354,7 @@ router.post("/query-status", protect, async (req, res) => {
             // Handle duplicate key error (E11000) - this means another request already created the record
             if (createError.code === 11000) {
               console.log("⚠️ Duplicate key error - deposit already recorded:", result.mpesaReceiptNumber);
+              await Payment.findByIdAndUpdate(payment._id, { $set: { deposit_processed: true } });
               return res.json({
                 success: true,
                 status: "completed",
@@ -379,6 +377,7 @@ router.post("/query-status", protect, async (req, res) => {
             $inc: { total_savings: depositAmount },
             $set: { wallet_balance: balanceAfter },
           });
+          await Payment.findByIdAndUpdate(payment._id, { $set: { deposit_processed: true } });
 
           console.log("✅ Wallet deposit completed:", {
             member: member?.name,
@@ -1109,17 +1108,15 @@ router.post("/callback", async (req, res) => {
       });
     }
 
-    // Use atomic update to prevent race conditions - only process if not already processed
+    // Do not mark deposit_processed yet. Set it only after wallet/member updates succeed.
     const payment = await Payment.findOneAndUpdate(
       {
         checkout_request_id: callbackData.checkoutRequestID,
-        deposit_processed: { $ne: true }, // Only process if not already processed
       },
       {
         status: callbackData.success ? "completed" : "failed",
         mpesa_transaction_id: callbackData.mpesaReceiptNumber,
         transaction_date: callbackData.transactionDate,
-        deposit_processed: callbackData.success ? true : false, // Mark as processed atomically
       },
       { new: true }
     );
@@ -1182,6 +1179,7 @@ router.post("/callback", async (req, res) => {
           await Member.findByIdAndUpdate(payment.member_id, {
             $set: { wallet_balance: existingSaving.balance_after },
           });
+          await Payment.findByIdAndUpdate(payment._id, { $set: { deposit_processed: true } });
           return res.json({
             success: true,
             ResultCode: "0",
@@ -1230,6 +1228,7 @@ router.post("/callback", async (req, res) => {
           // Handle duplicate key error (E11000) - this means another request already created the record
           if (createError.code === 11000) {
             console.log("⚠️ Callback: Duplicate key error - deposit already recorded:", callbackData.mpesaReceiptNumber);
+            await Payment.findByIdAndUpdate(payment._id, { $set: { deposit_processed: true } });
             return res.json({
               success: true,
               ResultCode: "0",
@@ -1250,6 +1249,7 @@ router.post("/callback", async (req, res) => {
           $inc: { total_savings: depositAmount },
           $set: { wallet_balance: balanceAfter },
         });
+        await Payment.findByIdAndUpdate(payment._id, { $set: { deposit_processed: true } });
 
         console.log("✅ Wallet deposit completed via callback:", {
           member: member?.name,
