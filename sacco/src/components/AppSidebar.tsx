@@ -24,6 +24,7 @@ const staffNav = [
   { title: "Members", url: "/members", icon: Users, allowedRoles: ["admin", "credit_officer"] },
   { title: "Loans", url: "/loans", icon: Landmark, allowedRoles: ["admin", "credit_officer", "credit_committee"] },
   { title: "Accounts & Ledger", url: "/accounts", icon: BookOpen, allowedRoles: ["admin", "treasurer"] },
+  { title: "Share Capital & Dividends", url: "/accounts?tab=share-capital-dividends", icon: Percent, allowedRoles: ["admin"] },
   { title: "Savings Interest", url: "/accounts?tab=savings-interest", icon: Percent, allowedRoles: ["admin"] },
   { title: "Guarantor Exposure", url: "/guarantors", icon: AlertTriangle, allowedRoles: ["admin", "treasurer"] },
   { title: "Risk Scoring", url: "/risk-scoring", icon: ShieldCheck, allowedRoles: ["admin", "credit_officer"] },

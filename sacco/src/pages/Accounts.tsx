@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Check, Loader2, TrendingUp, Users, Coins, X, Percent } from "lucide-react";
 import { toast } from "sonner";
+import ShareCapitalDividendsTab from "@/components/admin/ShareCapitalDividendsTab";
 
 export default function Accounts() {
   const qc = useQueryClient();
@@ -28,7 +29,7 @@ export default function Accounts() {
   const activeTab = searchParams.get("tab") || "coa";
 
   useEffect(() => {
-    if (!isAdmin && activeTab === "savings-interest") {
+    if (!isAdmin && (activeTab === "savings-interest" || activeTab === "share-capital-dividends")) {
       setSearchParams({ tab: "coa" });
     }
   }, [activeTab, isAdmin, setSearchParams]);
@@ -228,6 +229,11 @@ export default function Accounts() {
             <Coins className="mr-1.5 h-3.5 w-3.5" />
             Dividends
           </TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="share-capital-dividends">
+              Share Capital & Dividends
+            </TabsTrigger>
+          )}
           {isAdmin && (
             <TabsTrigger value="savings-interest">
               <Percent className="mr-1.5 h-3.5 w-3.5" />
@@ -625,6 +631,12 @@ export default function Accounts() {
           </Card>
 
         </TabsContent>
+
+        {isAdmin && (
+          <TabsContent value="share-capital-dividends" className="space-y-6">
+            <ShareCapitalDividendsTab />
+          </TabsContent>
+        )}
 
         {/* ── Savings Interest Distribution (Admin only) ───────────────── */}
         {isAdmin && (
