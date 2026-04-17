@@ -68,6 +68,27 @@ async function shouldTryNextBase(res: Response): Promise<boolean> {
     return true;
   }
 
+  if (res.status === 401) {
+    const contentType = res.headers.get("content-type") || "";
+    if (contentType.includes("text/html")) {
+      return true;
+    }
+
+    if (contentType.includes("application/json")) {
+      try {
+        const body = await res.clone().json() as { message?: string; error?: string };
+        const text = `${body?.message || ""} ${body?.error || ""}`.toLowerCase();
+        if (/unauthor|not authorized|invalid token|jwt|forbidden/.test(text)) {
+          return true;
+        }
+      } catch {
+        return false;
+      }
+    }
+
+    return false;
+  }
+
   if (res.status === 403) {
     const contentType = res.headers.get("content-type") || "";
     if (contentType.includes("text/html")) {

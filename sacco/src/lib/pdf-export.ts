@@ -122,6 +122,309 @@ export function exportIncomeStatement(data: {
   doc.save("income-statement.pdf");
 }
 
+type FinancialPreview = {
+  period?: { periodLabel?: string; startDate?: string; endDate?: string };
+  lines: Record<string, number>;
+  summary: Record<string, number | string | boolean>;
+  validation?: { warnings?: string[]; isValid?: boolean };
+};
+
+const INCOME_LABELS: Record<string, string> = {
+  loanInterestIncome: "Loan Interest Income",
+  penaltyIncome: "Penalty Income",
+  loanProcessingFees: "Loan Processing Fees",
+  registrationFees: "Registration Fees",
+  shareTransferFees: "Share Transfer Fees",
+  investmentIncome: "Investment Income",
+  otherOperatingIncome: "Other Operating Income",
+  operationalExpenses: "Operational Expenses",
+  staffAllowancesCommissions: "Staff Allowances and Commissions",
+  rentUtilitiesOfficeExpenses: "Rent, Utilities, and Office Expenses",
+  systemHostingSmsSoftwareCosts: "System Hosting, SMS, and Software Costs",
+  transportLogisticsCosts: "Transport and Logistics Costs",
+  maintenanceCosts: "Maintenance Costs",
+  bankTransactionCharges: "Bank and Transaction Charges",
+  investmentOperatingExpenses: "Investment Operating Expenses",
+  badDebtExpenseProvision: "Bad Debt Expense Provision",
+  otherApprovedExpenses: "Other Approved Expenses",
+};
+
+const BALANCE_LABELS: Record<string, string> = {
+  cashOnHand: "Cash on Hand",
+  bankBalances: "Bank Balances",
+  mobileMoneyWalletBalances: "Mobile Money Wallet Balances",
+  receivables: "Receivables",
+  outstandingLoansReceivable: "Outstanding Loans Receivable",
+  accruedInterestReceivable: "Accrued Interest Receivable",
+  shortTermInvestments: "Short-term Investments",
+  equipmentAssets: "Equipment Assets",
+  realEstateAssets: "Real Estate Assets",
+  landBuildingsAssets: "Land and Buildings",
+  otherLongTermAssets: "Other Long-term Assets",
+  memberWithdrawalsPayable: "Member Withdrawals Payable",
+  unpaidExpenses: "Unpaid Expenses",
+  shortTermObligations: "Short-term Obligations",
+  pendingRefunds: "Pending Refunds",
+  externalBorrowings: "External Borrowings",
+  longTermPayables: "Long-term Payables",
+  otherLiabilities: "Other Liabilities",
+  shareCapital: "Share Capital",
+  retainedEarnings: "Retained Earnings",
+  currentPeriodProfitLoss: "Current Period Profit or Loss",
+  reserves: "Reserves",
+  otherEquityBalances: "Other Equity Balances",
+};
+
+const CASH_LABELS: Record<string, string> = {
+  memberSavingsDepositsReceived: "Member Savings Deposits Received",
+  loanRepaymentsReceived: "Loan Repayments Received",
+  loanInterestReceived: "Loan Interest Received",
+  shareCapitalContributionsReceived: "Share Capital Contributions Received",
+  registrationFeesReceived: "Registration Fees Received",
+  investmentIncomeReceived: "Investment Income Received",
+  otherCashReceipts: "Other Cash Receipts",
+  loanDisbursements: "Loan Disbursements",
+  refundsWithdrawalsPaid: "Refunds and Withdrawals Paid",
+  operatingExpensesPaid: "Operating Expenses Paid",
+  assetPurchases: "Asset Purchases",
+  investmentProjectFunding: "Investment Project Funding",
+  rentSalariesTransportUtilitiesPaid: "Rent, Salaries, Transport, and Utilities Paid",
+  bankTransactionChargesPaid: "Bank and Transaction Charges Paid",
+  otherCashPayments: "Other Cash Payments",
+};
+
+function formatKes(value: number | string | boolean | undefined) {
+  if (typeof value === "number") return `KES ${value.toLocaleString()}`;
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  return String(value ?? "-");
+}
+
+function linesToTableRows(lines: Record<string, number>, labels: Record<string, string>) {
+  return Object.entries(lines).map(([key, value]) => [labels[key] ?? key, formatKes(value)]);
+}
+
+function summaryToRows(summary: Record<string, number | string | boolean>) {
+  return Object.entries(summary).map(([key, value]) => {
+    const title = key
+      .replace(/([A-Z])/g, " $1")
+      .replace(/^./, (s) => s.toUpperCase())
+      .trim();
+    return [title, formatKes(value)];
+  });
+}
+
+function addPreviewMeta(doc: jsPDF, preview: FinancialPreview, startY = 54) {
+  const periodLabel = preview.period?.periodLabel || "Selected period";
+  autoTable(doc, {
+    startY,
+    head: [["Meta", "Value"]],
+    body: [["Period", periodLabel]],
+    headStyles: { fillColor: HEADER_COLOR },
+    columnStyles: { 1: { halign: "right" } },
+    theme: "grid",
+  });
+  return (doc as any).lastAutoTable.finalY + 8;
+}
+
+export function exportDetailedIncomeStatement(preview: FinancialPreview) {
+  const doc = initDoc("Financial Statements - Income Statement");
+  let nextY = addPreviewMeta(doc, preview);
+
+  autoTable(doc, {
+    startY: nextY,
+    head: [["Income and Expense Line", "Amount"]],
+    body: linesToTableRows(preview.lines, INCOME_LABELS),
+    headStyles: { fillColor: HEADER_COLOR },
+    columnStyles: { 1: { halign: "right" } },
+    theme: "striped",
+  });
+
+  nextY = (doc as any).lastAutoTable.finalY + 8;
+  autoTable(doc, {
+    startY: nextY,
+    head: [["Summary", "Value"]],
+    body: summaryToRows(preview.summary),
+    headStyles: { fillColor: HEADER_COLOR },
+    columnStyles: { 1: { halign: "right" } },
+  });
+
+  if (preview.validation?.warnings?.length) {
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 8,
+      head: [["Validation Warnings"]],
+      body: preview.validation.warnings.map((w) => [w]),
+      headStyles: { fillColor: [170, 40, 40] },
+    });
+  }
+
+  addPageFooters(doc, "Financial Statements - Income Statement");
+  doc.save("financial-income-statement.pdf");
+}
+
+export function exportDetailedBalanceSheet(preview: FinancialPreview) {
+  const doc = initDoc("Financial Statements - Balance Sheet");
+  let nextY = addPreviewMeta(doc, preview);
+
+  autoTable(doc, {
+    startY: nextY,
+    head: [["Balance Sheet Line", "Amount"]],
+    body: linesToTableRows(preview.lines, BALANCE_LABELS),
+    headStyles: { fillColor: HEADER_COLOR },
+    columnStyles: { 1: { halign: "right" } },
+    theme: "striped",
+  });
+
+  nextY = (doc as any).lastAutoTable.finalY + 8;
+  autoTable(doc, {
+    startY: nextY,
+    head: [["Summary", "Value"]],
+    body: summaryToRows(preview.summary),
+    headStyles: { fillColor: HEADER_COLOR },
+    columnStyles: { 1: { halign: "right" } },
+  });
+
+  if (preview.validation?.warnings?.length) {
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 8,
+      head: [["Validation Warnings"]],
+      body: preview.validation.warnings.map((w) => [w]),
+      headStyles: { fillColor: [170, 40, 40] },
+    });
+  }
+
+  addPageFooters(doc, "Financial Statements - Balance Sheet");
+  doc.save("financial-balance-sheet.pdf");
+}
+
+export function exportDetailedCashFlow(preview: FinancialPreview) {
+  const doc = initDoc("Financial Statements - Cash Flow Statement");
+  let nextY = addPreviewMeta(doc, preview);
+
+  autoTable(doc, {
+    startY: nextY,
+    head: [["Cash Flow Line", "Amount"]],
+    body: linesToTableRows(preview.lines, CASH_LABELS),
+    headStyles: { fillColor: HEADER_COLOR },
+    columnStyles: { 1: { halign: "right" } },
+    theme: "striped",
+  });
+
+  nextY = (doc as any).lastAutoTable.finalY + 8;
+  autoTable(doc, {
+    startY: nextY,
+    head: [["Summary", "Value"]],
+    body: summaryToRows(preview.summary),
+    headStyles: { fillColor: HEADER_COLOR },
+    columnStyles: { 1: { halign: "right" } },
+  });
+
+  if (preview.validation?.warnings?.length) {
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 8,
+      head: [["Validation Warnings"]],
+      body: preview.validation.warnings.map((w) => [w]),
+      headStyles: { fillColor: [170, 40, 40] },
+    });
+  }
+
+  addPageFooters(doc, "Financial Statements - Cash Flow Statement");
+  doc.save("financial-cash-flow-statement.pdf");
+}
+
+export function exportFinancialReportPack(data: {
+  periodLabel?: string;
+  income: FinancialPreview;
+  balance: FinancialPreview;
+  cash: FinancialPreview;
+  notesToAccounts?: string;
+}) {
+  const doc = initDoc("Financial Statements - Report Pack");
+
+  autoTable(doc, {
+    startY: 54,
+    head: [["Item", "Value"]],
+    body: [
+      ["Reporting Period", data.periodLabel || data.income.period?.periodLabel || "Selected period"],
+      ["Report Pack Includes", "Income Statement, Balance Sheet, Cash Flow Statement"],
+      ["Validation Status", data.balance.validation?.isValid && data.cash.validation?.isValid ? "Valid" : "Contains warnings"],
+    ],
+    headStyles: { fillColor: HEADER_COLOR },
+    columnStyles: { 1: { halign: "right" } },
+  });
+
+  if (data.notesToAccounts?.trim()) {
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 8,
+      head: [["Notes to Accounts"]],
+      body: [[data.notesToAccounts.trim()]],
+      headStyles: { fillColor: HEADER_COLOR },
+    });
+  }
+
+  doc.addPage();
+  doc.setFontSize(13);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...NAVY);
+  doc.text("Income Statement", 14, 20);
+  autoTable(doc, {
+    startY: 28,
+    head: [["Line", "Amount"]],
+    body: linesToTableRows(data.income.lines, INCOME_LABELS),
+    headStyles: { fillColor: HEADER_COLOR },
+    columnStyles: { 1: { halign: "right" } },
+  });
+  autoTable(doc, {
+    startY: (doc as any).lastAutoTable.finalY + 6,
+    head: [["Summary", "Value"]],
+    body: summaryToRows(data.income.summary),
+    headStyles: { fillColor: HEADER_COLOR },
+    columnStyles: { 1: { halign: "right" } },
+  });
+
+  doc.addPage();
+  doc.setFontSize(13);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...NAVY);
+  doc.text("Balance Sheet", 14, 20);
+  autoTable(doc, {
+    startY: 28,
+    head: [["Line", "Amount"]],
+    body: linesToTableRows(data.balance.lines, BALANCE_LABELS),
+    headStyles: { fillColor: HEADER_COLOR },
+    columnStyles: { 1: { halign: "right" } },
+  });
+  autoTable(doc, {
+    startY: (doc as any).lastAutoTable.finalY + 6,
+    head: [["Summary", "Value"]],
+    body: summaryToRows(data.balance.summary),
+    headStyles: { fillColor: HEADER_COLOR },
+    columnStyles: { 1: { halign: "right" } },
+  });
+
+  doc.addPage();
+  doc.setFontSize(13);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...NAVY);
+  doc.text("Cash Flow Statement", 14, 20);
+  autoTable(doc, {
+    startY: 28,
+    head: [["Line", "Amount"]],
+    body: linesToTableRows(data.cash.lines, CASH_LABELS),
+    headStyles: { fillColor: HEADER_COLOR },
+    columnStyles: { 1: { halign: "right" } },
+  });
+  autoTable(doc, {
+    startY: (doc as any).lastAutoTable.finalY + 6,
+    head: [["Summary", "Value"]],
+    body: summaryToRows(data.cash.summary),
+    headStyles: { fillColor: HEADER_COLOR },
+    columnStyles: { 1: { halign: "right" } },
+  });
+
+  addPageFooters(doc, "Financial Statements - Report Pack");
+  doc.save("financial-report-pack.pdf");
+}
+
 export function exportLoanPortfolio(
   summary: { total: number; active: number; defaulted: number; par30: string },
   loans: Array<{ loan_number: string; memberName: string; principal: number; balance: number; status: string; risk_rating: string }>

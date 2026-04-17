@@ -137,12 +137,30 @@ function buildDefaultForm(member: any) {
   };
 }
 
+async function resolveMemberForRequest(req: AuthRequest) {
+  let member = await Member.findOne({ userId: req.userId });
+  if (member) return member;
+
+  const userEmail = String(req.user?.email || '').trim().toLowerCase();
+  if (!userEmail) return null;
+
+  member = await Member.findOne({ email: userEmail });
+  if (!member) return null;
+
+  if (!member.userId && req.userId) {
+    member.userId = req.userId as any;
+    await member.save();
+  }
+
+  return member;
+}
+
 // @route   GET /api/registration-forms/me
 // @desc    Get current member registration form submission state + defaults
 // @access  Private (member)
 router.get('/me', protect, async (req: AuthRequest, res, next) => {
   try {
-    const member = await Member.findOne({ userId: req.userId });
+    const member = await resolveMemberForRequest(req);
     if (!member) {
       return res.status(404).json({ success: false, message: 'Member profile not found for this account' });
     }
@@ -178,7 +196,7 @@ router.get('/me', protect, async (req: AuthRequest, res, next) => {
 // @access  Private (member)
 router.post('/me/submit', protect, async (req: AuthRequest, res, next) => {
   try {
-    const member = await Member.findOne({ userId: req.userId });
+    const member = await resolveMemberForRequest(req);
     if (!member) {
       return res.status(404).json({ success: false, message: 'Member profile not found for this account' });
     }

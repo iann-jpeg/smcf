@@ -318,11 +318,6 @@ export default function MemberRegistrationFormPanel({ member }: { member: Member
     : null;
 
   const submitForm = async () => {
-    if (backendUnavailable) {
-      toast.error("Registration form backend endpoint is not live yet. Please try again after backend deployment.");
-      return;
-    }
-
     const missing = collectMissingFields(form);
     if (missing.length > 0) {
       toast.error(`Please complete all required fields. Missing: ${missing[0]}`);
@@ -350,7 +345,14 @@ export default function MemberRegistrationFormPanel({ member }: { member: Member
       toast.success("Registration form submitted successfully. You are good to go.");
       queryClient.invalidateQueries({ queryKey: ["member-registration-form-me"] });
     } catch (err: any) {
-      toast.error(err.message || "Failed to submit registration form");
+      const message = String(err?.message || "").toLowerCase();
+      if (message.includes("404") || message.includes("route not found") || message.includes("not found")) {
+        toast.error("Registration form service is temporarily unavailable. Please refresh and try again shortly.");
+      } else if (message.includes("unauthorized")) {
+        toast.error("Your session expired. Please sign in again and submit the form.");
+      } else {
+        toast.error(err.message || "Failed to submit registration form");
+      }
     } finally {
       setSubmitting(false);
     }

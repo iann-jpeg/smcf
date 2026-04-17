@@ -1,350 +1,985 @@
-import { useMemo } from "react";
-import { useMembers } from "@/hooks/useMembers";
-import { useLoans } from "@/hooks/useLoans";
-import { useTransactions } from "@/hooks/useTransactions";
-import { useGuarantors } from "@/hooks/useGuarantors";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FileText, BarChart3, Users, Landmark, Shield, Download } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { api } from "@/lib/api";
 import {
-  exportBalanceSheet,
-  exportIncomeStatement,
-  exportLoanPortfolio,
-  exportGuarantorExposure,
-  exportMemberStatements,
+  exportDetailedIncomeStatement,
+  exportDetailedBalanceSheet,
+  exportDetailedCashFlow,
+  exportFinancialReportPack,
 } from "@/lib/pdf-export";
+import { useAuth } from "@/hooks/useAuth";
+
+type PeriodType = "monthly" | "quarterly" | "yearly" | "custom";
+
+type StatementType = "income_statement" | "balance_sheet" | "cash_flow_statement";
+
+type StatementPreview = {
+  statementType: StatementType;
+  period: {
+    periodType: PeriodType;
+    periodLabel: string;
+    startDate: string;
+    endDate: string;
+  };
+  lines: Record<string, number>;
+  summary: Record<string, number | string | boolean>;
+  comparison: Record<string, unknown>;
+  trend: Array<Record<string, unknown>>;
+  validation: {
+    isValid: boolean;
+    warnings: string[];
+    requiresOverride: boolean;
+  };
+  adjustmentsApplied: Array<{ _id: string; lineKey: string; amount: number; note: string }>;
+};
+
+type ReportPackPreview = {
+  period: StatementPreview["period"];
+  income: StatementPreview;
+  balance: StatementPreview;
+  cash: StatementPreview;
+  validation: {
+    isValid: boolean;
+    warnings: string[];
+    requiresOverride: boolean;
+  };
+};
+
+const statementTitles: Record<StatementType, string> = {
+  income_statement: "Income Statement",
+  balance_sheet: "Balance Sheet",
+  cash_flow_statement: "Cash Flow Statement",
+};
+
+const KES = new Intl.NumberFormat("en-KE", {
+  style: "currency",
+  currency: "KES",
+  maximumFractionDigits: 2,
+});
+
+function buildQueryString(params: Record<string, string | number | undefined>) {
+  const search = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === "") return;
+    search.set(key, String(value));
+  });
+  return search.toString();
+}
+
+function amountCell(value: unknown) {
+  if (typeof value === "number") return KES.format(value);
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  return String(value ?? "-");
+}
+
+function rowTitle(key: string) {
+  return key
+    .replace(/([A-Z])/g, " $1")
+    .replace(/^./, (s) => s.toUpperCase())
+    .trim();
+}
 
 export default function Reports() {
-  const { data: members = [] } = useMembers();
-  const { data: loans = [] } = useLoans();
-  const { data: transactions = [] } = useTransactions();
-  const { data: guarantors = [] } = useGuarantors();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { roles } = useAuth();
 
-  // Balance sheet
-  const balanceSheet = useMemo(() => {
-    const totalSavings = members.reduce((s, m: any) => s + Number(m.savings), 0);
-    const totalShares = members.reduce((s, m: any) => s + Number(m.shares), 0);
-    const totalLoanBalance = loans.reduce((s, l: any) => s + Number(l.balance), 0);
-    const totalDeposits = totalSavings + totalShares;
-    const equity = totalDeposits - totalLoanBalance;
-    return { totalSavings, totalShares, totalLoanBalance, totalDeposits, equity };
-  }, [members, loans]);
+  const [periodType, setPeriodType] = useState<PeriodType>("monthly");
+  const [year, setYear] = useState<number>(new Date().getFullYear());
+  const [month, setMonth] = useState<number>(new Date().getMonth() + 1);
+  const [quarter, setQuarter] = useState<number>(Math.floor(new Date().getMonth() / 3) + 1);
+  const [customStart, setCustomStart] = useState<string>(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10));
+  const [customEnd, setCustomEnd] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [notesToAccounts, setNotesToAccounts] = useState<string>("");
+  const [allowOverride, setAllowOverride] = useState<boolean>(false);
+  const [allowVersioning, setAllowVersioning] = useState<boolean>(false);
+  const [adjustmentLineKey, setAdjustmentLineKey] = useState<string>("otherApprovedExpenses");
+  const [adjustmentTarget, setAdjustmentTarget] = useState<"income_statement" | "balance_sheet" | "cash_flow_statement" | "all">("all");
+  const [adjustmentAmount, setAdjustmentAmount] = useState<string>("");
+  const [adjustmentNote, setAdjustmentNote] = useState<string>("");
+  const [mappingsJson, setMappingsJson] = useState<string>("");
 
-  // Income statement
-  const incomeStatement = useMemo(() => {
-    const interestIncome = loans.reduce((s, l: any) => s + (Number(l.total_payable) - Number(l.principal)), 0);
-    const disbursed = loans.filter((l: any) => ["repaying", "disbursed", "cleared"].includes(l.status)).length;
-    return { interestIncome, disbursed };
-  }, [loans]);
+  const canApprove = roles.includes("admin") || roles.includes("auditor") || roles.includes("treasurer");
+  const canLock = roles.includes("admin") || roles.includes("treasurer") || roles.includes("auditor");
+  const canUnlock = roles.includes("admin");
+  const canAdjust = roles.includes("admin") || roles.includes("treasurer");
+  const canManageMappings = roles.includes("admin") || roles.includes("auditor");
 
-  // Loan portfolio
-  const portfolio = useMemo(() => {
-    const active = loans.filter((l: any) => ["repaying", "disbursed"].includes(l.status));
-    const defaulted = loans.filter((l: any) => l.status === "defaulted");
-    const pending = loans.filter((l: any) => l.status === "pending");
-    const totalOutstanding = active.reduce((s, l: any) => s + Number(l.balance), 0);
-    const defaultedAmount = defaulted.reduce((s, l: any) => s + Number(l.balance), 0);
-    const par30 = totalOutstanding > 0 ? ((defaultedAmount / totalOutstanding) * 100).toFixed(1) : "0.0";
-    return { active, defaulted, pending, totalOutstanding, defaultedAmount, par30, total: loans.length };
-  }, [loans]);
+  const periodParams = useMemo(() => {
+    const base: Record<string, string | number | undefined> = {
+      periodType,
+      year,
+      month,
+      quarter,
+      startDate: customStart,
+      endDate: customEnd,
+    };
 
-  // Guarantor exposure
-  const guarantorExposure = useMemo(() => {
-    const grouped: Record<string, { name: string; total: number; count: number }> = {};
-    guarantors.forEach((g: any) => {
-      const mid = g.member_id;
-      if (!grouped[mid]) grouped[mid] = { name: g.members?.name ?? "Unknown", total: 0, count: 0 };
-      grouped[mid].total += Number(g.guarantee_amount);
-      grouped[mid].count += 1;
+    if (periodType === "monthly") {
+      return { periodType, year, month };
+    }
+    if (periodType === "quarterly") {
+      return { periodType, year, quarter };
+    }
+    if (periodType === "yearly") {
+      return { periodType, year };
+    }
+    return { periodType, startDate: base.startDate, endDate: base.endDate };
+  }, [periodType, year, month, quarter, customStart, customEnd]);
+
+  const periodSignature = useMemo(() => JSON.stringify(periodParams), [periodParams]);
+
+  const overviewQuery = useQuery({
+    queryKey: ["financial-statements", "overview", periodSignature],
+    queryFn: async () => {
+      const q = buildQueryString(periodParams);
+      return api.get(`/financial-statements/overview?${q}`) as Promise<any>;
+    },
+  });
+
+  const incomeQuery = useQuery({
+    queryKey: ["financial-statements", "income", periodSignature],
+    queryFn: async () => {
+      const q = buildQueryString(periodParams);
+      return api.get(`/financial-statements/income_statement/preview?${q}`) as Promise<StatementPreview>;
+    },
+  });
+
+  const balanceQuery = useQuery({
+    queryKey: ["financial-statements", "balance", periodSignature],
+    queryFn: async () => {
+      const q = buildQueryString(periodParams);
+      return api.get(`/financial-statements/balance_sheet/preview?${q}`) as Promise<StatementPreview>;
+    },
+  });
+
+  const cashQuery = useQuery({
+    queryKey: ["financial-statements", "cash", periodSignature],
+    queryFn: async () => {
+      const q = buildQueryString(periodParams);
+      return api.get(`/financial-statements/cash_flow_statement/preview?${q}`) as Promise<StatementPreview>;
+    },
+  });
+
+  const reportPackQuery = useQuery({
+    queryKey: ["financial-statements", "report-pack", periodSignature],
+    queryFn: async () => {
+      const q = buildQueryString(periodParams);
+      return api.get(`/financial-statements/report-pack/preview?${q}`) as Promise<ReportPackPreview>;
+    },
+  });
+
+  const historyQuery = useQuery({
+    queryKey: ["financial-statements", "history"],
+    queryFn: async () => api.get("/financial-statements/history/list") as Promise<any[]>,
+  });
+
+  const adjustmentsQuery = useQuery({
+    queryKey: ["financial-statements", "adjustments"],
+    queryFn: async () => api.get("/financial-statements/adjustments/list") as Promise<any[]>,
+  });
+
+  const mappingsQuery = useQuery({
+    queryKey: ["financial-statements", "mappings"],
+    queryFn: async () => api.get("/financial-statements/mappings/list") as Promise<{ mappings: any[]; missing: string[] }>,
+  });
+
+  const auditLogQuery = useQuery({
+    queryKey: ["financial-statements", "audit-log"],
+    queryFn: async () => api.get("/financial-statements/audit-log/list") as Promise<any[]>,
+  });
+
+  const generateMutation = useMutation({
+    mutationFn: async (statementType: StatementType) => {
+      return api.post(`/financial-statements/${statementType}/generate`, {
+        ...periodParams,
+        allowOverride,
+        allowVersioning,
+        notesToAccounts,
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Statement generated", description: "Statement snapshot was stored in history." });
+      queryClient.invalidateQueries({ queryKey: ["financial-statements", "history"] });
+      queryClient.invalidateQueries({ queryKey: ["financial-statements", "audit-log"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Generation failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const approveStatementMutation = useMutation({
+    mutationFn: (id: string) => api.patch(`/financial-statements/history/${id}/approve`, {}),
+    onSuccess: () => {
+      toast({ title: "Statement approved" });
+      queryClient.invalidateQueries({ queryKey: ["financial-statements", "history"] });
+      queryClient.invalidateQueries({ queryKey: ["financial-statements", "audit-log"] });
+    },
+  });
+
+  const lockStatementMutation = useMutation({
+    mutationFn: (id: string) => api.patch(`/financial-statements/history/${id}/lock`, {}),
+    onSuccess: () => {
+      toast({ title: "Statement locked" });
+      queryClient.invalidateQueries({ queryKey: ["financial-statements", "history"] });
+      queryClient.invalidateQueries({ queryKey: ["financial-statements", "audit-log"] });
+    },
+  });
+
+  const unlockStatementMutation = useMutation({
+    mutationFn: (id: string) => api.patch(`/financial-statements/history/${id}/unlock`, {}),
+    onSuccess: () => {
+      toast({ title: "Statement unlocked" });
+      queryClient.invalidateQueries({ queryKey: ["financial-statements", "history"] });
+      queryClient.invalidateQueries({ queryKey: ["financial-statements", "audit-log"] });
+    },
+  });
+
+  const createAdjustmentMutation = useMutation({
+    mutationFn: async () => {
+      const amount = Number(adjustmentAmount);
+      if (!Number.isFinite(amount) || amount === 0) {
+        throw new Error("Adjustment amount must be non-zero.");
+      }
+      if (!adjustmentNote.trim()) {
+        throw new Error("Adjustment note is required.");
+      }
+
+      return api.post("/financial-statements/adjustments", {
+        ...periodParams,
+        targetStatement: adjustmentTarget,
+        lineKey: adjustmentLineKey,
+        category: adjustmentLineKey,
+        amount,
+        note: adjustmentNote,
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Adjustment submitted" });
+      setAdjustmentAmount("");
+      setAdjustmentNote("");
+      queryClient.invalidateQueries({ queryKey: ["financial-statements", "adjustments"] });
+      queryClient.invalidateQueries({ queryKey: ["financial-statements", "income", periodSignature] });
+      queryClient.invalidateQueries({ queryKey: ["financial-statements", "balance", periodSignature] });
+      queryClient.invalidateQueries({ queryKey: ["financial-statements", "cash", periodSignature] });
+      queryClient.invalidateQueries({ queryKey: ["financial-statements", "audit-log"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Could not submit adjustment", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const approveAdjustmentMutation = useMutation({
+    mutationFn: (id: string) => api.patch(`/financial-statements/adjustments/${id}/approve`, {}),
+    onSuccess: () => {
+      toast({ title: "Adjustment approved" });
+      queryClient.invalidateQueries({ queryKey: ["financial-statements", "adjustments"] });
+      queryClient.invalidateQueries({ queryKey: ["financial-statements", "audit-log"] });
+      queryClient.invalidateQueries({ queryKey: ["financial-statements", "income", periodSignature] });
+      queryClient.invalidateQueries({ queryKey: ["financial-statements", "balance", periodSignature] });
+      queryClient.invalidateQueries({ queryKey: ["financial-statements", "cash", periodSignature] });
+    },
+  });
+
+  const rejectAdjustmentMutation = useMutation({
+    mutationFn: (id: string) => api.patch(`/financial-statements/adjustments/${id}/reject`, {}),
+    onSuccess: () => {
+      toast({ title: "Adjustment rejected" });
+      queryClient.invalidateQueries({ queryKey: ["financial-statements", "adjustments"] });
+      queryClient.invalidateQueries({ queryKey: ["financial-statements", "audit-log"] });
+    },
+  });
+
+  const updateMappingsMutation = useMutation({
+    mutationFn: async () => {
+      if (!mappingsJson.trim()) {
+        throw new Error("Mappings JSON is empty.");
+      }
+      const parsed = JSON.parse(mappingsJson);
+      return api.put("/financial-statements/mappings", { mappings: parsed });
+    },
+    onSuccess: () => {
+      toast({ title: "Mappings updated" });
+      queryClient.invalidateQueries({ queryKey: ["financial-statements", "mappings"] });
+      queryClient.invalidateQueries({ queryKey: ["financial-statements", "audit-log"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Mapping update failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const loading =
+    overviewQuery.isLoading ||
+    incomeQuery.isLoading ||
+    balanceQuery.isLoading ||
+    cashQuery.isLoading ||
+    reportPackQuery.isLoading;
+
+  const income = incomeQuery.data;
+  const balance = balanceQuery.data;
+  const cash = cashQuery.data;
+
+  const allWarnings = useMemo(() => {
+    const warningSet = new Set<string>();
+    [income, balance, cash].forEach((statement) => {
+      statement?.validation?.warnings?.forEach((w) => warningSet.add(w));
     });
-    return Object.entries(grouped).map(([id, v]) => {
-      const member = members.find((m: any) => m.id === id);
-      const savings = member ? Number((member as any).savings) : 0;
-      const maxAllowed = savings * 3;
-      const ratio = maxAllowed > 0 ? ((v.total / maxAllowed) * 100).toFixed(1) : "N/A";
-      return { ...v, savings, maxAllowed, ratio };
-    }).sort((a, b) => Number(b.ratio) - Number(a.ratio));
-  }, [guarantors, members]);
+    return Array.from(warningSet);
+  }, [income, balance, cash]);
+
+  const onExportIncome = () => {
+    if (!income) return;
+    exportDetailedIncomeStatement(income);
+  };
+
+  const onExportBalance = () => {
+    if (!balance) return;
+    exportDetailedBalanceSheet(balance);
+  };
+
+  const onExportCash = () => {
+    if (!cash) return;
+    exportDetailedCashFlow(cash);
+  };
+
+  const onExportReportPack = () => {
+    if (!reportPackQuery.data || !income || !balance || !cash) return;
+    if (!reportPackQuery.data.validation.isValid && !allowOverride) {
+      toast({
+        title: "Report pack blocked",
+        description: "Validation warnings exist. Enable override to export anyway.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    exportFinancialReportPack({
+      periodLabel: reportPackQuery.data.period.periodLabel,
+      income,
+      balance,
+      cash,
+      notesToAccounts,
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-heading font-bold">Reports</h1>
-        <p className="text-muted-foreground text-sm">Live financial reports from database</p>
+        <h1 className="text-2xl font-heading font-bold">Financial Statements</h1>
+        <p className="text-muted-foreground text-sm">
+          Income Statement, Balance Sheet, Cash Flow Statement, validation, history, and export workflows for SACCO admin.
+        </p>
       </div>
 
-      <Tabs defaultValue="balance">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Reporting Period</CardTitle>
+          <CardDescription>Select monthly, quarterly, yearly, or custom dates.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+            <div>
+              <Label htmlFor="periodType">Period Type</Label>
+              <select
+                id="periodType"
+                title="Period type"
+                aria-label="Period type"
+                className="w-full border rounded-md h-10 px-3 bg-background"
+                value={periodType}
+                onChange={(e) => setPeriodType(e.target.value as PeriodType)}
+              >
+                <option value="monthly">Monthly</option>
+                <option value="quarterly">Quarterly</option>
+                <option value="yearly">Yearly</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+
+            {(periodType === "monthly" || periodType === "quarterly" || periodType === "yearly") && (
+              <div>
+                <Label htmlFor="year">Year</Label>
+                <Input
+                  id="year"
+                  type="number"
+                  value={year}
+                  onChange={(e) => setYear(Number(e.target.value || new Date().getFullYear()))}
+                />
+              </div>
+            )}
+
+            {periodType === "monthly" && (
+              <div>
+                <Label htmlFor="month">Month</Label>
+                <Input id="month" type="number" min={1} max={12} value={month} onChange={(e) => setMonth(Number(e.target.value || 1))} />
+              </div>
+            )}
+
+            {periodType === "quarterly" && (
+              <div>
+                <Label htmlFor="quarter">Quarter</Label>
+                <Input
+                  id="quarter"
+                  type="number"
+                  min={1}
+                  max={4}
+                  value={quarter}
+                  onChange={(e) => setQuarter(Number(e.target.value || 1))}
+                />
+              </div>
+            )}
+
+            {periodType === "custom" && (
+              <>
+                <div>
+                  <Label htmlFor="customStart">Start Date</Label>
+                  <Input id="customStart" type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} />
+                </div>
+                <div>
+                  <Label htmlFor="customEnd">End Date</Label>
+                  <Input id="customEnd" type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} />
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="notesToAccounts">Notes to Accounts</Label>
+              <Textarea
+                id="notesToAccounts"
+                value={notesToAccounts}
+                onChange={(e) => setNotesToAccounts(e.target.value)}
+                placeholder="Explain assumptions, reclassifications, or exceptional items..."
+                className="min-h-[96px]"
+              />
+            </div>
+            <div className="rounded-lg border p-3 text-sm space-y-2">
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={allowOverride} onChange={(e) => setAllowOverride(e.target.checked)} />
+                Allow override when validations fail
+              </label>
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={allowVersioning} onChange={(e) => setAllowVersioning(e.target.checked)} />
+                Allow generation of new version even when a period is already locked
+              </label>
+              <p className="text-muted-foreground text-xs">
+                Overrides and locking actions are recorded in financial statement audit logs.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {allWarnings.length > 0 && (
+        <Card className="border-amber-300">
+          <CardHeader>
+            <CardTitle className="text-base">Validation Warnings</CardTitle>
+            <CardDescription>Resolve these warnings or use override with proper approval.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="list-disc pl-5 text-sm space-y-1">
+              {allWarnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      <Tabs defaultValue="overview" className="space-y-4">
         <TabsList className="flex-wrap">
-          <TabsTrigger value="balance" className="gap-1.5"><FileText className="h-3.5 w-3.5" /> Balance Sheet</TabsTrigger>
-          <TabsTrigger value="income" className="gap-1.5"><BarChart3 className="h-3.5 w-3.5" /> Income Statement</TabsTrigger>
-          <TabsTrigger value="portfolio" className="gap-1.5"><Landmark className="h-3.5 w-3.5" /> Loan Portfolio</TabsTrigger>
-          <TabsTrigger value="guarantor" className="gap-1.5"><Shield className="h-3.5 w-3.5" /> Guarantor Exposure</TabsTrigger>
-          <TabsTrigger value="members" className="gap-1.5"><Users className="h-3.5 w-3.5" /> Member Statements</TabsTrigger>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="income">Income Statement</TabsTrigger>
+          <TabsTrigger value="balance">Balance Sheet</TabsTrigger>
+          <TabsTrigger value="cash">Cash Flow Statement</TabsTrigger>
+          <TabsTrigger value="history">Statement History</TabsTrigger>
+          <TabsTrigger value="exports">PDF Exports</TabsTrigger>
+          <TabsTrigger value="audit">Audit Log</TabsTrigger>
         </TabsList>
 
-        {/* Balance Sheet */}
-        <TabsContent value="balance" className="mt-4">
+        <TabsContent value="overview" className="space-y-4">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div><CardTitle className="font-heading">Balance Sheet</CardTitle>
-                <CardDescription>Assets, liabilities, and equity snapshot</CardDescription></div>
-                <Button size="sm" variant="outline" onClick={() => exportBalanceSheet(balanceSheet)}><Download className="h-3.5 w-3.5 mr-1" />PDF</Button>
-              </div>
+              <CardTitle>Financial Overview</CardTitle>
+              <CardDescription>{income?.period?.periodLabel || "Current period"}</CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-2 md:hidden">
-                <div className="rounded-lg border p-3">
-                  <p className="text-xs text-muted-foreground">Assets</p>
-                  <p className="text-sm">Loan Portfolio (Outstanding)</p>
-                  <p className="font-semibold">KES {balanceSheet.totalLoanBalance.toLocaleString()}</p>
-                </div>
-                <div className="rounded-lg border p-3">
-                  <p className="text-xs text-muted-foreground">Liabilities</p>
-                  <p className="text-sm">Member Savings</p>
-                  <p className="font-semibold">KES {balanceSheet.totalSavings.toLocaleString()}</p>
-                </div>
-                <div className="rounded-lg border p-3">
-                  <p className="text-xs text-muted-foreground">Equity</p>
-                  <p className="text-sm">Share Capital</p>
-                  <p className="font-semibold">KES {balanceSheet.totalShares.toLocaleString()}</p>
-                </div>
-                <div className="rounded-lg border bg-muted/50 p-3">
-                  <p className="text-sm font-medium">Total Deposits (Savings + Shares)</p>
-                  <p className="font-bold">KES {balanceSheet.totalDeposits.toLocaleString()}</p>
-                </div>
+            <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground">Net Profit or Loss</p>
+                <p className="text-xl font-semibold">{amountCell(overviewQuery.data?.netProfitOrLoss)}</p>
               </div>
-              <div className="hidden md:block overflow-x-auto">
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground">Total Assets</p>
+                <p className="text-xl font-semibold">{amountCell(overviewQuery.data?.totalAssets)}</p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground">Closing Cash</p>
+                <p className="text-xl font-semibold">{amountCell(overviewQuery.data?.closingCashBalance)}</p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground">History Records</p>
+                <p className="text-xl font-semibold">{String(overviewQuery.data?.historyCount ?? 0)}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {canAdjust && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Manual Adjustments</CardTitle>
+                <CardDescription>
+                  Post reclassification or correction entries into statement lines. All entries are audited.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div>
+                    <Label htmlFor="adjTarget">Target Statement</Label>
+                    <select
+                      id="adjTarget"
+                      title="Adjustment target statement"
+                      aria-label="Adjustment target statement"
+                      className="w-full border rounded-md h-10 px-3 bg-background"
+                      value={adjustmentTarget}
+                      onChange={(e) => setAdjustmentTarget(e.target.value as any)}
+                    >
+                      <option value="all">All Statements</option>
+                      <option value="income_statement">Income Statement</option>
+                      <option value="balance_sheet">Balance Sheet</option>
+                      <option value="cash_flow_statement">Cash Flow Statement</option>
+                    </select>
+                  </div>
+                  <div>
+                    <Label htmlFor="adjLine">Line Key</Label>
+                    <Input id="adjLine" value={adjustmentLineKey} onChange={(e) => setAdjustmentLineKey(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label htmlFor="adjAmount">Amount (KES)</Label>
+                    <Input id="adjAmount" type="number" value={adjustmentAmount} onChange={(e) => setAdjustmentAmount(e.target.value)} />
+                  </div>
+                  <div className="flex items-end">
+                    <Button onClick={() => createAdjustmentMutation.mutate()} disabled={createAdjustmentMutation.isPending} className="w-full">
+                      Add Adjustment
+                    </Button>
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="adjNote">Adjustment Note</Label>
+                  <Textarea id="adjNote" value={adjustmentNote} onChange={(e) => setAdjustmentNote(e.target.value)} />
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Mapping Layer</CardTitle>
+              <CardDescription>
+                Missing mappings can lead to classification gaps in financial statements. Keep this mapping table updated.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {mappingsQuery.data?.missing?.length ? (
+                <div className="rounded-md border border-amber-300 p-3 text-sm">
+                  <p className="font-medium">Missing mappings</p>
+                  <p className="text-muted-foreground mt-1">{mappingsQuery.data.missing.join(", ")}</p>
+                </div>
+              ) : (
+                <div className="rounded-md border border-emerald-300 p-3 text-sm">No required mapping gaps detected.</div>
+              )}
+
+              <div className="overflow-x-auto rounded-md border">
                 <Table>
                   <TableHeader>
-                    <TableRow><TableHead>Item</TableHead><TableHead className="text-right">Amount (KES)</TableHead></TableRow>
+                    <TableRow>
+                      <TableHead>Source</TableHead>
+                      <TableHead>Income Line</TableHead>
+                      <TableHead>Balance Line</TableHead>
+                      <TableHead>Cash Flow Line</TableHead>
+                      <TableHead>Direction</TableHead>
+                    </TableRow>
                   </TableHeader>
                   <TableBody>
-                    <TableRow><TableCell className="font-semibold" colSpan={2}>Assets</TableCell></TableRow>
-                    <TableRow><TableCell className="pl-8">Loan Portfolio (Outstanding)</TableCell><TableCell className="text-right font-mono">{balanceSheet.totalLoanBalance.toLocaleString()}</TableCell></TableRow>
-                    <TableRow className="border-t"><TableCell className="font-semibold" colSpan={2}>Liabilities</TableCell></TableRow>
-                    <TableRow><TableCell className="pl-8">Member Savings</TableCell><TableCell className="text-right font-mono">{balanceSheet.totalSavings.toLocaleString()}</TableCell></TableRow>
-                    <TableRow className="border-t"><TableCell className="font-semibold" colSpan={2}>Equity</TableCell></TableRow>
-                    <TableRow><TableCell className="pl-8">Share Capital</TableCell><TableCell className="text-right font-mono">{balanceSheet.totalShares.toLocaleString()}</TableCell></TableRow>
-                    <TableRow className="bg-muted/50 font-bold"><TableCell>Total Deposits (Savings + Shares)</TableCell><TableCell className="text-right font-mono">{balanceSheet.totalDeposits.toLocaleString()}</TableCell></TableRow>
+                    {(mappingsQuery.data?.mappings || []).map((m: any) => (
+                      <TableRow key={`${m.sourceType}:${m.sourceKey}`}>
+                        <TableCell>{m.sourceType}:{m.sourceKey}</TableCell>
+                        <TableCell>{m.incomeLineKey || "-"}</TableCell>
+                        <TableCell>{m.balanceSheetLineKey || "-"}</TableCell>
+                        <TableCell>{m.cashFlowLineKey || "-"}</TableCell>
+                        <TableCell>{m.direction}</TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               </div>
+
+              {canManageMappings && (
+                <>
+                  <div>
+                    <Label htmlFor="mappingsJson">Bulk Mapping Update JSON</Label>
+                    <Textarea
+                      id="mappingsJson"
+                      className="min-h-[140px]"
+                      value={mappingsJson}
+                      onChange={(e) => setMappingsJson(e.target.value)}
+                      placeholder='[{"sourceType":"transaction","sourceKey":"deposit","incomeLineKey":null,"balanceSheetLineKey":"mobileMoneyWalletBalances","cashFlowLineKey":"memberSavingsDepositsReceived","cashFlowBucket":"operating","direction":"inflow","isActive":true}]'
+                    />
+                  </div>
+                  <Button onClick={() => updateMappingsMutation.mutate()} disabled={updateMappingsMutation.isPending}>
+                    Save Mapping Updates
+                  </Button>
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Income Statement */}
-        <TabsContent value="income" className="mt-4">
+        <TabsContent value="income">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div><CardTitle className="font-heading">Income Statement</CardTitle>
-                <CardDescription>Revenue from interest on active loans</CardDescription></div>
-                <Button size="sm" variant="outline" onClick={() => exportIncomeStatement({ ...incomeStatement, totalTransactions: transactions.length })}><Download className="h-3.5 w-3.5 mr-1" />PDF</Button>
-              </div>
+              <CardTitle>Income Statement Preview</CardTitle>
+              <CardDescription>{income?.period.periodLabel}</CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <div className="p-4 rounded-lg bg-muted/50">
-                  <p className="text-sm text-muted-foreground">Interest Income (Projected)</p>
-                  <p className="text-2xl font-bold font-heading">KES {incomeStatement.interestIncome.toLocaleString()}</p>
-                </div>
-                <div className="p-4 rounded-lg bg-muted/50">
-                  <p className="text-sm text-muted-foreground">Total Loans Disbursed</p>
-                  <p className="text-2xl font-bold font-heading">{incomeStatement.disbursed}</p>
-                </div>
-                <div className="p-4 rounded-lg bg-muted/50">
-                  <p className="text-sm text-muted-foreground">Total Transactions</p>
-                  <p className="text-2xl font-bold font-heading">{transactions.length}</p>
-                </div>
+            <CardContent className="space-y-3">
+              <div className="overflow-x-auto rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Line</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {Object.entries(income?.lines || {}).map(([key, value]) => (
+                      <TableRow key={key}>
+                        <TableCell>{rowTitle(key)}</TableCell>
+                        <TableCell className="text-right">{amountCell(value)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="overflow-x-auto rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Summary</TableHead>
+                      <TableHead className="text-right">Value</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {Object.entries(income?.summary || {}).map(([key, value]) => (
+                      <TableRow key={key}>
+                        <TableCell className="font-medium">{rowTitle(key)}</TableCell>
+                        <TableCell className="text-right">{amountCell(value)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => generateMutation.mutate("income_statement")} disabled={generateMutation.isPending}>
+                  Save Snapshot
+                </Button>
+                <Button variant="outline" onClick={onExportIncome}>Export PDF</Button>
+                <Badge variant={income?.validation?.isValid ? "default" : "destructive"}>
+                  {income?.validation?.isValid ? "Valid" : "Validation warning"}
+                </Badge>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Loan Portfolio */}
-        <TabsContent value="portfolio" className="mt-4 space-y-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card><CardContent className="pt-4 pb-4"><p className="text-sm text-muted-foreground">Total Loans</p><p className="text-2xl font-bold font-heading">{portfolio.total}</p></CardContent></Card>
-            <Card><CardContent className="pt-4 pb-4"><p className="text-sm text-muted-foreground">Active</p><p className="text-2xl font-bold font-heading">{portfolio.active.length}</p></CardContent></Card>
-            <Card><CardContent className="pt-4 pb-4"><p className="text-sm text-muted-foreground">Defaulted</p><p className="text-2xl font-bold font-heading text-destructive">{portfolio.defaulted.length}</p></CardContent></Card>
-            <Card><CardContent className="pt-4 pb-4"><p className="text-sm text-muted-foreground">PAR &gt;30</p><p className="text-2xl font-bold font-heading">{portfolio.par30}%</p></CardContent></Card>
-          </div>
+        <TabsContent value="balance">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="font-heading">Loan Portfolio Detail</CardTitle>
-                <Button size="sm" variant="outline" onClick={() => exportLoanPortfolio(
-                  { total: portfolio.total, active: portfolio.active.length, defaulted: portfolio.defaulted.length, par30: portfolio.par30 },
-                  loans.map((l: any) => ({ loan_number: l.loan_number, memberName: l.members?.name ?? "—", principal: Number(l.principal), balance: Number(l.balance), status: l.status, risk_rating: l.risk_rating }))
-                )}><Download className="h-3.5 w-3.5 mr-1" />PDF</Button>
+              <CardTitle>Balance Sheet Preview</CardTitle>
+              <CardDescription>{balance?.period.periodLabel}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="overflow-x-auto rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Line</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {Object.entries(balance?.lines || {}).map(([key, value]) => (
+                      <TableRow key={key}>
+                        <TableCell>{rowTitle(key)}</TableCell>
+                        <TableCell className="text-right">{amountCell(value)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
+              <div className="overflow-x-auto rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Summary</TableHead>
+                      <TableHead className="text-right">Value</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {Object.entries(balance?.summary || {}).map(([key, value]) => (
+                      <TableRow key={key}>
+                        <TableCell className="font-medium">{rowTitle(key)}</TableCell>
+                        <TableCell className="text-right">{amountCell(value)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => generateMutation.mutate("balance_sheet")} disabled={generateMutation.isPending}>
+                  Save Snapshot
+                </Button>
+                <Button variant="outline" onClick={onExportBalance}>Export PDF</Button>
+                <Badge variant={balance?.validation?.isValid ? "default" : "destructive"}>
+                  {balance?.validation?.isValid ? "Valid" : "Validation warning"}
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="cash">
+          <Card>
+            <CardHeader>
+              <CardTitle>Cash Flow Statement Preview</CardTitle>
+              <CardDescription>{cash?.period.periodLabel}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="overflow-x-auto rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Line</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {Object.entries(cash?.lines || {}).map(([key, value]) => (
+                      <TableRow key={key}>
+                        <TableCell>{rowTitle(key)}</TableCell>
+                        <TableCell className="text-right">{amountCell(value)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="overflow-x-auto rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Summary</TableHead>
+                      <TableHead className="text-right">Value</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {Object.entries(cash?.summary || {}).map(([key, value]) => (
+                      <TableRow key={key}>
+                        <TableCell className="font-medium">{rowTitle(key)}</TableCell>
+                        <TableCell className="text-right">{amountCell(value)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => generateMutation.mutate("cash_flow_statement")} disabled={generateMutation.isPending}>
+                  Save Snapshot
+                </Button>
+                <Button variant="outline" onClick={onExportCash}>Export PDF</Button>
+                <Badge variant={cash?.validation?.isValid ? "default" : "destructive"}>
+                  {cash?.validation?.isValid ? "Valid" : "Validation warning"}
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="history">
+          <Card>
+            <CardHeader>
+              <CardTitle>Statement History</CardTitle>
+              <CardDescription>Generated snapshots with version, approval, and locking status.</CardDescription>
             </CardHeader>
             <CardContent>
-              <>
-                <div className="space-y-3 md:hidden">
-                  {loans.map((loan: any) => (
-                    <div key={loan.id} className="rounded-lg border p-3 space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="font-mono text-xs truncate">{loan.loan_number}</p>
-                        <Badge variant={loan.status === "repaying" ? "default" : loan.status === "defaulted" ? "destructive" : "secondary"}>{loan.status}</Badge>
-                      </div>
-                      <p className="text-sm">{loan.members?.name ?? "—"}</p>
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        <div>
-                          <p className="text-xs text-muted-foreground">Principal</p>
-                          <p className="font-medium">KES {Number(loan.principal).toLocaleString()}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Balance</p>
-                          <p className="font-medium">KES {Number(loan.balance).toLocaleString()}</p>
-                        </div>
-                      </div>
-                      <Badge variant={loan.risk_rating === "low" ? "default" : loan.risk_rating === "high" ? "destructive" : "secondary"}>{loan.risk_rating}</Badge>
-                    </div>
-                  ))}
-                </div>
-                <div className="hidden md:block overflow-x-auto">
+              <div className="overflow-x-auto rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Period</TableHead>
+                      <TableHead>Version</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Valid</TableHead>
+                      <TableHead>Generated</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(historyQuery.data || []).map((row: any) => (
+                      <TableRow key={row._id}>
+                        <TableCell>{statementTitles[row.statementType as StatementType] || row.statementType}</TableCell>
+                        <TableCell>{row.periodLabel}</TableCell>
+                        <TableCell>v{row.version}</TableCell>
+                        <TableCell>
+                          <Badge variant={row.status === "locked" ? "default" : row.status === "approved" ? "secondary" : "outline"}>
+                            {row.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={row.isValid ? "default" : "destructive"}>{row.isValid ? "Yes" : "No"}</Badge>
+                        </TableCell>
+                        <TableCell>{new Date(row.generatedAt || row.createdAt).toLocaleString()}</TableCell>
+                        <TableCell className="space-x-2">
+                          {canApprove && row.status !== "approved" && row.status !== "locked" && (
+                            <Button size="sm" variant="outline" onClick={() => approveStatementMutation.mutate(row._id)}>
+                              Approve
+                            </Button>
+                          )}
+                          {canLock && row.status !== "locked" && (
+                            <Button size="sm" variant="outline" onClick={() => lockStatementMutation.mutate(row._id)}>
+                              Lock
+                            </Button>
+                          )}
+                          {canUnlock && row.status === "locked" && (
+                            <Button size="sm" variant="outline" onClick={() => unlockStatementMutation.mutate(row._id)}>
+                              Unlock
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <div className="mt-4">
+                <h3 className="font-medium mb-2">Adjustments History</h3>
+                <div className="overflow-x-auto rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Loan #</TableHead><TableHead>Member</TableHead><TableHead className="text-right">Principal</TableHead>
-                        <TableHead className="text-right">Balance</TableHead><TableHead>Status</TableHead><TableHead>Risk</TableHead>
+                        <TableHead>Period</TableHead>
+                        <TableHead>Target</TableHead>
+                        <TableHead>Line</TableHead>
+                        <TableHead>Amount</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Note</TableHead>
+                        <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {loans.map((loan: any) => (
-                        <TableRow key={loan.id}>
-                          <TableCell className="font-mono text-xs">{loan.loan_number}</TableCell>
-                          <TableCell>{loan.members?.name ?? "—"}</TableCell>
-                          <TableCell className="text-right font-mono">KES {Number(loan.principal).toLocaleString()}</TableCell>
-                          <TableCell className="text-right font-mono">KES {Number(loan.balance).toLocaleString()}</TableCell>
-                          <TableCell><Badge variant={loan.status === "repaying" ? "default" : loan.status === "defaulted" ? "destructive" : "secondary"}>{loan.status}</Badge></TableCell>
-                          <TableCell><Badge variant={loan.risk_rating === "low" ? "default" : loan.risk_rating === "high" ? "destructive" : "secondary"}>{loan.risk_rating}</Badge></TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Guarantor Exposure */}
-        <TabsContent value="guarantor" className="mt-4">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div><CardTitle className="font-heading">Guarantor Exposure Report</CardTitle>
-                <CardDescription>Guarantee concentration and risk by member</CardDescription></div>
-                <Button size="sm" variant="outline" onClick={() => exportGuarantorExposure(guarantorExposure)}><Download className="h-3.5 w-3.5 mr-1" />PDF</Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <>
-                <div className="space-y-3 md:hidden">
-                  {guarantorExposure.map((g, i) => (
-                    <div key={i} className="rounded-lg border p-3 space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="font-medium text-sm">{g.name}</p>
-                        <Badge variant={Number(g.ratio) > 80 ? "destructive" : Number(g.ratio) > 50 ? "secondary" : "default"}>{g.ratio}%</Badge>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        <p>Total: KES {g.total.toLocaleString()}</p>
-                        <p>Savings: KES {g.savings.toLocaleString()}</p>
-                        <p>Max: KES {g.maxAllowed.toLocaleString()}</p>
-                        <p>Guarantees: {g.count}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="hidden md:block overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Guarantor</TableHead><TableHead className="text-right">Total Guaranteed</TableHead>
-                        <TableHead className="text-right">Savings</TableHead><TableHead className="text-right">Max Allowed</TableHead>
-                        <TableHead className="text-right">Exposure %</TableHead><TableHead className="text-center">Guarantees</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {guarantorExposure.map((g, i) => (
-                        <TableRow key={i}>
-                          <TableCell className="font-medium">{g.name}</TableCell>
-                          <TableCell className="text-right font-mono">KES {g.total.toLocaleString()}</TableCell>
-                          <TableCell className="text-right font-mono">KES {g.savings.toLocaleString()}</TableCell>
-                          <TableCell className="text-right font-mono">KES {g.maxAllowed.toLocaleString()}</TableCell>
-                          <TableCell className="text-right">
-                            <Badge variant={Number(g.ratio) > 80 ? "destructive" : Number(g.ratio) > 50 ? "secondary" : "default"}>{g.ratio}%</Badge>
+                      {(adjustmentsQuery.data || []).map((row: any) => (
+                        <TableRow key={row._id}>
+                          <TableCell>{row.periodLabel}</TableCell>
+                          <TableCell>{row.targetStatement}</TableCell>
+                          <TableCell>{row.lineKey}</TableCell>
+                          <TableCell>{amountCell(row.amount)}</TableCell>
+                          <TableCell>
+                            <Badge variant={row.status === "approved" ? "default" : row.status === "rejected" ? "destructive" : "secondary"}>
+                              {row.status}
+                            </Badge>
                           </TableCell>
-                          <TableCell className="text-center">{g.count}</TableCell>
+                          <TableCell className="max-w-[240px] truncate" title={row.note}>{row.note}</TableCell>
+                          <TableCell className="space-x-2">
+                            {canApprove && row.status === "pending" && (
+                              <>
+                                <Button size="sm" variant="outline" onClick={() => approveAdjustmentMutation.mutate(row._id)}>Approve</Button>
+                                <Button size="sm" variant="outline" onClick={() => rejectAdjustmentMutation.mutate(row._id)}>Reject</Button>
+                              </>
+                            )}
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
                 </div>
-              </>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Member Statements */}
-        <TabsContent value="members" className="mt-4">
+        <TabsContent value="exports">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div><CardTitle className="font-heading">Member Statements</CardTitle>
-                <CardDescription>Account summary for all members</CardDescription></div>
-                <Button size="sm" variant="outline" onClick={() => exportMemberStatements(members as any)}><Download className="h-3.5 w-3.5 mr-1" />PDF</Button>
+              <CardTitle>PDF Exports</CardTitle>
+              <CardDescription>Generate branded exports and full report pack.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" onClick={onExportIncome}>Export Income Statement PDF</Button>
+                <Button variant="outline" onClick={onExportBalance}>Export Balance Sheet PDF</Button>
+                <Button variant="outline" onClick={onExportCash}>Export Cash Flow PDF</Button>
+                <Button onClick={onExportReportPack}>Export Combined Report Pack PDF</Button>
               </div>
+              <p className="text-xs text-muted-foreground">
+                Combined report pack export is blocked by validation warnings unless override is enabled above.
+              </p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="audit">
+          <Card>
+            <CardHeader>
+              <CardTitle>Financial Statement Audit Log</CardTitle>
+              <CardDescription>Generation, approvals, locks, adjustments, and mapping changes.</CardDescription>
             </CardHeader>
             <CardContent>
-              <>
-                <div className="space-y-3 md:hidden">
-                  {members.map((m: any) => (
-                    <div key={m.id} className="rounded-lg border p-3 space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="font-medium text-sm">{m.name}</p>
-                        <Badge variant={m.status === "active" ? "default" : "secondary"}>{m.status}</Badge>
-                      </div>
-                      <p className="font-mono text-xs text-muted-foreground">{m.member_id}</p>
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        <p>Savings: KES {Number(m.savings).toLocaleString()}</p>
-                        <p>Shares: KES {Number(m.shares).toLocaleString()}</p>
-                        <p className="col-span-2">Loan Balance: KES {Number(m.loan_balance).toLocaleString()}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="hidden md:block overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Member ID</TableHead><TableHead>Name</TableHead>
-                        <TableHead className="text-right">Savings</TableHead><TableHead className="text-right">Shares</TableHead>
-                        <TableHead className="text-right">Loan Balance</TableHead><TableHead>Status</TableHead>
+              <div className="overflow-x-auto rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>When</TableHead>
+                      <TableHead>User</TableHead>
+                      <TableHead>Action</TableHead>
+                      <TableHead>Record</TableHead>
+                      <TableHead>Details</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(auditLogQuery.data || []).map((entry: any) => (
+                      <TableRow key={entry._id}>
+                        <TableCell>{new Date(entry.createdAt).toLocaleString()}</TableCell>
+                        <TableCell>{entry.userId?.fullName || entry.userId?.email || "System"}</TableCell>
+                        <TableCell>{entry.action}</TableCell>
+                        <TableCell>{entry.recordId || "-"}</TableCell>
+                        <TableCell className="max-w-[400px] truncate" title={JSON.stringify(entry.changes || {})}>
+                          {JSON.stringify(entry.changes || {})}
+                        </TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {members.map((m: any) => (
-                        <TableRow key={m.id}>
-                          <TableCell className="font-mono text-xs">{m.member_id}</TableCell>
-                          <TableCell className="font-medium">{m.name}</TableCell>
-                          <TableCell className="text-right font-mono">KES {Number(m.savings).toLocaleString()}</TableCell>
-                          <TableCell className="text-right font-mono">KES {Number(m.shares).toLocaleString()}</TableCell>
-                          <TableCell className="text-right font-mono">KES {Number(m.loan_balance).toLocaleString()}</TableCell>
-                          <TableCell><Badge variant={m.status === "active" ? "default" : "secondary"}>{m.status}</Badge></TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
