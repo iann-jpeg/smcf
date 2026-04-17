@@ -138,12 +138,18 @@ export default function Reports() {
 
   const periodSignature = useMemo(() => JSON.stringify(periodParams), [periodParams]);
 
+  const financialQueryOptions = {
+    retry: 1,
+    refetchOnWindowFocus: false,
+  } as const;
+
   const overviewQuery = useQuery({
     queryKey: ["financial-statements", "overview", periodSignature],
     queryFn: async () => {
       const q = buildQueryString(periodParams);
       return api.get(`/financial-statements/overview?${q}`) as Promise<any>;
     },
+    ...financialQueryOptions,
   });
 
   const incomeQuery = useQuery({
@@ -152,6 +158,7 @@ export default function Reports() {
       const q = buildQueryString(periodParams);
       return api.get(`/financial-statements/income_statement/preview?${q}`) as Promise<StatementPreview>;
     },
+    ...financialQueryOptions,
   });
 
   const balanceQuery = useQuery({
@@ -160,6 +167,7 @@ export default function Reports() {
       const q = buildQueryString(periodParams);
       return api.get(`/financial-statements/balance_sheet/preview?${q}`) as Promise<StatementPreview>;
     },
+    ...financialQueryOptions,
   });
 
   const cashQuery = useQuery({
@@ -168,6 +176,7 @@ export default function Reports() {
       const q = buildQueryString(periodParams);
       return api.get(`/financial-statements/cash_flow_statement/preview?${q}`) as Promise<StatementPreview>;
     },
+    ...financialQueryOptions,
   });
 
   const reportPackQuery = useQuery({
@@ -176,26 +185,31 @@ export default function Reports() {
       const q = buildQueryString(periodParams);
       return api.get(`/financial-statements/report-pack/preview?${q}`) as Promise<ReportPackPreview>;
     },
+    ...financialQueryOptions,
   });
 
   const historyQuery = useQuery({
     queryKey: ["financial-statements", "history"],
     queryFn: async () => api.get("/financial-statements/history/list") as Promise<any[]>,
+    ...financialQueryOptions,
   });
 
   const adjustmentsQuery = useQuery({
     queryKey: ["financial-statements", "adjustments"],
     queryFn: async () => api.get("/financial-statements/adjustments/list") as Promise<any[]>,
+    ...financialQueryOptions,
   });
 
   const mappingsQuery = useQuery({
     queryKey: ["financial-statements", "mappings"],
     queryFn: async () => api.get("/financial-statements/mappings/list") as Promise<{ mappings: any[]; missing: string[] }>,
+    ...financialQueryOptions,
   });
 
   const auditLogQuery = useQuery({
     queryKey: ["financial-statements", "audit-log"],
     queryFn: async () => api.get("/financial-statements/audit-log/list") as Promise<any[]>,
+    ...financialQueryOptions,
   });
 
   const generateMutation = useMutation({
@@ -328,6 +342,10 @@ export default function Reports() {
     cashQuery.isLoading ||
     reportPackQuery.isLoading;
 
+  const criticalQueryErrors = [overviewQuery, incomeQuery, balanceQuery, cashQuery, reportPackQuery]
+    .map((q) => q.error)
+    .filter(Boolean) as Error[];
+
   const income = incomeQuery.data;
   const balance = balanceQuery.data;
   const cash = cashQuery.data;
@@ -367,7 +385,7 @@ export default function Reports() {
     }
 
     exportFinancialReportPack({
-      periodLabel: reportPackQuery.data.period.periodLabel,
+      periodLabel: reportPackQuery.data.period?.periodLabel || "Selected Period",
       income,
       balance,
       cash,
@@ -490,6 +508,22 @@ export default function Reports() {
           </div>
         </CardContent>
       </Card>
+
+      {criticalQueryErrors.length > 0 && (
+        <Card className="border-destructive/40">
+          <CardHeader>
+            <CardTitle className="text-base">Financial Reports Data Unavailable</CardTitle>
+            <CardDescription>
+              Some financial statement endpoints are not reachable right now. The page remains available while backend routing is fixed.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground space-y-1">
+            {criticalQueryErrors.slice(0, 2).map((error, index) => (
+              <p key={`${error.message}-${index}`}>{error.message}</p>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {allWarnings.length > 0 && (
         <Card className="border-amber-300">
@@ -659,7 +693,7 @@ export default function Reports() {
           <Card>
             <CardHeader>
               <CardTitle>Income Statement Preview</CardTitle>
-              <CardDescription>{income?.period.periodLabel}</CardDescription>
+              <CardDescription>{income?.period?.periodLabel || "Data unavailable"}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="overflow-x-auto rounded-md border">
@@ -715,7 +749,7 @@ export default function Reports() {
           <Card>
             <CardHeader>
               <CardTitle>Balance Sheet Preview</CardTitle>
-              <CardDescription>{balance?.period.periodLabel}</CardDescription>
+              <CardDescription>{balance?.period?.periodLabel || "Data unavailable"}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="overflow-x-auto rounded-md border">
@@ -771,7 +805,7 @@ export default function Reports() {
           <Card>
             <CardHeader>
               <CardTitle>Cash Flow Statement Preview</CardTitle>
-              <CardDescription>{cash?.period.periodLabel}</CardDescription>
+              <CardDescription>{cash?.period?.periodLabel || "Data unavailable"}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="overflow-x-auto rounded-md border">
