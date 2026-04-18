@@ -13,9 +13,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Check, Loader2, TrendingUp, Users, Coins, X, Percent } from "lucide-react";
+import { Check, Loader2, TrendingUp, Users, Coins, X, Percent, Download } from "lucide-react";
 import { toast } from "sonner";
 import ShareCapitalDividendsTab from "@/components/admin/ShareCapitalDividendsTab";
+import {
+  exportAccountsChartOfAccounts,
+  exportAccountsTransactionsPdf,
+  exportAccountsDividendDistributionPdf,
+  exportAccountsSavingsInterestHistoryPdf,
+  exportAccountsSavingsInterestPreviewPdf,
+} from "@/lib/pdf-export";
 
 export default function Accounts() {
   const qc = useQueryClient();
@@ -206,6 +213,66 @@ export default function Accounts() {
 
   const isLoading = membersLoading || txnLoading;
 
+  const downloadChartOfAccountsPdf = () => {
+    exportAccountsChartOfAccounts(chartOfAccounts);
+    toast.success("Chart of accounts PDF downloaded.");
+  };
+
+  const downloadTransactionsPdf = () => {
+    exportAccountsTransactionsPdf("Recent Transactions", transactions as any[], "accounts-ledger-recent-transactions.pdf");
+    toast.success("Recent transactions PDF downloaded.");
+  };
+
+  const downloadPendingPdf = () => {
+    exportAccountsTransactionsPdf("Pending Payments", pending as any[], "accounts-ledger-pending-payments.pdf");
+    toast.success("Pending payments PDF downloaded.");
+  };
+
+  const downloadPastDividendsPdf = () => {
+    exportAccountsTransactionsPdf("Past Dividend Distributions", dividends as any[], "accounts-ledger-dividends-history.pdf");
+    toast.success("Dividend history PDF downloaded.");
+  };
+
+  const downloadLatestDividendDistributionPdf = () => {
+    if (!distResult) {
+      toast.error("Run a dividend distribution first to export the detailed report.");
+      return;
+    }
+    exportAccountsDividendDistributionPdf(
+      String(distResult.period || "-"),
+      Number(distResult.totalDividend || 0),
+      Number(distResult.membersProcessed || 0),
+      Array.isArray(distResult.distributions) ? distResult.distributions : []
+    );
+    toast.success("Latest dividend distribution PDF downloaded.");
+  };
+
+  const downloadSavingsInterestPreviewPdf = () => {
+    if (!interestPreview && !interestResult) {
+      toast.error("Run preview or complete a distribution first to export.");
+      return;
+    }
+
+    const previewRows = Array.isArray(interestPreview?.preview)
+      ? interestPreview.preview
+      : [];
+
+    exportAccountsSavingsInterestPreviewPdf({
+      period: interestPeriod,
+      totalProfit: Number(interestProfit || 0),
+      interestRate: Number(interestRate || 0),
+      totalInterest: Number(interestPreview?.totalInterest ?? interestResult?.totalInterest ?? 0),
+      membersCount: Number(interestPreview?.membersCount ?? interestResult?.membersCount ?? 0),
+      rows: previewRows,
+    });
+    toast.success("Savings interest distribution PDF downloaded.");
+  };
+
+  const downloadSavingsInterestHistoryPdf = () => {
+    exportAccountsSavingsInterestHistoryPdf(savingsInterestHistory as any[]);
+    toast.success("Savings interest history PDF downloaded.");
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -244,6 +311,15 @@ export default function Accounts() {
 
         <TabsContent value="coa">
           <Card>
+            <CardHeader className="pb-0">
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="font-heading text-base">Chart of Accounts</CardTitle>
+                <Button variant="outline" size="sm" className="gap-2" onClick={downloadChartOfAccountsPdf}>
+                  <Download className="h-4 w-4" />
+                  Download PDF
+                </Button>
+              </div>
+            </CardHeader>
             <CardContent className="pt-6">
               {isLoading ? (
                 <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
@@ -291,6 +367,15 @@ export default function Accounts() {
 
         <TabsContent value="transactions">
           <Card>
+            <CardHeader className="pb-0">
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="font-heading text-base">Recent Transactions</CardTitle>
+                <Button variant="outline" size="sm" className="gap-2" onClick={downloadTransactionsPdf}>
+                  <Download className="h-4 w-4" />
+                  Download PDF
+                </Button>
+              </div>
+            </CardHeader>
             <CardContent className="pt-6">
               {txnLoading ? (
                 <div className="space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
@@ -350,6 +435,15 @@ export default function Accounts() {
 
         <TabsContent value="pending">
           <Card>
+            <CardHeader className="pb-0">
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="font-heading text-base">Pending Payments</CardTitle>
+                <Button variant="outline" size="sm" className="gap-2" onClick={downloadPendingPdf}>
+                  <Download className="h-4 w-4" />
+                  Download PDF
+                </Button>
+              </div>
+            </CardHeader>
             <CardContent className="pt-6">
               {pendingLoading ? (
                 <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
@@ -459,10 +553,16 @@ export default function Accounts() {
           {/* Distribution form */}
           <Card>
             <CardHeader>
-              <CardTitle className="font-heading text-lg flex items-center gap-2">
-                <Coins className="h-5 w-5 text-yellow-500" />
-                Distribute Dividends
-              </CardTitle>
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="font-heading text-lg flex items-center gap-2">
+                  <Coins className="h-5 w-5 text-yellow-500" />
+                  Distribute Dividends
+                </CardTitle>
+                <Button variant="outline" size="sm" className="gap-2" onClick={downloadLatestDividendDistributionPdf}>
+                  <Download className="h-4 w-4" />
+                  Download PDF
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4 max-w-lg">
               <p className="text-sm text-muted-foreground">
@@ -584,7 +684,13 @@ export default function Accounts() {
           {/* Past dividends */}
           <Card>
             <CardHeader>
-              <CardTitle className="font-heading text-base">Past Dividend Distributions</CardTitle>
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="font-heading text-base">Past Dividend Distributions</CardTitle>
+                <Button variant="outline" size="sm" className="gap-2" onClick={downloadPastDividendsPdf}>
+                  <Download className="h-4 w-4" />
+                  Download PDF
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {(dividends as any[]).length === 0 ? (
@@ -643,10 +749,16 @@ export default function Accounts() {
           <TabsContent value="savings-interest" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle className="font-heading text-lg flex items-center gap-2">
-                  <Percent className="h-5 w-5 text-emerald-600" />
-                  Savings Interest Distribution
-                </CardTitle>
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle className="font-heading text-lg flex items-center gap-2">
+                    <Percent className="h-5 w-5 text-emerald-600" />
+                    Savings Interest Distribution
+                  </CardTitle>
+                  <Button variant="outline" size="sm" className="gap-2" onClick={downloadSavingsInterestPreviewPdf}>
+                    <Download className="h-4 w-4" />
+                    Download PDF
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <p className="text-sm text-muted-foreground">
@@ -776,7 +888,13 @@ export default function Accounts() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="font-heading text-base">Past Savings Interest Distributions</CardTitle>
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle className="font-heading text-base">Past Savings Interest Distributions</CardTitle>
+                  <Button variant="outline" size="sm" className="gap-2" onClick={downloadSavingsInterestHistoryPdf}>
+                    <Download className="h-4 w-4" />
+                    Download PDF
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 {(savingsInterestHistory as any[]).length === 0 ? (

@@ -2119,3 +2119,238 @@ export function downloadBrandedPolicyDocument(
   addPageFooters(doc, `SMCF SACCO — ${title}`);
   doc.save(fileName);
 }
+
+type AccountsLine = {
+  code?: string;
+  name?: string;
+  type?: string;
+  balance?: number;
+};
+
+type AccountsTxn = {
+  transaction_ref?: string;
+  mpesa_ref?: string;
+  mpesaRef?: string;
+  processed_at?: string;
+  created_at?: string;
+  amount?: number;
+  status?: string;
+  type?: string;
+  description?: string;
+  members?: { name?: string };
+  member_name?: string;
+};
+
+type DividendDistributionRow = {
+  name?: string;
+  proportion?: number | string;
+  dividend?: number;
+};
+
+type SavingsInterestHistoryRow = {
+  period?: string;
+  interestRate?: number;
+  totalInterest?: number;
+  membersCount?: number;
+  approvedAt?: string;
+  createdAt?: string;
+  approvedBy?: { fullName?: string; email?: string };
+};
+
+type SavingsInterestPreviewRow = {
+  memberName?: string;
+  savings?: number;
+  interest?: number;
+  newSavings?: number;
+};
+
+function accountDate(value?: string): string {
+  if (!value) return "-";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "-";
+  return parsed.toLocaleDateString("en-KE");
+}
+
+export function exportAccountsChartOfAccounts(lines: AccountsLine[]) {
+  const doc = initDoc("Accounts & Ledger - Chart of Accounts");
+
+  autoTable(doc, {
+    startY: 54,
+    head: [["Code", "Account Name", "Type", "Balance (KES)"]],
+    body: lines.map((line) => [
+      line.code || "-",
+      line.name || "-",
+      line.type || "-",
+      Number(line.balance || 0).toLocaleString(),
+    ]),
+    headStyles: { fillColor: HEADER_COLOR },
+    columnStyles: {
+      3: { halign: "right" },
+    },
+  });
+
+  const totals = lines.reduce(
+    (acc, line) => {
+      const value = Number(line.balance || 0);
+      if (line.type === "Asset") acc.assets += value;
+      if (line.type === "Liability") acc.liabilities += value;
+      if (line.type === "Equity") acc.equity += value;
+      return acc;
+    },
+    { assets: 0, liabilities: 0, equity: 0 }
+  );
+
+  autoTable(doc, {
+    startY: (doc as any).lastAutoTable.finalY + 8,
+    head: [["Summary", "Value"]],
+    body: [
+      ["Total Assets", `KES ${totals.assets.toLocaleString()}`],
+      ["Total Liabilities", `KES ${totals.liabilities.toLocaleString()}`],
+      ["Total Equity", `KES ${totals.equity.toLocaleString()}`],
+    ],
+    headStyles: { fillColor: HEADER_COLOR },
+    columnStyles: { 1: { halign: "right" } },
+  });
+
+  addPageFooters(doc, "Accounts & Ledger - Chart of Accounts");
+  doc.save("accounts-ledger-chart-of-accounts.pdf");
+}
+
+export function exportAccountsTransactionsPdf(
+  title: string,
+  txns: AccountsTxn[],
+  fileName: string
+) {
+  const doc = initDoc(`Accounts & Ledger - ${title}`);
+
+  autoTable(doc, {
+    startY: 54,
+    head: [["Date", "Reference", "Member", "Type", "Status", "Amount (KES)"]],
+    body: txns.map((txn) => [
+      accountDate(txn.processed_at || txn.created_at),
+      txn.transaction_ref || txn.mpesa_ref || txn.mpesaRef || "-",
+      txn.members?.name || txn.member_name || "-",
+      txn.type || "-",
+      txn.status || "-",
+      Number(txn.amount || 0).toLocaleString(),
+    ]),
+    headStyles: { fillColor: HEADER_COLOR },
+    columnStyles: { 5: { halign: "right" } },
+    styles: { fontSize: 8.5 },
+  });
+
+  const totalAmount = txns.reduce((sum, txn) => sum + Number(txn.amount || 0), 0);
+  autoTable(doc, {
+    startY: (doc as any).lastAutoTable.finalY + 8,
+    head: [["Summary", "Value"]],
+    body: [
+      ["Records", String(txns.length)],
+      ["Total Amount", `KES ${totalAmount.toLocaleString()}`],
+    ],
+    headStyles: { fillColor: HEADER_COLOR },
+    columnStyles: { 1: { halign: "right" } },
+  });
+
+  addPageFooters(doc, `Accounts & Ledger - ${title}`);
+  doc.save(fileName);
+}
+
+export function exportAccountsDividendDistributionPdf(
+  period: string,
+  totalDividend: number,
+  membersProcessed: number,
+  rows: DividendDistributionRow[]
+) {
+  const doc = initDoc("Accounts & Ledger - Dividend Distribution");
+
+  autoTable(doc, {
+    startY: 54,
+    head: [["Summary", "Value"]],
+    body: [
+      ["Period", period || "-"],
+      ["Total Dividend", `KES ${Number(totalDividend || 0).toLocaleString()}`],
+      ["Members Processed", String(Number(membersProcessed || 0))],
+    ],
+    headStyles: { fillColor: HEADER_COLOR },
+    columnStyles: { 1: { halign: "right" } },
+  });
+
+  autoTable(doc, {
+    startY: (doc as any).lastAutoTable.finalY + 8,
+    head: [["Member", "Share %", "Dividend (KES)"]],
+    body: rows.map((row) => [
+      row.name || "-",
+      `${String(row.proportion ?? "0")}%`,
+      Number(row.dividend || 0).toLocaleString(),
+    ]),
+    headStyles: { fillColor: HEADER_COLOR },
+    columnStyles: { 1: { halign: "right" }, 2: { halign: "right" } },
+  });
+
+  addPageFooters(doc, "Accounts & Ledger - Dividend Distribution");
+  doc.save("accounts-ledger-dividend-distribution.pdf");
+}
+
+export function exportAccountsSavingsInterestHistoryPdf(rows: SavingsInterestHistoryRow[]) {
+  const doc = initDoc("Accounts & Ledger - Savings Interest History");
+
+  autoTable(doc, {
+    startY: 54,
+    head: [["Date", "Period", "Rate (%)", "Total Interest (KES)", "Members", "Approved By"]],
+    body: rows.map((row) => [
+      accountDate(row.approvedAt || row.createdAt),
+      row.period || "-",
+      Number(row.interestRate || 0).toLocaleString(),
+      Number(row.totalInterest || 0).toLocaleString(),
+      String(Number(row.membersCount || 0)),
+      row.approvedBy?.fullName || row.approvedBy?.email || "-",
+    ]),
+    headStyles: { fillColor: HEADER_COLOR },
+    columnStyles: { 2: { halign: "right" }, 3: { halign: "right" }, 4: { halign: "right" } },
+    styles: { fontSize: 8.5 },
+  });
+
+  addPageFooters(doc, "Accounts & Ledger - Savings Interest History");
+  doc.save("accounts-ledger-savings-interest-history.pdf");
+}
+
+export function exportAccountsSavingsInterestPreviewPdf(data: {
+  period?: string;
+  totalProfit?: number;
+  interestRate?: number;
+  totalInterest?: number;
+  membersCount?: number;
+  rows: SavingsInterestPreviewRow[];
+}) {
+  const doc = initDoc("Accounts & Ledger - Savings Interest Distribution");
+
+  autoTable(doc, {
+    startY: 54,
+    head: [["Summary", "Value"]],
+    body: [
+      ["Period", data.period || "-"],
+      ["Interest Rate", `${Number(data.interestRate || 0).toLocaleString()}%`],
+      ["Total Profit Input", `KES ${Number(data.totalProfit || 0).toLocaleString()}`],
+      ["Total Interest", `KES ${Number(data.totalInterest || 0).toLocaleString()}`],
+      ["Members", String(Number(data.membersCount || 0))],
+    ],
+    headStyles: { fillColor: HEADER_COLOR },
+    columnStyles: { 1: { halign: "right" } },
+  });
+
+  autoTable(doc, {
+    startY: (doc as any).lastAutoTable.finalY + 8,
+    head: [["Member", "Savings (KES)", "Interest (KES)", "New Savings (KES)"]],
+    body: data.rows.map((row) => [
+      row.memberName || "-",
+      Number(row.savings || 0).toLocaleString(),
+      Number(row.interest || 0).toLocaleString(),
+      Number(row.newSavings || 0).toLocaleString(),
+    ]),
+    headStyles: { fillColor: HEADER_COLOR },
+    columnStyles: { 1: { halign: "right" }, 2: { halign: "right" }, 3: { halign: "right" } },
+  });
+
+  addPageFooters(doc, "Accounts & Ledger - Savings Interest Distribution");
+  doc.save("accounts-ledger-savings-interest-distribution.pdf");
+}
