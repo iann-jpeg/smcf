@@ -88,6 +88,10 @@ function rowTitle(key: string) {
     .trim();
 }
 
+function safeArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
 export default function Reports() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -655,7 +659,7 @@ export default function Reports() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(mappingsQuery.data?.mappings || []).map((m: any) => (
+                    {safeArray<any>(mappingsQuery.data?.mappings).map((m: any) => (
                       <TableRow key={`${m.sourceType}:${m.sourceKey}`}>
                         <TableCell>{m.sourceType}:{m.sourceKey}</TableCell>
                         <TableCell>{m.incomeLineKey || "-"}</TableCell>
@@ -878,7 +882,7 @@ export default function Reports() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(historyQuery.data || []).map((row: any) => (
+                    {safeArray<any>(historyQuery.data).map((row: any) => (
                       <TableRow key={row._id}>
                         <TableCell>{statementTitles[row.statementType as StatementType] || row.statementType}</TableCell>
                         <TableCell>{row.periodLabel}</TableCell>
@@ -931,7 +935,7 @@ export default function Reports() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {(adjustmentsQuery.data || []).map((row: any) => (
+                      {safeArray<any>(adjustmentsQuery.data).map((row: any) => (
                         <TableRow key={row._id}>
                           <TableCell>{row.periodLabel}</TableCell>
                           <TableCell>{row.targetStatement}</TableCell>
@@ -1000,7 +1004,7 @@ export default function Reports() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(auditLogQuery.data || []).map((entry: any) => (
+                    {safeArray<any>(auditLogQuery.data).map((entry: any) => (
                       <TableRow key={entry._id}>
                         <TableCell>{new Date(entry.createdAt).toLocaleString()}</TableCell>
                         <TableCell>{entry.userId?.fullName || entry.userId?.email || "System"}</TableCell>

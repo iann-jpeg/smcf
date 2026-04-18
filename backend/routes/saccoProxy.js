@@ -54,7 +54,6 @@ function getSaccoTargetBases(req) {
   const configuredFallback = normalizeTargetBase(process.env.SACCO_BACKEND_FALLBACK_URL);
   const fallbacks = [
     normalizeTargetBase("http://127.0.0.1:5001"),
-    normalizeTargetBase("http://127.0.0.1:5000"),
     configuredFallback,
   ];
 

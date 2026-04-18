@@ -1,6 +1,9 @@
 export const BASE = import.meta.env.VITE_SACCO_API_URL as string;
 
-const FALLBACK_BASES = ["/sacco-api", "/_/backend"];
+// Use the VPS SACCO gateway path as canonical fallback.
+// Do not fall back to the main app backend (/_/backend), which doesn't serve
+// SACCO financial-statement routes.
+const FALLBACK_BASES = ["/sacco-api"];
 
 function normalizeBase(raw: string | undefined): string {
   const value = String(raw || "").trim().replace(/\/+$/, "");

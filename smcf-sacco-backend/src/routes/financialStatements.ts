@@ -27,6 +27,85 @@ type PeriodContext = {
 };
 
 type NumericDict = Record<string, number>;
+type GenericRecord = Record<string, unknown>;
+
+type QueryInput = Record<string, string | number | undefined | null>;
+
+type TransactionLike = {
+  type?: string;
+  status?: string;
+  amount?: number;
+};
+
+type LoanLike = {
+  totalPayable?: number;
+  totalInterest?: number;
+  principal?: number;
+  balance?: number;
+  status?: string;
+};
+
+type RepaymentLike = {
+  loanId?: LoanLike;
+  amountPaid?: number;
+  penaltyAmount?: number;
+  amountDue?: number;
+  status?: string;
+};
+
+type ReserveTransactionLike = {
+  transactionType?: 'inflow' | 'outflow' | string;
+  status?: string;
+  amount?: number;
+  source?: string;
+  description?: string;
+  usageCategory?: string;
+};
+
+type ShareTransactionLike = {
+  transactionType?: string;
+  totalValue?: number;
+};
+
+type ShareContributionLike = {
+  amount?: number;
+};
+
+type MemberLike = {
+  shares?: number;
+};
+
+type ReserveFundLike = {
+  currentBalance?: number;
+};
+
+type AdjustmentLike = {
+  _id?: unknown;
+  lineKey: string;
+  amount: number;
+};
+
+type StatementComputationResult = {
+  lines: NumericDict;
+  summary: Record<string, number | boolean>;
+  warnings?: string[];
+  adjustmentsApplied: AdjustmentLike[];
+};
+
+type StatementDataResult = {
+  statementType: StatementType;
+  period: PeriodContext;
+  lines: NumericDict;
+  summary: Record<string, number | boolean>;
+  comparison: Record<string, unknown>;
+  trend: Array<Record<string, unknown>>;
+  validation: {
+    isValid: boolean;
+    warnings: string[];
+    requiresOverride: boolean;
+  };
+  adjustmentsApplied: AdjustmentLike[];
+};
 
 const KEYWORDS = {
   investment: ['investment', 'event', 'events', 'real estate', 'rental', 'property', 'venture'],
@@ -149,7 +228,7 @@ function getQuarter(month: number): number {
   return Math.floor(month / 3) + 1;
 }
 
-function buildPeriodContext(query: Record<string, any>): PeriodContext {
+function buildPeriodContext(query: QueryInput): PeriodContext {
   const periodType = (String(query.periodType || 'monthly').toLowerCase() as PeriodType) || 'monthly';
   const now = new Date();
 
@@ -296,8 +375,8 @@ async function computeIncomeStatement(period: PeriodContext) {
     otherApprovedExpenses: 0,
   };
 
-  for (const repayment of repayments as any[]) {
-    const loan = repayment.loanId as any;
+  for (const repayment of repayments as RepaymentLike[]) {
+    const loan = repayment.loanId;
     const totalPayable = Number(loan?.totalPayable || 0);
     const totalInterest = Number(loan?.totalInterest || 0);
     const paidAmount = Number(repayment.amountPaid || 0);
@@ -307,22 +386,22 @@ async function computeIncomeStatement(period: PeriodContext) {
   }
 
   const processingFeeRate = Number(config?.processingFee || 0) / 100;
-  for (const loan of loansInPeriod as any[]) {
+  for (const loan of loansInPeriod as LoanLike[]) {
     lines.loanProcessingFees += Number(loan.principal || 0) * processingFeeRate;
   }
 
-  for (const txn of transactions as any[]) {
+  for (const txn of transactions as TransactionLike[]) {
     if (txn.type === 'registration_fee') lines.registrationFees += Number(txn.amount || 0);
   }
 
-  for (const st of shareTx as any[]) {
+  for (const st of shareTx as ShareTransactionLike[]) {
     if (st.transactionType === 'transfer_out') {
       const possibleFee = Math.max(0, Number(st.totalValue || 0) * 0.01);
       lines.shareTransferFees += possibleFee;
     }
   }
 
-  for (const rt of reserveTx as any[]) {
+  for (const rt of reserveTx as ReserveTransactionLike[]) {
     const amount = Number(rt.amount || 0);
     const descriptor = `${rt.source || ''} ${rt.description || ''} ${rt.usageCategory || ''}`;
 
@@ -358,9 +437,9 @@ async function computeIncomeStatement(period: PeriodContext) {
     status: 'defaulted',
     updatedAt: { $gte: period.startDate, $lte: period.endDate },
   }).lean();
-  lines.badDebtExpenseProvision = defaultedLoans.reduce((sum: number, loan: any) => sum + Number(loan.balance || 0) * 0.05, 0);
+  lines.badDebtExpenseProvision = defaultedLoans.reduce((sum: number, loan) => sum + Number((loan as LoanLike).balance || 0) * 0.05, 0);
 
-  const adjustedLines = applyAdjustments(lines, adjustments.map((a) => ({ lineKey: a.lineKey, amount: a.amount })));
+  const adjustedLines = applyAdjustments(lines, (adjustments as AdjustmentLike[]).map((a) => ({ lineKey: a.lineKey, amount: a.amount })));
 
   const totalIncome =
     adjustedLines.loanInterestIncome +
@@ -417,28 +496,28 @@ async function computeBalanceSheet(period: PeriodContext) {
     getApprovedAdjustments(period, 'balance_sheet'),
   ]);
 
-  const cashIn = (transactions as any[])
+  const cashIn = (transactions as TransactionLike[])
     .filter((t) => t.status === 'completed' && transactionInflowTypes.has(t.type))
     .reduce((sum, t) => sum + Number(t.amount || 0), 0);
-  const cashOut = (transactions as any[])
+  const cashOut = (transactions as TransactionLike[])
     .filter((t) => t.status === 'completed' && transactionOutflowTypes.has(t.type))
     .reduce((sum, t) => sum + Math.abs(Number(t.amount || 0)), 0);
 
-  const reserveNet = (reserveTx as any[])
+  const reserveNet = (reserveTx as ReserveTransactionLike[])
     .filter((r) => ['completed', 'approved'].includes(String(r.status || '')))
     .reduce((sum, r) => sum + (r.transactionType === 'inflow' ? Number(r.amount || 0) : -Number(r.amount || 0)), 0);
 
   const mobileWalletBalance = cashIn - cashOut + reserveNet;
 
-  const outstandingLoansReceivable = (loans as any[])
+  const outstandingLoansReceivable = (loans as LoanLike[])
     .filter((l) => ['approved', 'disbursed', 'active', 'defaulted'].includes(String(l.status)))
     .reduce((sum, l) => sum + Number(l.balance || 0), 0);
 
-  const receivables = (repayments as any[])
+  const receivables = (repayments as RepaymentLike[])
     .filter((r) => ['pending', 'partial', 'overdue'].includes(String(r.status)))
     .reduce((sum, r) => sum + Math.max(0, Number(r.amountDue || 0) - Number(r.amountPaid || 0)), 0);
 
-  const accruedInterestReceivable = (loans as any[]).reduce((sum, loan) => {
+  const accruedInterestReceivable = (loans as LoanLike[]).reduce((sum, loan) => {
     const totalInterest = Number(loan.totalInterest || 0);
     const totalPayable = Number(loan.totalPayable || 0);
     const balance = Number(loan.balance || 0);
@@ -448,22 +527,22 @@ async function computeBalanceSheet(period: PeriodContext) {
     return sum + Math.max(0, totalInterest - interestCollected);
   }, 0);
 
-  const pendingWithdrawals = (transactions as any[])
+  const pendingWithdrawals = (transactions as TransactionLike[])
     .filter((t) => t.type === 'withdrawal' && t.status === 'pending')
     .reduce((sum, t) => sum + Math.abs(Number(t.amount || 0)), 0);
 
-  const pendingReserveOutflows = (reserveTx as any[])
+  const pendingReserveOutflows = (reserveTx as ReserveTransactionLike[])
     .filter((r) => r.transactionType === 'outflow' && r.status === 'pending')
     .reduce((sum, r) => sum + Number(r.amount || 0), 0);
 
-  const shareCapital = (members as any[]).reduce((sum, m) => sum + Number(m.shares || 0), 0);
+  const shareCapital = (members as MemberLike[]).reduce((sum, m) => sum + Number(m.shares || 0), 0);
 
   const previousPeriod = buildPreviousPeriodContext(period);
   const retainedEarningsStatement = await computeIncomeStatement(previousPeriod);
   const retainedEarnings = Number(retainedEarningsStatement.summary.netProfitOrLoss || 0);
   const currentPeriodProfitLoss = Number(incomeStatement.summary.netProfitOrLoss || 0);
 
-  const reserveBalance = Number((reserveFund as any)?.currentBalance || 0);
+  const reserveBalance = Number((reserveFund as ReserveFundLike | null)?.currentBalance || 0);
 
   const lines: NumericDict = {
     cashOnHand: 0,
@@ -491,7 +570,7 @@ async function computeBalanceSheet(period: PeriodContext) {
     otherEquityBalances: 0,
   };
 
-  const adjustedLines = applyAdjustments(lines, adjustments.map((a) => ({ lineKey: a.lineKey, amount: a.amount })));
+  const adjustedLines = applyAdjustments(lines, (adjustments as AdjustmentLike[]).map((a) => ({ lineKey: a.lineKey, amount: a.amount })));
 
   const totalAssets =
     adjustedLines.cashOnHand +
@@ -572,14 +651,14 @@ async function computeCashFlow(period: PeriodContext) {
     createdAt: { $lt: period.startDate },
   }).lean();
 
-  const openingFromTransactions = (allTransactionsBeforeStart as any[]).reduce((sum, t) => {
+  const openingFromTransactions = (allTransactionsBeforeStart as TransactionLike[]).reduce((sum, t) => {
     const amount = Number(t.amount || 0);
     if (transactionInflowTypes.has(t.type)) return sum + amount;
     if (transactionOutflowTypes.has(t.type)) return sum - Math.abs(amount);
     return sum;
   }, 0);
 
-  const openingFromReserve = (allReserveBeforeStart as any[]).reduce((sum, r) => {
+  const openingFromReserve = (allReserveBeforeStart as ReserveTransactionLike[]).reduce((sum, r) => {
     const amount = Number(r.amount || 0);
     return r.transactionType === 'inflow' ? sum + amount : sum - amount;
   }, 0);
@@ -604,7 +683,7 @@ async function computeCashFlow(period: PeriodContext) {
     otherCashPayments: 0,
   };
 
-  for (const txn of transactionsInPeriod as any[]) {
+  for (const txn of transactionsInPeriod as TransactionLike[]) {
     const amount = Math.abs(Number(txn.amount || 0));
     if (txn.type === 'deposit') lines.memberSavingsDepositsReceived += amount;
     else if (txn.type === 'loan_repayment') lines.loanRepaymentsReceived += amount;
@@ -614,9 +693,9 @@ async function computeCashFlow(period: PeriodContext) {
     else if (txn.type === 'withdrawal') lines.refundsWithdrawalsPaid += amount;
   }
 
-  lines.shareCapitalContributionsReceived += (shareContributions as any[]).reduce((sum, s) => sum + Number(s.amount || 0), 0);
+  lines.shareCapitalContributionsReceived += (shareContributions as ShareContributionLike[]).reduce((sum, s) => sum + Number(s.amount || 0), 0);
 
-  for (const rt of reserveTxInPeriod as any[]) {
+  for (const rt of reserveTxInPeriod as ReserveTransactionLike[]) {
     const amount = Number(rt.amount || 0);
     const descriptor = `${rt.source || ''} ${rt.description || ''} ${rt.usageCategory || ''}`;
 
@@ -637,7 +716,7 @@ async function computeCashFlow(period: PeriodContext) {
     }
   }
 
-  const adjustedLines = applyAdjustments(lines, adjustments.map((a) => ({ lineKey: a.lineKey, amount: a.amount })));
+  const adjustedLines = applyAdjustments(lines, (adjustments as AdjustmentLike[]).map((a) => ({ lineKey: a.lineKey, amount: a.amount })));
 
   const operatingInflows =
     adjustedLines.memberSavingsDepositsReceived +
@@ -695,14 +774,14 @@ async function computeCashFlow(period: PeriodContext) {
   };
 }
 
-async function computeStatementByType(statementType: StatementType, period: PeriodContext): Promise<any> {
+async function computeStatementByType(statementType: StatementType, period: PeriodContext): Promise<StatementComputationResult> {
   if (statementType === 'income_statement') return computeIncomeStatement(period);
   if (statementType === 'balance_sheet') return computeBalanceSheet(period);
   return computeCashFlow(period);
 }
 
-async function computeTrend(statementType: StatementType, period: PeriodContext): Promise<Array<Record<string, any>>> {
-  const points: Array<Record<string, any>> = [];
+async function computeTrend(statementType: StatementType, period: PeriodContext): Promise<Array<Record<string, unknown>>> {
+  const points: Array<Record<string, unknown>> = [];
   const cursor = new Date(period.startDate);
 
   for (let i = 0; i < 6; i += 1) {
@@ -729,7 +808,7 @@ async function computeTrend(statementType: StatementType, period: PeriodContext)
   return points;
 }
 
-async function computeComparison(statementType: StatementType, period: PeriodContext): Promise<Record<string, any>> {
+async function computeComparison(statementType: StatementType, period: PeriodContext): Promise<Record<string, unknown>> {
   const prev = buildPreviousPeriodContext(period);
   const previousData = await computeStatementByType(statementType, prev);
 
@@ -739,7 +818,7 @@ async function computeComparison(statementType: StatementType, period: PeriodCon
       previous: previousData.summary,
       variance: {
         totalIncome: round2((previousData.summary.totalIncome || 0) === 0 ? 0 : 0),
-        netProfitOrLossDelta: round2((previousData.summary.netProfitOrLoss || 0)),
+        netProfitOrLossDelta: round2(Number(previousData.summary.netProfitOrLoss || 0)),
       },
     };
   }
@@ -749,9 +828,9 @@ async function computeComparison(statementType: StatementType, period: PeriodCon
       previousPeriod: prev,
       previous: previousData.summary,
       variance: {
-        totalAssetsDelta: round2(previousData.summary.totalAssets || 0),
-        totalLiabilitiesDelta: round2(previousData.summary.totalLiabilities || 0),
-        totalEquityDelta: round2(previousData.summary.totalEquity || 0),
+        totalAssetsDelta: round2(Number(previousData.summary.totalAssets || 0)),
+        totalLiabilitiesDelta: round2(Number(previousData.summary.totalLiabilities || 0)),
+        totalEquityDelta: round2(Number(previousData.summary.totalEquity || 0)),
       },
     };
   }
@@ -760,20 +839,20 @@ async function computeComparison(statementType: StatementType, period: PeriodCon
     previousPeriod: prev,
     previous: previousData.summary,
     variance: {
-      closingCashDelta: round2(previousData.summary.closingCashBalance || 0),
-      operatingCashDelta: round2(previousData.summary.netCashFromOperatingActivities || 0),
+      closingCashDelta: round2(Number(previousData.summary.closingCashBalance || 0)),
+      operatingCashDelta: round2(Number(previousData.summary.netCashFromOperatingActivities || 0)),
     },
   };
 }
 
-async function computeAllStatementData(statementType: StatementType, period: PeriodContext): Promise<any> {
+async function computeAllStatementData(statementType: StatementType, period: PeriodContext): Promise<StatementDataResult> {
   const [statementData, comparison, trend] = await Promise.all([
     computeStatementByType(statementType, period),
     computeComparison(statementType, period),
     computeTrend(statementType, period),
   ]);
 
-  const warnings = [...(statementData as any).warnings || []];
+  const warnings = [...(statementData.warnings || [])];
 
   return {
     statementType,
@@ -799,7 +878,7 @@ function assertStatementType(type: string): StatementType {
   return normalized as StatementType;
 }
 
-async function writeAudit(req: AuthRequest, action: string, changes: any) {
+async function writeAudit(req: AuthRequest, action: string, changes: GenericRecord) {
   await AuditLog.create({
     userId: req.userId || null,
     tableName: 'financial_statements',
@@ -816,7 +895,7 @@ router.use(protect, authorize('admin', 'credit_officer', 'treasurer', 'auditor')
 router.get('/overview', async (req: AuthRequest, res, next) => {
   try {
     await ensureDefaultMappings(req.userId);
-    const period = buildPeriodContext(req.query as any);
+    const period = buildPeriodContext(req.query as QueryInput);
 
     const [income, balance, cash, historyCount] = await Promise.all([
       computeAllStatementData('income_statement', period),
@@ -849,12 +928,47 @@ router.get('/overview', async (req: AuthRequest, res, next) => {
   }
 });
 
+// GET /api/financial-statements/report-pack/preview
+router.get('/report-pack/preview', async (req: AuthRequest, res, next) => {
+  try {
+    const period = buildPeriodContext(req.query as QueryInput);
+    const [income, balance, cash] = await Promise.all([
+      computeAllStatementData('income_statement', period),
+      computeAllStatementData('balance_sheet', period),
+      computeAllStatementData('cash_flow_statement', period),
+    ]);
+
+    const warnings = [
+      ...income.validation.warnings,
+      ...balance.validation.warnings,
+      ...cash.validation.warnings,
+    ];
+
+    res.json({
+      success: true,
+      data: {
+        period,
+        income,
+        balance,
+        cash,
+        validation: {
+          isValid: warnings.length === 0,
+          warnings,
+          requiresOverride: warnings.length > 0,
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /api/financial-statements/:statementType/preview
 router.get('/:statementType/preview', async (req: AuthRequest, res, next) => {
   try {
     await ensureDefaultMappings(req.userId);
     const statementType = assertStatementType(req.params.statementType);
-    const period = buildPeriodContext(req.query as any);
+    const period = buildPeriodContext(req.query as QueryInput);
     const data = await computeAllStatementData(statementType, period);
 
     res.json({ success: true, data });
@@ -921,7 +1035,7 @@ router.post('/:statementType/generate', async (req: AuthRequest, res, next) => {
       summary: computed.summary,
       comparison: computed.comparison,
       trend: computed.trend,
-      adjustmentsApplied: computed.adjustmentsApplied.map((a: any) => a._id),
+      adjustmentsApplied: computed.adjustmentsApplied.map((a) => a._id),
       pdfMeta: {
         fileName: `${statementType}-${period.startDate.toISOString().slice(0, 10)}-${period.endDate.toISOString().slice(0, 10)}-v${version}.pdf`,
         generatedAt: new Date(),
@@ -949,7 +1063,7 @@ router.get('/history/list', async (req: AuthRequest, res, next) => {
     const periodLabel = String(req.query.periodLabel || '').trim();
     const status = String(req.query.status || '').trim();
 
-    const filter: Record<string, any> = {};
+    const filter: Record<string, unknown> = {};
     if (statementType) filter.statementType = statementType;
     if (periodLabel) filter.periodLabel = periodLabel;
     if (status) filter.status = status;
@@ -991,7 +1105,7 @@ router.patch('/history/:id/approve', authorize('admin', 'treasurer', 'auditor'),
 
     row.status = row.status === 'locked' ? 'locked' : 'approved';
     row.approvedAt = new Date();
-    row.approvedBy = req.userId as any;
+    row.approvedBy = req.userId ? (req.userId as unknown as typeof row.approvedBy) : null;
     await row.save();
 
     await writeAudit(req, 'statement_approve', {
@@ -1026,7 +1140,7 @@ router.patch('/history/:id/lock', authorize('admin', 'treasurer', 'auditor'), as
 
     row.status = 'locked';
     row.lockedAt = new Date();
-    row.lockedBy = req.userId as any;
+    row.lockedBy = req.userId ? (req.userId as unknown as typeof row.lockedBy) : null;
     await row.save();
 
     await writeAudit(req, 'statement_lock', {
@@ -1073,7 +1187,7 @@ router.get('/adjustments/list', async (req: AuthRequest, res, next) => {
     const targetStatement = String(req.query.targetStatement || '').trim();
     const status = String(req.query.status || '').trim();
 
-    const filter: Record<string, any> = {};
+    const filter: Record<string, unknown> = {};
     if (periodLabel) filter.periodLabel = periodLabel;
     if (targetStatement) filter.targetStatement = targetStatement;
     if (status) filter.status = status;
@@ -1143,7 +1257,7 @@ router.patch('/adjustments/:id/approve', authorize('admin', 'auditor'), async (r
     if (!row) return res.status(404).json({ success: false, message: 'Adjustment not found' });
 
     row.status = 'approved';
-    row.approvedBy = req.userId as any;
+    row.approvedBy = req.userId ? (req.userId as unknown as typeof row.approvedBy) : null;
     row.approvedAt = new Date();
     await row.save();
 
@@ -1167,7 +1281,7 @@ router.patch('/adjustments/:id/reject', authorize('admin', 'auditor'), async (re
     if (!row) return res.status(404).json({ success: false, message: 'Adjustment not found' });
 
     row.status = 'rejected';
-    row.approvedBy = req.userId as any;
+    row.approvedBy = req.userId ? (req.userId as unknown as typeof row.approvedBy) : null;
     row.approvedAt = new Date();
     await row.save();
 
@@ -1220,8 +1334,8 @@ router.put('/mappings', authorize('admin', 'auditor'), async (req: AuthRequest, 
     }
 
     const bulkOps = updates
-      .filter((m: any) => m && m.sourceType && m.sourceKey)
-      .map((m: any) => ({
+      .filter((m: GenericRecord) => m && m.sourceType && m.sourceKey)
+      .map((m: GenericRecord) => ({
         updateOne: {
           filter: { sourceType: String(m.sourceType), sourceKey: String(m.sourceKey) },
           update: {
@@ -1260,7 +1374,7 @@ router.get('/audit-log/list', async (req: AuthRequest, res, next) => {
     const action = String(req.query.action || '').trim();
     const limit = Number(req.query.limit || 300);
 
-    const filter: Record<string, any> = { tableName: 'financial_statements' };
+    const filter: Record<string, unknown> = { tableName: 'financial_statements' };
     if (action) filter.action = action;
     if (periodLabel) filter['changes.periodLabel'] = periodLabel;
 
@@ -1270,41 +1384,6 @@ router.get('/audit-log/list', async (req: AuthRequest, res, next) => {
       .limit(Math.max(1, Math.min(1000, limit)));
 
     res.json({ success: true, data: rows });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// GET /api/financial-statements/report-pack/preview
-router.get('/report-pack/preview', async (req: AuthRequest, res, next) => {
-  try {
-    const period = buildPeriodContext(req.query as any);
-    const [income, balance, cash] = await Promise.all([
-      computeAllStatementData('income_statement', period),
-      computeAllStatementData('balance_sheet', period),
-      computeAllStatementData('cash_flow_statement', period),
-    ]);
-
-    const warnings = [
-      ...income.validation.warnings,
-      ...balance.validation.warnings,
-      ...cash.validation.warnings,
-    ];
-
-    res.json({
-      success: true,
-      data: {
-        period,
-        income,
-        balance,
-        cash,
-        validation: {
-          isValid: warnings.length === 0,
-          warnings,
-          requiresOverride: warnings.length > 0,
-        },
-      },
-    });
   } catch (error) {
     next(error);
   }
