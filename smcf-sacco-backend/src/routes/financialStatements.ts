@@ -296,6 +296,20 @@ function round2(value: number): number {
   return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
 }
 
+function buildLegacyAwareDateFilter(
+  primaryField: string,
+  fallbackField: string,
+  range: Record<string, Date>
+): Record<string, unknown> {
+  return {
+    $or: [
+      { [primaryField]: range },
+      { [primaryField]: { $exists: false }, [fallbackField]: range },
+      { [primaryField]: null, [fallbackField]: range },
+    ],
+  };
+}
+
 async function ensureDefaultMappings(userId?: string) {
   const existing = await FinancialStatementMapping.countDocuments();
   if (existing > 0) return;
@@ -331,7 +345,10 @@ async function computeIncomeStatement(period: PeriodContext) {
   const [transactions, repayments, loansInPeriod, reserveTx, shareTx, config, adjustments] = await Promise.all([
     Transaction.find({
       status: 'completed',
-      processedAt: { $gte: period.startDate, $lte: period.endDate },
+      ...buildLegacyAwareDateFilter('processedAt', 'createdAt', {
+        $gte: period.startDate,
+        $lte: period.endDate,
+      }),
     }).lean(),
     RepaymentRecord.find({
       paidDate: { $gte: period.startDate, $lte: period.endDate },
@@ -490,7 +507,9 @@ async function computeBalanceSheet(period: PeriodContext) {
     }).lean(),
     Transaction.find({
       status: { $in: ['completed', 'pending'] },
-      processedAt: { $lte: period.endDate },
+      ...buildLegacyAwareDateFilter('processedAt', 'createdAt', {
+        $lte: period.endDate,
+      }),
     }).lean(),
     RepaymentRecord.find({ dueDate: { $lte: period.endDate } }).lean(),
     getApprovedAdjustments(period, 'balance_sheet'),
@@ -626,7 +645,10 @@ async function computeCashFlow(period: PeriodContext) {
   const [transactionsInPeriod, reserveTxInPeriod, shareContributions, incomeStatement, balanceSheet, adjustments] = await Promise.all([
     Transaction.find({
       status: 'completed',
-      processedAt: { $gte: period.startDate, $lte: period.endDate },
+      ...buildLegacyAwareDateFilter('processedAt', 'createdAt', {
+        $gte: period.startDate,
+        $lte: period.endDate,
+      }),
     }).lean(),
     ReserveFundTransactionModel.find({
       status: { $in: ['completed', 'approved'] },
@@ -643,7 +665,9 @@ async function computeCashFlow(period: PeriodContext) {
 
   const allTransactionsBeforeStart = await Transaction.find({
     status: 'completed',
-    processedAt: { $lt: period.startDate },
+    ...buildLegacyAwareDateFilter('processedAt', 'createdAt', {
+      $lt: period.startDate,
+    }),
   }).lean();
 
   const allReserveBeforeStart = await ReserveFundTransactionModel.find({

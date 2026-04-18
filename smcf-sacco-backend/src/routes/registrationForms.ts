@@ -46,6 +46,10 @@ const requiredFieldPaths = [
   'form.declarationSignature.dateSigned',
 ];
 
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function getPathValue(obj: Record<string, any>, path: string): any {
   return path.split('.').reduce((acc, key) => (acc ? acc[key] : undefined), obj);
 }
@@ -142,13 +146,37 @@ async function resolveMemberForRequest(req: AuthRequest) {
   if (member) return member;
 
   const userEmail = String(req.user?.email || '').trim().toLowerCase();
-  if (!userEmail) return null;
+  if (userEmail) {
+    member = await Member.findOne({ email: userEmail });
+  }
 
-  member = await Member.findOne({ email: userEmail });
+  // Legacy-safe fallback: some older member rows were imported without userId/email linkage.
+  // Only attach by name when the match is unique to avoid cross-linking records.
+  if (!member) {
+    const fullName = String(req.user?.fullName || '').trim();
+    if (fullName) {
+      const exactNameMatches = await Member.find({
+        name: { $regex: `^${escapeRegex(fullName)}$`, $options: 'i' },
+      }).limit(2);
+
+      if (exactNameMatches.length === 1) {
+        member = exactNameMatches[0];
+      }
+    }
+  }
+
   if (!member) return null;
 
+  let shouldSave = false;
   if (!member.userId && req.userId) {
     member.userId = req.userId as any;
+    shouldSave = true;
+  }
+  if (!member.email && userEmail) {
+    member.email = userEmail;
+    shouldSave = true;
+  }
+  if (shouldSave) {
     await member.save();
   }
 
