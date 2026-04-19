@@ -11,7 +11,7 @@ function normalizeApiBase(raw?: string): string {
 
 	if (!value) {
 		// Hosted deployments call backend at /api (proxied by nginx)
-		return isHosted ? `${origin}` : fallback;
+		return isHosted ? `${origin}/api` : fallback;
 	}
 	const stripApi = (input: string) =>
 		input.replace(/\/api\/?$/, "").replace(/\/+$/, "");
