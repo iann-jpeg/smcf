@@ -362,23 +362,56 @@ export default function Reports() {
     return Array.from(warningSet);
   }, [income, balance, cash]);
 
+  const canExportIncome = Boolean(income);
+  const canExportBalance = Boolean(balance);
+  const canExportCash = Boolean(cash);
+  const canExportReportPack = Boolean(reportPackQuery.data && income && balance && cash);
+
   const onExportIncome = () => {
-    if (!income) return;
+    if (!income) {
+      toast({
+        title: "Income statement not ready",
+        description: "Wait for the preview data to load, then try exporting again.",
+        variant: "destructive",
+      });
+      return;
+    }
     exportDetailedIncomeStatement(income);
   };
 
   const onExportBalance = () => {
-    if (!balance) return;
+    if (!balance) {
+      toast({
+        title: "Balance sheet not ready",
+        description: "Wait for the preview data to load, then try exporting again.",
+        variant: "destructive",
+      });
+      return;
+    }
     exportDetailedBalanceSheet(balance);
   };
 
   const onExportCash = () => {
-    if (!cash) return;
+    if (!cash) {
+      toast({
+        title: "Cash flow statement not ready",
+        description: "Wait for the preview data to load, then try exporting again.",
+        variant: "destructive",
+      });
+      return;
+    }
     exportDetailedCashFlow(cash);
   };
 
   const onExportReportPack = () => {
-    if (!reportPackQuery.data || !income || !balance || !cash) return;
+    if (!reportPackQuery.data || !income || !balance || !cash) {
+      toast({
+        title: "Report pack not ready",
+        description: "Required financial previews are still loading. Try again in a moment.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (!reportPackQuery.data.validation.isValid && !allowOverride) {
       toast({
         title: "Report pack blocked",
@@ -973,10 +1006,10 @@ export default function Reports() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={onExportIncome}>Export Income Statement PDF</Button>
-                <Button variant="outline" onClick={onExportBalance}>Export Balance Sheet PDF</Button>
-                <Button variant="outline" onClick={onExportCash}>Export Cash Flow PDF</Button>
-                <Button onClick={onExportReportPack}>Export Combined Report Pack PDF</Button>
+                <Button variant="outline" onClick={onExportIncome} disabled={!canExportIncome}>Export Income Statement PDF</Button>
+                <Button variant="outline" onClick={onExportBalance} disabled={!canExportBalance}>Export Balance Sheet PDF</Button>
+                <Button variant="outline" onClick={onExportCash} disabled={!canExportCash}>Export Cash Flow PDF</Button>
+                <Button onClick={onExportReportPack} disabled={!canExportReportPack}>Export Combined Report Pack PDF</Button>
               </div>
               <p className="text-xs text-muted-foreground">
                 Combined report pack export is blocked by validation warnings unless override is enabled above.

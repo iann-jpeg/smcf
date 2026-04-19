@@ -3,16 +3,26 @@
 function normalizeApiBase(raw?: string): string {
 	const fallback = "http://localhost:4000";
 	const value = String(raw || "").trim();
-	if (!value) return fallback;
+	const origin =
+		typeof window !== "undefined" && window.location?.origin
+			? window.location.origin
+			: "";
+	const isHosted = Boolean(origin) && !/localhost|127\.0\.0\.1/i.test(origin);
+
+	if (!value) {
+		// Hosted deployments route backend under /_/backend (see vercel.json routePrefix).
+		return isHosted ? `${origin}/_/backend` : fallback;
+	}
 	const stripApi = (input: string) =>
 		input.replace(/\/api\/?$/, "").replace(/\/+$/, "");
 
+	if ((value === "/" || value === "/api") && isHosted) {
+		return stripApi(`${origin}/_/backend`);
+	}
+
 	if (value.startsWith("/")) {
-		const origin =
-			typeof window !== "undefined" && window.location?.origin
-				? window.location.origin
-				: fallback;
-		return stripApi(`${origin}${value}`);
+		const baseOrigin = origin || fallback;
+		return stripApi(`${baseOrigin}${value}`);
 	}
 
 	return stripApi(value);

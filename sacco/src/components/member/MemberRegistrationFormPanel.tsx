@@ -245,6 +245,7 @@ function collectMissingFields(form: FormState): string[] {
 
 export default function MemberRegistrationFormPanel({ member }: { member: MemberLike }) {
   const queryClient = useQueryClient();
+  const memberIdHint = String(member?.member_id || "").trim();
   const [form, setForm] = useState<FormState | null>(null);
   const [passportPhoto, setPassportPhoto] = useState<string>("");
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -252,8 +253,8 @@ export default function MemberRegistrationFormPanel({ member }: { member: Member
   const [initialised, setInitialised] = useState(false);
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ["member-registration-form-me"],
-    queryFn: async () => api.get("/registration-forms/me") as any,
+    queryKey: ["member-registration-form-me", memberIdHint],
+    queryFn: async () => api.get(`/registration-forms/me${memberIdHint ? `?memberId=${encodeURIComponent(memberIdHint)}` : ""}`) as any,
     retry: 2,
     retryDelay: 800,
   });
@@ -338,6 +339,7 @@ export default function MemberRegistrationFormPanel({ member }: { member: Member
     setSubmitting(true);
     try {
       await api.post("/registration-forms/me/submit", {
+        memberId: memberIdHint || undefined,
         form,
         passportPhoto,
         termsAccepted: true,

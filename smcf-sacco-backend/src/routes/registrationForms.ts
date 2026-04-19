@@ -150,6 +150,26 @@ async function resolveMemberForRequest(req: AuthRequest) {
     member = await Member.findOne({ email: userEmail });
   }
 
+  // Optional memberId hint for legacy rows that are not linked to userId/email yet.
+  // Only attach when safe: same user, or unlinked row with matching/no email.
+  if (!member) {
+    const body = (req.body && typeof req.body === 'object') ? (req.body as Record<string, any>) : {};
+    const hintedMemberId = String(body.memberId || body.saccoMemberId || req.query.memberId || '').trim();
+
+    if (hintedMemberId) {
+      const hinted = await Member.findOne({ memberId: hintedMemberId });
+      if (hinted) {
+        const hintedEmail = String(hinted.email || '').trim().toLowerCase();
+        const sameUser = Boolean(hinted.userId && String(hinted.userId) === String(req.userId));
+        const canAttachUnlinked = !hinted.userId && (!hintedEmail || (userEmail && hintedEmail === userEmail));
+
+        if (sameUser || canAttachUnlinked) {
+          member = hinted;
+        }
+      }
+    }
+  }
+
   // Legacy-safe fallback: some older member rows were imported without userId/email linkage.
   // Only attach by name when the match is unique to avoid cross-linking records.
   if (!member) {

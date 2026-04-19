@@ -70,7 +70,25 @@ function buildSaccoApiUrl(base: string, path: string): string {
 
 async function shouldTryNextBase(res: Response): Promise<boolean> {
   if (res.status === 404 || res.status === 405) {
-    return true;
+    const contentType = (res.headers.get("content-type") || "").toLowerCase();
+
+    // HTML 404/405 is usually a proxy/static-host miss, so try the next base.
+    if (contentType.includes("text/html")) {
+      return true;
+    }
+
+    // For JSON errors, only retry when it looks like route/method mismatch.
+    if (contentType.includes("application/json")) {
+      try {
+        const body = await res.clone().json() as { message?: string; error?: string };
+        const text = `${body?.message || ""} ${body?.error || ""}`.toLowerCase();
+        return /route not found|method not allowed|cannot\s+(get|post|put|patch|delete)\b/.test(text);
+      } catch {
+        return false;
+      }
+    }
+
+    return false;
   }
 
   if (res.status === 401) {
