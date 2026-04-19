@@ -348,6 +348,19 @@ io.on("connection", (socket) => {
 // Serve static files for receipts
 app.use("/receipts", express.static(path.join(process.cwd(), "receipts")));
 
+// Serve frontend static files (dist directory)
+// This must come BEFORE route handlers to intercept static file requests
+const distPath = path.join(process.cwd(), "dist");
+app.use(express.static(distPath, {
+  maxAge: "1d", // Cache static assets for 1 day
+  setHeaders: (res, filepath) => {
+    // Don't cache HTML files to ensure fresh app loads
+    if (filepath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
+  }
+}));
+
 // Routes
 app.use("/api/admin", adminRoutes);
 app.use("/api/auth", authRoutes);
@@ -401,11 +414,18 @@ app.get("/", (req, res) => {
   });
 });
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    error: "Route not found",
+// SPA fallback: serve index.html for all non-API, non-static routes
+// This enables client-side routing for React
+app.get("*", (req, res) => {
+  const indexPath = path.join(process.cwd(), "dist", "index.html");
+  res.sendFile(indexPath, (err) => {
+    if (err) {
+      console.error("Error serving index.html:", err.message);
+      res.status(500).json({
+        success: false,
+        error: "Failed to load application",
+      });
+    }
   });
 });
 
