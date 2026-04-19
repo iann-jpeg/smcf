@@ -18,7 +18,7 @@ function normalizeApiBase(raw?: string): string {
 		input.replace(/\/api\/?$/, "").replace(/\/+$/, "");
 
 	if ((value === "/" || value === "/api") && isHosted) {
-		return stripApi(`${origin}/_/backend`);
+		return stripApi(origin);
 	}
 
 	if (value.startsWith("/")) {
