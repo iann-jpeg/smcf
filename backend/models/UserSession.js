@@ -14,7 +14,7 @@ const userSessionSchema = new mongoose.Schema({
   role: {
     type: String,
     required: true,
-    enum: ['admin', 'super_admin', 'member', 'committee']
+    enum: ['admin', 'super_admin', 'superadmin', 'member', 'committee', 'treasurer', 'secretary', 'auditor', 'viewer', 'credit_officer']
   },
   loginTime: {
     type: Date,
