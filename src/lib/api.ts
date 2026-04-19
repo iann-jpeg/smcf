@@ -10,8 +10,8 @@ function normalizeApiBase(raw?: string): string {
 	const isHosted = Boolean(origin) && !/localhost|127\.0\.0\.1/i.test(origin);
 
 	if (!value) {
-		// Hosted deployments route backend under /_/backend (see vercel.json routePrefix).
-		return isHosted ? `${origin}/_/backend` : fallback;
+		// Hosted deployments call backend at /api (proxied by nginx)
+		return isHosted ? `${origin}` : fallback;
 	}
 	const stripApi = (input: string) =>
 		input.replace(/\/api\/?$/, "").replace(/\/+$/, "");
