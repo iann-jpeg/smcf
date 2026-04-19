@@ -70,8 +70,9 @@ router.post("/login", async (req, res) => {
       // Track successful login
       await trackLoginAttempt(phone, true, admin._id, 'Admin', req);
       
-      // Create session
-      const session = await createUserSession(admin._id, 'Admin', admin.role, req);
+      // Create session (normalize all admin roles to 'admin')
+      const normalizedRole = admin.role === 'superadmin' || admin.role === 'super_admin' ? 'admin' : 'admin';
+      const session = await createUserSession(admin._id, 'Admin', normalizedRole, req);
 
       const token = generateToken(admin._id, admin.role);
       return res.json({
