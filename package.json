@@ -8,7 +8,7 @@
     "build": "npm run build:all",
     "build:app": "vite build",
     "build:dev": "vite build --mode development",
-    "build:sacco": "npm --prefix sacco install --no-audit --no-fund && npm --prefix sacco run build && node -e \"const fs=require('fs');fs.rmSync('dist/sacco-assets',{recursive:true,force:true});fs.rmSync('dist/sacco',{recursive:true,force:true});fs.mkdirSync('dist/sacco-assets',{recursive:true});fs.mkdirSync('dist/sacco',{recursive:true});fs.cpSync('sacco/dist','dist/sacco-assets',{recursive:true,force:true});fs.cpSync('sacco/dist','dist/sacco',{recursive:true,force:true});\"",
+    "build:sacco": "npm --prefix sacco install --no-audit --no-fund && npm --prefix sacco run build && node -e \"const fs=require('fs');fs.rmSync('dist/sacco',{recursive:true,force:true});fs.mkdirSync('dist/sacco',{recursive:true});fs.cpSync('sacco/dist','dist/sacco',{recursive:true,force:true});\"",
     "build:all": "npm run build:app && npm run build:sacco",
     "lint": "eslint .",
     "preview": "vite preview"

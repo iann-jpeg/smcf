@@ -4,12 +4,10 @@ import path from "path";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
-  // In production the SACCO app itself is routed from /sacco/, but its static
-  // assets live under /sacco-assets/ so they are served as plain files instead
-  // of being captured by the SPA fallback for /sacco/*.
-  // In dev (mode === 'development') the Vite server runs at the root so leave
-  // base as '/' to avoid broken asset paths during local development.
-  base: mode === 'production' ? '/sacco-assets/' : '/',
+  // SACCO is deployed under /sacco/, so production assets must also resolve
+  // under /sacco/ (for example /sacco/assets/*).
+  // In dev (mode === 'development') the Vite server runs at the root.
+  base: mode === 'production' ? '/sacco/' : '/',
   server: {
     host: "::",
     port: 8080,
