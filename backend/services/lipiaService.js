@@ -1,9 +1,19 @@
 import fetch from "node-fetch";
 import env from "../config/env.js";
 
+function normalizeLipiaBaseUrl(rawUrl) {
+  const value = String(rawUrl || "").trim().replace(/\/+$/, "");
+  if (!value) return "https://lipia-api.kreativelabske.com/api/v2";
+
+  // Guard against env values that accidentally include endpoint paths.
+  return value
+    .replace(/\/(payments\/stk-push|request\/stk)(\/.*)?$/i, "")
+    .replace(/\/+$/, "");
+}
+
 // Correct Lipia API base URL
 const LIPIA_API_URL =
-  env.LIPIA_API_URL || "https://lipia-api.kreativelabske.com/api/v2";
+  normalizeLipiaBaseUrl(env.LIPIA_API_URL);
 const LIPIA_API_KEY = env.LIPIA_API_KEY;
 const LIPIA_APP_ID = env.LIPIA_APP_ID;
 const LIPIA_APP_NAME = env.LIPIA_APP_NAME;

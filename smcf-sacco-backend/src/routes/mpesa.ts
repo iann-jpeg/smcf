@@ -122,6 +122,16 @@ function toErrorMessage(err: unknown, fallback = 'Unknown error'): string {
   return fallback;
 }
 
+function normalizeLipiaBaseUrl(rawUrl?: string): string {
+  const value = String(rawUrl || '').trim().replace(/\/+$/, '');
+  if (!value) return 'https://lipia-api.kreativelabske.com/api/v2';
+
+  // Guard against env values that accidentally include endpoint paths.
+  return value
+    .replace(/\/(payments\/stk-push|request\/stk)(\/.*)?$/i, '')
+    .replace(/\/+$/, '');
+}
+
 // Purge stale entries every 10 min
 setInterval(() => {
   const cutoff = Date.now() - 10 * 60 * 1000;
@@ -348,7 +358,7 @@ async function pollSACCOPayment(
 /** Send STK push via Lipia Online to till 6938069 */
 async function sendLipiaSTK(phone: string, amount: number, reference: string, description: string): Promise<LipiaStkResponse> {
   const apiKey  = process.env.LIPIA_API_KEY!;
-  const baseUrl = process.env.LIPIA_API_URL || 'https://lipia-api.kreativelabske.com/api/v2';
+  const baseUrl = normalizeLipiaBaseUrl(process.env.LIPIA_API_URL);
   const callbackUrl = process.env.MPESA_CALLBACK_URL || 'https://smcf-sacco-backend.onrender.com/api/mpesa/callback';
   const appId = process.env.LIPIA_APP_ID;
   const appName = process.env.LIPIA_APP_NAME;
