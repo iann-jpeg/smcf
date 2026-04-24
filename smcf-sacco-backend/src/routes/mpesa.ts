@@ -359,7 +359,7 @@ async function pollSACCOPayment(
 async function sendLipiaSTK(phone: string, amount: number, reference: string, description: string): Promise<LipiaStkResponse> {
   const apiKey  = process.env.LIPIA_API_KEY!;
   const baseUrl = normalizeLipiaBaseUrl(process.env.LIPIA_API_URL);
-  const callbackUrl = process.env.MPESA_CALLBACK_URL || 'https://smcf-sacco-backend.onrender.com/api/mpesa/callback';
+  const callbackUrl = process.env.MPESA_CALLBACK_URL;
   const appId = process.env.LIPIA_APP_ID;
   const appName = process.env.LIPIA_APP_NAME;
 
@@ -377,7 +377,7 @@ async function sendLipiaSTK(phone: string, amount: number, reference: string, de
         external_reference: reference,
         ...(appId ? { app_id: appId } : {}),
         ...(appName ? { app_name: appName } : {}),
-        callback_url: callbackUrl,
+        ...(callbackUrl ? { callback_url: callbackUrl } : {}),
         description,
       },
     },
@@ -390,7 +390,7 @@ async function sendLipiaSTK(phone: string, amount: number, reference: string, de
         ...(appId ? { app_id: appId } : {}),
         ...(appName ? { app_name: appName } : {}),
         description,
-        callback_url: callbackUrl,
+        ...(callbackUrl ? { callback_url: callbackUrl } : {}),
       },
     },
   ]);

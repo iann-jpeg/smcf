@@ -65,9 +65,15 @@ function normalizeTargetBase(raw) {
   return value;
 }
 
+function isLegacyCloudHost(base) {
+  const normalized = String(base || "").toLowerCase();
+  return normalized.includes(".onrender.com") || normalized.includes(".vercel.app");
+}
+
 function getSaccoTargetBases(req) {
   const configured = normalizeTargetBase(process.env.SACCO_BACKEND_URL);
   const configuredFallback = normalizeTargetBase(process.env.SACCO_BACKEND_FALLBACK_URL);
+  const allowCloudUpstreams = String(process.env.SACCO_ALLOW_CLOUD_UPSTREAMS || "").toLowerCase() === "true";
   const fallbacks = [
     normalizeTargetBase("http://127.0.0.1:5001"),
     configuredFallback,
@@ -79,6 +85,10 @@ function getSaccoTargetBases(req) {
     const origin = toOrigin(base);
     // Prevent recursive proxying back into this same host.
     if (requestOrigin && origin && origin === requestOrigin) {
+      return false;
+    }
+    // VPS-first safety: ignore stale cloud upstreams unless explicitly enabled.
+    if (!allowCloudUpstreams && isLegacyCloudHost(base)) {
       return false;
     }
     return true;
@@ -100,6 +110,19 @@ function shouldRetryUpstream(req, upstreamResponse, responseText) {
 
   if (upstreamResponse.status === 404 || upstreamResponse.status === 405) {
     return true;
+  }
+
+  // Retry target selection when upstream returns route-shape 400s
+  // (e.g. legacy provider endpoint mismatch in stale backend deployments).
+  if (upstreamResponse.status === 400) {
+    if (
+      bodyText.includes("route not found") ||
+      bodyText.includes("endpoint post") ||
+      bodyText.includes("request/stk") ||
+      bodyText.includes("cannot post")
+    ) {
+      return true;
+    }
   }
 
   if (!isLogin) {
