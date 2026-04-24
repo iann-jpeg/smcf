@@ -350,6 +350,8 @@ async function sendLipiaSTK(phone: string, amount: number, reference: string, de
   const apiKey  = process.env.LIPIA_API_KEY!;
   const baseUrl = process.env.LIPIA_API_URL || 'https://lipia-api.kreativelabske.com/api/v2';
   const callbackUrl = process.env.MPESA_CALLBACK_URL || 'https://smcf-sacco-backend.onrender.com/api/mpesa/callback';
+  const appId = process.env.LIPIA_APP_ID;
+  const appName = process.env.LIPIA_APP_NAME;
 
   // Lipia requires 07xx/01xx format — convert from 254xxx if needed
   const lipiaPhone = normalizePhoneForLipia(phone);
@@ -361,14 +363,20 @@ async function sendLipiaSTK(phone: string, amount: number, reference: string, de
         phone_number: lipiaPhone,
         amount,
         external_reference: reference,
+        ...(appId ? { app_id: appId } : {}),
+        ...(appName ? { app_name: appName } : {}),
+        callback_url: callbackUrl,
+        description,
       },
     },
     {
-      url: `${baseUrl}/request/stk`,
+      url: `${baseUrl}/payments/stk-push`,
       body: {
         phone: lipiaPhone,
         amount,
         reference,
+        ...(appId ? { app_id: appId } : {}),
+        ...(appName ? { app_name: appName } : {}),
         description,
         callback_url: callbackUrl,
       },

@@ -5,6 +5,9 @@ import env from "../config/env.js";
 const LIPIA_API_URL =
   env.LIPIA_API_URL || "https://lipia-api.kreativelabske.com/api/v2";
 const LIPIA_API_KEY = env.LIPIA_API_KEY;
+const LIPIA_APP_ID = env.LIPIA_APP_ID;
+const LIPIA_APP_NAME = env.LIPIA_APP_NAME;
+const MPESA_CALLBACK_URL = env.MPESA_CALLBACK_URL;
 
 // Validate environment variables on load
 if (!LIPIA_API_KEY) {
@@ -98,60 +101,79 @@ export const initiateLipiaPayment = async (
       lipiaPhoneFormat = `0${formattedPhone.substring(3)}`;
     }
 
-    // Lipia API request format
-    const payload = {
-      phone_number: lipiaPhoneFormat,
-      amount: parseFloat(amount),
-      external_reference: reference,
-    };
+    const amountValue = parseFloat(amount);
+
+    // Try both known payload shapes on the same supported endpoint.
+    const payloads = [
+      {
+        phone_number: lipiaPhoneFormat,
+        amount: amountValue,
+        external_reference: reference,
+        ...(LIPIA_APP_ID ? { app_id: LIPIA_APP_ID } : {}),
+        ...(LIPIA_APP_NAME ? { app_name: LIPIA_APP_NAME } : {}),
+        ...(MPESA_CALLBACK_URL ? { callback_url: MPESA_CALLBACK_URL } : {}),
+        description,
+      },
+      {
+        phone: lipiaPhoneFormat,
+        amount: amountValue,
+        reference,
+        ...(LIPIA_APP_ID ? { app_id: LIPIA_APP_ID } : {}),
+        ...(LIPIA_APP_NAME ? { app_name: LIPIA_APP_NAME } : {}),
+        ...(MPESA_CALLBACK_URL ? { callback_url: MPESA_CALLBACK_URL } : {}),
+        description,
+      },
+    ];
 
     console.log("📱 Phone Formatting:");
     console.log("   Original:", phone);
     console.log("   Cleaned:", cleanedPhone);
     console.log("   Validated (254 format):", formattedPhone);
     console.log("   Sent to Lipia:", lipiaPhoneFormat);
-    console.log("📤 Initiating Lipia STK Push:", payload);
+    let data = null;
+    let lastErrorMessage = "Payment initiation failed";
 
-    const response = await fetch(`${LIPIA_API_URL}/payments/stk-push`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${LIPIA_API_KEY}`,
-      },
-      body: JSON.stringify(payload),
-    });
+    for (const payload of payloads) {
+      console.log("📤 Initiating Lipia STK Push:", payload);
 
-    console.log("Lipia API Response Status:", response.status);
-    const responseText = await response.text();
-    console.log("Lipia API Response Body:", responseText);
-
-    let data;
-    try {
-      data = JSON.parse(responseText);
-    } catch (parseError) {
-      console.error("Failed to parse Lipia response:", responseText);
-      throw new Error(
-        `Invalid response from Lipia API: ${responseText.substring(0, 200)}`
-      );
-    }
-
-    if (!data.success) {
-      // Extract M-Pesa specific error if available
-      const errorMessage =
-        data.error?.mpesaError?.errorMessage ||
-        data.error?.message ||
-        data.customerMessage ||
-        data.message ||
-        "Payment initiation failed";
-
-      console.error("❌ Lipia API returned failure:", {
-        success: data.success,
-        message: data.message,
-        error: data.error,
-        customerMessage: data.customerMessage,
+      const response = await fetch(`${LIPIA_API_URL}/payments/stk-push`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${LIPIA_API_KEY}`,
+        },
+        body: JSON.stringify(payload),
       });
 
-      throw new Error(errorMessage);
+      console.log("Lipia API Response Status:", response.status);
+      const responseText = await response.text();
+      console.log("Lipia API Response Body:", responseText);
+
+      let parsed;
+      try {
+        parsed = responseText ? JSON.parse(responseText) : {};
+      } catch (parseError) {
+        lastErrorMessage = `Invalid response from Lipia API: ${responseText.substring(0, 200)}`;
+        continue;
+      }
+
+      const errorMessage =
+        parsed.error?.mpesaError?.errorMessage ||
+        parsed.error?.message ||
+        parsed.customerMessage ||
+        parsed.message ||
+        `HTTP ${response.status}`;
+
+      if (response.ok && parsed.success !== false) {
+        data = parsed;
+        break;
+      }
+
+      lastErrorMessage = errorMessage;
+    }
+
+    if (!data) {
+      throw new Error(lastErrorMessage);
     }
 
     // Return normalized response with both formats for compatibility
