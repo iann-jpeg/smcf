@@ -93,20 +93,19 @@ export const initiateLipiaPayment = async (
       );
     }
 
-    // Lipia accepts: 0712345678, 254712345678, +254712345678
-    // Try sending in 07XX format as shown in their docs
-    let lipiaPhoneFormat = cleanedPhone;
-    if (formattedPhone.startsWith("254")) {
-      // Convert 254712345678 back to 0712345678 for Lipia
-      lipiaPhoneFormat = `0${formattedPhone.substring(3)}`;
-    }
+    // Lipia deployments differ on accepted phone format.
+    // Try all common Kenyan forms to avoid provider-side format rejection.
+    const phone07 = `0${formattedPhone.substring(3)}`;
+    const phone254 = formattedPhone;
+    const phonePlus254 = `+${formattedPhone}`;
+    const phoneCandidates = [phone07, phone254, phonePlus254];
 
     const amountValue = parseFloat(amount);
 
     // Try both known payload shapes on the same supported endpoint.
-    const payloads = [
+    const payloads = phoneCandidates.flatMap((phoneValue) => [
       {
-        phone_number: lipiaPhoneFormat,
+        phone_number: phoneValue,
         amount: amountValue,
         external_reference: reference,
         ...(LIPIA_APP_ID ? { app_id: LIPIA_APP_ID } : {}),
@@ -115,7 +114,7 @@ export const initiateLipiaPayment = async (
         description,
       },
       {
-        phone: lipiaPhoneFormat,
+        phone: phoneValue,
         amount: amountValue,
         reference,
         ...(LIPIA_APP_ID ? { app_id: LIPIA_APP_ID } : {}),
@@ -123,13 +122,13 @@ export const initiateLipiaPayment = async (
         ...(MPESA_CALLBACK_URL ? { callback_url: MPESA_CALLBACK_URL } : {}),
         description,
       },
-    ];
+    ]);
 
     console.log("📱 Phone Formatting:");
     console.log("   Original:", phone);
     console.log("   Cleaned:", cleanedPhone);
     console.log("   Validated (254 format):", formattedPhone);
-    console.log("   Sent to Lipia:", lipiaPhoneFormat);
+    console.log("   Candidate phone formats:", phoneCandidates);
     let data = null;
     let lastErrorMessage = "Payment initiation failed";
 

@@ -353,14 +353,16 @@ async function sendLipiaSTK(phone: string, amount: number, reference: string, de
   const appId = process.env.LIPIA_APP_ID;
   const appName = process.env.LIPIA_APP_NAME;
 
-  // Lipia requires 07xx/01xx format — convert from 254xxx if needed
-  const lipiaPhone = normalizePhoneForLipia(phone);
+  const phone07 = normalizePhoneForLipia(phone);
+  const phone254 = normalizePhone(phone);
+  const phonePlus254 = `+${phone254}`;
+  const phoneCandidates = Array.from(new Set([phone07, phone254, phonePlus254]));
 
-  const attempts = [
+  const attempts = phoneCandidates.flatMap((phoneValue) => [
     {
       url: `${baseUrl}/payments/stk-push`,
       body: {
-        phone_number: lipiaPhone,
+        phone_number: phoneValue,
         amount,
         external_reference: reference,
         ...(appId ? { app_id: appId } : {}),
@@ -372,7 +374,7 @@ async function sendLipiaSTK(phone: string, amount: number, reference: string, de
     {
       url: `${baseUrl}/payments/stk-push`,
       body: {
-        phone: lipiaPhone,
+        phone: phoneValue,
         amount,
         reference,
         ...(appId ? { app_id: appId } : {}),
@@ -381,7 +383,7 @@ async function sendLipiaSTK(phone: string, amount: number, reference: string, de
         callback_url: callbackUrl,
       },
     },
-  ];
+  ]);
 
   let lastStatus = 500;
   let lastReason = 'Unknown error';
