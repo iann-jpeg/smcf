@@ -373,8 +373,10 @@ async function sendLipiaSTK(phone: string, amount: number, reference: string, de
       url: `${baseUrl}/payments/stk-push`,
       body: {
         phone_number: phoneValue,
+        phone: phoneValue,
         amount,
         external_reference: reference,
+        reference,
         ...(appId ? { app_id: appId } : {}),
         ...(appName ? { app_name: appName } : {}),
         ...(callbackUrl ? { callback_url: callbackUrl } : {}),
@@ -385,8 +387,10 @@ async function sendLipiaSTK(phone: string, amount: number, reference: string, de
       url: `${baseUrl}/payments/stk-push`,
       body: {
         phone: phoneValue,
+        phone_number: phoneValue,
         amount,
         reference,
+        external_reference: reference,
         ...(appId ? { app_id: appId } : {}),
         ...(appName ? { app_name: appName } : {}),
         description,

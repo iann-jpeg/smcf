@@ -116,8 +116,10 @@ export const initiateLipiaPayment = async (
     const payloads = phoneCandidates.flatMap((phoneValue) => [
       {
         phone_number: phoneValue,
+        phone: phoneValue,
         amount: amountValue,
         external_reference: reference,
+        reference,
         ...(LIPIA_APP_ID ? { app_id: LIPIA_APP_ID } : {}),
         ...(LIPIA_APP_NAME ? { app_name: LIPIA_APP_NAME } : {}),
         ...(MPESA_CALLBACK_URL ? { callback_url: MPESA_CALLBACK_URL } : {}),
@@ -125,8 +127,10 @@ export const initiateLipiaPayment = async (
       },
       {
         phone: phoneValue,
+        phone_number: phoneValue,
         amount: amountValue,
         reference,
+        external_reference: reference,
         ...(LIPIA_APP_ID ? { app_id: LIPIA_APP_ID } : {}),
         ...(LIPIA_APP_NAME ? { app_name: LIPIA_APP_NAME } : {}),
         ...(MPESA_CALLBACK_URL ? { callback_url: MPESA_CALLBACK_URL } : {}),
