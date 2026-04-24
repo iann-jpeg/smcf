@@ -156,7 +156,7 @@ async function queryLipiaStatus(checkoutRequestId: string): Promise<{
   amount?: number;
 }> {
   const apiKey  = process.env.LIPIA_API_KEY!;
-  const baseUrl = process.env.LIPIA_API_URL || 'https://lipia-api.kreativelabske.com/api/v2';
+  const baseUrl = normalizeLipiaBaseUrl(process.env.LIPIA_API_URL);
 
   try {
     // Main SMCF flow uses /payments/status; keep /request/status as fallback.
@@ -843,12 +843,12 @@ async function createOrGetPendingDepositTransaction(params: {
 // ─── GET /api/mpesa/provider-diagnostics ─────────────────────────────────────
 // Admin diagnostics endpoint: returns masked provider config to compare environments
 
-router.get('/provider-diagnostics', protect, authorize('admin', 'treasurer'), async (_req: AuthRequest, res: Response) => {
+router.get('/provider-diagnostics', protect, authorize('admin', 'treasurer', 'member'), async (_req: AuthRequest, res: Response) => {
   const apiKey = process.env.LIPIA_API_KEY;
   const appId = process.env.LIPIA_APP_ID;
   const appName = process.env.LIPIA_APP_NAME;
   const callbackUrl = process.env.MPESA_CALLBACK_URL;
-  const apiUrl = process.env.LIPIA_API_URL || 'https://lipia-api.kreativelabske.com/api/v2';
+  const apiUrl = normalizeLipiaBaseUrl(process.env.LIPIA_API_URL);
 
   return res.json({
     success: true,
@@ -865,6 +865,8 @@ router.get('/provider-diagnostics', protect, authorize('admin', 'treasurer'), as
         appName,
         apiKeyMasked: maskSecret(apiKey),
         appIdMasked: maskSecret(appId),
+        service: 'smcf-sacco-backend',
+        commit: process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || null,
       },
       fingerprints: {
         apiKey: envFingerprint(apiKey),

@@ -2,6 +2,22 @@ import express from "express";
 
 const router = express.Router();
 
+router.get("/__proxy-diagnostics", (req, res) => {
+  const targetBases = getSaccoTargetBases(req);
+  return res.json({
+    success: true,
+    data: {
+      service: "smcf-main-backend-sacco-proxy",
+      commit: process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || null,
+      configured: {
+        SACCO_BACKEND_URL: process.env.SACCO_BACKEND_URL || null,
+        SACCO_BACKEND_FALLBACK_URL: process.env.SACCO_BACKEND_FALLBACK_URL || null,
+      },
+      resolvedTargets: targetBases,
+    },
+  });
+});
+
 function unique(values) {
   return Array.from(new Set(values.filter(Boolean)));
 }

@@ -11,6 +11,49 @@ import {
 
 const router = express.Router();
 
+function maskSecret(value) {
+  if (!value) return null;
+  const str = String(value);
+  if (str.length <= 8) return '*'.repeat(str.length);
+  return `${str.slice(0, 4)}***${str.slice(-4)}`;
+}
+
+function normalizeLipiaBaseUrl(rawUrl) {
+  const value = String(rawUrl || "").trim().replace(/\/+$/, "");
+  if (!value) return "https://lipia-api.kreativelabske.com/api/v2";
+  return value
+    .replace(/\/(payments\/stk-push|request\/stk)(\/.*)?$/i, "")
+    .replace(/\/+$/, "");
+}
+
+router.get('/provider-diagnostics', protect, async (_req, res) => {
+  const apiKey = process.env.LIPIA_API_KEY;
+  const appId = process.env.LIPIA_APP_ID;
+  const appName = process.env.LIPIA_APP_NAME;
+  const callbackUrl = process.env.MPESA_CALLBACK_URL;
+
+  res.json({
+    success: true,
+    data: {
+      configured: {
+        apiKey: !!apiKey,
+        appId: !!appId,
+        appName: !!appName,
+        callbackUrl: !!callbackUrl,
+      },
+      values: {
+        apiUrl: normalizeLipiaBaseUrl(process.env.LIPIA_API_URL),
+        callbackUrl,
+        appName,
+        apiKeyMasked: maskSecret(apiKey),
+        appIdMasked: maskSecret(appId),
+        service: 'smcf-main-backend',
+        commit: process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || null,
+      },
+    },
+  });
+});
+
 /**
  * @route   POST /api/lipia/stk-push
  * @desc    Initiate STK Push payment via Lipia Online
