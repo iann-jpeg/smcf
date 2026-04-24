@@ -60,3 +60,8 @@ data/
 # Member statement exports (sensitive)
 **/member-statements*.pdf
 **/member-statements*.json
+*.tar.gz
+*.zip
+*.log
+node_modules/
+backups/
