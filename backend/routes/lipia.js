@@ -535,7 +535,7 @@ router.post("/query-status", protect, async (req, res) => {
             if (io) {
               const socketPayload = {
                 memberId: payment.member_id.toString(), // Recipient (who got credited)
-                payerId: payment.paid_by.toString(), // Payer (who actually paid)
+                payerId: payment.paid_by ? payment.paid_by.toString() : payment.member_id.toString(), // Payer (who actually paid, fallback to member if not set)
                 checkoutRequestID: payment.checkout_request_id,
                 mpesaReceiptNumber: result.mpesaReceiptNumber,
                 payment: {
@@ -1375,7 +1375,7 @@ router.post("/callback", async (req, res) => {
           io.emit("paymentCompleted", {
             paymentId: payment._id,
             memberId: payment.member_id.toString(),
-            payerId: payment.paid_by.toString(),
+            payerId: payment.paid_by ? payment.paid_by.toString() : payment.member_id.toString(),
             amount: payment.amount,
             transactionId: callbackData.mpesaReceiptNumber,
             timestamp: new Date(),
@@ -1385,7 +1385,7 @@ router.post("/callback", async (req, res) => {
 
           io.emit("payment:completed", {
             memberId: payment.member_id.toString(),
-            payerId: payment.paid_by.toString(),
+            payerId: payment.paid_by ? payment.paid_by.toString() : payment.member_id.toString(),
             checkoutRequestID: payment.checkout_request_id,
             mpesaReceiptNumber: callbackData.mpesaReceiptNumber,
             payment: {
