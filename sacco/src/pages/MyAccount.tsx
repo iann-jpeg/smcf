@@ -51,6 +51,7 @@ import { LoanRepaymentDialog } from "@/components/LoanRepaymentDialog";
 import { ShareSubscriptionDialog } from "@/components/ShareSubscriptionDialog";
 import { ShareTransferDialog } from "@/components/ShareTransferDialog";
 import MemberRegistrationFormPanel from "@/components/member/MemberRegistrationFormPanel";
+import MembershipCardPanel from "@/components/member/MembershipCardPanel";
 
 function statusVariant(status: string) {
   switch (status) {
@@ -863,12 +864,17 @@ export default function MyAccount() {
             <span className="hidden sm:inline">Registration Form</span>
             <span className="sm:hidden">Form</span>
           </TabsTrigger>
-        </TabsList>
+            <TabsTrigger value="membership-card" className="rounded-lg px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-foreground/60 transition-all hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm flex-1 sm:flex-none">
+              <Shield className="mr-1 h-3.5 w-3.5" />
+              <span className="hidden sm:inline">ID Card</span>
+              <span className="sm:hidden">Card</span>
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Repayments */}
-        <TabsContent value="repayments">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
+          {/* Repayments */}
+          <TabsContent value="repayments">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
               <CardTitle className="font-heading text-lg">Repayment Schedule</CardTitle>
               <div className="flex items-center gap-2 flex-wrap">
                 {loans.filter((l: any) => ["active", "disbursed"].includes(l.status) && Number(l.balance) > 0).length > 0 && (
@@ -1246,11 +1252,16 @@ export default function MyAccount() {
         <TabsContent value="registration-form">
           <MemberRegistrationFormPanel member={member} />
         </TabsContent>
+  
+          {/* Membership Card */}
+          <TabsContent value="membership-card">
+            <MembershipCardPanel member={member} />
+          </TabsContent>
 
-        {/* Profile */}
-        <TabsContent value="profile">
-          <div className="space-y-6">
-            <Card className="border-primary/30 bg-primary/5">
+          {/* Profile */}
+          <TabsContent value="profile">
+            <div className="space-y-6 mt-6">
+              <Card className="border-primary/30 bg-primary/5">
               <CardHeader className="pb-3">
                 <CardTitle className="font-heading text-base flex items-center justify-between gap-3">
                   <span>Profile Completion</span>

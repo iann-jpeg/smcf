@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import { exportMembershipCard } from "@/lib/membership-card-pdf";
 import { ArrowLeft, Wallet, Landmark, TrendingUp, Pencil, Link2, Link2Off, UserCheck, FileText, Eye, Download, X } from "lucide-react";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { StatCard } from "@/components/StatCard";
@@ -234,9 +235,11 @@ export default function MemberDetail() {
         </div>
         {isAdmin && (
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={openEdit}>
-              <Pencil className="h-3.5 w-3.5" /> Edit
-            </Button>
+              {member.registration_fee_paid && (
+                <Button variant="outline" size="sm" className="gap-1.5 border-[#b4963c] text-[#b4963c] hover:bg-[#b4963c]/10" onClick={() => exportMembershipCard(member)}>
+                  <Download className="h-3.5 w-3.5" /> ID Card
+                </Button>
+              )}
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setLinkOpen(true)}>
               <Link2 className="h-3.5 w-3.5" /> Link Account
             </Button>
