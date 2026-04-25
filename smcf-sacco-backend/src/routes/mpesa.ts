@@ -123,8 +123,13 @@ function toErrorMessage(err: unknown, fallback = 'Unknown error'): string {
 }
 
 function normalizeLipiaBaseUrl(rawUrl?: string): string {
-  const value = String(rawUrl || '').trim().replace(/\/+$/, '');
+  let value = String(rawUrl || '').trim().replace(/\/+$/, '');
   if (!value) return 'https://lipia-api.kreativelabske.com/api/v2';
+
+  // Force /v2 if missing 
+  if (value.endsWith("/api")) {
+    value += "/v2";
+  }
 
   // Guard against env values that accidentally include endpoint paths.
   return value
