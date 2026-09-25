@@ -41,7 +41,7 @@ const App = () => (
             <Sonner />
             <BrowserRouter>
               <Routes>
-                <Route path="/" element={<SaccoBridge />} />
+                <Route path="/" element={<Index />} />
                 <Route path="/auth" element={<SaccoBridge />} />
                 <Route path="/sacco/*" element={<SaccoBridge />} />
                 <Route path="/admin" element={<SaccoBridge />} />

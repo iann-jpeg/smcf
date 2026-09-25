@@ -1,6 +1,5 @@
 import smcfLogo from "@/assets/newsmcflogo.png";
 import landingBackground from "@/assets/landingbackground.jpg";
-import AdminSetup from "@/components/AdminSetup";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import SEO from "@/components/SEO";
 import { StyledSMCF } from "@/components/StyledSMCF";
@@ -77,7 +76,6 @@ const getAuthHeaders = (): HeadersInit | undefined => {
 };
 
 const Index = () => {
-  const [setupComplete, setSetupComplete] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [showOrganization, setShowOrganization] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -247,11 +245,6 @@ const Index = () => {
   // Show loading state while checking authentication
   if (isLoading) {
     return <LoadingScreen />;
-  }
-
-  // Show admin setup if needed - MUST be after all hooks
-  if (!setupComplete) {
-    return <AdminSetup onSetupComplete={() => setSetupComplete(true)} />;
   }
 
   const handleLogin = (role: string, userData: UserData) => {
