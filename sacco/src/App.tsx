@@ -32,6 +32,7 @@ const Notifications    = lazy(() => import("./pages/Notifications"));
 const Auth             = lazy(() => import("./pages/Auth"));
 const ResetPassword    = lazy(() => import("./pages/ResetPassword"));
 const MyAccount        = lazy(() => import("./pages/MyAccount"));
+const FinanceCompliance = lazy(() => import("./pages/FinanceCompliance"));
 const NotFound         = lazy(() => import("./pages/NotFound"));
 
 // Thin route-level fallback — reuses the CSS spinner already on the page.
@@ -123,6 +124,7 @@ function ProtectedRoutes() {
           <Route path="/guarantors" element={<Guarantors />} />
           <Route path="/risk-scoring" element={<RiskScoring />} />
           <Route path="/reports" element={<Reports />} />
+          <Route path="/finance-compliance" element={<FinanceCompliance />} />
           <Route path="/compliance" element={<Compliance />} />
           <Route path="/documents" element={<Documents />} />
           <Route path="/registration-fee" element={<RegistrationFee />} />

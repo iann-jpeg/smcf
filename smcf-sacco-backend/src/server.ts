@@ -36,6 +36,7 @@ import savingsInterestRoutes from './routes/savingsInterest';
 import registrationFormsRoutes from './routes/registrationForms';
 import financialStatementsRoutes from './routes/financialStatements';
 import unifiedAccountRoutes from './routes/unifiedAccount';
+import financeOverviewRoutes from './routes/financeOverview';
 import { startOverdueRepaymentJob } from './utils/overdueRepayments';
 
 // Initialize app
@@ -179,6 +180,7 @@ app.use('/api/email', communicationsRoutes);
 app.use('/api/registration-forms', registrationFormsRoutes);
 app.use('/api/financial-statements', financialStatementsRoutes);
 app.use('/api/unified-account', unifiedAccountRoutes);
+app.use('/api/finance/overview', financeOverviewRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {
