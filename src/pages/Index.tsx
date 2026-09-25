@@ -448,9 +448,9 @@ const Index = () => {
           <div className="flex items-center gap-2 sm:gap-3">
             <nav className="flex items-center gap-1">
               <a
-                href="#sacco-portal"
+                href="/sacco/auth"
                 className="text-[10px] sm:text-sm font-medium px-2 sm:px-3 py-1 sm:py-1.5 rounded-md text-primary border border-primary/30 hover:bg-primary/10 transition-colors duration-200 whitespace-nowrap">
-                SMCF SACCO
+                SMCF Member Portal
               </a>
               <a
                 href="#non-member-loans"
@@ -962,7 +962,7 @@ const Index = () => {
         </div>
       </section>
 
-      {/* Unified SMCF SACCO member entry */}
+      {/* Unified SMCF member entry */}
       <section id="sacco-portal" className="py-10 sm:py-16 md:py-20 px-3 sm:px-4 bg-accent/10">
         <div className="container mx-auto max-w-4xl">
           <Card className="overflow-hidden hover-lift hover-glow border-2 border-accent/30 shadow-xl animate-fade-in-up">
@@ -972,10 +972,10 @@ const Index = () => {
                   <Users className="w-8 h-8 sm:w-10 sm:h-10 text-accent-foreground" />
                 </div>
                 <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4 bg-gradient-accent bg-clip-text text-transparent">
-                  SMCF SACCO – Official Member Portal
+                  SMCF Member Portal
                 </h2>
                 <p className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
-                  SMCF SACCO is the unified member platform for savings, loans, Wallet, Cycles, transactions, statements, and account services.
+                  SMCF Member Portal is the unified platform for savings, loans, Wallet, Cycles, transactions, statements, and account services.
                 </p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6 sm:mb-8">
@@ -1017,12 +1017,12 @@ const Index = () => {
                     size="lg"
                     className="text-base sm:text-lg px-8 sm:px-12 py-4 sm:py-6 h-auto hover-lift hover-shine bg-gradient-accent text-accent-foreground font-bold shadow-lg hover:shadow-2xl transition-all duration-300 group"
                   >
-                    Open SMCF SACCO
+                    Open SMCF Member Portal
                     <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform duration-300" />
                   </Button>
                 </button>
                 <p className="text-xs sm:text-sm text-muted-foreground mt-4 italic">
-                  One SMCF login for your SACCO account, Wallet, Cycles, loans, and statements.
+                  One SMCF login for your account, Wallet, Cycles, loans, and statements.
                 </p>
               </div>
 
