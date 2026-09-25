@@ -1,7 +1,6 @@
 import smcfLogo from "@/assets/newsmcflogo.png";
 import landingBackground from "@/assets/landingbackground.jpg";
 import AdminSetup from "@/components/AdminSetup";
-import AuthDialog from "@/components/AuthDialog";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import SEO from "@/components/SEO";
 import { StyledSMCF } from "@/components/StyledSMCF";
@@ -458,7 +457,7 @@ const Index = () => {
               <a
                 href="#sacco-portal"
                 className="text-[10px] sm:text-sm font-medium px-2 sm:px-3 py-1 sm:py-1.5 rounded-md text-primary border border-primary/30 hover:bg-primary/10 transition-colors duration-200 whitespace-nowrap">
-                FINANCE
+                SMCF SACCO
               </a>
               <a
                 href="#non-member-loans"
@@ -469,11 +468,11 @@ const Index = () => {
             </nav>
             <ThemeToggle />
             <Button
-              onClick={() => setShowAuth(true)}
+              onClick={() => { window.location.href = "/sacco/auth"; }}
               variant="default"
               size="sm"
               className="text-xs sm:text-sm px-3 sm:px-4 hover-glow hover-shine">
-              Login / Register
+              Sign in to SMCF
             </Button>
           </div>
         </div>
@@ -507,7 +506,7 @@ const Index = () => {
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-8 sm:mb-10 animate-fade-in-left animation-delay-400">
                 <Button
                   size="lg"
-                  onClick={() => setShowAuth(true)}
+                  onClick={() => { window.location.href = "/sacco/auth"; }}
                   className="text-sm sm:text-base md:text-lg py-4 sm:py-5 md:py-6 px-6 sm:px-8 hover-glow hover-shine">
                   Join <StyledSMCF className="inline" /> Today - Start Saving
                 </Button>
@@ -970,7 +969,7 @@ const Index = () => {
         </div>
       </section>
 
-      {/* SMCF FINANCE Section */}
+      {/* Unified SMCF SACCO member entry */}
       <section id="sacco-portal" className="py-10 sm:py-16 md:py-20 px-3 sm:px-4 bg-accent/10">
         <div className="container mx-auto max-w-4xl">
           <Card className="overflow-hidden hover-lift hover-glow border-2 border-accent/30 shadow-xl animate-fade-in-up">
@@ -980,10 +979,10 @@ const Index = () => {
                   <Users className="w-8 h-8 sm:w-10 sm:h-10 text-accent-foreground" />
                 </div>
                 <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4 bg-gradient-accent bg-clip-text text-transparent">
-                  SMCF FINANCE – Official Member Portal
+                  SMCF SACCO – Official Member Portal
                 </h2>
                 <p className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
-                  SMCF FINANCE is our dedicated platform for registered members to access exclusive FINANCE services, manage their savings, apply for loans, and view statements securely online.
+                  SMCF SACCO is the unified member platform for savings, loans, Wallet, Cycles, transactions, statements, and account services.
                 </p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6 sm:mb-8">
@@ -998,14 +997,14 @@ const Index = () => {
                   <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-accent flex-shrink-0 mt-0.5" />
                   <div>
                     <h4 className="font-semibold text-sm sm:text-base mb-1">Online Statements</h4>
-                    <p className="text-xs sm:text-sm text-muted-foreground">Download and view your FINANCE statements</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Download and view your SMCF statements</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3 p-4 bg-background/50 rounded-lg hover:bg-background/80 transition-all duration-300 hover:scale-105">
                   <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-accent flex-shrink-0 mt-0.5" />
                   <div>
                     <h4 className="font-semibold text-sm sm:text-base mb-1">Loan Applications</h4>
-                    <p className="text-xs sm:text-sm text-muted-foreground">Apply for FINANCE loans directly online</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Apply for SMCF loans directly online</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3 p-4 bg-background/50 rounded-lg hover:bg-background/80 transition-all duration-300 hover:scale-105">
@@ -1018,19 +1017,19 @@ const Index = () => {
               </div>
               <div className="text-center">
                 <button
-                  onClick={() => { window.location.href = '/sacco'; }}
+                  onClick={() => { window.location.href = '/sacco/auth'; }}
                   className="inline-block"
                 >
                   <Button
                     size="lg"
                     className="text-base sm:text-lg px-8 sm:px-12 py-4 sm:py-6 h-auto hover-lift hover-shine bg-gradient-accent text-accent-foreground font-bold shadow-lg hover:shadow-2xl transition-all duration-300 group"
                   >
-                    Go to SMCF FINANCE Portal
+                    Open SMCF SACCO
                     <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform duration-300" />
                   </Button>
                 </button>
                 <p className="text-xs sm:text-sm text-muted-foreground mt-4 italic">
-                  For registered members only. Use your FINANCE credentials to log in.
+                  One SMCF login for your SACCO account, Wallet, Cycles, loans, and statements.
                 </p>
               </div>
 
@@ -1054,7 +1053,7 @@ const Index = () => {
           <Button
             size="lg"
             variant="secondary"
-            onClick={() => setShowAuth(true)}
+            onClick={() => { window.location.href = "/sacco/auth"; }}
             className="text-base sm:text-lg px-6 sm:px-8 py-4 sm:py-6 h-auto hover-lift hover-shine animate-scale-in animation-delay-200">
             Get Started Today
           </Button>
@@ -1086,13 +1085,6 @@ const Index = () => {
           </p>
         </div>
       </footer>
-
-      {/* Auth Dialog */}
-      <AuthDialog
-        open={showAuth}
-        onOpenChange={setShowAuth}
-        onLogin={handleLogin}
-      />
 
       {/* Organization Dialog */}
       <OrganizationDialog
