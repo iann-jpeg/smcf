@@ -14,7 +14,7 @@ function openDataUrl(dataUrl: string) {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 import { Link } from "react-router-dom";
-import { useMyMember, useMyLoans, useMyRepayments, useMyTransactions, useMySavingsHistory, useMyGuarantorRequests, useRespondToGuarantorRequest } from "@/hooks/useMyAccount";
+import { useMyMember, useMyLoans, useMyRepayments, useMyTransactions, useMySavingsHistory, useMyUnifiedAccount, useMyGuarantorRequests, useRespondToGuarantorRequest } from "@/hooks/useMyAccount";
 import { useMyGuaranteedLoans } from "@/hooks/useGuaranteedLoans";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -52,6 +52,7 @@ import { ShareSubscriptionDialog } from "@/components/ShareSubscriptionDialog";
 import { ShareTransferDialog } from "@/components/ShareTransferDialog";
 import MemberRegistrationFormPanel from "@/components/member/MemberRegistrationFormPanel";
 import MembershipCardPanel from "@/components/member/MembershipCardPanel";
+import { UnifiedAccountModules } from "@/components/UnifiedAccountModules";
 
 function statusVariant(status: string) {
   switch (status) {
@@ -74,6 +75,7 @@ export default function MyAccount() {
   const { data: repayments = [] } = useMyRepayments(member?.id);
   const { data: transactions = [] } = useMyTransactions(member?.id);
   const { data: savingsHistory = [] } = useMySavingsHistory(member?.id);
+  const { data: unifiedAccount, isLoading: unifiedAccountLoading } = useMyUnifiedAccount();
   const { data: notifications = [], unreadCount } = useNotifications();
   const { data: guaranteedLoans = [], isLoading: guaranteedLoading } = useMyGuaranteedLoans(member?.id);
   const markRead = useMarkRead();
@@ -848,6 +850,11 @@ export default function MyAccount() {
             <span className="hidden sm:inline">Savings History</span>
             <span className="sm:hidden">Save</span>
           </TabsTrigger>
+          <TabsTrigger value="wallet-cycles" className="rounded-lg px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-foreground/60 transition-all hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm flex-1 sm:flex-none">
+            <Wallet className="mr-1 h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Wallet & Cycles</span>
+            <span className="sm:hidden">Wallet</span>
+          </TabsTrigger>
           <TabsTrigger value="growth" className="rounded-lg px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-foreground/60 transition-all hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm flex-1 sm:flex-none">
             <Sparkles className="mr-1 h-3.5 w-3.5" />
             <span className="hidden sm:inline">Growth</span>
@@ -1241,6 +1248,11 @@ export default function MyAccount() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Unified Wallet and Cycles */}
+        <TabsContent value="wallet-cycles">
+          <UnifiedAccountModules data={unifiedAccount} isLoading={unifiedAccountLoading} />
         </TabsContent>
 
         {/* Growth Dashboard */}

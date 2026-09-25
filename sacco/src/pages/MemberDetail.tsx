@@ -1,5 +1,6 @@
 import { useParams, Link } from "react-router-dom";
 import { useMember, useUpdateMember, useLinkMemberAccount } from "@/hooks/useMembers";
+import { useMyUnifiedAccount } from "@/hooks/useMyAccount";
 import { useLoansByMember } from "@/hooks/useLoans";
 import { useTransactionsByMember } from "@/hooks/useTransactions";
 import { useAuth } from "@/hooks/useAuth";
@@ -23,6 +24,7 @@ import { MemberAvatar } from "@/components/MemberAvatar";
 import { StatCard } from "@/components/StatCard";
 import { useState } from "react";
 import { exportLoanApplicationReceipt } from "@/lib/pdf-export";
+import { UnifiedAccountModules } from "@/components/UnifiedAccountModules";
 
 function downloadDataUrl(dataUrl: string, filename = "document") {
   const a = document.createElement("a");
@@ -59,6 +61,7 @@ export default function MemberDetail() {
   const { data: member, isLoading } = useMember(id ?? "");
   const { data: loans = [] } = useLoansByMember(id ?? "");
   const { data: transactions = [] } = useTransactionsByMember(id ?? "");
+  const { data: unifiedAccount, isLoading: unifiedAccountLoading } = useMyUnifiedAccount(id);
   const updateMember = useUpdateMember();
   const linkAccount = useLinkMemberAccount();
 
@@ -240,6 +243,9 @@ export default function MemberDetail() {
                   <Download className="h-3.5 w-3.5" /> ID Card
                 </Button>
               )}
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={openEdit}>
+                <Pencil className="h-3.5 w-3.5" /> Edit Member
+              </Button>
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setLinkOpen(true)}>
               <Link2 className="h-3.5 w-3.5" /> Link Account
             </Button>
@@ -299,6 +305,8 @@ export default function MemberDetail() {
         <StatCard title="Savings" value={`KES ${Number(member.savings).toLocaleString()}`} icon={Wallet} variant="success" />
         <StatCard title="Loan Balance" value={`KES ${Number(member.loan_balance).toLocaleString()}`} icon={TrendingUp} variant={Number(member.loan_balance) > 0 ? "warning" : "default"} />
       </div>
+
+      <UnifiedAccountModules data={unifiedAccount} isLoading={unifiedAccountLoading} />
 
       {/* ── Tabs ── */}
       <Tabs defaultValue="transactions" className="space-y-4">

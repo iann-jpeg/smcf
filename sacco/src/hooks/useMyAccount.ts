@@ -82,6 +82,36 @@ export function useMySavingsHistory(memberId: string | undefined) {
   });
 }
 
+export function useMyUnifiedAccount(memberId?: string) {
+  return useQuery({
+    queryKey: ["my-unified-account", memberId ?? "self"],
+    queryFn: async () => api.get<{
+      member: { id: string; memberId: string; name: string; status: string };
+      wallet: {
+        balance: number;
+        totalDeposits: number;
+        totalWithdrawals: number;
+        transactionCount: number;
+        transactions: any[];
+      };
+      cycles: {
+        active: {
+          cycleNumber: number;
+          status: string;
+          startDate?: string | null;
+          endDate?: string | null;
+          daysLeft?: number | null;
+          contributionAmount?: number | null;
+          memberContribution: number;
+          paymentCount: number;
+        } | null;
+        payments: any[];
+      };
+    }>(memberId ? `/unified-account?memberId=${encodeURIComponent(memberId)}` : "/unified-account"),
+    enabled: memberId !== "",
+  });
+}
+
 /** All guarantor consent requests for the logged-in member (pending + historical) */
 export function useMyGuarantorRequests() {
   return useQuery({
