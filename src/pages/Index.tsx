@@ -484,45 +484,49 @@ const Index = () => {
         <div className="container mx-auto max-w-7xl relative z-10">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
             {/* Left side - Text content */}
-            <div className="animate-slide-in-left rounded-2xl border border-white/35 bg-background/35 p-4 shadow-[0_10px_30px_-18px_hsl(var(--foreground)/0.45)] backdrop-blur-[2px] sm:p-6 md:p-8">
-              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-4 sm:mb-6 bg-gradient-primary bg-clip-text text-transparent drop-shadow-[0_4px_10px_hsl(var(--background)/0.85)]">
+            <div className="animate-slide-in-left rounded-3xl border border-white/55 bg-background/68 p-5 shadow-[0_24px_70px_-28px_hsl(var(--foreground)/0.55)] backdrop-blur-md sm:p-7 md:p-9">
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-primary">
+                <span className="h-2 w-2 rounded-full bg-primary shadow-[0_0_0_4px_hsl(var(--primary)/0.12)]" />
+                Kenya's trusted table banking platform
+              </div>
+              <h1 className="max-w-2xl text-3xl font-bold leading-[1.08] tracking-tight text-primary sm:text-4xl md:text-5xl lg:text-6xl">
                 Digital Table Banking Platform for Kenya
               </h1>
-              <h2 className="text-xl sm:text-2xl md:text-3xl font-semibold mb-4 animate-fade-in-left animation-delay-200 text-foreground drop-shadow-[0_2px_6px_hsl(var(--background)/0.7)]">
+              <h2 className="mt-5 mb-4 text-xl font-semibold leading-tight text-foreground sm:text-2xl md:text-3xl">
                 <StyledSMCF /> - Smart Moves Cash Flow
               </h2>
-              <p className="text-base sm:text-lg md:text-xl text-foreground/90 mb-6 sm:mb-8 animate-fade-in-left animation-delay-300 drop-shadow-[0_2px_6px_hsl(var(--background)/0.7)]">
+              <p className="max-w-xl text-base leading-7 text-foreground/80 sm:text-lg md:text-xl">
                 Kenya's #1 automated chama management system.{" "}
                 <br className="hidden sm:block" />
                 Contribute every 5 days • 3% monthly interest • Instant M-Pesa payments
               </p>
-              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-8 sm:mb-10 animate-fade-in-left animation-delay-400">
+              <div className="mb-8 mt-8 flex flex-col gap-3 sm:mb-10 sm:flex-row sm:gap-4">
                 <Button
                   size="lg"
                   onClick={() => { window.location.href = "/sacco/auth"; }}
-                  className="text-sm sm:text-base md:text-lg py-4 sm:py-5 md:py-6 px-6 sm:px-8 hover-glow hover-shine">
+                  className="h-12 flex-1 bg-primary px-6 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/20 hover:-translate-y-0.5 hover:bg-primary/90 hover:shadow-xl sm:flex-none sm:text-base">
                   Join <StyledSMCF className="inline" /> Today - Start Saving
                 </Button>
                 <Button
                   size="lg"
                   variant="outline"
-                  className="text-sm sm:text-base md:text-lg py-4 sm:py-5 md:py-6 px-6 sm:px-8 hover-lift"
+                  className="h-12 flex-1 border-primary/35 bg-white/60 px-6 text-sm font-semibold text-primary hover:-translate-y-0.5 hover:bg-white sm:flex-none sm:text-base"
                   onClick={() => setShowOrganization(true)}>
                   Learn How It Works
                 </Button>
               </div>
               
               {/* Trust Indicators */}
-              <div className="flex flex-wrap gap-4 sm:gap-6 text-xs sm:text-sm text-foreground/80 animate-fade-in-left animation-delay-500">
-                <div className="flex items-center gap-2 hover:text-financial-success transition-colors">
+              <div className="grid gap-3 border-t border-foreground/10 pt-5 text-xs text-foreground/75 sm:grid-cols-3 sm:gap-4 sm:text-sm">
+                <div className="flex items-center gap-2 transition-colors hover:text-financial-success">
                   <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-financial-success" />
                   <span>Bank-Level Security</span>
                 </div>
-                <div className="flex items-center gap-2 hover:text-financial-success transition-colors">
+                <div className="flex items-center gap-2 transition-colors hover:text-financial-success">
                   <Users className="w-4 h-4 sm:w-5 sm:h-5 text-financial-success" />
                   <span>1000+ Active Members</span>
                 </div>
-                <div className="flex items-center gap-2 hover:text-financial-success transition-colors">
+                <div className="flex items-center gap-2 transition-colors hover:text-financial-success">
                   <Smartphone className="w-4 h-4 sm:w-5 sm:h-5 text-financial-success" />
                   <span>M-Pesa Verified Partner</span>
                 </div>
