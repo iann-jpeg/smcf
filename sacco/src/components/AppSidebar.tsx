@@ -34,11 +34,22 @@ const staffNav = [
 
 const memberNav = [
   { title: "My Account", url: "/my-account", icon: UserCircle },
+  { title: "Repayments", url: "/my-account?tab=repayments", icon: CreditCard },
+  { title: "Repayment History", url: "/my-account?tab=repayment-history", icon: Receipt },
+  { title: "My Loans", url: "/my-account?tab=loans", icon: Landmark },
+  { title: "Transactions", url: "/my-account?tab=transactions", icon: ArrowLeftRight },
+  { title: "Savings History", url: "/my-account?tab=savings", icon: Wallet },
+  { title: "Wallet & Cycles", url: "/my-account?tab=wallet-cycles", icon: CalendarCheck },
+  { title: "Growth", url: "/my-account?tab=growth", icon: TrendingUp },
+  { title: "Guarantor Requests", url: "/my-account?tab=guarantors", icon: ShieldCheck },
+  { title: "Registration Form", url: "/my-account?tab=registration-form", icon: FileText },
+  { title: "ID Card", url: "/my-account?tab=membership-card", icon: BadgeCheck },
   { title: "Apply for Loan", url: "/loans/apply", icon: CreditCard },
   { title: "Profile", url: "/my-account?tab=profile", icon: UserCircle2 },
 ];
 
 const adminNav = [
+  { title: "Cycle Admin", url: "/cycle-admin", icon: Shield, allowedRoles: ["admin"] },
   { title: "Finance & Compliance", url: "/finance-compliance", icon: Calculator, allowedRoles: ["admin", "treasurer", "auditor"] },
   { title: "Reports", url: "/reports", icon: BarChart3, allowedRoles: ["admin", "credit_committee", "treasurer", "auditor"] },
   { title: "Registration Fee", url: "/registration-fee", icon: Receipt, allowedRoles: ["admin"] },

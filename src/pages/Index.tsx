@@ -79,6 +79,8 @@ const Index = () => {
   const [showAuth, setShowAuth] = useState(false);
   const [showOrganization, setShowOrganization] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   // userRole is simplified for UI: 'admin' means any administrative role (treasurer, secretary, etc.)
   const [userRole, setUserRole] = useState<"admin" | "member" | null>(null);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
@@ -242,6 +244,23 @@ const Index = () => {
     }
   }, [userRole, hasCurrentUser, currentUserPhone]); // Use phone as dependency to avoid infinite loops
 
+  useEffect(() => {
+    const onScroll = () => setIsScrolled(window.scrollY > 18);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const navItems = [
+    { label: "Home", href: "#home" },
+    { label: "About", href: "#about" },
+    { label: "How It Works", href: "#how-it-works" },
+    { label: "Features", href: "#features" },
+    { label: "Cycles", href: "#cycles" },
+    { label: "FAQ", href: "#faq" },
+    { label: "Contact", href: "#contact" },
+  ];
+
   // Show loading state while checking authentication
   if (isLoading) {
     return <LoadingScreen />;
@@ -402,692 +421,650 @@ const Index = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-primary/5">
-      {/* SEO Component for dynamic meta tags */}
-      <SEO 
+    <div className="min-h-screen bg-[#f7f3ee] text-[#162f2d]">
+      <SEO
         title="SMCF - Smart Moves Cash Flow | Digital Table Banking Platform Kenya"
-        description="Best digital table banking platform in Kenya. Automated KES 224 contributions, M-Pesa integration, personal savings wallet with 3% interest, member loans. Join SMCF chama today!"
-        keywords="table banking Kenya, digital chama, SMCF, chama management, group savings Kenya, M-Pesa table banking, automated contributions, savings wallet, member loans, financial empowerment Kenya, digital banking platform, table banking app"
+        description="Digital savings and contribution platform for Kenya. Track wallets, cycle contributions, payments and growth in one secure place."
+        keywords="table banking Kenya, digital chama, SMCF, savings wallet Kenya, contribution cycles, smart moves cash flow, member dashboard"
         url="https://smcf.app"
       />
 
-      {/* Breadcrumb Schema */}
-      <nav aria-label="Breadcrumb" className="sr-only" itemScope itemType="https://schema.org/BreadcrumbList">
-        <ol>
-          <li itemProp="itemListElement" itemScope itemType="https://schema.org/ListItem">
-            <a itemProp="item" href="https://smcf.app">
-              <span itemProp="name">Home</span>
-            </a>
-            <meta itemProp="position" content="1" />
-          </li>
-        </ol>
-      </nav>
-
-      
-      {/* Header */}
-      <header className="fixed inset-x-0 top-0 z-50 border-b bg-background/90 backdrop-blur-md animate-fade-in">
-        <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2 sm:gap-3 hover:scale-105 transition-transform duration-300 cursor-pointer">
-            <img
-              src={smcfLogo}
-              alt="SMCF - Smart Moves Cash Flow Logo - Digital Table Banking Platform"
-              className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 hover:rotate-12 transition-transform duration-300"
-            />
+      <header
+        className={`fixed inset-x-0 top-0 z-50 border-b transition-all duration-300 ${
+          isScrolled
+            ? "border-[#e8dec5] bg-[rgba(250,247,242,0.84)] backdrop-blur-xl shadow-[0_18px_45px_rgba(20,36,35,0.08)]"
+            : "border-transparent bg-[rgba(250,247,242,0.6)] backdrop-blur-sm"
+        }`}
+      >
+        <div className="container mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
+          <a href="#home" className="flex items-center gap-3">
+            <img src={smcfLogo} alt="SMCF" className="h-11 w-11 rounded-xl object-cover shadow-sm sm:h-12 sm:w-12" />
             <div>
-              <h1 className="text-base sm:text-xl">
+              <div className="text-lg font-bold tracking-tight text-[#123026] sm:text-xl">
                 <StyledSMCF />
-              </h1>
-              <p className="text-[10px] sm:text-xs text-muted-foreground">
-                Smart Moves Cash Flow
-              </p>
-              <p className="text-[9px] sm:text-[10px] text-primary/70 font-medium italic">
-                Digital Table Banking Made Simple
-              </p>
+              </div>
+              <div className="text-[10px] uppercase tracking-[0.2em] text-[#527166]">Smart Moves Cash Flow</div>
             </div>
+          </a>
+
+          <nav className="hidden items-center gap-6 md:flex">
+            {navItems.map((item) => (
+              <a
+                key={item.label}
+                href={item.href}
+                className="text-sm font-medium text-[#345449] transition-colors hover:text-[#123026]"
+              >
+                {item.label}
+              </a>
+            ))}
+          </nav>
+
+          <div className="hidden items-center gap-3 sm:flex">
+            <a
+              href="/sacco/auth"
+              className="rounded-full border border-[#d9c4a0] bg-[#fffaf3] px-4 py-2 text-sm font-medium text-[#16352f] transition hover:border-[#b69960] hover:bg-[#f8f1e9]"
+            >
+              Login
+            </a>
+            <a
+              href="/sacco/auth"
+              className="rounded-full bg-[#b8924a] px-4 py-2 text-sm font-semibold text-[#162f2d] shadow-[0_12px_30px_rgba(184,146,74,0.24)] transition hover:-translate-y-0.5 hover:bg-[#c59d54]"
+            >
+              Join SMCF
+            </a>
           </div>
-          <div className="flex items-center gap-2 sm:gap-3">
-            <nav className="flex items-center gap-1">
-              <a
-                href="/sacco/auth"
-                className="text-[10px] sm:text-sm font-medium px-2 sm:px-3 py-1 sm:py-1.5 rounded-md text-primary border border-primary/30 hover:bg-primary/10 transition-colors duration-200 whitespace-nowrap">
-                SMCF Member Portal
-              </a>
-              <a
-                href="#non-member-loans"
-                className="text-[10px] sm:text-sm font-medium px-2 sm:px-3 py-1 sm:py-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors duration-200 whitespace-nowrap">
-                <span className="sm:hidden">Loan</span>
-                <span className="hidden sm:inline">Non-Member Loan</span>
-              </a>
-            </nav>
+
+          <div className="flex items-center gap-2 sm:hidden">
             <ThemeToggle />
-            <Button
-              onClick={() => { window.location.href = "/sacco/auth"; }}
-              variant="default"
-              size="sm"
-              className="text-xs sm:text-sm px-3 sm:px-4 hover-glow hover-shine">
-              Sign in to SMCF
-            </Button>
+            <button
+              type="button"
+              aria-label="Open menu"
+              className="rounded-full border border-[#dfe9e3] bg-white p-2 text-[#123026]"
+              onClick={() => setMobileMenuOpen((value) => !value)}
+            >
+              <div className="flex h-4 w-5 flex-col justify-between">
+                <span className="block h-0.5 w-full rounded-full bg-current" />
+                <span className="block h-0.5 w-full rounded-full bg-current" />
+                <span className="block h-0.5 w-full rounded-full bg-current" />
+              </div>
+            </button>
           </div>
         </div>
+
+        {mobileMenuOpen && (
+          <div className="border-t border-[#e6eee8] bg-white/95 px-4 py-4 shadow-lg md:hidden">
+            <div className="flex flex-col gap-2">
+              {navItems.map((item) => (
+                <a
+                  key={item.label}
+                  href={item.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="rounded-xl px-3 py-2 text-sm font-medium text-[#254a3d] hover:bg-[#f3f7f4]"
+                >
+                  {item.label}
+                </a>
+              ))}
+              <div className="mt-2 flex gap-2 pt-2">
+                <a href="/sacco/auth" className="flex-1 rounded-full border border-[#dfe9e3] px-4 py-2 text-center text-sm font-medium text-[#123026]">
+                  Login
+                </a>
+                <a href="/sacco/auth" className="flex-1 rounded-full bg-[#123026] px-4 py-2 text-center text-sm font-semibold text-white">
+                  Join SMCF
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
       </header>
 
-      {/* Hero Section */}
-      <section className="pt-24 sm:pt-28 md:pt-32 pb-10 sm:pb-16 md:pb-20 px-3 sm:px-4 overflow-hidden relative">
-        {/* Background Image */}
-        <img
-          src={landingBackground}
-          alt=""
-          aria-hidden="true"
-          className="absolute inset-0 z-0 h-full w-full object-cover opacity-60 blur-[1px] pointer-events-none"
-        />
-        <div className="absolute inset-0 z-0 bg-gradient-to-br from-background/72 via-background/58 to-background/66 dark:from-background/82 dark:via-background/72 dark:to-background/78" />
-        <div className="container mx-auto max-w-7xl relative z-10">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
-            {/* Left side - Text content */}
-            <div className="animate-slide-in-left rounded-3xl border border-white/55 bg-background/68 p-5 shadow-[0_24px_70px_-28px_hsl(var(--foreground)/0.55)] backdrop-blur-md sm:p-7 md:p-9">
-              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-primary">
-                <span className="h-2 w-2 rounded-full bg-primary shadow-[0_0_0_4px_hsl(var(--primary)/0.12)]" />
-                Kenya's trusted table banking platform
+      <main className="pt-20">
+        <section id="home" className="relative overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(184,146,74,0.15),transparent_24%),radial-gradient(circle_at_center,_rgba(18,45,42,0.08),transparent_40%),linear-gradient(135deg,#f7f3ee_0%,#f5f0e8_42%,#efeae3_100%)]" />
+          <div className="container relative mx-auto grid max-w-7xl items-center gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:py-20">
+            <div className="animate-fade-in-up">
+              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#e2d2a3] bg-[rgba(255,251,246,0.82)] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#85704f] shadow-sm">
+                <span className="h-2.5 w-2.5 rounded-full bg-[#b8924a]" />
+                global wealth management
               </div>
-              <h1 className="max-w-2xl text-3xl font-bold leading-[1.08] tracking-tight text-primary sm:text-4xl md:text-5xl lg:text-6xl">
-                Digital Table Banking Platform for Kenya
+
+              <h1 className="max-w-[14ch] text-4xl font-black leading-[0.9] tracking-[-0.08em] text-[#162f2d] sm:text-5xl lg:text-7xl">
+                Wealth, managed with global perspective.
               </h1>
-              <h2 className="mt-5 mb-4 text-xl font-semibold leading-tight text-foreground sm:text-2xl md:text-3xl">
-                <StyledSMCF /> - Smart Moves Cash Flow
-              </h2>
-              <p className="max-w-xl text-base leading-7 text-foreground/80 sm:text-lg md:text-xl">
-                Kenya's #1 automated chama management system.{" "}
-                <br className="hidden sm:block" />
-                Contribute every 5 days • 3% monthly interest • Instant M-Pesa payments
+
+              <p className="mt-6 max-w-lg text-lg leading-8 text-[#536c67] sm:text-xl">
+                A refined wealth platform for savings, wallets, contribution cycles and long-term capital planning—designed for members who value trust, discretion and a globally informed approach to financial growth.
               </p>
-              <div className="mb-8 mt-8 flex flex-col gap-3 sm:mb-10 sm:flex-row sm:gap-4">
-                <Button
-                  size="lg"
-                  onClick={() => { window.location.href = "/sacco/auth"; }}
-                  className="h-12 flex-1 bg-primary px-6 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/20 hover:-translate-y-0.5 hover:bg-primary/90 hover:shadow-xl sm:flex-none sm:text-base">
-                  Join <StyledSMCF className="inline" /> Today - Start Saving
-                </Button>
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="h-12 flex-1 border-primary/35 bg-white/60 px-6 text-sm font-semibold text-primary hover:-translate-y-0.5 hover:bg-white sm:flex-none sm:text-base"
-                  onClick={() => setShowOrganization(true)}>
-                  Learn How It Works
-                </Button>
+
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                <a
+                  href="/sacco/auth"
+                  className="inline-flex items-center justify-center rounded-full bg-[#b8924a] px-6 py-3.5 text-base font-semibold text-[#162f2d] shadow-[0_18px_40px_rgba(184,146,74,0.28)] transition hover:-translate-y-0.5 hover:bg-[#c99f51]"
+                >
+                  Join SMCF
+                </a>
+                <a
+                  href="/sacco/auth"
+                  className="inline-flex items-center justify-center rounded-full border border-[#d7c39e] bg-[rgba(255,255,255,0.88)] px-6 py-3.5 text-base font-semibold text-[#16352f] transition hover:border-[#b8924a] hover:bg-[#fffaf3]"
+                >
+                  Login
+                </a>
               </div>
-              
-              {/* Trust Indicators */}
-              <div className="grid gap-3 border-t border-foreground/10 pt-5 text-xs text-foreground/75 sm:grid-cols-3 sm:gap-4 sm:text-sm">
-                <div className="flex items-center gap-2 transition-colors hover:text-financial-success">
-                  <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-financial-success" />
-                  <span>Bank-Level Security</span>
-                </div>
-                <div className="flex items-center gap-2 transition-colors hover:text-financial-success">
-                  <Users className="w-4 h-4 sm:w-5 sm:h-5 text-financial-success" />
-                  <span>1000+ Active Members</span>
-                </div>
-                <div className="flex items-center gap-2 transition-colors hover:text-financial-success">
-                  <Smartphone className="w-4 h-4 sm:w-5 sm:h-5 text-financial-success" />
-                  <span>M-Pesa Verified Partner</span>
-                </div>
+
+              <div className="mt-5 flex items-center gap-3 text-sm text-[#4d645d]">
+                <button
+                  type="button"
+                  onClick={() => setShowOrganization(true)}
+                  className="inline-flex items-center gap-2 rounded-full border border-[#dfe9e3] bg-white px-3 py-1.5 font-medium text-[#123026] transition hover:bg-[#f3f7f4]"
+                >
+                  Explore how it works
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="mt-9 grid gap-3 border-t border-[#e6dbc0] pt-6 sm:grid-cols-3">
+                {[
+                  { label: "Global standards", icon: Shield },
+                  { label: "Portfolio visibility", icon: TrendingUp },
+                  { label: "Private member access", icon: Users },
+                ].map(({ label, icon: Icon }) => (
+                  <div key={label} className="flex items-center gap-3 rounded-2xl border border-[#efe7d8] bg-[rgba(255,255,255,0.72)] p-3 shadow-[0_12px_28px_rgba(17,45,42,0.03)]">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#f5ebd4] text-[#112d2a]">
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <span className="text-sm font-medium text-[#31584b]">{label}</span>
+                  </div>
+                ))}
               </div>
             </div>
 
-            {/* Right side - Stats Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4 sm:gap-6 animate-slide-in-right">
-              <Card className="text-center hover-lift hover-glow animate-scale-in animation-delay-200 bg-background/78 backdrop-blur-sm border-white/45 dark:border-border/70 shadow-xl">
-                <CardContent className="pt-6 pb-6">
-                  <div className="text-3xl sm:text-4xl md:text-5xl font-bold text-financial-success mb-3 animate-float">
-                    Contribute
+            <div className="animate-slide-in-right">
+              <div className="relative mx-auto max-w-xl rounded-[30px] border border-[#eedcb1] bg-white/85 p-4 shadow-[0_30px_80px_rgba(16,45,40,0.12)] backdrop-blur-xl sm:p-5">
+                <div className="absolute -left-8 top-10 hidden h-32 w-32 rounded-full bg-[#f3e3b3] blur-3xl lg:block" />
+                <div className="absolute -right-10 bottom-0 hidden h-32 w-32 rounded-full bg-[#dfe9e3] blur-3xl lg:block" />
+
+                <div className="relative rounded-[22px] border border-[#ebf0ec] bg-[linear-gradient(135deg,#fffdf9,#f5efe4)] p-4 sm:p-5">
+                  <div className="mb-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.18em] text-[#648073]">Member dashboard</p>
+                      <h2 className="mt-1 text-xl font-bold text-[#123026]">Your account overview</h2>
+                    </div>
+                    <div className="rounded-full bg-[#ebf7f0] px-2.5 py-1 text-xs font-semibold text-[#1c6c4d]">Active cycle</div>
                   </div>
-                  <div className="text-sm sm:text-base text-foreground/80">
-                    Every 5 Days
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl bg-[#123026] p-4 text-white">
+                      <p className="text-xs uppercase tracking-[0.14em] text-white/70">Savings</p>
+                      <div className="mt-3 text-2xl font-bold">KES 26,400</div>
+                      <p className="mt-1 text-xs text-white/75">+ KES 1,260 this month</p>
+                    </div>
+                    <div className="rounded-2xl border border-[#dfe9e3] bg-white p-4 shadow-sm">
+                      <p className="text-xs uppercase tracking-[0.14em] text-[#648073]">Wallet</p>
+                      <div className="mt-3 text-2xl font-bold text-[#123026]">KES 8,750</div>
+                      <p className="mt-1 text-xs text-[#527166]">Available balance</p>
+                    </div>
                   </div>
-                  <div className="mt-3 text-xs text-foreground/70">
-                    Consistent & Affordable Contributions
+
+                  <div className="mt-4 rounded-2xl border border-[#dfe9e3] bg-white p-4 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.14em] text-[#648073]">Contribution status</p>
+                        <p className="mt-2 text-lg font-bold text-[#123026]">Cycle 14</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-[#648073]">Paid</p>
+                        <p className="font-semibold text-[#123026]">8 / 10</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-[#ebf0ec]">
+                      <div className="h-full w-[80%] rounded-full bg-[#1d6d4d]" />
+                    </div>
                   </div>
-                </CardContent>
-              </Card>
-              <Card className="text-center hover-lift hover-glow animate-scale-in animation-delay-300 bg-background/78 backdrop-blur-sm border-white/45 dark:border-border/70 shadow-xl">
-                <CardContent className="pt-6 pb-6">
-                  <div className="text-3xl sm:text-4xl md:text-5xl font-bold text-primary mb-3">
-                    100%
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-[1.3fr_0.7fr]">
+                    <div className="rounded-2xl border border-[#dfe9e3] bg-white p-4 shadow-sm">
+                      <div className="mb-3 flex items-center justify-between">
+                        <p className="text-xs uppercase tracking-[0.14em] text-[#648073]">Growth</p>
+                        <span className="text-xs font-semibold text-[#1c6c4d]">+12.4%</span>
+                      </div>
+                      <div className="flex h-20 items-end gap-2">
+                        {[32, 44, 40, 62, 58, 86, 94].map((height, index) => (
+                          <div
+                            key={index}
+                            className="flex-1 rounded-t-xl bg-gradient-to-t from-[#123026] to-[#4d9d75]"
+                            style={{ height: `${height}%` }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-[#dfe9e3] bg-[#edf7f1] p-4 shadow-sm">
+                      <p className="text-xs uppercase tracking-[0.14em] text-[#648073]">Recent</p>
+                      <div className="mt-3 space-y-2 text-sm text-[#123026]">
+                        <div className="flex items-center justify-between rounded-xl bg-white px-2 py-1.5">
+                          <span>Contribution</span>
+                          <span className="font-semibold">KES 224</span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-xl bg-white px-2 py-1.5">
+                          <span>Wallet</span>
+                          <span className="font-semibold">KES 750</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-sm sm:text-base text-foreground/80">
-                    Automated
-                  </div>
-                  <div className="mt-3 text-xs text-foreground/70">
-                    No Manual Tracking Required
-                  </div>
-                </CardContent>
-              </Card>
-              <Card className="text-center hover-lift hover-glow animate-scale-in animation-delay-400 sm:col-span-2 lg:col-span-1 bg-background/78 backdrop-blur-sm border-white/45 dark:border-border/70 shadow-xl">
-                <CardContent className="pt-6 pb-6">
-                  <div className="text-3xl sm:text-4xl md:text-5xl font-bold text-accent mb-3">
-                    Secure
-                  </div>
-                  <div className="text-sm sm:text-base text-foreground/80">
-                    M-Pesa Integration
-                  </div>
-                  <div className="mt-3 text-xs text-foreground/70">
-                    Protected & Verified Payments
-                  </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Till Banner (floating) */}
-      <section className="relative px-3 sm:px-4">
-        <div className="container mx-auto max-w-4xl">
-          <div className="relative -mt-10 sm:-mt-12 md:-mt-16 mb-10">
-            <div className="rounded-2xl border border-white/40 bg-[#6BB043] text-white shadow-2xl">
-              <div className="px-4 sm:px-6 py-4 sm:py-5 text-center">
-                <p className="text-sm sm:text-base font-semibold tracking-wide">
-                  BUY GOODS &amp; SERVICES
-                </p>
-                <p className="text-xs sm:text-sm font-semibold tracking-[0.3em]">TILL NO</p>
+        <section className="border-y border-[#eaf0eb] bg-white/70">
+          <div className="container mx-auto grid max-w-6xl gap-4 px-4 py-5 sm:grid-cols-2 lg:grid-cols-4 lg:gap-6 lg:px-6">
+            {[
+              "Secure Digital Records",
+              "Transparent Transactions",
+              "Member-Focused",
+              "Accessible Anywhere",
+            ].map((item) => (
+              <div key={item} className="flex items-center justify-center gap-3 rounded-2xl border border-[#edf2ee] bg-[#f9fbf9] px-4 py-3 text-center text-sm font-medium text-[#2a5a49]">
+                <CheckCircle2 className="h-4 w-4 text-[#1d6d4d]" />
+                {item}
               </div>
-              <div className="bg-[#5CA63A] px-4 sm:px-6 pb-5 sm:pb-6">
-                <div className="flex items-center justify-center gap-2 sm:gap-3">
-                  {"6938069".split("").map((digit, index) => (
-                    <div
-                      key={`${digit}-${index}`}
-                      className="flex h-12 w-12 items-center justify-center rounded-md bg-white text-2xl font-bold text-[#2F5E2B] shadow-sm sm:h-14 sm:w-14"
-                    >
-                      {digit}
+            ))}
+          </div>
+        </section>
+
+        <section id="about" className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:py-20">
+          <div className="grid items-center gap-8 lg:grid-cols-[0.95fr_1.05fr]">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#2a5a49]">About SMCF</p>
+              <h2 className="mt-4 text-3xl font-black tracking-[-0.04em] text-[#123026] sm:text-4xl">
+                Built for members who want global wealth management with clarity and confidence.
+              </h2>
+              <p className="mt-5 max-w-xl text-lg leading-8 text-[#4d645d]">
+                SMCF brings together savings, wallet planning, contribution cycles and capital tracking in one disciplined platform. It replaces fragmented table-banking experience with a thoughtfully designed, globally minded system built around trust, accountability, and long-term financial stewardship.
+              </p>
+              <ul className="mt-7 space-y-3 text-[#264e43]">
+                {[
+                  "Track savings and wallet activity in one place",
+                  "Stay informed through transparent contribution records",
+                  "Access member records without confusion or paperwork",
+                ].map((point) => (
+                  <li key={point} className="flex items-start gap-3">
+                    <span className="mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#edf7f1] text-[#1d6d4d]">
+                      <CheckCircle2 className="h-4 w-4" />
+                    </span>
+                    <span className="text-base font-medium">{point}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="relative">
+              <div className="absolute inset-0 -z-10 rounded-[30px] bg-[linear-gradient(135deg,rgba(18,48,38,0.08),rgba(206,179,84,0.10))]" />
+              <div className="grid gap-4 sm:grid-cols-2">
+                {[
+                  { label: "Savings", value: "Track balances", icon: Wallet },
+                  { label: "Wallet", value: "Manage funds", icon: Wallet },
+                  { label: "Cycles", value: "Join and track", icon: TrendingUp },
+                  { label: "Records", value: "See transactions", icon: FileText },
+                ].map(({ label, value, icon: Icon }, index) => (
+                  <div
+                    key={label}
+                    className={`rounded-[26px] border border-[#e6eee8] bg-white p-5 shadow-[0_20px_50px_rgba(17,53,39,0.06)] ${
+                      index === 0 || index === 3 ? "sm:translate-y-4" : ""
+                    }`}
+                  >
+                    <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#edf7f1] text-[#123026]">
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-[#648073]">{label}</p>
+                    <p className="mt-3 text-xl font-bold text-[#123026]">{value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="how-it-works" className="bg-[#f0f4ef] py-16 sm:py-20">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6">
+            <div className="mb-10 text-center">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#2a5a49]">How it works</p>
+              <h2 className="mt-3 text-3xl font-black tracking-[-0.04em] text-[#123026] sm:text-4xl">Simple steps. Clear progress.</h2>
+            </div>
+
+            <div className="grid gap-5 md:grid-cols-4">
+              {[
+                { number: "01", title: "Create your account", text: "Register and set up your secure member profile." },
+                { number: "02", title: "Access your tools", text: "Open your wallet, savings and member dashboard." },
+                { number: "03", title: "Save and contribute", text: "Join cycles and keep your financial activity organised." },
+                { number: "04", title: "Track progress", text: "Review contributions, payouts and records over time." },
+              ].map((item) => (
+                <div key={item.number} className="rounded-[28px] border border-[#e7efe9] bg-white p-5 shadow-[0_15px_30px_rgba(17,53,39,0.04)]">
+                  <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-full bg-[#123026] text-lg font-black text-white">{item.number}</div>
+                  <div className="mb-3 text-2xl font-bold text-[#123026]">{item.title}</div>
+                  <p className="text-base leading-7 text-[#4d645d]">{item.text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="features" className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:py-20">
+          <div className="mb-10 text-center">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#85704f]">Everything you need</p>
+            <h2 className="mt-3 text-3xl font-black tracking-[-0.05em] text-[#162f2d] sm:text-4xl">A more elevated standard for financial life.</h2>
+          </div>
+
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {[
+              { icon: Wallet, title: "Savings", text: "Track your savings and growth with clear, consistent visibility." },
+              { icon: Smartphone, title: "Digital Wallet", text: "Manage available funds and monitor transaction activity with confidence." },
+              { icon: TrendingUp, title: "Contribution Cycles", text: "Join cycles, track your position and stay on top of each contribution." },
+              { icon: FileText, title: "Financial Records", text: "View a complete history of member transactions and account activity." },
+              { icon: CheckCircle2, title: "Digital Receipts", text: "Keep a clear record of successful payments and confirmations." },
+              { icon: Shield, title: "Secure Account", text: "Access your information through a personal, protected member account." },
+            ].map(({ icon: Icon, title, text }) => (
+              <div key={title} className="group rounded-[30px] border border-[#e7dbc0] bg-[linear-gradient(180deg,#ffffff,#faf5ee)] p-6 shadow-[0_18px_38px_rgba(17,45,42,0.04)] transition hover:-translate-y-1 hover:shadow-[0_28px_60px_rgba(17,45,42,0.09)]">
+                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#f7ebd4] text-[#162f2d] transition group-hover:bg-[#b8924a] group-hover:text-[#162f2d]">
+                  <Icon className="h-6 w-6" />
+                </div>
+                <h3 className="text-xl font-bold text-[#123026]">{title}</h3>
+                <p className="mt-3 text-base leading-7 text-[#4d645d]">{text}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section id="cycles" className="bg-[linear-gradient(135deg,#162f2d,#183f39_35%,#122b2b)] py-16 text-white sm:py-20">
+          <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-[0.9fr_1.1fr]">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#e7dcc0]">Contribution cycles</p>
+              <h2 className="mt-4 text-3xl font-black tracking-[-0.04em] sm:text-4xl">A clear path from contribution to payout.</h2>
+              <p className="mt-5 max-w-xl text-lg leading-8 text-[#d7e5df]">
+                Members can see available positions, select a contribution slot, make payment and monitor cycle progress through a simple, transparent flow.
+              </p>
+              <a
+                href="/sacco/auth"
+                className="mt-8 inline-flex items-center rounded-full bg-[#b8924a] px-5 py-3 text-base font-semibold text-[#162f2d] shadow-[0_18px_40px_rgba(184,146,74,0.28)] transition hover:-translate-y-0.5 hover:bg-[#c99f51]"
+              >
+                Explore Cycles
+              </a>
+            </div>
+
+            <div className="rounded-[30px] border border-white/10 bg-white/5 p-4 shadow-[0_25px_70px_rgba(0,0,0,0.18)] backdrop-blur-sm sm:p-5">
+              <div className="rounded-[22px] bg-[#f5f7f2] p-4 text-[#123026] sm:p-5">
+                <div className="mb-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-[#648073]">Available positions</p>
+                    <h3 className="mt-1 text-2xl font-black">Cycle 14</h3>
+                  </div>
+                  <div className="rounded-full bg-[#edf7f1] px-2.5 py-1 text-xs font-semibold text-[#1c6c4d]">Next payout</div>
+                </div>
+
+                <div className="space-y-3">
+                  {[
+                    ["Position 1", "KES 224", "Paid"],
+                    ["Position 2", "KES 224", "Pending"],
+                    ["Position 3", "KES 224", "Pending"],
+                    ["Position 4", "KES 224", "Pending"],
+                  ].map(([name, amount, status]) => (
+                    <div key={name} className="flex items-center justify-between rounded-2xl border border-[#e6eee8] bg-white px-3 py-3">
+                      <div>
+                        <div className="text-sm font-semibold text-[#123026]">{name}</div>
+                        <div className="text-xs text-[#648073]">{amount}</div>
+                      </div>
+                      <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${status === "Paid" ? "bg-[#edf7f1] text-[#1c6c4d]" : "bg-[#f8f3df] text-[#825f00]"}`}>
+                        {status}
+                      </span>
                     </div>
                   ))}
                 </div>
-                <p className="mt-3 text-center text-[10px] sm:text-xs text-white/90">
-                  Use MySafaricom App (Cost Calculator) or dial *234# to view applicable charges
-                </p>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Features */}
-      <section className="py-10 sm:py-16 md:py-20 px-3 sm:px-4 bg-muted/30">
-        <div className="container mx-auto max-w-6xl">
-          <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-8 sm:mb-12 animate-fade-in-up">
-            Why Choose <StyledSMCF className="inline" />?
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
-            {[
-              {
-                icon: Wallet,
-                title: "Personal Savings Wallet",
-                description:
-                  "Save any amount in your personal wallet and earn 3% interest every month with zero maintenance fees.",
-                delay: "100",
-              },
-              {
-                icon: TrendingUp,
-                title: "Member Loans",
-                description:
-                  "Access loans when you need them. Quick approval process with flexible repayment terms for active members.",
-                delay: "200",
-              },
-              {
-                icon: Smartphone,
-                title: "M-Pesa Integration",
-                description:
-                  "Seamless payments via M-Pesa STK Push. Direct payouts to your mobile money account.",
-                delay: "300",
-              },
-              {
-                icon: Users,
-                title: "Group Management",
-                description:
-                  "Hierarchical member system with automated disbursements based on contribution order.",
-                delay: "400",
-              },
-              {
-                icon: Shield,
-                title: "Secure & Transparent",
-                description:
-                  "OTP authentication, encrypted transactions, and complete audit trails for all activities.",
-                delay: "500",
-              },
-              {
-                icon: Clock,
-                title: "Automated Reminders",
-                description:
-                  "SMS and web notifications for payment deadlines and payout confirmations.",
-                delay: "600",
-              },
-            ].map((feature, index) => (
-              <Card
-                key={index}
-                className={`hover-lift hover-glow group cursor-pointer animate-scale-in animation-delay-${feature.delay}`}>
-                <CardHeader>
-                  <feature.icon className="w-12 h-12 sm:w-14 sm:h-14 text-primary mb-4 group-hover:scale-110 transition-transform duration-300" />
-                  <CardTitle className="group-hover:text-primary transition-colors duration-300">{feature.title}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription className="group-hover:text-foreground transition-colors duration-300">{feature.description}</CardDescription>
-                </CardContent>
-              </Card>
-            ))}
+        <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:py-20">
+          <div className="mb-10 text-center">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#2a5a49]">Member experience</p>
+            <h2 className="mt-3 text-3xl font-black tracking-[-0.04em] text-[#123026] sm:text-4xl">Your finances. One simple view.</h2>
           </div>
-        </div>
-      </section>
 
-      {/* Loans & Savings Section */}
-      <section className="py-10 sm:py-16 md:py-20 px-3 sm:px-4">
-        <div className="container mx-auto max-w-6xl">
-          <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-8 sm:mb-12 animate-fade-in-up">
-            More Benefits for Members
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
-            {/* Savings Wallet Card */}
-            <Card className="overflow-hidden hover-lift hover-glow group animate-fade-in-left">
-              <div className="bg-gradient-to-br from-financial-success/10 to-financial-success/5 p-6 group-hover:from-financial-success/20 group-hover:to-financial-success/10 transition-all duration-300">
-                <Wallet className="w-12 h-12 sm:w-16 sm:h-16 text-financial-success mb-4 group-hover:scale-110 transition-transform duration-300" />
-                <CardTitle className="text-xl sm:text-2xl mb-3 group-hover:text-financial-success transition-colors duration-300">Personal Savings Wallet</CardTitle>
-                <CardDescription className="text-base sm:text-lg mb-6">
-                  Save for your future with our personal wallet feature
-                </CardDescription>
-              </div>
-              <CardContent className="pt-6">
-                <ul className="space-y-3 sm:space-y-4">
-                  <li className="flex items-start gap-3 group/item hover:translate-x-2 transition-transform duration-300">
-                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-financial-success/20 flex items-center justify-center flex-shrink-0 mt-0.5 group-hover/item:bg-financial-success/40 transition-colors">
-                      <span className="text-financial-success text-sm sm:text-base">✓</span>
-                    </div>
-                    <div>
-                      <p className="font-semibold text-sm sm:text-base">Save Any Amount</p>
-                      <p className="text-xs sm:text-sm text-muted-foreground">No minimum deposit required</p>
-                    </div>
-                  </li>
-                  <li className="flex items-start gap-3 group/item hover:translate-x-2 transition-transform duration-300">
-                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-financial-success/20 flex items-center justify-center flex-shrink-0 mt-0.5 group-hover/item:bg-financial-success/40 transition-colors">
-                      <span className="text-financial-success text-sm sm:text-base">✓</span>
-                    </div>
-                    <div>
-                      <p className="font-semibold text-sm sm:text-base">Earn 3% Interest Monthly</p>
-                      <p className="text-xs sm:text-sm text-muted-foreground">Interest calculated and paid every month</p>
-                    </div>
-                  </li>
-                  <li className="flex items-start gap-3 group/item hover:translate-x-2 transition-transform duration-300">
-                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-financial-success/20 flex items-center justify-center flex-shrink-0 mt-0.5 group-hover/item:bg-financial-success/40 transition-colors">
-                      <span className="text-financial-success text-sm sm:text-base">✓</span>
-                    </div>
-                    <div>
-                      <p className="font-semibold text-sm sm:text-base">Zero Maintenance Fees</p>
-                      <p className="text-xs sm:text-sm text-muted-foreground">Keep 100% of your interest earnings</p>
-                    </div>
-                  </li>
-                  <li className="flex items-start gap-3 group/item hover:translate-x-2 transition-transform duration-300">
-                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-financial-success/20 flex items-center justify-center flex-shrink-0 mt-0.5 group-hover/item:bg-financial-success/40 transition-colors">
-                      <span className="text-financial-success text-sm sm:text-base">✓</span>
-                    </div>
-                    <div>
-                      <p className="font-semibold text-sm sm:text-base">Withdraw Anytime</p>
-                      <p className="text-xs sm:text-sm text-muted-foreground">Direct to M-Pesa, no restrictions</p>
-                    </div>
-                  </li>
-                </ul>
-              </CardContent>
-            </Card>
-
-            {/* Loans Card */}
-            <Card className="overflow-hidden hover-lift hover-glow group animate-fade-in-right animation-delay-200">
-              <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-6 group-hover:from-primary/20 group-hover:to-primary/10 transition-all duration-300">
-                <TrendingUp className="w-12 h-12 sm:w-16 sm:h-16 text-primary mb-4 group-hover:scale-110 transition-transform duration-300" />
-                <CardTitle className="text-xl sm:text-2xl mb-3 group-hover:text-primary transition-colors duration-300">Member Loans</CardTitle>
-                <CardDescription className="text-base sm:text-lg mb-6">
-                  Access financial support when you need it most
-                </CardDescription>
-              </div>
-              <CardContent className="pt-6">
-                <ul className="space-y-3 sm:space-y-4">
-                  <li className="flex items-start gap-3 group/item hover:translate-x-2 transition-transform duration-300">
-                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5 group-hover/item:bg-primary/40 transition-colors">
-                      <span className="text-primary text-sm sm:text-base">✓</span>
-                    </div>
-                    <div>
-                      <p className="font-semibold text-sm sm:text-base">Quick Approval</p>
-                      <p className="text-xs sm:text-sm text-muted-foreground">Get approved within 24 hours</p>
-                    </div>
-                  </li>
-                  <li className="flex items-start gap-3 group/item hover:translate-x-2 transition-transform duration-300">
-                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5 group-hover/item:bg-primary/40 transition-colors">
-                      <span className="text-primary text-sm sm:text-base">✓</span>
-                    </div>
-                    <div>
-                      <p className="font-semibold text-sm sm:text-base">Flexible Repayment</p>
-                      <p className="text-xs sm:text-sm text-muted-foreground">Choose terms that work for you</p>
-                    </div>
-                  </li>
-                  <li className="flex items-start gap-3 group/item hover:translate-x-2 transition-transform duration-300">
-                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5 group-hover/item:bg-primary/40 transition-colors">
-                      <span className="text-primary text-sm sm:text-base">✓</span>
-                    </div>
-                    <div>
-                      <p className="font-semibold text-sm sm:text-base">Competitive Rates</p>
-                      <p className="text-xs sm:text-sm text-muted-foreground">Fair interest rates for members</p>
-                    </div>
-                  </li>
-                  <li className="flex items-start gap-3 group/item hover:translate-x-2 transition-transform duration-300">
-                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5 group-hover/item:bg-primary/40 transition-colors">
-                      <span className="text-primary text-sm sm:text-base">✓</span>
-                    </div>
-                    <div>
-                      <p className="font-semibold text-sm sm:text-base">Build Credit History</p>
-                      <p className="text-xs sm:text-sm text-muted-foreground">Increase your loan limit over time</p>
-                    </div>
-                  </li>
-                </ul>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </section>
-
-      {/* Non-Member Loan Section */}
-      <section id="non-member-loans" className="py-10 sm:py-16 md:py-20 px-3 sm:px-4 bg-gradient-to-br from-primary/5 via-accent/5 to-primary/10 relative overflow-hidden">
-        {/* Background decoration */}
-        <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
-        
-        <div className="container mx-auto max-w-5xl relative z-10">
-          <Card className="overflow-hidden hover-lift hover-glow border-2 border-primary/20 shadow-2xl animate-fade-in-up">
-            <div className="bg-gradient-to-br from-primary/10 via-accent/10 to-primary/5 p-6 sm:p-8 md:p-10">
-              <div className="text-center mb-6 sm:mb-8">
-                <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 bg-gradient-primary rounded-full mb-4 sm:mb-6 animate-pulse-glow">
-                  <FileText className="w-8 h-8 sm:w-10 sm:h-10 text-primary-foreground" />
-                </div>
-                <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4 bg-gradient-primary bg-clip-text text-transparent">
-                  Get a Loan Without Being a Member
-                </h2>
-                <p className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
-                  Not yet part of SMART MONEY CASH FLOW? You can still request a loan instantly.
-                </p>
-              </div>
-
-              {/* Benefits Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
-                <div className="flex items-start gap-3 p-4 bg-background/50 rounded-lg hover:bg-background/80 transition-all duration-300 hover:scale-105">
-                  <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-financial-success flex-shrink-0 mt-0.5" />
+          <div className="rounded-[32px] border border-[#e7efe9] bg-white p-4 shadow-[0_30px_80px_rgba(17,53,39,0.06)] sm:p-6 lg:p-7">
+            <div className="grid gap-5 lg:grid-cols-[1fr_0.9fr]">
+              <div className="rounded-[28px] bg-[#f5f7f2] p-4 sm:p-5">
+                <div className="mb-5 flex items-center justify-between">
                   <div>
-                    <h4 className="font-semibold text-sm sm:text-base mb-1">Quick Online Application</h4>
-                    <p className="text-xs sm:text-sm text-muted-foreground">Simple form, fast process</p>
+                    <p className="text-xs uppercase tracking-[0.16em] text-[#648073]">Member dashboard</p>
+                    <h3 className="mt-1 text-2xl font-black text-[#123026]">Overview</h3>
                   </div>
+                  <div className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-[#1c6c4d]">This month</div>
                 </div>
-                <div className="flex items-start gap-3 p-4 bg-background/50 rounded-lg hover:bg-background/80 transition-all duration-300 hover:scale-105">
-                  <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-financial-success flex-shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="font-semibold text-sm sm:text-base mb-1">Fast Approval Process</h4>
-                    <p className="text-xs sm:text-sm text-muted-foreground">Get feedback quickly</p>
+
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {[
+                    ["Total savings", "KES 26,400"],
+                    ["Wallet", "KES 8,750"],
+                    ["Active cycle", "Cycle 14"],
+                  ].map(([label, value]) => (
+                    <div key={label} className="rounded-2xl border border-[#e6eee8] bg-white p-3 shadow-sm">
+                      <div className="text-xs uppercase tracking-[0.12em] text-[#648073]">{label}</div>
+                      <div className="mt-2 text-lg font-bold text-[#123026]">{value}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-5 rounded-2xl border border-[#e6eee8] bg-white p-4 shadow-sm">
+                  <div className="mb-3 flex items-center justify-between">
+                    <p className="text-sm font-semibold text-[#123026]">Financial activity</p>
+                    <span className="text-xs font-medium text-[#1c6c4d]">+12.4%</span>
                   </div>
-                </div>
-                <div className="flex items-start gap-3 p-4 bg-background/50 rounded-lg hover:bg-background/80 transition-all duration-300 hover:scale-105">
-                  <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-financial-success flex-shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="font-semibold text-sm sm:text-base mb-1">Secure and Confidential</h4>
-                    <p className="text-xs sm:text-sm text-muted-foreground">Your data is protected</p>
+                  <div className="flex h-28 items-end gap-2">
+                    {[22, 38, 28, 52, 62, 74, 92].map((height, index) => (
+                      <div key={index} className="flex-1 rounded-t-xl bg-gradient-to-t from-[#123026] to-[#4d9d75]" style={{ height: `${height}%` }} />
+                    ))}
                   </div>
                 </div>
               </div>
 
-              {/* CTA Button */}
-              <div className="text-center">
-                <a 
-                  href="https://smcfloans.page" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="inline-block"
-                >
-                  <Button
-                    size="lg"
-                    className="text-base sm:text-lg px-8 sm:px-12 py-4 sm:py-6 h-auto hover-lift hover-shine bg-gradient-primary text-primary-foreground font-bold shadow-lg hover:shadow-2xl transition-all duration-300 group"
-                  >
-                    Apply for Non-Member Loan
-                    <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform duration-300" />
-                  </Button>
-                </a>
-                <p className="text-xs sm:text-sm text-muted-foreground mt-4 italic">
-                  Terms and eligibility criteria apply.
-                </p>
+              <div className="rounded-[28px] bg-[#123026] p-5 text-white">
+                <div className="mb-4 flex items-center justify-between">
+                  <p className="text-xs uppercase tracking-[0.16em] text-[#dfe9e3]">Next contribution</p>
+                  <span className="rounded-full bg-[#1f6d4d] px-2.5 py-1 text-[10px] font-semibold">Due in 3 days</span>
+                </div>
+
+                <div className="rounded-2xl bg-white/5 p-4">
+                  <div className="text-sm text-[#dfe9e3]">Member contribution</div>
+                  <div className="mt-2 text-3xl font-black">KES 224</div>
+                </div>
+
+                <div className="mt-5 space-y-3">
+                  {[
+                    ["Contribution", "KES 224"],
+                    ["Wallet deposit", "KES 750"],
+                    ["Loan payment", "KES 1,200"],
+                  ].map(([label, amount]) => (
+                    <div key={label} className="flex items-center justify-between rounded-2xl bg-white/5 px-3 py-2.5">
+                      <span className="text-sm text-[#dfe9e3]">{label}</span>
+                      <span className="font-semibold">{amount}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-          </Card>
-        </div>
-      </section>
-
-      {/* How It Works */}
-      <section className="py-10 sm:py-16 md:py-20 px-3 sm:px-4 bg-muted/30">
-        <div className="container mx-auto max-w-4xl">
-          <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-8 sm:mb-12 animate-fade-in-up">
-            How <StyledSMCF className="inline" /> Works
-          </h3>
-          <div className="space-y-6 sm:space-y-8">
-            {[
-              {
-                step: 1,
-                title: "Register & Join",
-                description:
-                  "Sign up with your M-Pesa number and receive your unique member ID.",
-                delay: "100",
-              },
-              {
-                step: 2,
-                title: "Contribute KES 224",
-                description:
-                  "Every 5 days, contribute KES 224 via secure M-Pesa paybill 6938069 or STK Push payment.",
-                delay: "200",
-              },
-              {
-                step: 3,
-                title: "Automated Payout",
-                description:
-                  "When all members contribute, the total amount is sent to the next member in line.",
-                delay: "300",
-              },
-              {
-                step: 4,
-                title: "Track Progress",
-                description:
-                  "Monitor your payment history, upcoming payouts, and group status in real-time.",
-                delay: "400",
-              },
-            ].map((step, index) => (
-              <Card key={index} className={`overflow-hidden hover-lift group cursor-pointer animate-fade-in-left animation-delay-${step.delay}`}>
-                <CardContent className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 p-4 sm:p-6">
-                  <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-primary rounded-full flex items-center justify-center text-xl sm:text-2xl font-bold text-primary-foreground flex-shrink-0 group-hover:scale-110 transition-transform duration-300 animate-pulse-glow">
-                    {step.step}
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="text-lg sm:text-xl font-semibold mb-2 group-hover:text-primary transition-colors duration-300">{step.title}</h4>
-                    <p className="text-sm sm:text-base text-muted-foreground group-hover:text-foreground transition-colors duration-300">{step.description}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* FAQ Section - Enhanced for SEO and Rich Snippets */}
-      <section className="py-10 sm:py-16 md:py-20 px-3 sm:px-4">
-        <div className="container mx-auto max-w-4xl">
-          <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-8 sm:mb-12 animate-fade-in-up">
-            Frequently Asked Questions
-          </h3>
-          <div className="space-y-4">
-            {[
-              {
-                question: "What is table banking?",
-                answer: "Smart Moves Cash Flow is a digital table banking platform that automates group savings with KES 224 contributions every 5 days. Members save together and take turns receiving the pooled funds, with integrated M-Pesa payments for convenience and security."
-              },
-              {
-                question: "How does the contribution cycle work?",
-                answer: "Every member contributes KES 224 every 5 days. The total collected amount is disbursed to members in a hierarchical order based on their position. Each member gets their turn to receive the pooled funds, creating a rotating savings and credit system that benefits everyone."
-              },
-              {
-                question: "Can I save additional money beyond contributions?",
-                answer: "Yes! We offer a personal savings wallet where you can save any amount beyond your regular contributions. Your savings earn 3% interest every month with zero maintenance fees. You can deposit or withdraw anytime through M-Pesa, giving you complete financial flexibility."
-              },
-              {
-                question: "How do member loans work?",
-                answer: "Active members can apply for loans directly through the platform. Loans are approved quickly based on your contribution history and savings balance. Repayment terms are flexible with competitive interest rates designed to support members' financial needs without burden."
-              },
-              {
-                question: "Is M-Pesa integration safe and secure?",
-                answer: "Absolutely! SMCF uses Safaricom's official M-Pesa API with STK Push for secure payments. All transactions are encrypted end-to-end, and we use OTP authentication for added security. Your financial data is protected with industry-standard encryption and secure cloud storage."
-              },
-              {
-                question: "How do I join SMCF?",
-                answer: "Contact your group administrator to get registered in the system. Once added, you'll receive login credentials via SMS to your registered phone number. You can then access the platform via web browser or download our mobile app to start managing your contributions, savings, and loans."
-              },
-              {
-                question: "What makes SMCF better than traditional chamas?",
-                answer: "SMCF automates everything - from contribution reminders to M-Pesa payments and disbursements. You get real-time tracking, transparent records, instant notifications, personal savings with interest, and quick loan access. No more manual record-keeping, delayed payments, or cash handling risks."
-              },
-              {
-                question: "Are there any hidden fees?",
-                answer: "No hidden fees! We believe in complete transparency. Standard M-Pesa transaction charges apply for payments and withdrawals. Your personal savings wallet has zero maintenance fees, and you earn 3% interest monthly on your balance. All fees are clearly disclosed upfront."
-              }
-            ].map((faq, index) => (
-              <Card key={index} className="hover-lift hover-glow group cursor-pointer animate-scale-in" style={{animationDelay: `${index * 50}ms`}} itemScope itemType="https://schema.org/Question">
-                <CardHeader>
-                  <CardTitle className="text-base sm:text-lg group-hover:text-primary transition-colors duration-300" itemProp="name">{faq.question}</CardTitle>
-                </CardHeader>
-                <CardContent itemScope itemType="https://schema.org/Answer" itemProp="acceptedAnswer">
-                  <p className="text-sm sm:text-base text-muted-foreground group-hover:text-foreground transition-colors duration-300" itemProp="text">{faq.answer}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
+        <section id="security" className="bg-[#f0f4ef] py-16 sm:py-20">
+          <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-[1fr_0.9fr]">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#2a5a49]">Built around transparency</p>
+              <h2 className="mt-4 text-3xl font-black tracking-[-0.04em] text-[#123026] sm:text-4xl">Members can access the information they need, when they need it.</h2>
+              <p className="mt-5 max-w-lg text-lg leading-8 text-[#4d645d]">
+                From transactions and contributions to payment records and account details, the platform is designed to give members clear visibility into their activity and progress.
+              </p>
 
-      {/* Unified SMCF member entry */}
-      <section id="sacco-portal" className="py-10 sm:py-16 md:py-20 px-3 sm:px-4 bg-accent/10">
-        <div className="container mx-auto max-w-4xl">
-          <Card className="overflow-hidden hover-lift hover-glow border-2 border-accent/30 shadow-xl animate-fade-in-up">
-            <div className="bg-gradient-to-br from-accent/10 via-primary/5 to-accent/5 p-6 sm:p-8 md:p-10">
-              <div className="text-center mb-6 sm:mb-8">
-                <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 bg-gradient-accent rounded-full mb-4 sm:mb-6 animate-pulse-glow">
-                  <Users className="w-8 h-8 sm:w-10 sm:h-10 text-accent-foreground" />
-                </div>
-                <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4 bg-gradient-accent bg-clip-text text-transparent">
-                  SMCF Member Portal
-                </h2>
-                <p className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
-                  SMCF Member Portal is the unified platform for savings, loans, Wallet, Cycles, transactions, statements, and account services.
-                </p>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6 sm:mb-8">
-                <div className="flex items-start gap-3 p-4 bg-background/50 rounded-lg hover:bg-background/80 transition-all duration-300 hover:scale-105">
-                  <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-accent flex-shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="font-semibold text-sm sm:text-base mb-1">Member Dashboard</h4>
-                    <p className="text-xs sm:text-sm text-muted-foreground">Track savings, loans, and payouts</p>
+              <div className="mt-7 grid gap-3 sm:grid-cols-2">
+                {[
+                  "Transactions",
+                  "Contributions",
+                  "Payment records",
+                  "Member account info",
+                ].map((item) => (
+                  <div key={item} className="rounded-2xl border border-[#dfe9e3] bg-white p-3 text-sm font-medium text-[#264e43] shadow-sm">
+                    {item}
                   </div>
-                </div>
-                <div className="flex items-start gap-3 p-4 bg-background/50 rounded-lg hover:bg-background/80 transition-all duration-300 hover:scale-105">
-                  <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-accent flex-shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="font-semibold text-sm sm:text-base mb-1">Online Statements</h4>
-                    <p className="text-xs sm:text-sm text-muted-foreground">Download and view your SMCF statements</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 p-4 bg-background/50 rounded-lg hover:bg-background/80 transition-all duration-300 hover:scale-105">
-                  <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-accent flex-shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="font-semibold text-sm sm:text-base mb-1">Loan Applications</h4>
-                    <p className="text-xs sm:text-sm text-muted-foreground">Apply for SMCF loans directly online</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 p-4 bg-background/50 rounded-lg hover:bg-background/80 transition-all duration-300 hover:scale-105">
-                  <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-accent flex-shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="font-semibold text-sm sm:text-base mb-1">Secure Access</h4>
-                    <p className="text-xs sm:text-sm text-muted-foreground">Protected with OTP and encrypted login</p>
-                  </div>
-                </div>
-              </div>
-              <div className="text-center">
-                <button
-                  onClick={() => { window.location.href = '/sacco/auth'; }}
-                  className="inline-block"
-                >
-                  <Button
-                    size="lg"
-                    className="text-base sm:text-lg px-8 sm:px-12 py-4 sm:py-6 h-auto hover-lift hover-shine bg-gradient-accent text-accent-foreground font-bold shadow-lg hover:shadow-2xl transition-all duration-300 group"
-                  >
-                    Open SMCF Member Portal
-                    <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform duration-300" />
-                  </Button>
-                </button>
-                <p className="text-xs sm:text-sm text-muted-foreground mt-4 italic">
-                  One SMCF login for your account, Wallet, Cycles, loans, and statements.
-                </p>
-              </div>
-
-              <div className="mt-8">
-                <MemberMessageComposer mode="public" source="landing-page" title="Send a Message to Main SMCF Admin" compact />
+                ))}
               </div>
             </div>
-          </Card>
-        </div>
-      </section>
 
-      {/* Call to Action Section */}
-      <section className="py-10 sm:py-16 md:py-20 px-3 sm:px-4 bg-gradient-primary overflow-hidden">
-        <div className="container mx-auto max-w-4xl text-center">
-          <h3 className="text-2xl sm:text-4xl md:text-5xl font-bold mb-4 sm:mb-6 text-white animate-fade-in-up">
-            Ready to Transform Your Group Savings?
-          </h3>
-          <p className="text-base sm:text-xl md:text-2xl text-white/90 mb-6 sm:mb-8 animate-fade-in-up animation-delay-100">
-            Join thousands of Kenyan members already using SMCF for secure, automated table banking
-          </p>
-          <Button
-            size="lg"
-            variant="secondary"
-            onClick={() => { window.location.href = "/sacco/auth"; }}
-            className="text-base sm:text-lg px-6 sm:px-8 py-4 sm:py-6 h-auto hover-lift hover-shine animate-scale-in animation-delay-200">
-            Get Started Today
-          </Button>
-        </div>
-      </section>
+            <div className="rounded-[30px] border border-[#e7efe9] bg-white p-5 shadow-[0_25px_70px_rgba(17,53,39,0.06)] sm:p-6">
+              <div className="rounded-[24px] bg-[#edf7f1] p-5">
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#123026] text-white">
+                    <Shield className="h-5 w-5" />
+                  </div>
+                  <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#1d6d4d]">Secure access</span>
+                </div>
 
-      {/* Footer */}
-      <footer className="bg-secondary text-secondary-foreground py-10 sm:py-12 px-3 sm:px-4">
-        <div className="container mx-auto text-center">
-          <div className="flex items-center justify-center gap-3 mb-4 animate-fade-in-up">
-            <img 
-              src={smcfLogo} 
-              alt="SMCF - Smart Moves Cash Flow Footer Logo" 
-              className="w-8 h-8 hover:rotate-12 transition-transform duration-300" 
-            />
-            <span className="text-xl"><StyledSMCF /></span>
+                <div className="space-y-4">
+                  {[
+                    ["Transactions", "Visible & organised"],
+                    ["Account access", "Protected member login"],
+                    ["Records", "Readable and reviewable"],
+                  ].map(([title, value]) => (
+                    <div key={title} className="rounded-2xl bg-white p-3 shadow-sm">
+                      <p className="text-xs uppercase tracking-[0.14em] text-[#648073]">{title}</p>
+                      <p className="mt-2 text-lg font-bold text-[#123026]">{value}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
-          <p className="text-sm sm:text-base text-muted-foreground mb-4 animate-fade-in-up animation-delay-100">
-            Smart Moves Cash Flow - Digital Table Banking Platform
-          </p>
-          <p className="text-xs sm:text-sm text-muted-foreground mb-2 animate-fade-in-up animation-delay-200">
-            Secure • Automated • Transparent • Kenyan-Made
-          </p>
-          <p className="text-xs sm:text-sm text-muted-foreground mb-2 animate-fade-in-up animation-delay-300">
-            Contact: <a href="tel:+254759097157" className="hover:text-primary transition-colors duration-300 hover:underline">+254 759 097 157</a>
-          </p>
-          <p className="text-xs sm:text-sm text-muted-foreground animate-fade-in-up animation-delay-400">
-            Email: <a href="mailto:administrator@smcf.app" className="hover:text-primary transition-colors duration-300 hover:underline">administrator@smcf.app</a> | <a href="mailto:info@smcf.app" className="hover:text-primary transition-colors duration-300 hover:underline">info@smcf.app</a>
-          </p>
+        </section>
+
+        <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:py-20">
+          <div className="mb-10 text-center">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#2a5a49]">Community</p>
+            <h2 className="mt-3 text-3xl font-black tracking-[-0.04em] text-[#123026] sm:text-4xl">Financial progress works better together.</h2>
+          </div>
+
+          <div className="rounded-[30px] border border-[#e7efe9] bg-white p-6 shadow-[0_20px_50px_rgba(17,53,39,0.05)]">
+            <div className="grid gap-6 md:grid-cols-5">
+              {[
+                "Moses",
+                "Mary",
+                "Daniel",
+                "Aisha",
+                "John",
+              ].map((name, index) => (
+                <div key={name} className="flex flex-col items-center justify-center rounded-[24px] border border-[#e7efe9] bg-[#f8faf8] p-4 text-center">
+                  <div className={`mb-3 flex h-14 w-14 items-center justify-center rounded-full font-bold text-white ${index % 2 === 0 ? "bg-[#123026]" : "bg-[#1a6d4f]"}`}>
+                    {name.slice(0, 1)}
+                  </div>
+                  <div className="text-sm font-semibold text-[#123026]">{name}</div>
+                  <div className="text-xs text-[#648073]">Member</div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-6 h-20 rounded-[24px] bg-[radial-gradient(circle_at_center,_rgba(29,109,77,0.12),transparent_55%)]" />
+          </div>
+        </section>
+
+        <section id="faq" className="bg-[#f0f4ef] py-16 sm:py-20">
+          <div className="mx-auto max-w-5xl px-4 sm:px-6">
+            <div className="mb-10 text-center">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#2a5a49]">FAQ</p>
+              <h2 className="mt-3 text-3xl font-black tracking-[-0.04em] text-[#123026] sm:text-4xl">Frequently asked questions</h2>
+            </div>
+
+            <div className="space-y-3">
+              {[
+                ["What is SMCF?", "SMCF is a digital community finance platform built to help members save, contribute and monitor their financial activity in one place."],
+                ["How do I become a member?", "You can join through the SMCF member portal and complete the registration process for your account."],
+                ["How do contribution cycles work?", "Members contribute on a planned schedule and track their cycle position and contribution status through the member dashboard."],
+                ["How do I make payments?", "Payments are made through the platform flow and the supported mobile money payment process used by the application."],
+                ["Can I view my transactions?", "Yes. The platform provides member access to transaction history and account information."],
+                ["Can I access my wallet?", "Yes. The wallet is available through the member account and can be reviewed alongside your savings and activity."],
+                ["How do I contact SMCF?", "You can use the contact details shown at the footer or send a message through the member portal."],
+              ].map(([question, answer]) => (
+                <details key={question} className="group rounded-[22px] border border-[#dfe9e3] bg-white p-4 shadow-sm open:shadow-md" open={question === "What is SMCF?"}>
+                  <summary className="cursor-pointer list-none text-left text-lg font-semibold text-[#123026]">
+                    {question}
+                  </summary>
+                  <p className="mt-3 text-base leading-7 text-[#4d645d]">{answer}</p>
+                </details>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="px-4 py-16 sm:px-6 lg:py-20">
+          <div className="mx-auto max-w-6xl rounded-[34px] bg-[linear-gradient(135deg,#162f2d,#183f39_55%,#122b2b)] px-6 py-10 text-center text-white shadow-[0_25px_70px_rgba(22,47,45,0.22)] sm:px-8 lg:px-12 lg:py-14">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#e7dcc0]">Start today</p>
+            <h2 className="mt-4 text-3xl font-black tracking-[-0.04em] sm:text-4xl">Ready to take control of your financial journey?</h2>
+            <p className="mx-auto mt-4 max-w-2xl text-lg leading-8 text-[#d7e5df]">
+              Join a growing community using digital tools to save, contribute and manage their financial activities.
+            </p>
+            <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+              <a href="/sacco/auth" className="inline-flex items-center justify-center rounded-full bg-[#b8924a] px-6 py-3.5 text-base font-semibold text-[#162f2d] shadow-[0_18px_40px_rgba(184,146,74,0.28)] transition hover:-translate-y-0.5 hover:bg-[#c99f51]">
+                Join SMCF
+              </a>
+              <a href="/sacco/auth" className="inline-flex items-center justify-center rounded-full border border-white/20 bg-transparent px-6 py-3.5 text-base font-semibold text-white transition hover:bg-white/5">
+                Login to your account
+              </a>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer id="contact" className="bg-[#0d261f] text-white">
+        <div className="mx-auto grid max-w-7xl gap-8 px-4 py-12 sm:px-6 lg:grid-cols-[1.2fr_0.8fr_0.8fr]">
+          <div>
+            <div className="flex items-center gap-3">
+              <img src={smcfLogo} alt="SMCF" className="h-11 w-11 rounded-xl object-cover" />
+              <div>
+                <div className="text-xl font-bold"><StyledSMCF /></div>
+                <div className="text-xs uppercase tracking-[0.18em] text-[#dfe9e3]">Smart Moves Development Agency</div>
+              </div>
+            </div>
+            <p className="mt-5 max-w-sm text-base leading-7 text-[#d7e5df]">Powering Grassroots Financial Freedom</p>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-[#dfe9e3]">Navigation</h3>
+            <ul className="mt-4 space-y-3 text-sm text-[#d7e5df]">
+              {navItems.map((item) => (
+                <li key={item.label}><a href={item.href} className="transition hover:text-white">{item.label}</a></li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-[#dfe9e3]">Member</h3>
+            <ul className="mt-4 space-y-3 text-sm text-[#d7e5df]">
+              <li><a href="/sacco/auth" className="transition hover:text-white">Login</a></li>
+              <li><a href="/sacco/auth" className="transition hover:text-white">Join SMCF</a></li>
+              <li><a href="/sacco/auth" className="transition hover:text-white">Member Account</a></li>
+            </ul>
+
+            <div className="mt-6 text-sm text-[#d7e5df]">
+              <div>Email: <a href="mailto:administrator@smcf.app" className="hover:text-white">administrator@smcf.app</a></div>
+              <div className="mt-2">Phone: <a href="tel:+254759097157" className="hover:text-white">+254 759 097 157</a></div>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-white/10">
+          <div className="mx-auto flex max-w-7xl items-center justify-center px-4 py-5 text-sm text-[#d7e5df]">
+            © {new Date().getFullYear()} SMART MOVES DEVELOPMENT AGENCY
+          </div>
         </div>
       </footer>
 
-      {/* Organization Dialog */}
-      <OrganizationDialog
-        open={showOrganization}
-        onOpenChange={setShowOrganization}
-      />
+      <OrganizationDialog open={showOrganization} onOpenChange={setShowOrganization} />
     </div>
   );
 };
