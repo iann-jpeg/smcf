@@ -40,6 +40,14 @@ const memberSchema = new mongoose.Schema({
     enum: ["regular", "wallet_only"],
     default: "regular",
   },
+  is10XMember: {
+    type: Boolean,
+    default: false,
+    index: true,
+  },
+  tenXJoinedAt: {
+    type: Date,
+  },
   payment_status: {
     type: String,
     enum: ["paid", "pending"],

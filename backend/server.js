@@ -38,6 +38,7 @@ import dashboardRoutes from "./routes/dashboard.js";
 import saccoPaymentRoutes from "./routes/saccoPayments.js";
 import memberMessageRoutes from "./routes/memberMessages.js";
 import saccoProxyRoutes from "./routes/saccoProxy.js";
+import tenXRoutes from "./routes/tenx.js";
 
 // Import interest service
 import { startInterestCronJob } from "./services/interestService.js";
@@ -382,6 +383,7 @@ app.use("/api/reports", analyticsRoutes); // Alias to avoid ad blocker issues
 app.use("/api/search", searchRoutes);
 app.use("/api/sacco-payments", saccoPaymentRoutes); // SACCO portal payment bridge
 app.use("/api/member-messages", memberMessageRoutes);
+app.use("/api/tenx", tenXRoutes);
 app.use("/sacco-api", saccoProxyRoutes); // Canonical SACCO backend proxy path
 app.use("/api", dashboardRoutes); // Optimized dashboard endpoint
 

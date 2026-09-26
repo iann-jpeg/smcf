@@ -48,7 +48,7 @@ const paymentSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ["cycle_payment", "wallet_deposit", "loan_repayment", "other"],
+    enum: ["cycle_payment", "wallet_deposit", "loan_repayment", "ten_x_contribution", "other"],
     default: "cycle_payment",
   },
   notes: {

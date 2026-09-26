@@ -8,6 +8,7 @@ import ProfilePictureUpload from "@/components/ProfilePictureUpload";
 import GuarantorRequests from "@/components/GuarantorRequests";
 import GuarantorProfile from "@/components/GuarantorProfile";
 import MemberMessageComposer from "@/components/MemberMessageComposer";
+import TenXMemberPanel from "@/components/TenXMemberPanel";
 import { StyledSMCF } from "@/components/StyledSMCF";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -918,6 +919,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
 
   return (
     <div className="space-y-4 md:space-y-6 p-2 sm:p-4 md:p-0">
+      <TenXMemberPanel userData={userData} />
       {/* Top Saver Badge */}
       {isTopSaver && (
         <Card className="bg-gradient-to-r from-yellow-50 to-yellow-100 dark:from-yellow-950 dark:to-yellow-900 border-yellow-300">
