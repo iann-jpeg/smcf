@@ -111,8 +111,8 @@ router.get("/", protect, adminOnly, async (req, res) => {
     const isLean = req.query.lean === 'true';
     
     const selectFields = isLean 
-      ? '_id name phone email position member_type payment_status wallet_balance savings_balance loan_balance credit_score total_contributed total_cycle_contribution total_member_credit total_transaction_fees created_at payment_date member_id status'
-      : '_id name phone email position member_type payment_status wallet_balance savings_balance loan_balance credit_score total_contributed total_cycle_contribution total_member_credit total_transaction_fees created_at payment_date profile_picture member_id status';
+      ? '_id name phone email position member_type payment_status wallet_balance savings_balance loan_balance credit_score total_contributed total_cycle_contribution total_member_credit total_transaction_fees created_at payment_date member_id status is10XMember tenXJoinedAt'
+      : '_id name phone email position member_type payment_status wallet_balance savings_balance loan_balance credit_score total_contributed total_cycle_contribution total_member_credit total_transaction_fees created_at payment_date profile_picture member_id status is10XMember tenXJoinedAt';
     
     const members = await Member.find()
       .sort({ position: 1, created_at: 1 })
