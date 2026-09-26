@@ -1259,6 +1259,7 @@ export default function MyAccount() {
             memberName={member.name}
             memberId={member.member_id}
             onPayCycle={() => { setDepositType("cycle"); setDepositOpen(true); }}
+            onDepositSavings={() => { setDepositType("savings"); setDepositOpen(true); }}
           />
         </TabsContent>
 

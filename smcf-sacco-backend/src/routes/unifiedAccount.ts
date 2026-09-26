@@ -76,6 +76,9 @@ router.get('/', protect, async (req: AuthRequest, res, next) => {
       const currentCycle = await cyclesCollection.findOne(
         { status: 'active' },
         { sort: { cycle_number: -1 } },
+      ) ?? await cyclesCollection.findOne(
+        { cycle_number: { $exists: true } },
+        { sort: { cycle_number: -1 } },
       );
 
       if (currentCycle) {

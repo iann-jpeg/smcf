@@ -37,12 +37,14 @@ export function UnifiedAccountModules({
   memberName = "Member",
   memberId = "",
   onPayCycle,
+  onDepositSavings,
 }: {
   data?: UnifiedAccountData;
   isLoading: boolean;
   memberName?: string;
   memberId?: string;
   onPayCycle?: () => void;
+  onDepositSavings?: () => void;
 }) {
   if (isLoading) {
     return <Skeleton className="h-48 w-full" />;
@@ -57,7 +59,7 @@ export function UnifiedAccountModules({
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm"><Wallet className="h-4 w-4" /> Wallet Balance</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><div className="flex items-center justify-between gap-2"><CardTitle className="flex items-center gap-2 text-sm"><Wallet className="h-4 w-4" /> Wallet Balance</CardTitle>{onDepositSavings && <Button size="sm" onClick={onDepositSavings}>Deposit via STK</Button>}</div></CardHeader>
           <CardContent><p className="text-2xl font-semibold">{kes(wallet?.balance)}</p></CardContent>
         </Card>
         <Card>
@@ -74,7 +76,7 @@ export function UnifiedAccountModules({
         <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><CalendarSync className="h-5 w-5" /> Active Cycle</CardTitle></CardHeader>
         <CardContent>
           {!cycle ? (
-            <p className="py-4 text-sm text-muted-foreground">No active cycle is linked to this SACCO account yet.</p>
+            <div className="py-4"><p className="text-sm text-muted-foreground">No cycle record is currently linked to this SACCO account.</p>{onPayCycle && <Button className="mt-4" onClick={onPayCycle}><Wallet className="mr-2 h-4 w-4" /> Pay Cycle via STK</Button>}</div>
           ) : (
             <div>
               <div className="grid gap-3 sm:grid-cols-4">
