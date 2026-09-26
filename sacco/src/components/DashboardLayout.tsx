@@ -4,11 +4,13 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { useAuth } from "@/hooks/useAuth";
 import { getApiBaseForDebug } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { LogOut, Moon, Sun } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
+import { ChevronRight, LogOut, Moon, Settings, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { signOut, user, isStaff } = useAuth();
+  const location = useLocation();
   const { theme, setTheme } = useTheme();
   const apiBase = getApiBaseForDebug();
   const maskEmail = (value?: string | null): string => {
@@ -49,15 +51,25 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   })();
   const apiDisplay = maskApiDisplay(apiBase || apiHost);
   const safeEmail = maskEmail(user?.email || "");
+  const pageName = (() => {
+    const path = location.pathname;
+    if (path === "/") return "Command Centre";
+    const segment = path.split("/").filter(Boolean).pop() || "dashboard";
+    return segment.split("-").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
+  })();
 
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full">
         <AppSidebar />
         <div className="flex-1 flex min-w-0 flex-col">
-          <header className="h-14 border-b bg-card flex items-center justify-between px-2 sm:px-4">
+          <header className="sticky top-0 z-30 flex min-h-14 items-center justify-between gap-3 border-b bg-card/95 px-2 backdrop-blur sm:px-4">
             <div className="flex items-center gap-2">
               <SidebarTrigger />
+              <div className="hidden border-l pl-3 sm:block">
+                <div className="flex items-center gap-1 text-[11px] text-muted-foreground"><span>SMCF Admin</span><ChevronRight className="h-3 w-3" /><span className="font-medium text-foreground">{pageName}</span></div>
+                <p className="text-sm font-semibold leading-tight">{pageName}</p>
+              </div>
             </div>
             <div className="flex items-center gap-1.5 sm:gap-3">
               {isStaff && (
@@ -79,6 +91,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
               </Button>
               <NotificationBell />
+              {isStaff && <Button asChild variant="ghost" size="icon" title="Settings"><Link to="/settings"><Settings className="h-4 w-4" /></Link></Button>}
               <Button variant="ghost" size="icon" onClick={signOut} title="Sign out">
                 <LogOut className="h-4 w-4" />
               </Button>

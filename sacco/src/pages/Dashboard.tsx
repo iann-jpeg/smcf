@@ -1,4 +1,4 @@
-import { Users, Wallet, Landmark, TrendingUp, AlertTriangle, ShieldCheck, Clock, Percent, Bell, CheckCircle, XCircle, Info, Mail } from "lucide-react";
+import { Users, Wallet, Landmark, TrendingUp, AlertTriangle, ShieldCheck, Clock, Percent, Bell, CheckCircle, XCircle, Info, Mail, UserPlus, FileText, CalendarCheck, ArrowUpRight } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import { useDashboardStats } from "@/hooks/useDashboardStats";
 import { useNotifications, useMarkRead, useMarkAllRead } from "@/hooks/useNotifications";
@@ -45,27 +45,41 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-heading font-bold">Executive Dashboard</h1>
-        <p className="text-muted-foreground text-sm"><span className="text-[#C9A227]">SMC</span><span className="text-[#2D7A36]">F</span> Financial Overview</p>
+    <div className="space-y-6 pb-8">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">SMCF command centre</p>
+          <h1 className="mt-2 text-3xl font-heading font-bold tracking-tight">Good evening, Admin</h1>
+          <p className="mt-1 text-muted-foreground">Here&apos;s what&apos;s happening across SMCF.</p>
+          <p className="mt-3 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{new Intl.DateTimeFormat("en-KE", { dateStyle: "full" }).format(new Date())}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild size="sm"><Link to="/members"><UserPlus className="mr-2 h-4 w-4" /> Add Member</Link></Button>
+          <Button asChild size="sm" variant="outline"><Link to="/cycle-admin"><CalendarCheck className="mr-2 h-4 w-4" /> Manage Cycles</Link></Button>
+          <Button asChild size="sm" variant="outline"><Link to="/accounts?tab=wallet"><Wallet className="mr-2 h-4 w-4" /> Wallets</Link></Button>
+          <Button asChild size="sm" variant="outline"><Link to="/reports"><FileText className="mr-2 h-4 w-4" /> Reports</Link></Button>
+        </div>
       </div>
 
-      {/* Stat cards — show inline skeletons while loading so the header is always visible */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <section aria-labelledby="financial-position-heading" className="space-y-3">
+        <div className="flex items-center justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Financial position</p><h2 id="financial-position-heading" className="text-xl font-heading font-bold">At a glance</h2></div><Button asChild variant="ghost" size="sm"><Link to="/accounts">Open ledger <ArrowUpRight className="ml-1 h-3.5 w-3.5" /></Link></Button></div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
         {statsLoading ? (
-          Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-lg" />)
+          Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-lg" />)
         ) : (
           <>
             <StatCard title="Total Members" value={s.totalMembers.toLocaleString()} icon={Users} />
             <StatCard title="Total Savings" value={formatKES(s.totalSavings)} icon={Wallet} variant="success" subtitle={s.totalShares > 0 ? `Shares: ${formatKES(s.totalShares)}` : undefined} />
             <StatCard title="Active Loans" value={s.activeLoans.toLocaleString()} icon={Landmark} variant="accent" subtitle={`Portfolio: ${formatKES(s.totalLoans)}`} />
+            <StatCard title="Share Capital" value={formatKES(s.totalShares)} icon={Percent} variant="success" />
             <StatCard title="Available Liquidity" value={formatKES(s.availableLiquidity)} icon={TrendingUp} variant={s.liquidityRatio < 25 ? "destructive" : "default"} subtitle={`Ratio: ${s.liquidityRatio}%`} />
+            <StatCard title="Needs Attention" value={s.pendingApprovals.toLocaleString()} icon={Clock} variant="warning" subtitle="Pending approvals" />
           </>
         )}
       </div>
+      </section>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {statsLoading ? (
           Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-lg" />)
         ) : (
@@ -107,28 +121,26 @@ export default function Dashboard() {
         </Card>
 
         {/* Pending Actions */}
-        <Card>
+        <Card className="border-amber-300/50 bg-amber-50/40 dark:bg-amber-950/10">
           <CardHeader>
-            <CardTitle className="font-heading text-lg">Pending Actions</CardTitle>
+            <CardTitle className="font-heading text-lg flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-amber-600" /> Needs Your Attention</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+            <Link to="/loans/approvals" className="flex items-center justify-between rounded-lg border bg-background/70 p-3 transition hover:border-amber-400 hover:bg-background">
               <div className="flex items-center gap-2">
                 <Clock className="h-5 w-5 text-warning" />
                 <span className="text-sm font-medium">Loan Approvals</span>
               </div>
               <Badge variant="outline" className="text-lg font-bold">{s.pendingApprovals}</Badge>
-            </div>
-            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+            </Link>
+            <Link to="/notifications" className="flex items-center justify-between rounded-lg border bg-background/70 p-3 transition hover:border-primary hover:bg-background">
               <div className="flex items-center gap-2">
                 <Bell className="h-5 w-5 text-primary" />
                 <span className="text-sm font-medium">Unread Alerts</span>
               </div>
               <Badge variant="outline" className="text-lg font-bold">{unreadCount}</Badge>
-            </div>
-            <button onClick={() => navigate("/loans/approvals")} className="w-full text-sm text-primary hover:underline text-center pt-2">
-              Go to Approvals →
-            </button>
+            </Link>
+            <Link to="/cycle-admin" className="flex items-center justify-between rounded-lg border bg-background/70 p-3 transition hover:border-primary hover:bg-background"><div className="flex items-center gap-2"><CalendarCheck className="h-5 w-5 text-primary" /><span className="text-sm font-medium">Cycle operations</span></div><ArrowUpRight className="h-4 w-4 text-muted-foreground" /></Link>
           </CardContent>
         </Card>
 

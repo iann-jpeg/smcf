@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Users, Landmark, BookOpen, BarChart3, Shield, Settings,
-  FileText, AlertTriangle, ShieldCheck, Gavel, UserCircle, UserCircle2, CreditCard, CalendarCheck, FlaskConical, Receipt, Percent, Calculator, ArrowLeftRight, Wallet, TrendingUp, BadgeCheck,
+  FileText, AlertTriangle, ShieldCheck, Gavel, UserCircle, UserCircle2, CreditCard, CalendarCheck, FlaskConical, Receipt, Percent, Calculator, ArrowLeftRight, Wallet, TrendingUp, BadgeCheck, Bell, ClipboardList, CircleDollarSign,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -22,14 +22,33 @@ type StaffNavItem = {
 const staffNav = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard, allowedRoles: ["admin", "credit_officer", "credit_committee", "treasurer", "auditor"] },
   { title: "Members", url: "/members", icon: Users, allowedRoles: ["admin", "credit_officer"] },
-  { title: "Loans", url: "/loans", icon: Landmark, allowedRoles: ["admin", "credit_officer", "credit_committee"] },
+] satisfies StaffNavItem[];
+
+const financeNav = [
   { title: "Accounts & Ledger", url: "/accounts", icon: BookOpen, allowedRoles: ["admin", "treasurer"] },
-  { title: "Share Capital & Dividends", url: "/accounts?tab=share-capital-dividends", icon: Percent, allowedRoles: ["admin"] },
-  { title: "Savings Interest", url: "/accounts?tab=savings-interest", icon: Percent, allowedRoles: ["admin"] },
-  { title: "Guarantor Exposure", url: "/guarantors", icon: AlertTriangle, allowedRoles: ["admin", "treasurer"] },
+  { title: "Wallet Deposits", url: "/accounts?tab=wallet", icon: Wallet, allowedRoles: ["admin", "treasurer"] },
+  { title: "Transactions", url: "/accounts?tab=transactions", icon: ArrowLeftRight, allowedRoles: ["admin", "treasurer", "auditor"] },
+  { title: "Statements & Reports", url: "/reports", icon: FileText, allowedRoles: ["admin", "treasurer", "auditor"] },
+] satisfies StaffNavItem[];
+
+const cycleNav = [
+  { title: "Cycle Command Centre", url: "/cycle-admin", icon: CalendarCheck, allowedRoles: ["admin", "treasurer"] },
+  { title: "Contributions", url: "/accounts?tab=cycles", icon: CircleDollarSign, allowedRoles: ["admin", "treasurer"] },
+  { title: "Payouts & Disbursements", url: "/cycle-admin", icon: Wallet, allowedRoles: ["admin", "treasurer"] },
+] satisfies StaffNavItem[];
+
+const loanNav = [
+  { title: "Loan Portfolio", url: "/loans", icon: Landmark, allowedRoles: ["admin", "credit_officer", "credit_committee"] },
+  { title: "Loan Applications", url: "/loans/approvals", icon: Gavel, allowedRoles: ["admin", "credit_officer", "credit_committee"] },
+  { title: "Repayments", url: "/loans", icon: CreditCard, allowedRoles: ["admin", "credit_officer", "treasurer", "auditor"] },
   { title: "Risk Scoring", url: "/risk-scoring", icon: ShieldCheck, allowedRoles: ["admin", "credit_officer"] },
   { title: "Loan Simulator", url: "/loans/simulator", icon: FlaskConical, allowedRoles: ["admin", "credit_officer", "credit_committee", "treasurer", "auditor"] },
-  { title: "Loan Approvals", url: "/loans/approvals", icon: Gavel, allowedRoles: ["admin", "credit_officer", "credit_committee"] },
+  { title: "Guarantor Requests", url: "/guarantors", icon: AlertTriangle, allowedRoles: ["admin", "treasurer"] },
+] satisfies StaffNavItem[];
+
+const shareNav = [
+  { title: "Share Capital & Dividends", url: "/accounts?tab=share-capital-dividends", icon: Percent, allowedRoles: ["admin"] },
+  { title: "Savings Interest", url: "/accounts?tab=savings-interest", icon: Percent, allowedRoles: ["admin"] },
 ] satisfies StaffNavItem[];
 
 const memberNav = [
@@ -49,11 +68,14 @@ const memberNav = [
 ];
 
 const adminNav = [
-  { title: "Cycle Admin", url: "/cycle-admin", icon: Shield, allowedRoles: ["admin"] },
   { title: "Finance & Compliance", url: "/finance-compliance", icon: Calculator, allowedRoles: ["admin", "treasurer", "auditor"] },
   { title: "Reports", url: "/reports", icon: BarChart3, allowedRoles: ["admin", "credit_committee", "treasurer", "auditor"] },
   { title: "Registration Fee", url: "/registration-fee", icon: Receipt, allowedRoles: ["admin"] },
-  { title: "Compliance & Audit", url: "/compliance", icon: Shield, allowedRoles: ["admin", "auditor"] },
+] satisfies StaffNavItem[];
+
+const systemNav = [
+  { title: "Notifications", url: "/notifications", icon: Bell, allowedRoles: ["admin", "treasurer", "auditor"] },
+  { title: "Audit & Compliance", url: "/compliance", icon: ClipboardList, allowedRoles: ["admin", "auditor"] },
   { title: "Documents", url: "/documents", icon: FileText, allowedRoles: ["admin", "auditor"] },
   { title: "Settings", url: "/settings", icon: Settings, allowedRoles: ["admin"] },
 ] satisfies StaffNavItem[];
@@ -90,7 +112,34 @@ export function AppSidebar() {
   };
 
   const visibleStaffNav = staffNav.filter((item) => hasAccess(item.allowedRoles));
-  const visibleAdminNav = adminNav.filter((item) => hasAccess(item.allowedRoles));
+  const navGroups = [
+    ["Finance", financeNav],
+    ["Cycles", cycleNav],
+    ["Loans", loanNav],
+    ["Shares", shareNav],
+    ["Compliance & Reports", adminNav],
+    ["System", systemNav],
+  ].map(([label, items]) => [label, (items as StaffNavItem[]).filter((item) => hasAccess(item.allowedRoles))] as const).filter(([, items]) => items.length > 0);
+
+  const renderNavGroup = (label: string, items: StaffNavItem[]) => (
+    <SidebarGroup key={label}>
+      <SidebarGroupLabel className="text-sidebar-foreground/50 text-[10px] uppercase tracking-[0.16em]">{label}</SidebarGroupLabel>
+      <SidebarGroupContent>
+        <SidebarMenu>
+          {items.map((item) => (
+            <SidebarMenuItem key={`${label}-${item.title}`}>
+              <SidebarMenuButton asChild>
+                <NavLink to={item.url} onClick={handleNavClick} end={item.url === "/"} className="hover:bg-sidebar-accent" activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold">
+                  <item.icon className="mr-3 h-4 w-4" />
+                  <span>{item.title}</span>
+                </NavLink>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ))}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  );
 
   return (
     <Sidebar>
@@ -129,46 +178,10 @@ export function AppSidebar() {
         )}
 
         {/* Staff Operations - only visible to staff */}
-        {isStaff && (
-          <SidebarGroup>
-            <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs uppercase tracking-wider">Operations</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {visibleStaffNav.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild>
-                      <NavLink to={item.url} onClick={handleNavClick} end={item.url === "/"} className="hover:bg-sidebar-accent" activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold">
-                        <item.icon className="mr-3 h-4 w-4" />
-                        <span>{item.title}</span>
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
+        {isStaff && <SidebarGroup><SidebarGroupLabel className="text-sidebar-foreground/50 text-[10px] uppercase tracking-[0.16em]">Command Centre</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{visibleStaffNav.map((item) => <SidebarMenuItem key={item.title}><SidebarMenuButton asChild><NavLink to={item.url} onClick={handleNavClick} end={item.url === "/"} className="hover:bg-sidebar-accent" activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold"><item.icon className="mr-3 h-4 w-4" /><span>{item.title}</span></NavLink></SidebarMenuButton></SidebarMenuItem>)}</SidebarMenu></SidebarGroupContent></SidebarGroup>}
 
         {/* Administration - only visible to staff */}
-        {isStaff && (
-          <SidebarGroup>
-            <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs uppercase tracking-wider">Administration</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {visibleAdminNav.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild>
-                      <NavLink to={item.url} onClick={handleNavClick} className="hover:bg-sidebar-accent" activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold">
-                        <item.icon className="mr-3 h-4 w-4" />
-                        <span>{item.title}</span>
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
+        {isStaff && navGroups.map(([label, items]) => renderNavGroup(label, items))}
       </SidebarContent>
 
       <SidebarFooter className="p-4 border-t border-sidebar-border">
