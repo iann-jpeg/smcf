@@ -22,6 +22,10 @@ export default function CycleAdmin() {
   const [tab, setTab] = useState("overview");
   const [savingMember, setSavingMember] = useState<string | null>(null);
   const [cycleAmount, setCycleAmount] = useState("");
+  const [walletMembers, setWalletMembers] = useState<any[]>([]);
+  const [pendingWithdrawals, setPendingWithdrawals] = useState<any[]>([]);
+  const [walletLoading, setWalletLoading] = useState(false);
+  const [walletAction, setWalletAction] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!isAdmin) return;
@@ -45,6 +49,25 @@ export default function CycleAdmin() {
   const disbursements = data.disbursements || [];
   const advancePayments = data.advancePayments || [];
   useEffect(() => { if (currentCycle?.contribution_amount) setCycleAmount(String(currentCycle.contribution_amount)); }, [currentCycle?.contribution_amount]);
+  const loadWallet = useCallback(async () => {
+    setWalletLoading(true);
+    try {
+      const [membersResponse, withdrawalsResponse] = await Promise.all([
+        api.get<any>("/savings/admin/all"),
+        api.get<any>("/savings/admin/pending-withdrawals"),
+      ]);
+      const membersResult = membersResponse?.data ?? membersResponse ?? [];
+      const withdrawalsResult = withdrawalsResponse?.data ?? withdrawalsResponse ?? [];
+      setWalletMembers(Array.isArray(membersResult) ? membersResult : []);
+      setPendingWithdrawals(Array.isArray(withdrawalsResult) ? withdrawalsResult : []);
+    } catch (error: any) {
+      toast({ title: "Unable to load wallet records", description: error?.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setWalletLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => { if (tab === "wallet") void loadWallet(); }, [tab, loadWallet]);
   const pendingMembers = useMemo(() => {
     const paid = new Set((data.paidMemberIds || []).map(String));
     return members.filter((member: any) => !paid.has(String(member._id)) && !paid.has(String(member.member_id)));
@@ -90,6 +113,32 @@ export default function CycleAdmin() {
     }
   };
 
+  const actOnWithdrawal = async (withdrawalId: string, action: "approve" | "reject") => {
+    setWalletAction(withdrawalId);
+    try {
+      await api.post(`/savings/admin/${action}-withdrawal/${withdrawalId}`, action === "reject" ? { rejection_reason: "Rejected by SACCO administrator" } : {});
+      toast({ title: action === "approve" ? "Withdrawal approved" : "Withdrawal rejected", description: "Wallet records have been updated." });
+      await loadWallet();
+    } catch (error: any) {
+      toast({ title: "Wallet action failed", description: error?.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setWalletAction(null);
+    }
+  };
+
+  const applyWalletInterest = async () => {
+    setWalletAction("interest");
+    try {
+      await api.post("/savings/admin/apply-interest", {});
+      toast({ title: "Interest applied", description: "Wallet balances and interest records were updated." });
+      await loadWallet();
+    } catch (error: any) {
+      toast({ title: "Interest application failed", description: error?.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setWalletAction(null);
+    }
+  };
+
   if (!isAdmin) return <Card className="m-6 border-destructive/30"><CardHeader><CardTitle className="flex items-center gap-2 text-destructive"><ShieldCheck className="h-5 w-5" /> Access restricted</CardTitle><CardDescription>Administrator access is required.</CardDescription></CardHeader></Card>;
 
   return (
@@ -102,7 +151,7 @@ export default function CycleAdmin() {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><Metric title="Active cycle" value={`#${stats.cycleNumber || "-"}`} icon={TrendingUp} /><Metric title="Paid this cycle" value={`${stats.paidMembers || 0}/${stats.totalMembers || 0}`} icon={CheckCircle2} /><Metric title="Collected" value={money(stats.collected)} icon={Wallet} /><Metric title="Pending members" value={String(stats.pendingMembers || 0)} icon={AlertCircle} /><Metric title="Paid in advance" value={String(advancePayments.length)} icon={FastForward} /></div>
 
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-        <TabsList className="flex w-full justify-start overflow-x-auto">{[["overview", "Overview"], ["members", "Members"], ["payments", "Payments"], ["advance", "Advance payments"], ["disbursements", "Disbursements"], ["analytics", "Analytics"], ["savings", "Savings & reserve"], ["admin", "Other admin"]].map(([value, label]) => <TabsTrigger key={value} value={value}>{label}</TabsTrigger>)}</TabsList>
+        <TabsList className="flex w-full justify-start overflow-x-auto">{[["overview", "Overview"], ["members", "Members"], ["payments", "Payments"], ["advance", "Advance payments"], ["disbursements", "Disbursements"], ["analytics", "Analytics"], ["wallet", "Wallet deposits"], ["savings", "Savings & reserve"], ["admin", "Other admin"]].map(([value, label]) => <TabsTrigger key={value} value={value}>{label}</TabsTrigger>)}</TabsList>
 
         <TabsContent value="overview" className="space-y-4"><div className="grid gap-4 lg:grid-cols-2"><Card><CardHeader><CardTitle className="flex items-center gap-2"><BarChart3 className="h-4 w-4" /> Current cycle status</CardTitle><CardDescription>Cycle #{currentCycle?.cycle_number || "-"} · {currentCycle?.status || "not active"}</CardDescription></CardHeader><CardContent className="space-y-3"><ProgressRow label="Collection progress" value={stats.totalMembers ? (stats.paidMembers / stats.totalMembers) * 100 : 0} /><Row label="Target amount" value={money(stats.target)} /><Row label="Remaining" value={money(Math.max(0, Number(stats.target || 0) - Number(stats.collected || 0)))} /><Row label="Cycle dates" value={`${date(currentCycle?.start_date)} - ${date(currentCycle?.end_date)}`} /><div className="flex items-center gap-2 border-t pt-3"><Input className="w-36" type="number" value={cycleAmount} onChange={(event) => setCycleAmount(event.target.value)} aria-label="Contribution amount" /><Button size="sm" onClick={() => void updateCycleAmount()} disabled={!currentCycle?._id}>Update contribution</Button></div></CardContent></Card><Card><CardHeader><CardTitle>Quick actions</CardTitle><CardDescription>Legacy cycle actions are now available inside SACCO administration.</CardDescription></CardHeader><CardContent className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => setTab("members")}><Wallet className="mr-2 h-4 w-4" /> Manage payment status</Button><Button variant="outline" onClick={() => setTab("disbursements")}><Landmark className="mr-2 h-4 w-4" /> Manage payouts</Button><Button variant="outline" onClick={exportRecords}><FileText className="mr-2 h-4 w-4" /> Export records</Button><Button asChild variant="outline"><Link to="/notifications"><Megaphone className="mr-2 h-4 w-4" /> Announcements</Link></Button></CardContent></Card></div></TabsContent>
 
@@ -116,6 +165,7 @@ export default function CycleAdmin() {
 
         <TabsContent value="analytics"><Card><CardHeader><CardTitle className="flex items-center gap-2"><BarChart3 className="h-4 w-4" /> Cycle analytics</CardTitle><CardDescription>Operational rates calculated from the active-cycle ledger.</CardDescription></CardHeader><CardContent className="grid gap-3 sm:grid-cols-3"><Row label="Payment rate" value={`${stats.totalMembers ? Math.round((stats.paidMembers / stats.totalMembers) * 100) : 0}%`} /><Row label="Average payment" value={money(stats.paidMembers ? Number(stats.collected) / Number(stats.paidMembers) : 0)} /><Row label="Cycles completed" value={String(Math.max(0, Number(stats.cycleNumber || 0) - 1))} /></CardContent></Card></TabsContent>
 
+        <TabsContent value="wallet" className="space-y-4"><div className="flex items-center justify-between"><div><h2 className="text-xl font-semibold">Wallet deposits & withdrawals</h2><p className="text-sm text-muted-foreground">Wallet deposits remain separate from cycle contributions. Review balances, approve withdrawals, and apply interest here.</p></div><Button onClick={() => void applyWalletInterest()} disabled={walletAction !== null}><TrendingUp className="mr-2 h-4 w-4" /> Apply monthly interest</Button></div><div className="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]"><Card><CardHeader><CardTitle>Member wallet balances</CardTitle><CardDescription>{walletMembers.length} wallet records</CardDescription></CardHeader><CardContent>{walletLoading ? <Empty text="Loading wallet records..." /> : walletMembers.length === 0 ? <Empty text="No wallet records found." /> : <div className="space-y-2">{walletMembers.map((member: any) => <div key={String(member._id)} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"><div><p className="font-medium">{member.name}</p><p className="text-xs text-muted-foreground">{member.member_id || member.memberId} · {member.transactionCount || 0} deposits</p></div><div className="text-right"><p className="font-semibold">{money(member.currentBalance)}</p><p className="text-xs text-muted-foreground">Deposits {money(member.totalDeposits)} · Interest {money(member.totalInterestEarned)}</p></div></div>)}</div>}</CardContent></Card><Card><CardHeader><CardTitle>Pending withdrawals</CardTitle><CardDescription>Approve or reject wallet withdrawals.</CardDescription></CardHeader><CardContent>{pendingWithdrawals.length === 0 ? <Empty text="No pending withdrawals." /> : <div className="space-y-3">{pendingWithdrawals.map((withdrawal: any) => <div key={String(withdrawal._id)} className="rounded-lg border p-3"><div className="flex items-center justify-between"><div><p className="font-medium">{withdrawal.member?.name || withdrawal.memberName || "Member"}</p><p className="text-xs text-muted-foreground">{date(withdrawal.createdAt || withdrawal.created_at)}</p></div><p className="font-semibold">{money(withdrawal.amount)}</p></div><div className="mt-3 flex gap-2"><Button size="sm" onClick={() => void actOnWithdrawal(String(withdrawal._id), "approve")} disabled={walletAction === String(withdrawal._id)}>Approve</Button><Button size="sm" variant="destructive" onClick={() => void actOnWithdrawal(String(withdrawal._id), "reject")} disabled={walletAction === String(withdrawal._id)}>Reject</Button></div></div>)}</div>}</CardContent></Card></div></TabsContent>
         <TabsContent value="savings"><ModuleLinks links={[["/members", "Member management", Wallet], ["/accounts", "Savings & wallet ledger", Wallet], ["/finance-compliance", "Reserve and compliance", ShieldCheck], ["/registration-fee", "Registration fees", FileText], ["/reports", "Financial reports", BarChart3]]} /></TabsContent>
         <TabsContent value="admin"><ModuleLinks links={[["/loans/approvals", "Loan approvals", CheckCircle2], ["/guarantors", "Guarantor management", ShieldCheck], ["/notifications", "Announcements and notifications", Megaphone], ["/admin-email", "Member messages", Send], ["/documents", "Member documents", FileText], ["/compliance", "Compliance and audit", ShieldCheck], ["/settings", "Admin settings", Settings]]} /></TabsContent>
       </Tabs>
