@@ -537,7 +537,14 @@ export default function MyAccount() {
             onClick={() => { setDepositType("savings"); setDepositOpen(true); }}
           >
             <Wallet className="h-4 w-4" />
-            Deposit Savings
+            Wallet Deposit
+          </Button>
+          <Button
+            className="bg-amber-500 hover:bg-amber-600 text-slate-950 gap-2"
+            onClick={() => { setDepositType("cycle"); setDepositOpen(true); }}
+          >
+            <CalendarCheck className="h-4 w-4" />
+            Pay Cycle
           </Button>
           <Button
             className="bg-purple-600 hover:bg-purple-700 text-white gap-2"
