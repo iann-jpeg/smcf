@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Users, Landmark, BookOpen, BarChart3, Shield, Settings,
-  FileText, AlertTriangle, ShieldCheck, Gavel, UserCircle, UserCircle2, CreditCard, CalendarCheck, FlaskConical, Receipt, Percent, Calculator,
+  FileText, AlertTriangle, ShieldCheck, Gavel, UserCircle, UserCircle2, CreditCard, CalendarCheck, FlaskConical, Receipt, Percent, Calculator, ArrowLeftRight, Wallet, TrendingUp, BadgeCheck,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
