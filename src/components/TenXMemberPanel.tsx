@@ -43,9 +43,9 @@ export default function TenXMemberPanel({ userData }: { userData: any }) {
     if (body.success) setData(body.data);
   };
 
-  useEffect(() => { if (userData?.is10XMember) load(); }, [userData?.is10XMember]);
+  useEffect(() => { if (userData?._id || userData?.id) load(); }, [userData?._id, userData?.id]);
 
-  if (!userData?.is10XMember || !data) return null;
+  if (!data) return null;
   const current = data.currentPeriod;
   const currentPayment = data.contributions.find((item) => item.period === current?.period && item.status === "SUCCESSFUL");
   const pending = data.contributions.find((item) => item.period === current?.period && item.status === "PENDING");
