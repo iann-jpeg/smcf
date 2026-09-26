@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import mongoose from 'mongoose';
 import Member from '../models/Member';
+import Transaction from '../models/Transaction';
+import { recordSavingsDeposit } from '../utils/depositLedger';
+import { createTransactionRef } from '../utils/transactionRef';
 import { protect, authorize, AuthRequest } from '../middleware/auth';
 
 const router = Router();
@@ -92,6 +95,42 @@ router.post('/payments/manual', ...adminOnly, async (req: AuthRequest, res, next
       deposit_processed: true,
     });
     return res.status(201).json({ success: true, data: { id: payment.insertedId, reference, member: member.name } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.put('/wallet/:memberId', ...adminOnly, async (req: AuthRequest, res, next) => {
+  try {
+    const desiredBalance = Math.round(Number(req.body?.currentBalance));
+    if (!Number.isFinite(desiredBalance) || desiredBalance < 0) {
+      return res.status(400).json({ success: false, message: 'A valid non-negative wallet balance is required' });
+    }
+    const member = await Member.findById(req.params.memberId).select('name memberId savings');
+    if (!member) return res.status(404).json({ success: false, message: 'Member not found' });
+    const currentBalance = Number(member.savings || 0);
+    const delta = desiredBalance - currentBalance;
+    if (delta === 0) return res.json({ success: true, data: member, message: 'No wallet change required' });
+    const transactionRef = createTransactionRef();
+    const type = delta > 0 ? 'deposit' : 'withdrawal';
+    const amount = Math.abs(delta);
+    await Transaction.create({
+      transactionRef,
+      memberId: member._id,
+      type,
+      amount,
+      description: `Admin wallet balance adjustment: ${currentBalance} -> ${desiredBalance}`,
+      status: 'completed',
+      createdBy: req.userId,
+      depositProcessed: type === 'deposit',
+    });
+    if (delta > 0) {
+      await recordSavingsDeposit({ memberId: String(member._id), amount, reference: transactionRef, sourceLabel: 'admin wallet adjustment', note: `Balance set to KES ${desiredBalance}` });
+    } else {
+      await Member.findByIdAndUpdate(member._id, { $inc: { savings: -amount } });
+    }
+    const updated = await Member.findById(member._id).select('name memberId savings');
+    return res.json({ success: true, data: updated, transactionRef });
   } catch (error) {
     return next(error);
   }

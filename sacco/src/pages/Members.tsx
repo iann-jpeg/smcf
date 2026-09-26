@@ -27,11 +27,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Search, UserPlus, Trash2, Wallet, Landmark, Activity, ShieldCheck } from "lucide-react";
+import { Search, UserPlus, Trash2, Wallet, Landmark, Activity, ShieldCheck, Download } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { api } from "@/lib/api";
+import { exportMyStatement } from "@/lib/pdf-export";
 
 function riskColor(score: number) {
   if (score >= 75) return "text-success";
@@ -164,6 +166,22 @@ export default function Members() {
       toast.error(err.message || "Failed to delete member");
     } finally {
       setDeleteTarget(null);
+    }
+  };
+
+  const downloadMemberReport = async (member: any) => {
+    try {
+      const [loansResponse, repaymentsResponse, transactionsResponse, savingsResponse] = await Promise.all([
+        api.get<any>(`/loans?memberId=${member.id}`),
+        api.get<any>(`/repayments?memberId=${member.id}`),
+        api.get<any>(`/transactions?memberId=${member.id}&limit=200`),
+        api.get<any>(`/savings-history?memberId=${member.id}`),
+      ]);
+      const list = (response: any) => Array.isArray(response) ? response : response?.data ?? [];
+      exportMyStatement(member.name, member.member_id, member, list(loansResponse), list(repaymentsResponse), list(transactionsResponse), list(savingsResponse));
+      toast.success(`PDF report downloaded for ${member.name}`);
+    } catch (error: any) {
+      toast.error(error?.message || "Could not download member report");
     }
   };
 
@@ -340,6 +358,15 @@ export default function Members() {
                     </TableCell>
                     {isAdmin && (
                       <TableCell onClick={(e) => e.stopPropagation()} className="flex gap-1 justify-end">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-primary hover:bg-primary/10"
+                          title="Download account report"
+                          onClick={() => void downloadMemberReport(m)}
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"
