@@ -102,7 +102,7 @@ export default function MyAccount() {
   const [regFeeCheckoutId, setRegFeeCheckoutId] = useState<string | null>(null);
 
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get("tab") || "repayments";
+  const activeTab = searchParams.get("tab") || "overview";
   const tabsContainerRef = useRef<HTMLDivElement>(null);
   const [extProfile, setExtProfile] = useState<{
     name: string; nationalId: string; dateOfBirth: string;
@@ -467,9 +467,9 @@ export default function MyAccount() {
         <div className="flex items-center gap-3">
           <MemberAvatar name={member.name} photo={member.profile_photo} size="md" />
           <div>
-            <h1 className="text-2xl font-heading font-bold">My Account</h1>
+            <h1 className="text-2xl font-heading font-bold">Good morning, {member.name?.split(" ")[0] || "Member"}</h1>
             <p className="text-muted-foreground text-sm">
-              Welcome, {member.name} · {member.member_id}
+              Your SMCF financial overview · {member.member_id}
             </p>
             {registrationFeePaid && (
               <Badge className="mt-1 bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-100">
@@ -582,7 +582,7 @@ export default function MyAccount() {
       {/**
        * Share capital and units calculation
        * Share unit price is the same as in ShareSubscriptionDialog (KES 100). */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <StatCard
           title="Share Capital"
           value={`KES ${Number(member?.shares ?? 0).toLocaleString()}`}
@@ -616,6 +616,20 @@ export default function MyAccount() {
           icon={CreditCard}
           variant="destructive"
           subtitle={pendingLoans.length > 0 ? `${pendingLoans.length} pending` : undefined}
+        />
+        <StatCard
+          title="Wallet Balance"
+          value={`KES ${Number(unifiedAccount?.wallet?.balance ?? 0).toLocaleString()}`}
+          icon={Wallet}
+          variant="success"
+          subtitle="Available balance"
+        />
+        <StatCard
+          title="Current Cycle"
+          value={unifiedAccount?.cycles?.active ? `#${unifiedAccount.cycles.active.cycleNumber}` : "None"}
+          icon={CalendarCheck}
+          variant="accent"
+          subtitle={unifiedAccount?.cycles?.active ? `${Number(unifiedAccount.cycles.active.memberContribution || 0).toLocaleString()} contributed` : "Join a cycle when available"}
         />
       </div>
 
@@ -885,6 +899,45 @@ export default function MyAccount() {
               <span className="sm:hidden">Card</span>
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="overview" className="space-y-4">
+            <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+              <Card>
+                <CardHeader><CardTitle className="font-heading text-lg">Quick actions</CardTitle><p className="text-sm text-muted-foreground">Keep your financial life moving from one place.</p></CardHeader>
+                <CardContent className="grid gap-3 sm:grid-cols-2">
+                  <Button className="justify-start gap-2" onClick={() => { setDepositType("savings"); setDepositOpen(true); }}><Wallet className="h-4 w-4" /> Deposit Savings</Button>
+                  <Button variant="outline" className="justify-start gap-2" onClick={() => setShareSubscribeOpen(true)} disabled={!sharePurchaseEnabled}><Landmark className="h-4 w-4" /> Buy Shares</Button>
+                  <Button asChild variant="outline" className="justify-start gap-2"><Link to="/loans/apply"><PlusCircle className="h-4 w-4" /> Apply for Loan</Link></Button>
+                  <Button variant="outline" className="justify-start gap-2" onClick={() => { const activeLoan = activeLoans[0]; if (activeLoan) setRepayLoan(activeLoan); else setSearchParams({ tab: "repayments" }); }}><CreditCard className="h-4 w-4" /> Make Repayment</Button>
+                  <Button variant="outline" className="justify-start gap-2" onClick={() => setSearchParams({ tab: "wallet-cycles" })}><CalendarCheck className="h-4 w-4" /> Open Wallet & Cycles</Button>
+                  <Button variant="outline" className="justify-start gap-2" onClick={() => setSearchParams({ tab: "transactions" })}><ArrowRightLeft className="h-4 w-4" /> View Transactions</Button>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader><CardTitle className="font-heading text-lg">Recent activity</CardTitle><p className="text-sm text-muted-foreground">Your latest account movements.</p></CardHeader>
+                <CardContent className="space-y-2">
+                  {(unifiedAccount?.wallet?.transactions || transactions).slice(0, 5).length === 0 ? <p className="py-4 text-sm text-muted-foreground">Your transactions will appear here.</p> : (unifiedAccount?.wallet?.transactions || transactions).slice(0, 5).map((transaction: any) => <div key={String(transaction._id || transaction.id || transaction.transaction_ref)} className="flex items-center justify-between border-b py-2 last:border-0"><div><p className="text-sm font-medium capitalize">{String(transaction.type || "transaction").replaceAll("_", " ")}</p><p className="text-xs text-muted-foreground">{transaction.processedAt || transaction.processed_at ? new Date(transaction.processedAt || transaction.processed_at).toLocaleDateString() : "-"}</p></div><div className="text-right"><p className="text-sm font-semibold">KES {Number(transaction.amount || 0).toLocaleString()}</p><Badge variant={transaction.status === "completed" ? "default" : "outline"}>{transaction.status || "-"}</Badge></div></div>)}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="shares" className="space-y-4">
+            <Card>
+              <CardHeader><CardTitle className="font-heading text-lg">Shares & Dividends</CardTitle><p className="text-sm text-muted-foreground">Your share capital, contribution history, and dividend record.</p></CardHeader>
+              <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-lg border p-4"><p className="text-xs text-muted-foreground">Shares owned</p><p className="mt-1 text-2xl font-semibold">{memberSharesOwned.toLocaleString()}</p></div>
+                <div className="rounded-lg border p-4"><p className="text-xs text-muted-foreground">Share capital</p><p className="mt-1 text-2xl font-semibold">KES {memberTotalShareCapital.toLocaleString()}</p></div>
+                <div className="rounded-lg border p-4"><p className="text-xs text-muted-foreground">Minimum progress</p><p className="mt-1 text-2xl font-semibold">{memberShareProgress.toFixed(1)}%</p><Progress className="mt-2 h-2" value={Math.min(100, memberShareProgress)} /></div>
+                <div className="rounded-lg border p-4"><p className="text-xs text-muted-foreground">Current dividend</p><p className="mt-1 text-2xl font-semibold">KES {memberCurrentDividend.toLocaleString()}</p></div>
+              </CardContent>
+            </Card>
+            <Button onClick={() => setShareSubscribeOpen(true)} disabled={!sharePurchaseEnabled}><Landmark className="mr-2 h-4 w-4" /> Buy Shares</Button>
+          </TabsContent>
+
+          <TabsContent value="statements" className="space-y-4">
+            <Card><CardHeader><CardTitle className="font-heading text-lg">Statement Centre</CardTitle><p className="text-sm text-muted-foreground">Generate a statement from your existing savings, loans, repayments, transactions, and member records.</p></CardHeader><CardContent className="flex flex-wrap gap-3"><Button onClick={() => exportMyStatement(member.name, member.member_id, member, loans, repayments, transactions, savingsHistory, { from: dateFrom, to: dateTo })}><FileText className="mr-2 h-4 w-4" /> Download Statement</Button><Button variant="outline" onClick={() => { setDateFrom(undefined); setDateTo(undefined); }} disabled={!dateFrom && !dateTo}>Clear date filters</Button></CardContent></Card>
+          </TabsContent>
 
           {/* Repayments */}
           <TabsContent value="repayments">

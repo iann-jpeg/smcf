@@ -53,18 +53,27 @@ const shareNav = [
 
 const memberNav = [
   { title: "My Account", url: "/my-account", icon: UserCircle },
-  { title: "Repayments", url: "/my-account?tab=repayments", icon: CreditCard },
-  { title: "Repayment History", url: "/my-account?tab=repayment-history", icon: Receipt },
-  { title: "My Loans", url: "/my-account?tab=loans", icon: Landmark },
-  { title: "Transactions", url: "/my-account?tab=transactions", icon: ArrowLeftRight },
-  { title: "Savings History", url: "/my-account?tab=savings", icon: Wallet },
   { title: "Wallet & Cycles", url: "/my-account?tab=wallet-cycles", icon: CalendarCheck },
+  { title: "Apply for Loan", url: "/loans/apply", icon: CreditCard },
+];
+
+const memberFinanceNav = [
+  { title: "Savings", url: "/my-account?tab=savings", icon: Wallet },
+  { title: "Shares", url: "/my-account?tab=shares", icon: Percent },
+  { title: "Loans", url: "/my-account?tab=loans", icon: Landmark },
+  { title: "Repayments", url: "/my-account?tab=repayments", icon: CreditCard },
+  { title: "Transactions", url: "/my-account?tab=transactions", icon: ArrowLeftRight },
+  { title: "Statements", url: "/my-account?tab=statements", icon: FileText },
+];
+
+const memberServicesNav = [
+  { title: "Repayment History", url: "/my-account?tab=repayment-history", icon: Receipt },
   { title: "Growth", url: "/my-account?tab=growth", icon: TrendingUp },
   { title: "Guarantor Requests", url: "/my-account?tab=guarantors", icon: ShieldCheck },
-  { title: "Registration Form", url: "/my-account?tab=registration-form", icon: FileText },
+  { title: "Registration Details", url: "/my-account?tab=registration-form", icon: FileText },
   { title: "ID Card", url: "/my-account?tab=membership-card", icon: BadgeCheck },
-  { title: "Apply for Loan", url: "/loans/apply", icon: CreditCard },
-  { title: "Profile", url: "/my-account?tab=profile", icon: UserCircle2 },
+  { title: "Notifications", url: "/notifications", icon: Bell },
+  { title: "Profile & Security", url: "/my-account?tab=profile", icon: UserCircle2 },
 ];
 
 const adminNav = [
@@ -141,6 +150,13 @@ export function AppSidebar() {
     </SidebarGroup>
   );
 
+  const renderMemberGroup = (label: string, items: typeof memberFinanceNav) => (
+    <SidebarGroup key={label}>
+      <SidebarGroupLabel className="text-sidebar-foreground/50 text-[10px] uppercase tracking-[0.16em]">{label}</SidebarGroupLabel>
+      <SidebarGroupContent><SidebarMenu>{items.map((item) => <SidebarMenuItem key={item.title}><SidebarMenuButton asChild><NavLink to={item.url} onClick={handleNavClick} className="hover:bg-sidebar-accent" activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold"><item.icon className="mr-3 h-4 w-4" /><span>{item.title}</span></NavLink></SidebarMenuButton></SidebarMenuItem>)}</SidebarMenu></SidebarGroupContent>
+    </SidebarGroup>
+  );
+
   return (
     <Sidebar>
       <SidebarHeader className="p-6 border-b border-sidebar-border">
@@ -157,25 +173,7 @@ export function AppSidebar() {
 
       <SidebarContent>
         {/* Member Self-Service — only for non-staff members */}
-        {!isStaff && (
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs uppercase tracking-wider">My Account</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {memberNav.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
-                    <NavLink to={item.url} onClick={handleNavClick} className="hover:bg-sidebar-accent" activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold">
-                      <item.icon className="mr-3 h-4 w-4" />
-                      <span>{item.title}</span>
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        )}
+        {!isStaff && <>{renderMemberGroup("My Account", memberNav)}{renderMemberGroup("Financial", memberFinanceNav)}{renderMemberGroup("Account & Services", memberServicesNav)}</>}
 
         {/* Staff Operations - only visible to staff */}
         {isStaff && <SidebarGroup><SidebarGroupLabel className="text-sidebar-foreground/50 text-[10px] uppercase tracking-[0.16em]">Command Centre</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{visibleStaffNav.map((item) => <SidebarMenuItem key={item.title}><SidebarMenuButton asChild><NavLink to={item.url} onClick={handleNavClick} end={item.url === "/"} className="hover:bg-sidebar-accent" activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold"><item.icon className="mr-3 h-4 w-4" /><span>{item.title}</span></NavLink></SidebarMenuButton></SidebarMenuItem>)}</SidebarMenu></SidebarGroupContent></SidebarGroup>}
