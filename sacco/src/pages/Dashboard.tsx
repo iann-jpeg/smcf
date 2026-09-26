@@ -55,8 +55,8 @@ export default function Dashboard() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button asChild size="sm"><Link to="/members"><UserPlus className="mr-2 h-4 w-4" /> Add Member</Link></Button>
-          <Button asChild size="sm" variant="outline"><Link to="/cycle-admin"><CalendarCheck className="mr-2 h-4 w-4" /> Manage Cycles</Link></Button>
-          <Button asChild size="sm" variant="outline"><Link to="/accounts?tab=wallet"><Wallet className="mr-2 h-4 w-4" /> Wallets</Link></Button>
+          <Button size="sm" variant="outline" onClick={() => navigate("/cycle-admin")}><CalendarCheck className="mr-2 h-4 w-4" /> Manage Cycles</Button>
+          <Button size="sm" variant="outline" onClick={() => navigate("/accounts?tab=wallet")}><Wallet className="mr-2 h-4 w-4" /> Wallets</Button>
           <Button asChild size="sm" variant="outline"><Link to="/reports"><FileText className="mr-2 h-4 w-4" /> Reports</Link></Button>
         </div>
       </div>
