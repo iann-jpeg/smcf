@@ -1018,6 +1018,35 @@ const Index = () => {
             </div>
           </div>
         </section>
+
+        <section className="border-y border-[#e7eee9] bg-[#fbfcfa] px-4 py-16 sm:px-6 lg:py-20">
+          <div className="mx-auto max-w-7xl">
+            <div className="mx-auto max-w-2xl text-center">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#85704f]">Featured Organizations &amp; Brands</p>
+              <h2 className="mt-3 text-3xl font-black tracking-[-0.04em] text-[#123026] sm:text-4xl">Built alongside trusted names.</h2>
+              <p className="mt-4 text-base leading-7 text-[#536c67] sm:text-lg">
+                Working with trusted organizations and brands to strengthen financial inclusion, technology and community empowerment.
+              </p>
+            </div>
+
+            <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 lg:gap-4">
+              {["Safaricom", "Co-operative Bank of Kenya", "Jubilee Insurance", "SM Digital Solutions", "SmartMoves Books"].map((brand, index) => (
+                <div
+                  key={brand}
+                  className="group flex min-h-[132px] animate-fade-in-up flex-col items-center justify-center rounded-[22px] border border-[#e5ece7] bg-white px-4 py-5 text-center shadow-[0_12px_28px_rgba(17,53,39,0.04)] transition duration-300 hover:-translate-y-0.5 hover:scale-[1.02] hover:shadow-[0_20px_40px_rgba(17,53,39,0.09)]"
+                  style={{ animationDelay: `${index * 70}ms` }}
+                >
+                  <div className="flex h-12 w-full items-center justify-center rounded-xl border border-dashed border-[#cbd9d0] bg-[#f7faf7] px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#6d8278] transition group-hover:border-[#b8924a]">
+                    Official logo asset pending
+                  </div>
+                  <p className="mt-4 text-sm font-semibold leading-5 text-[#123026]">{brand}</p>
+                </div>
+              ))}
+            </div>
+
+            <p className="mt-8 text-center text-xs tracking-[0.08em] text-[#789087]">Building stronger communities through finance, technology and opportunity.</p>
+          </div>
+        </section>
       </main>
 
       <footer id="contact" className="bg-[#0d261f] text-white">
