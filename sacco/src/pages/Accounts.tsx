@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useMembers } from "@/hooks/useMembers";
@@ -13,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Check, Loader2, TrendingUp, Users, Coins, X, Percent, Download } from "lucide-react";
+import { Check, Loader2, TrendingUp, Users, Coins, X, Percent, Download, CalendarSync, Wallet, FastForward, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import ShareCapitalDividendsTab from "@/components/admin/ShareCapitalDividendsTab";
 import {
@@ -55,6 +56,31 @@ export default function Accounts() {
   const [approvingInterest, setApprovingInterest] = useState(false);
   const [interestPreview, setInterestPreview] = useState<any | null>(null);
   const [interestResult, setInterestResult] = useState<any | null>(null);
+  const [walletActionId, setWalletActionId] = useState<string | null>(null);
+
+  const { data: cycleAdminData, isLoading: cycleAdminLoading, refetch: refetchCycleAdmin } = useQuery({
+    queryKey: ["cycle-admin-overview"],
+    queryFn: async () => {
+      const res: any = await api.get("/cycle-admin/overview");
+      return res?.data ?? res ?? {};
+    },
+    enabled: isAdmin && activeTab === "cycles",
+  });
+
+  const { data: walletAdminData, isLoading: walletAdminLoading, refetch: refetchWalletAdmin } = useQuery({
+    queryKey: ["wallet-admin-overview"],
+    queryFn: async () => {
+      const [membersRes, withdrawalsRes] = await Promise.all([
+        api.get<any>("/savings/admin/all"),
+        api.get<any>("/savings/admin/pending-withdrawals"),
+      ]);
+      return {
+        members: Array.isArray(membersRes?.data ?? membersRes) ? (membersRes?.data ?? membersRes) : [],
+        withdrawals: Array.isArray(withdrawalsRes?.data ?? withdrawalsRes) ? (withdrawalsRes?.data ?? withdrawalsRes) : [],
+      };
+    },
+    enabled: isAdmin && activeTab === "wallet",
+  });
 
   // Pending payments (status = pending)
   const { data: pending = [], isLoading: pendingLoading, refetch: refetchPending } = useQuery({
@@ -119,6 +145,30 @@ export default function Accounts() {
       toast.error(err?.message || "Failed to decline payment.");
     } finally {
       setDecliningId(null);
+    }
+  }
+
+  async function handleWalletWithdrawal(id: string, action: "approve" | "reject") {
+    setWalletActionId(id);
+    try {
+      await api.post(`/savings/admin/${action}-withdrawal/${id}`, action === "reject" ? { rejection_reason: "Rejected by SACCO administrator" } : {});
+      toast.success(action === "approve" ? "Wallet withdrawal approved." : "Wallet withdrawal rejected.");
+      refetchWalletAdmin();
+    } catch (err: any) {
+      toast.error(err?.message || "Wallet action failed.");
+    } finally {
+      setWalletActionId(null);
+    }
+  }
+
+  async function handleApplyWalletInterest() {
+    try {
+      await api.post("/savings/admin/apply-interest", {});
+      toast.success("Wallet interest applied.");
+      refetchWalletAdmin();
+      qc.invalidateQueries({ queryKey: ["members"] });
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to apply wallet interest.");
     }
   }
 
@@ -292,6 +342,8 @@ export default function Accounts() {
               </span>
             )}
           </TabsTrigger>
+          {isAdmin && <TabsTrigger value="wallet"><Wallet className="mr-1.5 h-3.5 w-3.5" /> Wallet Deposits</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="cycles"><CalendarSync className="mr-1.5 h-3.5 w-3.5" /> Cycles</TabsTrigger>}
           <TabsTrigger value="dividends">
             <Coins className="mr-1.5 h-3.5 w-3.5" />
             Dividends
@@ -545,6 +597,27 @@ export default function Accounts() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="wallet" className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div><h2 className="font-heading text-lg">Wallet Deposits & Withdrawals</h2><p className="text-sm text-muted-foreground">Wallet activity is separate from contribution-cycle funds.</p></div>
+            <Button variant="outline" className="gap-2" onClick={() => void handleApplyWalletInterest()}><TrendingUp className="h-4 w-4" /> Apply interest</Button>
+          </div>
+          <Card>
+            <CardHeader><div className="flex items-center justify-between"><div><CardTitle>Member wallet balances</CardTitle><p className="text-sm text-muted-foreground">Deposits, interest and current available balances</p></div><Button variant="ghost" size="icon" onClick={() => refetchWalletAdmin()} title="Refresh wallet records"><RefreshCw className="h-4 w-4" /></Button></div></CardHeader>
+            <CardContent>{walletAdminLoading ? <Skeleton className="h-48 w-full" /> : (walletAdminData?.members || []).length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No wallet records found.</p> : <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Member</TableHead><TableHead className="text-right">Balance</TableHead><TableHead className="text-right">Deposits</TableHead><TableHead className="text-right">Interest</TableHead><TableHead>Activity</TableHead></TableRow></TableHeader><TableBody>{(walletAdminData?.members || []).map((member: any) => <TableRow key={String(member._id)}><TableCell><p className="font-medium">{member.name}</p><p className="text-xs text-muted-foreground">{member.member_id || member.memberId}</p></TableCell><TableCell className="text-right font-semibold">{Number(member.currentBalance || 0).toLocaleString()}</TableCell><TableCell className="text-right">{Number(member.totalDeposits || 0).toLocaleString()}</TableCell><TableCell className="text-right">{Number(member.totalInterestEarned || 0).toLocaleString()}</TableCell><TableCell><Badge variant="secondary">{member.transactionCount || 0} deposits</Badge></TableCell></TableRow>)}</TableBody></Table></div>}</CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Pending wallet withdrawals</CardTitle><p className="text-sm text-muted-foreground">Approve or reject member withdrawal requests.</p></CardHeader>
+            <CardContent>{(walletAdminData?.withdrawals || []).length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">No pending withdrawals.</p> : <div className="space-y-3">{(walletAdminData?.withdrawals || []).map((withdrawal: any) => <div key={String(withdrawal._id)} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"><div><p className="font-medium">{withdrawal.member?.name || withdrawal.memberName || "Member"}</p><p className="text-xs text-muted-foreground">{withdrawal.createdAt ? new Date(withdrawal.createdAt).toLocaleString() : "-"}</p></div><div className="flex items-center gap-2"><span className="font-semibold">KES {Number(withdrawal.amount || 0).toLocaleString()}</span><Button size="sm" onClick={() => void handleWalletWithdrawal(String(withdrawal._id), "approve")} disabled={walletActionId === String(withdrawal._id)}>Approve</Button><Button size="sm" variant="destructive" onClick={() => void handleWalletWithdrawal(String(withdrawal._id), "reject")} disabled={walletActionId === String(withdrawal._id)}>Reject</Button></div></div>)}</div>}</CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="cycles" className="space-y-4">
+          <div className="flex items-center justify-between"><div><h2 className="font-heading text-lg">Contribution Cycles</h2><p className="text-sm text-muted-foreground">Cycle collections are tracked independently from wallet deposits.</p></div><Button variant="outline" className="gap-2" onClick={() => refetchCycleAdmin()}><RefreshCw className="h-4 w-4" /> Refresh</Button></div>
+          <Card><CardHeader><CardTitle className="flex items-center gap-2"><CalendarSync className="h-5 w-5" /> Active Cycle #{cycleAdminData?.stats?.cycleNumber || "-"}</CardTitle><p className="text-sm text-muted-foreground">{cycleAdminData?.currentCycle?.status || "No active cycle"}</p></CardHeader><CardContent>{cycleAdminLoading ? <Skeleton className="h-40 w-full" /> : <div className="grid gap-4 sm:grid-cols-4"><div><p className="text-xs text-muted-foreground">Paid members</p><p className="text-2xl font-bold">{cycleAdminData?.stats?.paidMembers || 0}/{cycleAdminData?.stats?.totalMembers || 0}</p></div><div><p className="text-xs text-muted-foreground">Collected</p><p className="text-2xl font-bold">KES {Number(cycleAdminData?.stats?.collected || 0).toLocaleString()}</p></div><div><p className="text-xs text-muted-foreground">Target</p><p className="text-2xl font-bold">KES {Number(cycleAdminData?.stats?.target || 0).toLocaleString()}</p></div><div><p className="text-xs text-muted-foreground">Advance payers</p><p className="text-2xl font-bold"><FastForward className="mr-1 inline h-5 w-5" />{cycleAdminData?.advancePayments?.length || 0}</p></div></div>}</CardContent></Card>
+          <Card><CardHeader><div className="flex items-center justify-between"><div><CardTitle>Cycle payment records</CardTitle><p className="text-sm text-muted-foreground">STK and manual contributions for the active cycle</p></div><Button asChild variant="outline"><Link to="/cycle-admin">Open full Cycle Admin</Link></Button></div></CardHeader><CardContent>{(cycleAdminData?.payments || []).length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">No cycle payments found.</p> : <div className="space-y-2">{(cycleAdminData?.payments || []).slice(0, 20).map((payment: any) => <div key={String(payment._id)} className="flex items-center justify-between rounded-lg border p-3"><div><p className="font-medium">{payment.member_id?.name || payment.phone || "Member"}</p><p className="text-xs text-muted-foreground">{payment.mpesa_transaction_id || payment.transaction_reference || "Manual"}</p></div><div className="text-right"><p className="font-semibold">KES {Number(payment.amount || 0).toLocaleString()}</p><Badge>{payment.status || "completed"}</Badge></div></div>)}</div>}</CardContent></Card>
         </TabsContent>
 
         {/* ── Dividend Distribution ─────────────────────────────────────── */}
