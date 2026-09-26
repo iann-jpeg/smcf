@@ -60,7 +60,7 @@ router.get('/', protect, async (req: AuthRequest, res, next) => {
     ]);
 
     const deposits = completedTransactions
-      .filter((transaction) => ['deposit', 'savings_interest'].includes(transaction.type))
+      .filter((transaction) => ['deposit', 'savings_interest'].includes(transaction.type) && !transaction.cycleNumber)
       .reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
     const withdrawals = completedTransactions
       .filter((transaction) => transaction.type === 'withdrawal')
@@ -119,7 +119,7 @@ router.get('/', protect, async (req: AuthRequest, res, next) => {
           totalDeposits: deposits,
           totalWithdrawals: withdrawals,
           transactionCount: transactions.length,
-          transactions,
+          transactions: transactions.filter((transaction) => !transaction.cycleNumber),
         },
         cycles: {
           active: cycle,

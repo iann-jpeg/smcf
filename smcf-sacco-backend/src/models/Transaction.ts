@@ -13,6 +13,8 @@ export interface ITransaction extends Document {
   // STK push tracking
   checkoutRequestId?: string;
   mpesaRef?: string;
+  paymentGateway?: string;
+  cycleNumber?: number;
   loanId?: string;
   depositProcessed?: boolean;
 }
@@ -61,6 +63,8 @@ const TransactionSchema = new Schema<ITransaction>({
   },
   checkoutRequestId: { type: String, default: null },
   mpesaRef: { type: String, default: null },
+  paymentGateway: { type: String, default: null },
+  cycleNumber: { type: Number, default: null },
   loanId: { type: String, default: null },
   depositProcessed: { type: Boolean, default: false },
 });
@@ -72,5 +76,6 @@ TransactionSchema.index({ processedAt: -1 });
 TransactionSchema.index({ status: 1 });
 TransactionSchema.index({ checkoutRequestId: 1 });
 TransactionSchema.index({ mpesaRef: 1 }, { sparse: true });
+TransactionSchema.index({ memberId: 1, cycleNumber: 1, processedAt: -1 });
 
 export default mongoose.model<ITransaction>('Transaction', TransactionSchema);

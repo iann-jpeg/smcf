@@ -916,6 +916,41 @@ export function exportMyTransactions(
   doc.save(`transactions-${memberId}.pdf`);
 }
 
+export function exportPaymentReceipt(data: {
+  memberName: string;
+  memberId: string;
+  amount: number;
+  date?: string;
+  status?: string;
+  type?: string;
+  reference?: string;
+  gateway?: string;
+  cycleNumber?: number;
+}) {
+  const doc = initDoc("Payment Receipt");
+  autoTable(doc, {
+    startY: 58,
+    head: [["Payment Detail", "Value"]],
+    body: [
+      ["Member", `${data.memberName} (${data.memberId})`],
+      ["Amount", `KES ${Number(data.amount || 0).toLocaleString()}`],
+      ["Date", data.date ? new Date(data.date).toLocaleString("en-KE") : DATE_FMT.format(new Date())],
+      ["Payment Type", data.cycleNumber ? `Cycle ${data.cycleNumber} contribution` : (data.type || "Payment").replaceAll("_", " ")],
+      ["Status", data.status || "completed"],
+      ["Gateway", data.gateway || "Lipia STK / M-Pesa"],
+      ["Reference", data.reference || "—"],
+    ],
+    headStyles: { fillColor: HEADER_COLOR },
+    columnStyles: { 0: { fontStyle: "bold" } },
+  });
+  doc.setFontSize(10);
+  doc.setTextColor(100);
+  doc.text("Keep this receipt for your records. SMCF SACCO.", 14, (doc as any).lastAutoTable.finalY + 16);
+  doc.setTextColor(0);
+  addPageFooters(doc, `Payment Receipt — ${data.memberId}`);
+  doc.save(`SMCF_Payment_Receipt_${data.reference || Date.now()}.pdf`);
+}
+
 export function exportMemberStatements(
   rows: Array<{ member_id: string; name: string; savings: number; shares: number; loan_balance: number; status: string }>
 ) {

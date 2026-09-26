@@ -15,6 +15,7 @@
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
+import mongoose from 'mongoose';
 import Transaction from '../models/Transaction';
 import Member from '../models/Member';
 import Loan from '../models/Loan';
@@ -60,6 +61,8 @@ interface PendingDeposit {
   status: 'pending' | 'success' | 'failed';
   mpesaRef?: string;
   resultDesc?: string;
+  cyclePayment?: boolean;
+  cycleNumber?: number;
   createdAt: number;
 }
 
@@ -257,6 +260,7 @@ async function pollSACCOPayment(
       const confirmedAmount = paidAmt || amount;
       try {
         if (type === 'deposit') {
+          const pending = pendingDeposits.get(checkoutRequestId);
           await settlePendingDeposit({
             checkoutRequestId,
             memberId,
@@ -264,6 +268,7 @@ async function pollSACCOPayment(
             phone,
             mpesaRef: mpesaReceiptNumber,
             sourceLabel: 'M-Pesa STK',
+            cycleNumber: pending?.cyclePayment ? pending.cycleNumber : undefined,
             processedAt: new Date(),
           });
           const d = pendingDeposits.get(checkoutRequestId);
@@ -659,6 +664,7 @@ async function settlePendingDeposit(params: {
   phone?: string;
   mpesaRef: string;
   sourceLabel: string;
+  cycleNumber?: number;
   processedAt?: Date;
 }) {
   const amount = Math.round(Number(params.amount));
@@ -677,6 +683,7 @@ async function settlePendingDeposit(params: {
     return { applied: false, duplicate: true };
   }
 
+  const cycleNumber = params.cycleNumber;
   const claimedTxn = await Transaction.findOneAndUpdate(
     {
       checkoutRequestId: params.checkoutRequestId,
@@ -687,8 +694,12 @@ async function settlePendingDeposit(params: {
       $set: {
         status: 'completed',
         mpesaRef: params.mpesaRef,
+        paymentGateway: 'lipia',
+        cycleNumber: cycleNumber ?? null,
         amount,
-        description: `M-Pesa Savings Deposit — Ref: ${params.mpesaRef} — ${params.phone || 'unknown'}`,
+        description: cycleNumber
+          ? `Cycle ${cycleNumber} contribution via Lipia STK — Ref: ${params.mpesaRef} — ${params.phone || 'unknown'}`
+          : `M-Pesa Savings Deposit — Ref: ${params.mpesaRef} — ${params.phone || 'unknown'}`,
         processedAt,
         depositProcessed: true,
       },
@@ -709,17 +720,73 @@ async function settlePendingDeposit(params: {
     throw new Error('Pending deposit transaction not found');
   }
 
-  await recordSavingsDeposit({
-    memberId: params.memberId,
-    amount,
-    reference: params.mpesaRef,
-    sourceLabel: params.sourceLabel,
-    processedAt,
-    note: params.phone ? `Phone: ${params.phone}` : undefined,
-    notificationPath: '/accounts',
-  });
+  if (!cycleNumber) {
+    await recordSavingsDeposit({
+      memberId: params.memberId,
+      amount,
+      reference: params.mpesaRef,
+      sourceLabel: params.sourceLabel,
+      processedAt,
+      note: params.phone ? `Phone: ${params.phone}` : undefined,
+      notificationPath: '/accounts',
+    });
+  }
+
+  if (cycleNumber) {
+    await recordCyclePayment({
+      memberId: params.memberId,
+      amount,
+      phone: params.phone,
+      cycleNumber,
+      checkoutRequestId: params.checkoutRequestId,
+      mpesaRef: params.mpesaRef,
+      processedAt,
+    });
+  }
 
   return { applied: true, duplicate: false };
+}
+
+async function recordCyclePayment(params: {
+  memberId: string;
+  amount: number;
+  phone?: string;
+  cycleNumber: number;
+  checkoutRequestId: string;
+  mpesaRef: string;
+  processedAt: Date;
+}) {
+  const database = mongoose.connection.db;
+  if (!database) throw new Error('Database connection unavailable');
+
+  const payments = database.collection('payments');
+  const existing = await payments.findOne({
+    $or: [
+      { mpesa_transaction_id: params.mpesaRef },
+      { checkout_request_id: params.checkoutRequestId },
+    ],
+  });
+  if (existing) return existing;
+
+  const memberObjectId = new mongoose.Types.ObjectId(params.memberId);
+  const result = await payments.insertOne({
+    member_id: memberObjectId,
+    paid_by: memberObjectId,
+    amount: params.amount,
+    phone: params.phone || '',
+    mpesa_transaction_id: params.mpesaRef,
+    checkout_request_id: params.checkoutRequestId,
+    transaction_reference: params.mpesaRef,
+    payment_method: 'lipia',
+    status: 'completed',
+    type: 'cycle_payment',
+    cycle_number: params.cycleNumber,
+    date: params.processedAt,
+    created_at: params.processedAt,
+    deposit_processed: true,
+    notes: `Cycle ${params.cycleNumber} contribution via Lipia STK`,
+  });
+  return { _id: result.insertedId };
 }
 
 function isDuplicateKeyError(err: unknown): err is { code?: number; keyValue?: Record<string, unknown>; keyPattern?: Record<string, unknown> } {
@@ -773,6 +840,7 @@ async function createOrGetPendingDepositTransaction(params: {
   amount: number;
   phone: string;
   checkoutRequestId: string;
+  cycleNumber?: number;
 }) {
   const description = `M-Pesa Savings Deposit — STK Pending — ${params.phone}`;
 
@@ -794,8 +862,11 @@ async function createOrGetPendingDepositTransaction(params: {
             description,
             status: 'pending',
             checkoutRequestId: params.checkoutRequestId,
+            cycleNumber: params.cycleNumber ?? null,
+            paymentGateway: 'lipia',
             createdBy: null,
           },
+          $set: params.cycleNumber ? { cycleNumber: params.cycleNumber } : {},
         },
         { upsert: true, new: true }
       ).select('_id checkoutRequestId memberId amount status mpesaRef depositProcessed');
@@ -892,7 +963,7 @@ router.get('/provider-diagnostics', protect, authorize('admin', 'treasurer', 'me
 
 router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { memberId, amount, phone } = req.body;
+    const { memberId, amount, phone, paymentType, cycleNumber: requestedCycleNumber } = req.body;
 
     if (!memberId) return res.status(400).json({ success: false, message: 'memberId is required' });
     if (!phone)    return res.status(400).json({ success: false, message: 'Phone number is required' });
@@ -901,6 +972,19 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
 
     const mpesaPhone = normalizePhone(phone);
     const numAmount  = Math.round(Number(amount));
+    const cyclePayment = paymentType === 'cycle';
+    let cycleNumber = Number(requestedCycleNumber) || undefined;
+
+    if (cyclePayment && !cycleNumber && mongoose.connection.db) {
+      const activeCycle = await mongoose.connection.db.collection('cycles').findOne(
+        { status: 'active' },
+        { sort: { cycle_number: -1 } },
+      );
+      cycleNumber = Number(activeCycle?.cycle_number) || undefined;
+    }
+    if (cyclePayment && !cycleNumber) {
+      return res.status(400).json({ success: false, message: 'No active cycle is available for payment' });
+    }
 
     const reusablePendingTxn = await findReusablePendingDepositTransaction({
       memberId,
@@ -916,6 +1000,8 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
         amount: numAmount,
         phone: mpesaPhone,
         status: 'pending',
+        cyclePayment,
+        cycleNumber,
         createdAt: Date.now(),
       });
 
@@ -943,6 +1029,8 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
         amount: numAmount,
         phone: mpesaPhone,
         status: 'pending',
+        cyclePayment,
+        cycleNumber,
         createdAt: Date.now(),
       });
 
@@ -952,7 +1040,7 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
         if (!d || d.status !== 'pending') return;
         try {
           const ref = `SIM${Date.now()}`;
-          await recordDeposit(d.memberId, d.amount, d.phone, ref);
+          await recordDeposit(d.memberId, d.amount, d.phone, ref, d.cycleNumber, simId);
           d.status = 'success';
           d.mpesaRef = ref;
         } catch {
@@ -989,6 +1077,7 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
       amount: numAmount,
       phone: mpesaPhone,
       checkoutRequestId,
+      cycleNumber,
     });
 
     const mapStatus: PendingDeposit['status'] =
@@ -1000,6 +1089,8 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
       phone: mpesaPhone,
       status: mapStatus,
       mpesaRef: txnDoc.mpesaRef || undefined,
+      cyclePayment,
+      cycleNumber,
       createdAt: Date.now(),
     });
 
@@ -1016,27 +1107,47 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
   }
 });
 
-async function recordDeposit(memberId: string, amount: number, phone: string, mpesaRef: string) {
+async function recordDeposit(memberId: string, amount: number, phone: string, mpesaRef: string, cycleNumber?: number, checkoutRequestId?: string) {
   const transactionRef = createTransactionRef();
   await Transaction.create({
     transactionRef,
     memberId,
     type: 'deposit',
+    paymentGateway: 'lipia',
+    cycleNumber: cycleNumber ?? null,
     amount,
-    description: `M-Pesa Savings Deposit — Ref: ${mpesaRef} — ${phone}`,
+    description: cycleNumber
+      ? `Cycle ${cycleNumber} contribution via Lipia STK — Ref: ${mpesaRef} — ${phone}`
+      : `M-Pesa Savings Deposit — Ref: ${mpesaRef} — ${phone}`,
     status: 'completed',
+    checkoutRequestId: checkoutRequestId || null,
+    mpesaRef,
     createdBy: null,
   });
 
-  await recordSavingsDeposit({
-    memberId,
-    amount,
-    reference: mpesaRef,
-    sourceLabel: 'M-Pesa',
-    processedAt: new Date(),
-    note: phone ? `Phone: ${phone}` : undefined,
-    notificationPath: '/accounts',
-  });
+  if (!cycleNumber) {
+    await recordSavingsDeposit({
+      memberId,
+      amount,
+      reference: mpesaRef,
+      sourceLabel: 'M-Pesa',
+      processedAt: new Date(),
+      note: phone ? `Phone: ${phone}` : undefined,
+      notificationPath: '/accounts',
+    });
+  }
+
+  if (cycleNumber && checkoutRequestId) {
+    await recordCyclePayment({
+      memberId,
+      amount,
+      phone,
+      cycleNumber,
+      checkoutRequestId,
+      mpesaRef,
+      processedAt: new Date(),
+    });
+  }
 }
 
 // ─── POST /api/mpesa/share-purchase ─────────────────────────────────────────

@@ -21,11 +21,13 @@ interface Props {
   onClose: () => void;
   memberId: string;
   memberPhone?: string | null;
+  paymentType?: "savings" | "cycle";
+  cycleNumber?: number | null;
 }
 
 const QUICK_AMOUNTS = [500, 1000, 2000, 5000];
 
-export function DepositSavingsDialog({ open, onClose, memberId, memberPhone }: Props) {
+export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, paymentType = "savings", cycleNumber }: Props) {
   const [step,        setStep]        = useState<Step>("input");
   const [amount,      setAmount]      = useState("");
   const [phone,       setPhone]       = useState(memberPhone ?? "");
@@ -99,6 +101,8 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone }: P
         memberId,
         amount: num,
         phone: phone.trim(),
+        paymentType,
+        cycleNumber,
       });
       const id = (res as any)?.checkoutRequestId || (res as any)?.data?.checkoutRequestId;
       if (!id) throw new Error("No checkout ID returned");
@@ -126,10 +130,10 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone }: P
                 <div className="p-1.5 rounded-full bg-green-100 dark:bg-green-900/30">
                   <Wallet className="h-5 w-5 text-green-600 dark:text-green-400" />
                 </div>
-                Deposit Savings via M-Pesa
+                {paymentType === "cycle" ? `Pay Cycle ${cycleNumber ? `#${cycleNumber} ` : ""}via M-Pesa` : "Deposit Savings via M-Pesa"}
               </DialogTitle>
               <DialogDescription>
-                Select an amount below. An M-Pesa STK push will be sent to your phone — just enter your PIN to complete the deposit.
+                Select an amount below. An M-Pesa STK push will be sent to your phone — just enter your PIN to complete the {paymentType === "cycle" ? "cycle contribution" : "savings deposit"}.
               </DialogDescription>
             </DialogHeader>
 

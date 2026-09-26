@@ -89,6 +89,7 @@ export default function MyAccount() {
   const [email, setEmail] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [depositOpen, setDepositOpen] = useState(false);
+  const [depositType, setDepositType] = useState<"savings" | "cycle">("savings");
   const [repayLoan, setRepayLoan] = useState<any | null>(null);
   const [historyLoanId, setHistoryLoanId] = useState<string | null>(null);
   const [shareSubscribeOpen, setShareSubscribeOpen] = useState(false);
@@ -533,7 +534,7 @@ export default function MyAccount() {
           </Button>
           <Button
             className="bg-green-600 hover:bg-green-700 text-white gap-2"
-            onClick={() => setDepositOpen(true)}
+            onClick={() => { setDepositType("savings"); setDepositOpen(true); }}
           >
             <Wallet className="h-4 w-4" />
             Deposit Savings
@@ -1202,7 +1203,7 @@ export default function MyAccount() {
             </div>
             <Button
               className="bg-green-600 hover:bg-green-700 text-white gap-2 shrink-0"
-              onClick={() => setDepositOpen(true)}
+              onClick={() => { setDepositType("savings"); setDepositOpen(true); }}
             >
               <Wallet className="h-4 w-4" />
               Deposit via M-Pesa
@@ -1217,7 +1218,7 @@ export default function MyAccount() {
               {savingsHistory.length === 0 ? (
                 <div className="text-center py-10 space-y-3">
                   <p className="text-sm text-muted-foreground">No savings history yet. Make your first deposit to get started!</p>
-                  <Button className="bg-green-600 hover:bg-green-700 text-white gap-2" onClick={() => setDepositOpen(true)}>
+                  <Button className="bg-green-600 hover:bg-green-700 text-white gap-2" onClick={() => { setDepositType("savings"); setDepositOpen(true); }}>
                     <Wallet className="h-4 w-4" /> Make First Deposit
                   </Button>
                 </div>
@@ -1252,7 +1253,13 @@ export default function MyAccount() {
 
         {/* Unified Wallet and Cycles */}
         <TabsContent value="wallet-cycles">
-          <UnifiedAccountModules data={unifiedAccount} isLoading={unifiedAccountLoading} />
+          <UnifiedAccountModules
+            data={unifiedAccount}
+            isLoading={unifiedAccountLoading}
+            memberName={member.name}
+            memberId={member.member_id}
+            onPayCycle={() => { setDepositType("cycle"); setDepositOpen(true); }}
+          />
         </TabsContent>
 
         {/* Growth Dashboard */}
@@ -1724,6 +1731,8 @@ export default function MyAccount() {
         onClose={() => setDepositOpen(false)}
         memberId={member.id}
         memberPhone={member.phone}
+        paymentType={depositType}
+        cycleNumber={(unifiedAccount as any)?.cycles?.active?.cycleNumber}
       />
 
       {/* M-Pesa Loan Repayment Dialog */}

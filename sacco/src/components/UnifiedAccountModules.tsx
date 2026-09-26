@@ -2,7 +2,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { CalendarSync, Wallet } from "lucide-react";
+import { CalendarSync, Wallet, Download } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { exportPaymentReceipt } from "@/lib/pdf-export";
 
 type UnifiedAccountData = {
   wallet?: {
@@ -29,7 +31,19 @@ function kes(value: unknown) {
   return `KES ${Number(value || 0).toLocaleString()}`;
 }
 
-export function UnifiedAccountModules({ data, isLoading }: { data?: UnifiedAccountData; isLoading: boolean }) {
+export function UnifiedAccountModules({
+  data,
+  isLoading,
+  memberName = "Member",
+  memberId = "",
+  onPayCycle,
+}: {
+  data?: UnifiedAccountData;
+  isLoading: boolean;
+  memberName?: string;
+  memberId?: string;
+  onPayCycle?: () => void;
+}) {
   if (isLoading) {
     return <Skeleton className="h-48 w-full" />;
   }
@@ -62,11 +76,18 @@ export function UnifiedAccountModules({ data, isLoading }: { data?: UnifiedAccou
           {!cycle ? (
             <p className="py-4 text-sm text-muted-foreground">No active cycle is linked to this SACCO account yet.</p>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-4">
-              <div><p className="text-xs text-muted-foreground">Cycle</p><p className="font-semibold">#{cycle.cycleNumber ?? "—"}</p></div>
-              <div><p className="text-xs text-muted-foreground">Contribution</p><p className="font-semibold">{kes(cycle.memberContribution)}</p></div>
-              <div><p className="text-xs text-muted-foreground">Payments</p><p className="font-semibold">{cycle.paymentCount ?? 0}</p></div>
-              <div><p className="text-xs text-muted-foreground">Status</p><Badge variant="default">{cycle.status ?? "active"}</Badge></div>
+            <div>
+              <div className="grid gap-3 sm:grid-cols-4">
+                <div><p className="text-xs text-muted-foreground">Cycle</p><p className="font-semibold">#{cycle.cycleNumber ?? "—"}</p></div>
+                <div><p className="text-xs text-muted-foreground">Contribution</p><p className="font-semibold">{kes(cycle.memberContribution)}</p></div>
+                <div><p className="text-xs text-muted-foreground">Payments</p><p className="font-semibold">{cycle.paymentCount ?? 0}</p></div>
+                <div><p className="text-xs text-muted-foreground">Status</p><Badge variant="default">{cycle.status ?? "active"}</Badge></div>
+              </div>
+              {onPayCycle && (
+                <Button className="mt-4" onClick={onPayCycle}>
+                  <Wallet className="mr-2 h-4 w-4" /> Pay Active Cycle via STK
+                </Button>
+              )}
             </div>
           )}
         </CardContent>
@@ -87,7 +108,14 @@ export function UnifiedAccountModules({ data, isLoading }: { data?: UnifiedAccou
                       <TableCell>{transaction.processedAt ? new Date(transaction.processedAt).toLocaleDateString() : "—"}</TableCell>
                       <TableCell className="capitalize">{String(transaction.type ?? "transaction").replaceAll("_", " ")}</TableCell>
                       <TableCell className="text-right font-medium">{kes(transaction.amount)}</TableCell>
-                      <TableCell><Badge variant={transaction.status === "completed" ? "default" : "outline"}>{transaction.status ?? "—"}</Badge></TableCell>
+                      <TableCell>
+                        <div className="flex items-center justify-end gap-2">
+                          <Badge variant={transaction.status === "completed" ? "default" : "outline"}>{transaction.status ?? "—"}</Badge>
+                          <Button variant="ghost" size="icon" title="Download receipt" onClick={() => exportPaymentReceipt({ memberName, memberId, amount: transaction.amount, date: transaction.processedAt, status: transaction.status, type: transaction.type, reference: transaction.mpesaRef || transaction.transactionRef, gateway: transaction.paymentGateway })}>
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -105,7 +133,12 @@ export function UnifiedAccountModules({ data, isLoading }: { data?: UnifiedAccou
               <div key={String(payment._id ?? payment.id)} className="flex items-center justify-between border-b py-2 text-sm last:border-0">
                 <span>{payment.created_at ? new Date(payment.created_at).toLocaleDateString() : "—"}</span>
                 <span className="font-medium">{kes(payment.amount)}</span>
-                <Badge variant="default">{payment.status ?? "completed"}</Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant="default">{payment.status ?? "completed"}</Badge>
+                  <Button variant="ghost" size="icon" title="Download receipt" onClick={() => exportPaymentReceipt({ memberName, memberId, amount: payment.amount, date: payment.created_at || payment.date, status: payment.status, type: "cycle_payment", cycleNumber: payment.cycle_number, reference: payment.mpesa_transaction_id || payment.transaction_reference, gateway: "Lipia STK / M-Pesa" })}>
+                    <Download className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             ))}
           </CardContent>
