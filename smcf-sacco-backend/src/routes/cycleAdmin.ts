@@ -116,6 +116,56 @@ router.put('/cycles/:id', ...adminOnly, async (req: AuthRequest, res, next) => {
   }
 });
 
+router.post('/cycles/start', ...adminOnly, async (req: AuthRequest, res, next) => {
+  try {
+    const database = mongoose.connection.db;
+    if (!database) return res.status(503).json({ success: false, message: 'Database unavailable' });
+    const cycles = database.collection('cycles');
+    const members = database.collection('members');
+    const currentCycle = await cycles.findOne({ status: 'active' }, { sort: { cycle_number: -1 } });
+    const lastCycle = await cycles.findOne({}, { sort: { cycle_number: -1 } });
+    const cycleNumber = Number(lastCycle?.cycle_number || currentCycle?.cycle_number || 0) + 1;
+    const activeMembers = await members.find({ status: 'active' }).sort({ position: 1, memberId: 1 }).toArray();
+    if (activeMembers.length === 0) return res.status(400).json({ success: false, message: 'Add at least one active member before setting up a cycle' });
+
+    const startDate = req.body?.startDate ? new Date(req.body.startDate) : new Date();
+    const endDate = req.body?.endDate ? new Date(req.body.endDate) : new Date(startDate.getTime() + 5 * 24 * 60 * 60 * 1000);
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || endDate <= startDate) {
+      return res.status(400).json({ success: false, message: 'Cycle dates are invalid' });
+    }
+    const contributionAmount = Math.round(Number(req.body?.contributionAmount || currentCycle?.contribution_amount || 224));
+    const requestedRecipient = req.body?.recipientId && mongoose.Types.ObjectId.isValid(req.body.recipientId)
+      ? new mongoose.Types.ObjectId(req.body.recipientId)
+      : null;
+    const recipient = requestedRecipient
+      ? activeMembers.find((member) => String(member._id) === String(requestedRecipient))
+      : activeMembers[0];
+    if (currentCycle) {
+      await cycles.updateOne({ _id: currentCycle._id }, { $set: { status: 'completed', next_recipient: null, recipient_paid: true, updated_at: new Date() } });
+    }
+    const cycle = {
+      cycle_number: cycleNumber,
+      start_date: startDate,
+      end_date: endDate,
+      status: 'active',
+      contribution_amount: contributionAmount,
+      expected_amount: activeMembers.length * contributionAmount,
+      total_members: activeMembers.length,
+      paid_members_count: 0,
+      total_amount_collected: 0,
+      next_recipient: recipient?._id || null,
+      recipient_paid: false,
+      created_at: new Date(),
+      updated_at: new Date(),
+    };
+    const result = await cycles.insertOne(cycle);
+    await members.updateMany({ status: 'active' }, { $set: { payment_status: 'pending', payment_date: null } });
+    return res.status(201).json({ success: true, data: { ...cycle, _id: result.insertedId } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.put('/members/:id', ...adminOnly, async (req: AuthRequest, res, next) => {
   try {
     const allowed = ['name', 'phone', 'monthly_contribution', 'position', 'payment_status'];
