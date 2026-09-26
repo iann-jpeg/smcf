@@ -1,314 +1,131 @@
-import { useEffect, useMemo, useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { AlertCircle, BarChart3, CheckCircle2, Download, FastForward, FileText, Landmark, Megaphone, RefreshCw, Send, Settings, ShieldCheck, TrendingUp, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { AlertCircle, ArrowUpDown, CheckCircle2, Download, Landmark, ShieldCheck, TrendingUp, Wallet, Users, BarChart3, BellRing, LandmarkIcon, BadgeDollarSign } from "lucide-react";
 
-function formatKES(value: number | string | undefined | null) {
-  const numeric = Number(value || 0);
-  if (!Number.isFinite(numeric)) return "KES 0";
-  if (numeric >= 1_000_000) return `KES ${(numeric / 1_000_000).toFixed(1)}M`;
-  if (numeric >= 1_000) return `KES ${(numeric / 1_000).toFixed(1)}K`;
-  return `KES ${numeric.toLocaleString()}`;
-}
+const money = (value: unknown) => `KES ${Number(value || 0).toLocaleString()}`;
+const date = (value: unknown) => value ? new Date(String(value)).toLocaleString("en-KE") : "-";
 
 export default function CycleAdmin() {
   const { hasRole } = useAuth();
   const { toast } = useToast();
   const isAdmin = hasRole("admin");
-
+  const [data, setData] = useState<any>({});
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState<any>({});
-  const [members, setMembers] = useState<any[]>([]);
-  const [pendingWithdrawals, setPendingWithdrawals] = useState<any[]>([]);
-  const [feeSummary, setFeeSummary] = useState<any>({});
-  const [transactions, setTransactions] = useState<any[]>([]);
-  const [selectedTab, setSelectedTab] = useState("overview");
+  const [tab, setTab] = useState("overview");
+  const [savingMember, setSavingMember] = useState<string | null>(null);
+  const [cycleAmount, setCycleAmount] = useState("");
 
-  useEffect(() => {
-    if (!isAdmin) {
+  const load = useCallback(async () => {
+    if (!isAdmin) return;
+    setLoading(true);
+    try {
+      const response = await api.get<any>("/cycle-admin/overview");
+      setData(response?.data ?? response ?? {});
+    } catch (error: any) {
+      toast({ title: "Unable to load cycle administration", description: error?.message || "Please try again.", variant: "destructive" });
+    } finally {
       setLoading(false);
-      return;
     }
-
-    let ignore = false;
-    const load = async () => {
-      setLoading(true);
-      try {
-        const [memberRes, savingsRes, withdrawalRes, feeRes, txRes] = await Promise.all([
-          api.get("/members").catch(() => ({ data: [] })),
-          api.get("/dashboard/stats").catch(() => ({})),
-          api.get("/savings/admin/pending-withdrawals").catch(() => ({ data: [] })),
-          api.get("/savings/admin/fees/summary").catch(() => ({ data: {} })),
-          api.get("/transactions").catch(() => ({ data: [] })),
-        ]);
-
-        if (ignore) return;
-
-        const memberList = Array.isArray((memberRes as any)?.data) ? (memberRes as any).data : Array.isArray(memberRes) ? memberRes : [];
-        const walletStats = (savingsRes as any)?.data ?? savingsRes ?? {};
-        const pending = Array.isArray((withdrawalRes as any)?.data) ? (withdrawalRes as any).data : Array.isArray(withdrawalRes) ? withdrawalRes : [];
-        const fees = (feeRes as any)?.data ?? feeRes ?? {};
-        const txList = Array.isArray((txRes as any)?.data) ? (txRes as any).data : Array.isArray(txRes) ? txRes : [];
-
-        setMembers(memberList);
-        setStats({
-          totalMembers: walletStats.totalMembers ?? memberList.length ?? 0,
-          totalSavings: walletStats.totalSavings ?? 0,
-          totalShares: walletStats.totalShares ?? 0,
-          totalLoans: walletStats.totalLoanBalance ?? 0,
-          activeLoans: walletStats.activeLoans ?? 0,
-          availableLiquidity: walletStats.availableLiquidity ?? 0,
-          pendingApprovals: walletStats.pendingLoans ?? 0,
-          defaultRate: walletStats.defaultRate ?? 0,
-          par30: walletStats.par30 ?? 0,
-          capitalAdequacy: walletStats.capitalAdequacy ?? 0,
-        });
-        setPendingWithdrawals(pending);
-        setFeeSummary(fees);
-        setTransactions(txList.slice(0, 8));
-      } catch (error) {
-        console.error("Failed to load cycle admin data", error);
-        toast({ title: "Unable to load admin data", description: "Some cycle admin data could not be fetched.", variant: "destructive" });
-      } finally {
-        if (!ignore) setLoading(false);
-      }
-    };
-
-    load();
-    return () => { ignore = true; };
   }, [isAdmin, toast]);
 
-  const overview = useMemo(() => {
-    const totalMembers = members.length || Number(stats.totalMembers || 0);
-    const paidMembers = members.filter((m) => m.registrationFeePaid || m.status === "active").length;
-    const totalSavings = Number(stats.totalSavings || 0);
-    const totalPortfolio = Number(stats.totalLoans || 0);
-    const pendingApprovals = Number(stats.pendingApprovals || pendingWithdrawals.length || 0);
-    return { totalMembers, paidMembers, totalSavings, totalPortfolio, pendingApprovals };
-  }, [members, stats, pendingWithdrawals]);
+  useEffect(() => { void load(); }, [load]);
 
-  if (!isAdmin) {
-    return (
-      <div className="p-6">
-        <Card className="border-destructive/30">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-destructive"><ShieldCheck className="h-5 w-5" /> Access restricted</CardTitle>
-            <CardDescription>You need admin access to view the Cycle Admin dashboard.</CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    );
-  }
+  const currentCycle = data.currentCycle;
+  const stats = data.stats || {};
+  const members = data.members || [];
+  const payments = data.payments || [];
+  const disbursements = data.disbursements || [];
+  const advancePayments = data.advancePayments || [];
+  useEffect(() => { if (currentCycle?.contribution_amount) setCycleAmount(String(currentCycle.contribution_amount)); }, [currentCycle?.contribution_amount]);
+  const pendingMembers = useMemo(() => {
+    const paid = new Set((data.paidMemberIds || []).map(String));
+    return members.filter((member: any) => !paid.has(String(member._id)) && !paid.has(String(member.member_id)));
+  }, [data.paidMemberIds, members]);
+
+  const recordManualPayment = async (member: any, amount: number, noPayment = false) => {
+    setSavingMember(String(member._id));
+    try {
+      await api.post("/cycle-admin/payments/manual", {
+        memberId: member._id,
+        amount: Number(amount || member.monthly_contribution || currentCycle?.contribution_amount || 200),
+        phone: member.phone,
+        cycleNumber: currentCycle?.cycle_number,
+        noPayment,
+      });
+      toast({ title: "Cycle payment recorded", description: `${member.name} is marked paid for cycle #${currentCycle?.cycle_number}.` });
+      await load();
+    } catch (error: any) {
+      toast({ title: "Could not record payment", description: error?.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setSavingMember(null);
+    }
+  };
+
+  const exportRecords = () => {
+    const rows = [["Member ID", "Name", "Phone", "Status", "Cycle Contribution"], ...members.map((member: any) => [member.memberId || member.member_id, member.name, member.phone || "", member.status || "", member.total_cycle_contribution || 0])];
+    const blob = new Blob([rows.map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `smcf-cycle-${currentCycle?.cycle_number || "records"}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const updateCycleAmount = async () => {
+    try {
+      await api.put(`/cycle-admin/cycles/${currentCycle?._id}`, { contributionAmount: Number(cycleAmount), memberCount: members.length });
+      toast({ title: "Contribution amount updated", description: `New cycle contribution: ${money(cycleAmount)}` });
+      await load();
+    } catch (error: any) {
+      toast({ title: "Could not update cycle", description: error?.message || "Please try again.", variant: "destructive" });
+    }
+  };
+
+  if (!isAdmin) return <Card className="m-6 border-destructive/30"><CardHeader><CardTitle className="flex items-center gap-2 text-destructive"><ShieldCheck className="h-5 w-5" /> Access restricted</CardTitle><CardDescription>Administrator access is required.</CardDescription></CardHeader></Card>;
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Cycle Admin</h1>
-          <p className="text-sm text-muted-foreground">Consolidated operational controls previously spread across the old cycle admin.</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm"><Download className="mr-2 h-4 w-4" /> Export report</Button>
-          <Button variant="default" size="sm">Sync data</Button>
-        </div>
+    <div className="space-y-6 p-4 md:p-6">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">SACCO Administration</p><h1 className="text-3xl font-bold tracking-tight">Cycles & Member Operations</h1><p className="text-sm text-muted-foreground">All cycle-side controls, payment tracking, disbursements and records in one admin workspace.</p></div>
+        <div className="flex gap-2"><Button variant="outline" onClick={exportRecords}><Download className="mr-2 h-4 w-4" /> Export records</Button><Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw className="mr-2 h-4 w-4" /> Refresh</Button></div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="Members" value={overview.totalMembers.toLocaleString()} icon={Users} change={`${overview.paidMembers} active`} tone="default" />
-        <StatCard title="Savings pool" value={formatKES(overview.totalSavings)} icon={Wallet} change="Cycle reserves" tone="success" />
-        <StatCard title="Loan portfolio" value={formatKES(overview.totalPortfolio)} icon={LandmarkIcon} change="Active + closed" tone="accent" />
-        <StatCard title="Pending approvals" value={String(overview.pendingApprovals)} icon={BellRing} change="Withdrawals / actions" tone="warning" />
-      </div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><Metric title="Active cycle" value={`#${stats.cycleNumber || "-"}`} icon={TrendingUp} /><Metric title="Paid this cycle" value={`${stats.paidMembers || 0}/${stats.totalMembers || 0}`} icon={CheckCircle2} /><Metric title="Collected" value={money(stats.collected)} icon={Wallet} /><Metric title="Pending members" value={String(stats.pendingMembers || 0)} icon={AlertCircle} /><Metric title="Paid in advance" value={String(advancePayments.length)} icon={FastForward} /></div>
 
-      <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-4">
-        <TabsList className="w-full justify-start overflow-x-auto">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="payments">Payments</TabsTrigger>
-          <TabsTrigger value="savings">Savings</TabsTrigger>
-          <TabsTrigger value="approvals">Approvals</TabsTrigger>
-          <TabsTrigger value="reports">Reports</TabsTrigger>
-        </TabsList>
+      <Tabs value={tab} onValueChange={setTab} className="space-y-4">
+        <TabsList className="flex w-full justify-start overflow-x-auto">{[["overview", "Overview"], ["members", "Members"], ["payments", "Payments"], ["advance", "Advance payments"], ["disbursements", "Disbursements"], ["analytics", "Analytics"], ["savings", "Savings & reserve"], ["admin", "Other admin"]].map(([value, label]) => <TabsTrigger key={value} value={value}>{label}</TabsTrigger>)}</TabsList>
 
-        <TabsContent value="overview" className="space-y-4">
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-            <Card className="xl:col-span-2">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2"><TrendingUp className="h-4 w-4" /> Financial snapshot</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <MetricRow label="Collections" value={formatKES(feeSummary?.totalAmount || 0)} />
-                  <MetricRow label="Fee summary" value={feeSummary?.totalFees ? `${feeSummary.totalFees}` : "0"} />
-                  <MetricRow label="Liquidity" value={formatKES(stats.availableLiquidity || 0)} />
-                  <MetricRow label="Default rate" value={`${Number(stats.defaultRate || 0).toFixed(1)}%`} />
-                </div>
-              </CardContent>
-            </Card>
+        <TabsContent value="overview" className="space-y-4"><div className="grid gap-4 lg:grid-cols-2"><Card><CardHeader><CardTitle className="flex items-center gap-2"><BarChart3 className="h-4 w-4" /> Current cycle status</CardTitle><CardDescription>Cycle #{currentCycle?.cycle_number || "-"} · {currentCycle?.status || "not active"}</CardDescription></CardHeader><CardContent className="space-y-3"><ProgressRow label="Collection progress" value={stats.totalMembers ? (stats.paidMembers / stats.totalMembers) * 100 : 0} /><Row label="Target amount" value={money(stats.target)} /><Row label="Remaining" value={money(Math.max(0, Number(stats.target || 0) - Number(stats.collected || 0)))} /><Row label="Cycle dates" value={`${date(currentCycle?.start_date)} - ${date(currentCycle?.end_date)}`} /><div className="flex items-center gap-2 border-t pt-3"><Input className="w-36" type="number" value={cycleAmount} onChange={(event) => setCycleAmount(event.target.value)} aria-label="Contribution amount" /><Button size="sm" onClick={() => void updateCycleAmount()} disabled={!currentCycle?._id}>Update contribution</Button></div></CardContent></Card><Card><CardHeader><CardTitle>Quick actions</CardTitle><CardDescription>Legacy cycle actions are now available inside SACCO administration.</CardDescription></CardHeader><CardContent className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => setTab("members")}><Wallet className="mr-2 h-4 w-4" /> Manage payment status</Button><Button variant="outline" onClick={() => setTab("disbursements")}><Landmark className="mr-2 h-4 w-4" /> Manage payouts</Button><Button variant="outline" onClick={exportRecords}><FileText className="mr-2 h-4 w-4" /> Export records</Button><Button asChild variant="outline"><Link to="/notifications"><Megaphone className="mr-2 h-4 w-4" /> Announcements</Link></Button></CardContent></Card></div></TabsContent>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2"><BarChart3 className="h-4 w-4" /> Cycle status</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <StatusRow label="Member activity" value={`${overview.paidMembers}/${overview.totalMembers}`} />
-                <StatusRow label="Savings coverage" value={`${Math.min(100, Math.round((overview.totalSavings / Math.max(1, overview.totalPortfolio || overview.totalSavings)) * 100))}%`} />
-                <StatusRow label="Approvals" value={String(overview.pendingApprovals)} />
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
+        <TabsContent value="members"><Card><CardHeader><CardTitle>Member management & cycle status</CardTitle><CardDescription>Review participants and mark payments manually when authorized.</CardDescription></CardHeader><CardContent className="space-y-3">{members.map((member: any) => <MemberRow key={String(member._id)} member={member} pending={pendingMembers.some((item: any) => String(item._id) === String(member._id))} loading={savingMember === String(member._id)} onMarkPaid={(amount) => void recordManualPayment(member, amount)} onMarkNoPayment={(amount) => void recordManualPayment(member, amount, true)} />)}</CardContent></Card></TabsContent>
 
-        <TabsContent value="payments" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2"><ArrowUpDown className="h-4 w-4" /> Recent payment activity</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {transactions.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No recent transactions available.</p>
-                ) : (
-                  transactions.map((item, index) => (
-                    <div key={item.id || index} className="flex items-center justify-between rounded-lg border p-3">
-                      <div>
-                        <p className="font-medium">{item.type || "Payment"}</p>
-                        <p className="text-xs text-muted-foreground">{item.memberName || item.member || "Member"}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold">{formatKES(item.amount || 0)}</p>
-                        <Badge variant={item.status === "completed" ? "default" : "secondary"}>{item.status || "processed"}</Badge>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+        <TabsContent value="payments"><Card><CardHeader><CardTitle className="flex items-center gap-2"><Wallet className="h-4 w-4" /> Cycle payment tracking</CardTitle><CardDescription>STK, manual and historical cycle payment records.</CardDescription></CardHeader><CardContent className="space-y-2">{payments.length === 0 ? <Empty text="No payments recorded for the active cycle." /> : payments.map((payment: any) => <div key={String(payment._id)} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"><div><p className="font-medium">{payment.member_id?.name || payment.memberId || payment.phone || "Member"}</p><p className="text-xs text-muted-foreground">Cycle #{payment.cycle_number} · {payment.mpesa_transaction_id || payment.transaction_reference || "Manual"} · {date(payment.date || payment.created_at)}</p></div><div className="text-right"><p className="font-semibold">{money(payment.amount)}</p><Badge variant={payment.status === "completed" ? "default" : "outline"}>{payment.status || "pending"}</Badge></div></div>)}</CardContent></Card></TabsContent>
 
-        <TabsContent value="savings" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Wallet className="h-4 w-4" /> Savings & reserve overview</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <MetricRow label="Savings pool" value={formatKES(stats.totalSavings || 0)} />
-              <MetricRow label="Available liquidity" value={formatKES(stats.availableLiquidity || 0)} />
-              <MetricRow label="Share capital" value={formatKES(stats.totalShares || 0)} />
-            </CardContent>
-          </Card>
-        </TabsContent>
+        <TabsContent value="advance"><Card><CardHeader><CardTitle className="flex items-center gap-2"><FastForward className="h-4 w-4" /> Paid in advance</CardTitle><CardDescription>Members whose recorded contribution is ahead of the active cycle.</CardDescription></CardHeader><CardContent>{advancePayments.length === 0 ? <Empty text="No advance payments found." /> : advancePayments.map((item: any) => <div key={item.memberId} className="flex items-center justify-between border-b py-3 last:border-0"><div><p className="font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.memberId} · {item.cyclesPaid} cycles paid</p></div><Badge variant="secondary">+{item.cyclesAhead} ahead</Badge></div>)}</CardContent></Card></TabsContent>
 
-        <TabsContent value="approvals" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Approvals queue</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {pendingWithdrawals.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No pending approvals in the queue.</p>
-              ) : (
-                <div className="space-y-3">
-                  {pendingWithdrawals.slice(0, 5).map((item, index) => (
-                    <div key={item.id || index} className="flex items-center justify-between rounded-lg border p-3">
-                      <div>
-                        <p className="font-medium">{item.memberName || item.member || "Member"}</p>
-                        <p className="text-xs text-muted-foreground">{item.reason || "Withdrawal request"}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold">{formatKES(item.amount || item.total || 0)}</p>
-                        <Badge variant="outline">Pending</Badge>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+        <TabsContent value="disbursements"><Card><CardHeader><CardTitle className="flex items-center gap-2"><Landmark className="h-4 w-4" /> Disbursement & payout history</CardTitle><CardDescription>Previous cycle payouts and recipient records.</CardDescription></CardHeader><CardContent>{disbursements.length === 0 ? <Empty text="No disbursement records found." /> : disbursements.map((item: any) => <div key={String(item._id)} className="flex items-center justify-between border-b py-3 last:border-0"><div><p className="font-medium">{item.recipient_id?.name || item.member_id || "Recipient"}</p><p className="text-xs text-muted-foreground">Cycle #{item.cycle_id?.cycle_number || item.cycle_number || "-"} · {item.mpesa_transaction_id || item.phone || "Manual"}</p></div><div className="text-right"><p className="font-semibold">{money(item.amount)}</p><Badge>{item.status || "completed"}</Badge></div></div>)}</CardContent></Card></TabsContent>
 
-        <TabsContent value="reports" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2"><BadgeDollarSign className="h-4 w-4" /> Financial performance</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <MetricRow label="Loan balance" value={formatKES(stats.totalLoans || 0)} />
-                <MetricRow label="PAR 30" value={`${Number(stats.par30 || 0).toFixed(1)}%`} />
-                <MetricRow label="Capital adequacy" value={`${Number(stats.capitalAdequacy || 0).toFixed(1)}%`} />
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2"><AlertCircle className="h-4 w-4" /> Compliance watch</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <MetricRow label="Default rate" value={`${Number(stats.defaultRate || 0).toFixed(1)}%`} />
-                <MetricRow label="Total approvals" value={String(overview.pendingApprovals)} />
-                <MetricRow label="Members tracked" value={String(overview.totalMembers)} />
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
+        <TabsContent value="analytics"><Card><CardHeader><CardTitle className="flex items-center gap-2"><BarChart3 className="h-4 w-4" /> Cycle analytics</CardTitle><CardDescription>Operational rates calculated from the active-cycle ledger.</CardDescription></CardHeader><CardContent className="grid gap-3 sm:grid-cols-3"><Row label="Payment rate" value={`${stats.totalMembers ? Math.round((stats.paidMembers / stats.totalMembers) * 100) : 0}%`} /><Row label="Average payment" value={money(stats.paidMembers ? Number(stats.collected) / Number(stats.paidMembers) : 0)} /><Row label="Cycles completed" value={String(Math.max(0, Number(stats.cycleNumber || 0) - 1))} /></CardContent></Card></TabsContent>
+
+        <TabsContent value="savings"><ModuleLinks links={[["/members", "Member management", Wallet], ["/accounts", "Savings & wallet ledger", Wallet], ["/finance-compliance", "Reserve and compliance", ShieldCheck], ["/registration-fee", "Registration fees", FileText], ["/reports", "Financial reports", BarChart3]]} /></TabsContent>
+        <TabsContent value="admin"><ModuleLinks links={[["/loans/approvals", "Loan approvals", CheckCircle2], ["/guarantors", "Guarantor management", ShieldCheck], ["/notifications", "Announcements and notifications", Megaphone], ["/admin-email", "Member messages", Send], ["/documents", "Member documents", FileText], ["/compliance", "Compliance and audit", ShieldCheck], ["/settings", "Admin settings", Settings]]} /></TabsContent>
       </Tabs>
-
-      {loading && (
-        <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-          Loading cycle admin data…
-        </div>
-      )}
+      {loading && <p className="text-sm text-muted-foreground">Loading cycle administration...</p>}
     </div>
   );
 }
 
-function StatCard({ title, value, icon: Icon, change, tone = "default" }: {
-  title: string;
-  value: string;
-  icon: any;
-  change?: string;
-  tone?: "default" | "success" | "accent" | "warning";
-}) {
-  const toneClasses = {
-    default: "border-border bg-background",
-    success: "border-emerald-600/20 bg-emerald-500/5",
-    accent: "border-primary/15 bg-primary/5",
-    warning: "border-amber-600/20 bg-amber-500/5",
-  }[tone];
-
-  return (
-    <Card className={toneClasses}>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm text-muted-foreground">{title}</CardTitle>
-        <div className="rounded-md bg-muted p-2"><Icon className="h-4 w-4" /></div>
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
-        {change && <p className="mt-2 text-xs text-muted-foreground">{change}</p>}
-      </CardContent>
-    </Card>
-  );
-}
-
-function MetricRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between rounded-md border bg-muted/30 p-3">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="font-semibold">{value}</span>
-    </div>
-  );
-}
-
-function StatusRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium">{value}</span>
-    </div>
-  );
-}
+function Row({ label, value }: { label: string; value: string }) { return <div className="flex items-center justify-between rounded-md border bg-muted/20 p-3 text-sm"><span className="text-muted-foreground">{label}</span><span className="font-semibold">{value}</span></div>; }
+function ProgressRow({ label, value }: { label: string; value: number }) { return <div><div className="mb-1 flex justify-between text-sm"><span>{label}</span><span>{Math.round(value)}%</span></div><div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary" style={{ width: `${Math.min(100, Math.max(0, value))}%` }} /></div></div>; }
+function Empty({ text }: { text: string }) { return <p className="py-8 text-center text-sm text-muted-foreground">{text}</p>; }
+function MemberRow({ member, pending, loading, onMarkPaid, onMarkNoPayment }: { member: any; pending: boolean; loading: boolean; onMarkPaid: (amount: number) => void; onMarkNoPayment: (amount: number) => void }) { const [amount, setAmount] = useState(String(member.monthly_contribution || 200)); return <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"><div><p className="font-medium">{member.name}</p><p className="text-xs text-muted-foreground">{member.member_id || member.memberId} · {member.phone || "No phone"}</p></div><div className="flex items-center gap-2"><Input className="w-28" type="number" value={amount} onChange={(event) => setAmount(event.target.value)} aria-label={`Contribution for ${member.name}`} /><Badge variant={pending ? "outline" : "default"}>{pending ? "Pending" : "Paid"}</Badge>{pending && <><Button size="sm" onClick={() => onMarkPaid(Number(amount))} disabled={loading}>Record paid</Button><Button size="sm" variant="outline" onClick={() => onMarkNoPayment(Number(amount))} disabled={loading}>Mark paid</Button></>}</div></div>; }
+function ModuleLinks({ links }: { links: Array<[string, string, any]> }) { return <div className="grid gap-4 md:grid-cols-2">{links.map(([href, label, Icon]) => <Card key={href}><CardContent className="flex items-center justify-between p-5"><div className="flex items-center gap-3"><Icon className="h-5 w-5 text-primary" /><span className="font-medium">{label}</span></div><Button asChild variant="outline" size="sm"><Link to={href}>Open</Link></Button></CardContent></Card>)}</div>; }
