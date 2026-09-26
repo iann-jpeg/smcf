@@ -1,9 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, FileCheck2, Landmark, ReceiptText, ShieldCheck, Wallet } from "lucide-react";
+import { AlertTriangle, Download, FileCheck2, Landmark, ReceiptText, ShieldCheck, Wallet } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "@/lib/api";
+import { exportKraFilingReport } from "@/lib/pdf-export";
 
 type FinanceTransaction = {
   _id: string;
@@ -68,11 +70,34 @@ export default function FinanceCompliance() {
   const recentAuditActivity = finance?.recentAuditActivity ?? [];
   const loading = financeLoading || statementsLoading;
 
+  const downloadKraReport = () => {
+    exportKraFilingReport({
+      periodLabel: new Date().toLocaleDateString("en-KE", { month: "long", year: "numeric" }),
+      verifiedTransactionCount: finance?.verifiedTransactions?.verifiedTransactionCount,
+      verifiedTransactionVolume: finance?.verifiedTransactions?.verifiedTransactionVolume,
+      memberDeposits: memberFunds.deposits,
+      income: organizationalFunds.income,
+      expenses: organizationalFunds.expenses,
+      closingCashBalance: statements?.closingCashBalance,
+      classificationRequired: organizationalFunds.classificationRequired,
+      transactions: recentTransactions.map((transaction) => ({
+        processedAt: transaction.processedAt,
+        type: transaction.type,
+        memberName: transaction.memberId?.name || undefined,
+        amount: transaction.amount,
+      })),
+      auditActivity: recentAuditActivity,
+    });
+  };
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-heading font-bold">Finance & Compliance</h1>
-        <p className="text-sm text-muted-foreground">Finance preparation and evidence tracking over existing SACCO records.</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-heading font-bold">Finance & Compliance</h1>
+          <p className="text-sm text-muted-foreground">Finance preparation and evidence tracking over existing SACCO records.</p>
+        </div>
+        <Button onClick={downloadKraReport} disabled={loading} className="gap-2"><Download className="h-4 w-4" /> Download KRA Filing PDF</Button>
       </div>
 
       <Card className="border-amber-300 bg-amber-50/60 dark:bg-amber-950/20">

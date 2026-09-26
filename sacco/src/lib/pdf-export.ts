@@ -425,6 +425,84 @@ export function exportFinancialReportPack(data: {
   doc.save("financial-report-pack.pdf");
 }
 
+export function exportKraFilingReport(data: {
+  periodLabel?: string;
+  verifiedTransactionCount?: number;
+  verifiedTransactionVolume?: number;
+  memberDeposits?: number;
+  income?: number;
+  expenses?: number;
+  closingCashBalance?: number;
+  classificationRequired?: number;
+  transactions?: Array<{ processedAt?: string | null; type?: string; memberName?: string; amount?: number }>;
+  auditActivity?: Array<{ action?: string; tableName?: string; createdAt?: string | null }>;
+}) {
+  const doc = initDoc("KRA Filing Returns Evidence Report");
+  autoTable(doc, {
+    startY: 54,
+    head: [["Evidence Summary", "Value"]],
+    body: [
+      ["Reporting period", data.periodLabel || DATE_FMT.format(new Date())],
+      ["Verified transactions", Number(data.verifiedTransactionCount || 0).toLocaleString()],
+      ["Verified transaction volume", `KES ${Number(data.verifiedTransactionVolume || 0).toLocaleString()}`],
+      ["Member deposits", `KES ${Number(data.memberDeposits || 0).toLocaleString()}`],
+      ["Recorded organizational income", `KES ${Number(data.income || 0).toLocaleString()}`],
+      ["Recorded organizational expenses", `KES ${Number(data.expenses || 0).toLocaleString()}`],
+      ["Closing cash balance", `KES ${Number(data.closingCashBalance || 0).toLocaleString()}`],
+      ["Unclassified verified transactions", Number(data.classificationRequired || 0).toLocaleString()],
+    ],
+    headStyles: { fillColor: HEADER_COLOR },
+    columnStyles: { 1: { halign: "right" } },
+  });
+
+  doc.addPage();
+  doc.setFontSize(13);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...NAVY);
+  doc.text("Verified Transaction Evidence", 14, 20);
+  autoTable(doc, {
+    startY: 28,
+    head: [["Date", "Type", "Member", "Amount (KES)"]],
+    body: (data.transactions || []).map((transaction) => [
+      transaction.processedAt ? new Date(transaction.processedAt).toLocaleDateString("en-KE") : "-",
+      String(transaction.type || "transaction").replaceAll("_", " "),
+      transaction.memberName || "-",
+      Number(transaction.amount || 0).toLocaleString(),
+    ]),
+    headStyles: { fillColor: HEADER_COLOR },
+    columnStyles: { 3: { halign: "right" } },
+  });
+
+  doc.addPage();
+  doc.setFontSize(13);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...NAVY);
+  doc.text("Audit Evidence", 14, 20);
+  autoTable(doc, {
+    startY: 28,
+    head: [["Date", "Action", "Record"]],
+    body: (data.auditActivity || []).map((entry) => [
+      entry.createdAt ? new Date(entry.createdAt).toLocaleString("en-KE") : "-",
+      entry.action || "-",
+      entry.tableName || "-",
+    ]),
+    headStyles: { fillColor: HEADER_COLOR },
+  });
+
+  doc.addPage();
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(80);
+  const note = doc.splitTextToSize(
+    "This document is an evidence report generated from SMCF SACCO system records. It is not tax advice and does not constitute a tax return. An authorized finance officer or tax professional must review, classify, and submit the applicable KRA filing.",
+    180,
+  );
+  doc.text(note, 14, 30);
+  doc.setTextColor(0);
+  addPageFooters(doc, "KRA Filing Returns Evidence Report");
+  doc.save("smcf-kra-filing-returns-evidence.pdf");
+}
+
 export function exportLoanPortfolio(
   summary: { total: number; active: number; defaulted: number; par30: string },
   loans: Array<{ loan_number: string; memberName: string; principal: number; balance: number; status: string; risk_rating: string }>

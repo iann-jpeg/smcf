@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useMembers } from "@/hooks/useMembers";
@@ -34,6 +33,7 @@ export default function Accounts() {
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [decliningId, setDecliningId] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const activeTab = searchParams.get("tab") || "coa";
 
   useEffect(() => {
@@ -617,7 +617,7 @@ export default function Accounts() {
         <TabsContent value="cycles" className="space-y-4">
           <div className="flex items-center justify-between"><div><h2 className="font-heading text-lg">Contribution Cycles</h2><p className="text-sm text-muted-foreground">Cycle collections are tracked independently from wallet deposits.</p></div><Button variant="outline" className="gap-2" onClick={() => refetchCycleAdmin()}><RefreshCw className="h-4 w-4" /> Refresh</Button></div>
           <Card><CardHeader><CardTitle className="flex items-center gap-2"><CalendarSync className="h-5 w-5" /> Active Cycle #{cycleAdminData?.stats?.cycleNumber || "-"}</CardTitle><p className="text-sm text-muted-foreground">{cycleAdminData?.currentCycle?.status || "No active cycle"}</p></CardHeader><CardContent>{cycleAdminLoading ? <Skeleton className="h-40 w-full" /> : <div className="grid gap-4 sm:grid-cols-4"><div><p className="text-xs text-muted-foreground">Paid members</p><p className="text-2xl font-bold">{cycleAdminData?.stats?.paidMembers || 0}/{cycleAdminData?.stats?.totalMembers || 0}</p></div><div><p className="text-xs text-muted-foreground">Collected</p><p className="text-2xl font-bold">KES {Number(cycleAdminData?.stats?.collected || 0).toLocaleString()}</p></div><div><p className="text-xs text-muted-foreground">Target</p><p className="text-2xl font-bold">KES {Number(cycleAdminData?.stats?.target || 0).toLocaleString()}</p></div><div><p className="text-xs text-muted-foreground">Advance payers</p><p className="text-2xl font-bold"><FastForward className="mr-1 inline h-5 w-5" />{cycleAdminData?.advancePayments?.length || 0}</p></div></div>}</CardContent></Card>
-          <Card><CardHeader><div className="flex items-center justify-between"><div><CardTitle>Cycle payment records</CardTitle><p className="text-sm text-muted-foreground">STK and manual contributions for the active cycle</p></div><Button asChild variant="outline"><Link to="/cycle-admin">Open full Cycle Admin</Link></Button></div></CardHeader><CardContent>{(cycleAdminData?.payments || []).length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">No cycle payments found.</p> : <div className="space-y-2">{(cycleAdminData?.payments || []).slice(0, 20).map((payment: any) => <div key={String(payment._id)} className="flex items-center justify-between rounded-lg border p-3"><div><p className="font-medium">{payment.member_id?.name || payment.phone || "Member"}</p><p className="text-xs text-muted-foreground">{payment.mpesa_transaction_id || payment.transaction_reference || "Manual"}</p></div><div className="text-right"><p className="font-semibold">KES {Number(payment.amount || 0).toLocaleString()}</p><Badge>{payment.status || "completed"}</Badge></div></div>)}</div>}</CardContent></Card>
+          <Card><CardHeader><div className="flex items-center justify-between"><div><CardTitle>Cycle payment records</CardTitle><p className="text-sm text-muted-foreground">STK and manual contributions for the active cycle</p></div><Button variant="outline" onClick={() => navigate("/cycle-admin")}>Open full Cycle Admin</Button></div></CardHeader><CardContent>{(cycleAdminData?.payments || []).length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">No cycle payments found.</p> : <div className="space-y-2">{(cycleAdminData?.payments || []).slice(0, 20).map((payment: any) => <div key={String(payment._id)} className="flex items-center justify-between rounded-lg border p-3"><div><p className="font-medium">{payment.member_id?.name || payment.phone || "Member"}</p><p className="text-xs text-muted-foreground">{payment.mpesa_transaction_id || payment.transaction_reference || "Manual"}</p></div><div className="text-right"><p className="font-semibold">KES {Number(payment.amount || 0).toLocaleString()}</p><Badge>{payment.status || "completed"}</Badge></div></div>)}</div>}</CardContent></Card>
         </TabsContent>
 
         {/* ── Dividend Distribution ─────────────────────────────────────── */}
