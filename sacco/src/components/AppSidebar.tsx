@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Users, Landmark, BookOpen, BarChart3, Shield, Settings,
-  FileText, AlertTriangle, ShieldCheck, Gavel, UserCircle, UserCircle2, CreditCard, CalendarCheck, FlaskConical, Receipt, Percent, Calculator, ArrowLeftRight, Wallet, TrendingUp, BadgeCheck, Bell, ClipboardList, CircleDollarSign,
+  FileText, AlertTriangle, ShieldCheck, Gavel, UserCircle, UserCircle2, CreditCard, CalendarCheck, FlaskConical, Receipt, Percent, Calculator, ArrowLeftRight, Wallet, TrendingUp, BadgeCheck, Bell, ClipboardList, CircleDollarSign, UsersRound,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -77,6 +77,7 @@ const memberServicesNav = [
 ];
 
 const adminNav = [
+  { title: "10X Group", url: "/tenx", icon: UsersRound, allowedRoles: ["admin", "treasurer"] },
   { title: "Finance & Compliance", url: "/finance-compliance", icon: Calculator, allowedRoles: ["admin", "treasurer", "auditor"] },
   { title: "Reports", url: "/reports", icon: BarChart3, allowedRoles: ["admin", "credit_committee", "treasurer", "auditor"] },
   { title: "Registration Fee", url: "/registration-fee", icon: Receipt, allowedRoles: ["admin"] },

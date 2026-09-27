@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertCircle, BarChart3, CheckCircle2, Download, FastForward, FileText, Landmark, Megaphone, RefreshCw, Save, Send, Settings, ShieldCheck, TrendingUp, Wallet } from "lucide-react";
+import { AlertCircle, BarChart3, CalendarPlus, CheckCircle2, Download, FastForward, FileText, Landmark, Megaphone, RefreshCw, Save, Send, Settings, ShieldCheck, TrendingUp, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +27,7 @@ export default function CycleAdmin() {
   const [walletLoading, setWalletLoading] = useState(false);
   const [walletAction, setWalletAction] = useState<string | null>(null);
   const [walletDrafts, setWalletDrafts] = useState<Record<string, string>>({});
+  const [startingCycle, setStartingCycle] = useState(false);
 
   const load = useCallback(async () => {
     if (!isAdmin) return;
@@ -115,6 +116,20 @@ export default function CycleAdmin() {
     }
   };
 
+  const setupCycle = async () => {
+    if (!window.confirm("Set up a new active cycle? The current active cycle will be completed.")) return;
+    setStartingCycle(true);
+    try {
+      await api.post("/cycle-admin/cycles/start", { contributionAmount: Number(cycleAmount || currentCycle?.contribution_amount || 224) });
+      toast({ title: "Cycle set up", description: "The new active cycle is ready for member payments." });
+      await load();
+    } catch (error: any) {
+      toast({ title: "Could not set up cycle", description: error?.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setStartingCycle(false);
+    }
+  };
+
   const actOnWithdrawal = async (withdrawalId: string, action: "approve" | "reject") => {
     setWalletAction(withdrawalId);
     try {
@@ -160,7 +175,7 @@ export default function CycleAdmin() {
     <div className="space-y-6 p-4 md:p-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">SACCO Administration</p><h1 className="text-3xl font-bold tracking-tight">Cycles & Member Operations</h1><p className="text-sm text-muted-foreground">All cycle-side controls, payment tracking, disbursements and records in one admin workspace.</p></div>
-        <div className="flex gap-2"><Button variant="outline" onClick={exportRecords}><Download className="mr-2 h-4 w-4" /> Export records</Button><Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw className="mr-2 h-4 w-4" /> Refresh</Button></div>
+        <div className="flex flex-wrap gap-2"><Button onClick={() => void setupCycle()} disabled={startingCycle}><CalendarPlus className="mr-2 h-4 w-4" /> {startingCycle ? "Setting up..." : "Set up cycle"}</Button><Button variant="outline" onClick={exportRecords}><Download className="mr-2 h-4 w-4" /> Export records</Button><Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw className="mr-2 h-4 w-4" /> Refresh</Button></div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><Metric title="Active cycle" value={`#${stats.cycleNumber || "-"}`} icon={TrendingUp} /><Metric title="Paid this cycle" value={`${stats.paidMembers || 0}/${stats.totalMembers || 0}`} icon={CheckCircle2} /><Metric title="Collected" value={money(stats.collected)} icon={Wallet} /><Metric title="Pending members" value={String(stats.pendingMembers || 0)} icon={AlertCircle} /><Metric title="Paid in advance" value={String(advancePayments.length)} icon={FastForward} /></div>

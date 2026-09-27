@@ -164,7 +164,8 @@ router.post('/cycles/start', ...adminOnly, async (req: AuthRequest, res, next) =
     const currentCycle = await cycles.findOne({ status: 'active' }, { sort: { cycle_number: -1 } });
     const lastCycle = await cycles.findOne({}, { sort: { cycle_number: -1 } });
     const cycleNumber = Number(lastCycle?.cycle_number || currentCycle?.cycle_number || 0) + 1;
-    const activeMembers = await members.find({ status: 'active' }).sort({ position: 1, memberId: 1 }).toArray();
+    // Include legacy members without a normalized status value.
+    const activeMembers = await members.find({ status: { $ne: 'deleted' } }).sort({ position: 1, memberId: 1 }).toArray();
     if (activeMembers.length === 0) return res.status(400).json({ success: false, message: 'Add at least one active member before setting up a cycle' });
 
     const startDate = req.body?.startDate ? new Date(req.body.startDate) : new Date();

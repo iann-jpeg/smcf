@@ -34,6 +34,7 @@ const ResetPassword    = lazy(() => import("./pages/ResetPassword"));
 const MyAccount        = lazy(() => import("./pages/MyAccount"));
 const FinanceCompliance = lazy(() => import("./pages/FinanceCompliance"));
 const CycleAdmin       = lazy(() => import("./pages/CycleAdmin"));
+const TenXAdmin        = lazy(() => import("./pages/TenXAdmin"));
 const NotFound         = lazy(() => import("./pages/NotFound"));
 
 // Thin route-level fallback — reuses the CSS spinner already on the page.
@@ -126,6 +127,7 @@ function ProtectedRoutes() {
           <Route path="/risk-scoring" element={<RiskScoring />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/cycle-admin" element={<CycleAdmin />} />
+          <Route path="/tenx" element={<TenXAdmin />} />
           <Route path="/finance-compliance" element={<FinanceCompliance />} />
           <Route path="/compliance" element={<Compliance />} />
           <Route path="/documents" element={<Documents />} />

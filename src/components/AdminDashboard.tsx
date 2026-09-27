@@ -78,7 +78,6 @@ import ReportsTab from "./admin/ReportsTab";
 import TrafficDashboard from "./admin/TrafficDashboard";
 import AdminGuarantorManagement from "./admin/AdminGuarantorManagement";
 import MemberMessagesTab from "./admin/MemberMessagesTab";
-import TenXAdminPanel from "./admin/TenXAdminPanel";
 
 
 interface AdminDashboardProps {
@@ -2955,11 +2954,6 @@ Thank you for your cooperation! ðŸ™`;
               <span className="sm:hidden">Payments</span>
             </TabsTrigger>
             <TabsTrigger
-              value="tenx"
-              className="text-xs sm:text-sm whitespace-nowrap">
-              10X Group
-            </TabsTrigger>
-            <TabsTrigger
               value="analytics"
               className="text-xs sm:text-sm whitespace-nowrap">
               Analytics
@@ -3583,10 +3577,6 @@ Thank you for your cooperation! ðŸ™`;
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
-
-        <TabsContent value="tenx" className="space-y-6">
-          <TenXAdminPanel members={members} readOnly={isReadOnly} />
         </TabsContent>
 
         <TabsContent value="analytics" className="space-y-6">
