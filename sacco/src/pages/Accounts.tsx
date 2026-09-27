@@ -182,9 +182,13 @@ export default function Accounts() {
     if (!confirm("Set up a new active cycle? The current active cycle will be completed.")) return;
     setStartingCycle(true);
     try {
-      await api.post("/cycle-admin/cycles/start", {
-        contributionAmount: Number(cycleAdminData?.currentCycle?.contribution_amount || 224),
-      });
+      const payload = { contributionAmount: Number(cycleAdminData?.currentCycle?.contribution_amount || 224) };
+      try {
+        await api.post("/cycle-admin/cycles/start", payload);
+      } catch (error: any) {
+        if (!String(error?.message || "").includes("405")) throw error;
+        await api.put("/cycle-admin/cycles/start", payload);
+      }
       toast.success("New cycle set up successfully.");
       await refetchCycleAdmin();
       qc.invalidateQueries({ queryKey: ["dashboard-stats"] });

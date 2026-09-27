@@ -120,7 +120,13 @@ export default function CycleAdmin() {
     if (!window.confirm("Set up a new active cycle? The current active cycle will be completed.")) return;
     setStartingCycle(true);
     try {
-      await api.post("/cycle-admin/cycles/start", { contributionAmount: Number(cycleAmount || currentCycle?.contribution_amount || 224) });
+      const payload = { contributionAmount: Number(cycleAmount || currentCycle?.contribution_amount || 224) };
+      try {
+        await api.post("/cycle-admin/cycles/start", payload);
+      } catch (error: any) {
+        if (!String(error?.message || "").includes("405")) throw error;
+        await api.put("/cycle-admin/cycles/start", payload);
+      }
       toast({ title: "Cycle set up", description: "The new active cycle is ready for member payments." });
       await load();
     } catch (error: any) {

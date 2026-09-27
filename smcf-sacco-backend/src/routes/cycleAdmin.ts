@@ -155,7 +155,7 @@ router.put('/cycles/:id', ...adminOnly, async (req: AuthRequest, res, next) => {
   }
 });
 
-router.post('/cycles/start', ...adminOnly, async (req: AuthRequest, res, next) => {
+const startCycle = async (req: AuthRequest, res: any, next: any) => {
   try {
     const database = mongoose.connection.db;
     if (!database) return res.status(503).json({ success: false, message: 'Database unavailable' });
@@ -204,7 +204,12 @@ router.post('/cycles/start', ...adminOnly, async (req: AuthRequest, res, next) =
   } catch (error) {
     return next(error);
   }
-});
+};
+
+// POST is the canonical create action. PUT is retained for gateways that
+// reject POST requests to this legacy endpoint with HTTP 405.
+router.post('/cycles/start', ...adminOnly, startCycle);
+router.put('/cycles/start', ...adminOnly, startCycle);
 
 router.put('/members/:id', ...adminOnly, async (req: AuthRequest, res, next) => {
   try {
