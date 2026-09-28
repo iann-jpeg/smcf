@@ -35,7 +35,7 @@ pm2 list  # Should show running processes
 
 ```
 Main Backend    → Port 4000 → http://localhost:4000
-SACCO Backend   → Port 5000 → http://localhost:5000
+SACCO Backend   → Port 5001 → http://localhost:5001
 Frontend Main   → Port 3000 → http://localhost:3000
 Frontend SACCO  → Port 3001 → http://localhost:3001
 ```
@@ -45,11 +45,11 @@ Frontend SACCO  → Port 3001 → http://localhost:3001
 ### ✅ Main Backend - `backend/.env`
 - MongoDB: `mongodb://localhost:27017/smcf`
 - Port: 4000
-- SACCO Backend URL: `http://127.0.0.1:5000`
+- SACCO Backend URL: `http://127.0.0.1:5001`
 
 ### ✅ SACCO Backend - `smcf-sacco-backend/.env`
 - MongoDB: `mongodb://localhost:27017/smcf-sacco`
-- Port: 5000
+- Port: 5001
 - Frontend URL: `http://localhost:3001`
 
 ## **5. DEPLOYMENT STEPS ON VPS**
@@ -80,7 +80,8 @@ cd ..
 pm2 start backend/server.js --name "smcf-backend" --port 4000
 
 # Start SACCO Backend
-pm2 start smcf-sacco-backend/server.js --name "sacco-backend" --port 5000
+cd smcf-sacco-backend && npm run build
+pm2 restart smcf-sacco-backend --update-env || pm2 start dist/server.js --name "smcf-sacco-backend" --env production
 
 # Save PM2 config
 pm2 save
@@ -95,7 +96,7 @@ pm2 logs sacco-backend
 
 # Test connectivity
 curl http://localhost:4000/health
-curl http://localhost:5000/health
+curl http://localhost:5001/health
 ```
 
 ## **6. COMMON VPS MONGODB ISSUES**

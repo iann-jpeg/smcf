@@ -113,7 +113,7 @@ pm2 logs sacco-backend
 
 # Test connectivity
 curl http://localhost:4000/health
-curl http://localhost:5000/health
+curl http://localhost:5001/health
 
 # Expected response: { "status": "ok", ... }
 ```
@@ -131,7 +131,7 @@ curl http://localhost:5000/health
 / → :3000 (Frontend Main)
 /api/* → :4000 (Backend Main)
 /sacco/* → :3001 (Frontend SACCO)
-/sacco-api/* → :5000 (Backend SACCO)
+/sacco-api/* → :5001 (Backend SACCO)
 ```
 
 ---
@@ -145,7 +145,7 @@ PORT=4000
 NODE_ENV=production
 CLIENT_URL=http://localhost:3000
 JWT_SECRET=your-secret-key
-SACCO_BACKEND_URL=http://127.0.0.1:5000
+SACCO_BACKEND_URL=http://127.0.0.1:5001
 LIPIA_API_KEY=your-lipia-key
 ADMIN_EMAILS=ianabungana5@gmail.com
 ```
@@ -153,7 +153,7 @@ ADMIN_EMAILS=ianabungana5@gmail.com
 ### SACCO Backend - `smcf-sacco-backend/.env`
 ```env
 MONGODB_URI=mongodb://localhost:27017/smcf-sacco
-PORT=5000
+PORT=5001
 NODE_ENV=production
 FRONTEND_URL=http://localhost:3001
 JWT_SECRET=your-secret-key
@@ -202,7 +202,7 @@ After deployment, test from browser:
 
 ✅ **Backend Health**
 - `http://your-vps:4000/health` → Should return `{ status: "ok" }`
-- `http://your-vps:5000/health` → Should return `{ status: "ok" }`
+- `http://your-vps:5001/health` → Should return `{ status: "ok" }`
 
 ✅ **Login**
 - Try to login with admin credentials
