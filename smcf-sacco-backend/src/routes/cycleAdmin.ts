@@ -14,7 +14,7 @@ router.get('/overview', ...adminOnly, async (_req: AuthRequest, res, next) => {
     const database = mongoose.connection.db;
     if (!database) return res.status(503).json({ success: false, message: 'Database unavailable' });
 
-    const [members, currentCycle, cycles, payments, disbursements] = await Promise.all([
+    const [allMembers, currentCycle, cycles, payments, disbursements] = await Promise.all([
       Member.find({ status: { $ne: 'deleted' } }).sort({ position: 1, memberId: 1 }).lean(),
       database.collection('cycles').findOne({ status: 'active' }, { sort: { cycle_number: -1 } }),
       database.collection('cycles').find({}).sort({ cycle_number: -1 }).limit(24).toArray(),
@@ -23,6 +23,12 @@ router.get('/overview', ...adminOnly, async (_req: AuthRequest, res, next) => {
     ]);
 
     const cycleNumber = Number(currentCycle?.cycle_number || 0);
+    const selectedMemberIds = Array.isArray(currentCycle?.member_ids) && currentCycle.member_ids.length > 0
+      ? new Set(currentCycle.member_ids.map((id: unknown) => String(id)))
+      : null;
+    const members = selectedMemberIds
+      ? allMembers.filter((member: any) => selectedMemberIds.has(String(member._id)))
+      : allMembers;
     const currentPayments = payments.filter((payment) => Number(payment.cycle_number) === cycleNumber);
     const completedPayments = currentPayments.filter((payment) => payment.status === 'completed');
     const paidIds = new Set(completedPayments.map((payment) => String(payment.member_id)));
@@ -43,6 +49,7 @@ router.get('/overview', ...adminOnly, async (_req: AuthRequest, res, next) => {
       data: {
         currentCycle,
         cycles,
+        allMembers,
         members,
         payments: currentPayments.slice(0, 100),
         recentPayments: payments.slice(0, 100),
@@ -165,7 +172,16 @@ const startCycle = async (req: AuthRequest, res: any, next: any) => {
     const lastCycle = await cycles.findOne({}, { sort: { cycle_number: -1 } });
     const cycleNumber = Number(lastCycle?.cycle_number || currentCycle?.cycle_number || 0) + 1;
     // Include legacy members without a normalized status value.
-    const activeMembers = await members.find({ status: { $ne: 'deleted' } }).sort({ position: 1, memberId: 1 }).toArray();
+    const allMembers = await members.find({ status: { $ne: 'deleted' } }).sort({ position: 1, memberId: 1 }).toArray();
+    const requestedMemberIds = Array.isArray(req.body?.memberIds) ? req.body.memberIds.map(String) : [];
+    if (Array.isArray(req.body?.memberIds) && requestedMemberIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'Select at least one member before setting up a cycle' });
+    }
+    const validMemberIds = new Set(allMembers.map((member) => String(member._id)));
+    const selectedMemberIds = requestedMemberIds.filter((id: string) => validMemberIds.has(id));
+    const activeMembers = selectedMemberIds.length > 0
+      ? allMembers.filter((member) => selectedMemberIds.includes(String(member._id)))
+      : allMembers;
     if (activeMembers.length === 0) return res.status(400).json({ success: false, message: 'Add at least one active member before setting up a cycle' });
 
     const startDate = req.body?.startDate ? new Date(req.body.startDate) : new Date();
@@ -191,6 +207,7 @@ const startCycle = async (req: AuthRequest, res: any, next: any) => {
       contribution_amount: contributionAmount,
       expected_amount: activeMembers.length * contributionAmount,
       total_members: activeMembers.length,
+      member_ids: activeMembers.map((member) => member._id),
       paid_members_count: 0,
       total_amount_collected: 0,
       next_recipient: recipient?._id || null,

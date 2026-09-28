@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { AlertCircle, BarChart3, CalendarPlus, CheckCircle2, Download, FastForward, FileText, Landmark, Megaphone, RefreshCw, Save, Send, Settings, ShieldCheck, TrendingUp, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,8 @@ export default function CycleAdmin() {
   const isAdmin = hasRole("admin");
   const [data, setData] = useState<any>({});
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState("overview");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [tab, setTab] = useState(searchParams.get("tab") || "overview");
   const [savingMember, setSavingMember] = useState<string | null>(null);
   const [cycleAmount, setCycleAmount] = useState("");
   const [walletMembers, setWalletMembers] = useState<any[]>([]);
@@ -28,6 +29,7 @@ export default function CycleAdmin() {
   const [walletAction, setWalletAction] = useState<string | null>(null);
   const [walletDrafts, setWalletDrafts] = useState<Record<string, string>>({});
   const [startingCycle, setStartingCycle] = useState(false);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     if (!isAdmin) return;
@@ -47,10 +49,14 @@ export default function CycleAdmin() {
   const currentCycle = data.currentCycle;
   const stats = data.stats || {};
   const members = data.members || [];
+  const allMembers = data.allMembers || members;
   const payments = data.payments || [];
   const disbursements = data.disbursements || [];
   const advancePayments = data.advancePayments || [];
   useEffect(() => { if (currentCycle?.contribution_amount) setCycleAmount(String(currentCycle.contribution_amount)); }, [currentCycle?.contribution_amount]);
+  useEffect(() => {
+    setSelectedMemberIds(members.map((member: any) => String(member._id)));
+  }, [data.currentCycle?._id, members.length]);
   const loadWallet = useCallback(async () => {
     setWalletLoading(true);
     try {
@@ -120,13 +126,8 @@ export default function CycleAdmin() {
     if (!window.confirm("Set up a new active cycle? The current active cycle will be completed.")) return;
     setStartingCycle(true);
     try {
-      const payload = { contributionAmount: Number(cycleAmount || currentCycle?.contribution_amount || 224) };
-      try {
-        await api.post("/cycle-admin/cycles/start", payload);
-      } catch (error: any) {
-        if (!String(error?.message || "").includes("405")) throw error;
-        await api.put("/cycle-admin/cycles/start", payload);
-      }
+      const payload = { contributionAmount: Number(cycleAmount || currentCycle?.contribution_amount || 224), memberIds: selectedMemberIds };
+      await api.post("/cycle-admin/cycles/start", payload);
       toast({ title: "Cycle set up", description: "The new active cycle is ready for member payments." });
       await load();
     } catch (error: any) {
@@ -181,17 +182,17 @@ export default function CycleAdmin() {
     <div className="space-y-6 p-4 md:p-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">SACCO Administration</p><h1 className="text-3xl font-bold tracking-tight">Cycles & Member Operations</h1><p className="text-sm text-muted-foreground">All cycle-side controls, payment tracking, disbursements and records in one admin workspace.</p></div>
-        <div className="flex flex-wrap gap-2"><Button onClick={() => void setupCycle()} disabled={startingCycle}><CalendarPlus className="mr-2 h-4 w-4" /> {startingCycle ? "Setting up..." : "Set up cycle"}</Button><Button variant="outline" onClick={exportRecords}><Download className="mr-2 h-4 w-4" /> Export records</Button><Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw className="mr-2 h-4 w-4" /> Refresh</Button></div>
+        <div className="flex flex-wrap gap-2"><Button onClick={() => void setupCycle()} disabled={startingCycle || selectedMemberIds.length === 0}><CalendarPlus className="mr-2 h-4 w-4" /> {startingCycle ? "Setting up..." : "Set up cycle"}</Button><Button variant="outline" onClick={exportRecords}><Download className="mr-2 h-4 w-4" /> Export records</Button><Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw className="mr-2 h-4 w-4" /> Refresh</Button></div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><Metric title="Active cycle" value={`#${stats.cycleNumber || "-"}`} icon={TrendingUp} /><Metric title="Paid this cycle" value={`${stats.paidMembers || 0}/${stats.totalMembers || 0}`} icon={CheckCircle2} /><Metric title="Collected" value={money(stats.collected)} icon={Wallet} /><Metric title="Pending members" value={String(stats.pendingMembers || 0)} icon={AlertCircle} /><Metric title="Paid in advance" value={String(advancePayments.length)} icon={FastForward} /></div>
 
-      <Tabs value={tab} onValueChange={setTab} className="space-y-4">
+      <Tabs value={tab} onValueChange={(value) => { setTab(value); setSearchParams({ tab: value }); }} className="space-y-4">
         <TabsList className="flex w-full justify-start overflow-x-auto">{[["overview", "Overview"], ["members", "Members"], ["cycle-table", "Cycle table"], ["payments", "Payments"], ["advance", "Advance payments"], ["disbursements", "Disbursements"], ["analytics", "Analytics"], ["wallet", "Wallet deposits"], ["savings", "Savings & reserve"], ["admin", "Other admin"]].map(([value, label]) => <TabsTrigger key={value} value={value}>{label}</TabsTrigger>)}</TabsList>
 
         <TabsContent value="overview" className="space-y-4"><div className="grid gap-4 lg:grid-cols-2"><Card><CardHeader><CardTitle className="flex items-center gap-2"><BarChart3 className="h-4 w-4" /> Current cycle status</CardTitle><CardDescription>Cycle #{currentCycle?.cycle_number || "-"} · {currentCycle?.status || "not active"}</CardDescription></CardHeader><CardContent className="space-y-3"><ProgressRow label="Collection progress" value={stats.totalMembers ? (stats.paidMembers / stats.totalMembers) * 100 : 0} /><Row label="Target amount" value={money(stats.target)} /><Row label="Remaining" value={money(Math.max(0, Number(stats.target || 0) - Number(stats.collected || 0)))} /><Row label="Cycle dates" value={`${date(currentCycle?.start_date)} - ${date(currentCycle?.end_date)}`} /><div className="flex items-center gap-2 border-t pt-3"><Input className="w-36" type="number" value={cycleAmount} onChange={(event) => setCycleAmount(event.target.value)} aria-label="Contribution amount" /><Button size="sm" onClick={() => void updateCycleAmount()} disabled={!currentCycle?._id}>Update contribution</Button></div></CardContent></Card><Card><CardHeader><CardTitle>Quick actions</CardTitle><CardDescription>Legacy cycle actions are now available inside SACCO administration.</CardDescription></CardHeader><CardContent className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => setTab("members")}><Wallet className="mr-2 h-4 w-4" /> Manage payment status</Button><Button variant="outline" onClick={() => setTab("disbursements")}><Landmark className="mr-2 h-4 w-4" /> Manage payouts</Button><Button variant="outline" onClick={exportRecords}><FileText className="mr-2 h-4 w-4" /> Export records</Button><Button asChild variant="outline"><Link to="/notifications"><Megaphone className="mr-2 h-4 w-4" /> Announcements</Link></Button></CardContent></Card></div></TabsContent>
 
-        <TabsContent value="members"><Card><CardHeader><CardTitle>Member management & cycle status</CardTitle><CardDescription>Review participants and mark payments manually when authorized.</CardDescription></CardHeader><CardContent className="space-y-3">{members.map((member: any) => <MemberRow key={String(member._id)} member={member} pending={pendingMembers.some((item: any) => String(item._id) === String(member._id))} loading={savingMember === String(member._id)} onMarkPaid={(amount) => void recordManualPayment(member, amount)} onMarkNoPayment={(amount) => void recordManualPayment(member, amount, true)} />)}</CardContent></Card></TabsContent>
+        <TabsContent value="members"><Card><CardHeader><CardTitle>Choose cycle members</CardTitle><CardDescription>Select existing SACCO members who will participate when the next cycle is set up.</CardDescription></CardHeader><CardContent className="space-y-3"><div className="grid gap-2 sm:grid-cols-2">{allMembers.map((member: any) => { const memberId = String(member._id); const selected = selectedMemberIds.includes(memberId); return <label key={memberId} className="flex cursor-pointer items-center gap-3 rounded-md border p-3"><input type="checkbox" checked={selected} onChange={() => setSelectedMemberIds((current) => selected ? current.filter((id) => id !== memberId) : [...current, memberId])} /><span><span className="block font-medium">{member.name}</span><span className="text-xs text-muted-foreground">{member.member_id || member.memberId} {member.phone ? `| ${member.phone}` : ""}</span></span></label>; })}</div><p className="text-xs text-muted-foreground">{selectedMemberIds.length} member{selectedMemberIds.length === 1 ? "" : "s"} selected for the next cycle.</p><div className="border-t pt-3">{members.map((member: any) => <MemberRow key={String(member._id)} member={member} pending={pendingMembers.some((item: any) => String(item._id) === String(member._id))} loading={savingMember === String(member._id)} onMarkPaid={(amount) => void recordManualPayment(member, amount)} onMarkNoPayment={(amount) => void recordManualPayment(member, amount, true)} />)}</div></CardContent></Card></TabsContent>
 
         <TabsContent value="cycle-table"><Card><CardHeader><CardTitle>Cycle member contribution table</CardTitle><CardDescription>Expected contribution, payment status, and cycle totals for the active cycle.</CardDescription></CardHeader><CardContent>{members.length === 0 ? <Empty text="No cycle members found." /> : <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="p-2">Member</th><th className="p-2">Position</th><th className="p-2 text-right">Expected</th><th className="p-2 text-right">Paid</th><th className="p-2">Status</th><th className="p-2">Action</th></tr></thead><tbody>{members.map((member: any) => { const pending = pendingMembers.some((item: any) => String(item._id) === String(member._id)); const payment = payments.find((item: any) => String(item.member_id?._id || item.member_id) === String(member._id)); return <tr key={String(member._id)} className="border-b last:border-0"><td className="p-2"><p className="font-medium">{member.name}</p><p className="text-xs text-muted-foreground">{member.member_id || member.memberId}</p></td><td className="p-2">{member.position || "-"}</td><td className="p-2 text-right">{money(member.monthly_contribution || currentCycle?.contribution_amount || 224)}</td><td className="p-2 text-right">{money(payment?.amount || 0)}</td><td className="p-2"><Badge variant={pending ? "outline" : "default"}>{pending ? "Pending" : "Paid"}</Badge></td><td className="p-2">{pending && <Button size="sm" onClick={() => void recordManualPayment(member, Number(member.monthly_contribution || currentCycle?.contribution_amount || 224))} disabled={savingMember === String(member._id)}>Record paid</Button>}</td></tr>; })}</tbody></table></div>}</CardContent></Card></TabsContent>
 

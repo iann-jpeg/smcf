@@ -34,7 +34,7 @@ const financeNav = [
 const cycleNav = [
   { title: "Cycle Command Centre", url: "/cycle-admin", icon: CalendarCheck, allowedRoles: ["admin", "treasurer"] },
   { title: "Contributions", url: "/accounts?tab=cycles", icon: CircleDollarSign, allowedRoles: ["admin", "treasurer"] },
-  { title: "Payouts & Disbursements", url: "/cycle-admin", icon: Wallet, allowedRoles: ["admin", "treasurer"] },
+  { title: "Payouts & Disbursements", url: "/cycle-admin?tab=disbursements", icon: Wallet, allowedRoles: ["admin", "treasurer"] },
 ] satisfies StaffNavItem[];
 
 const loanNav = [
