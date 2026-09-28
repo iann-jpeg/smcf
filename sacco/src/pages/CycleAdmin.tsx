@@ -48,11 +48,11 @@ export default function CycleAdmin() {
 
   const currentCycle = data.currentCycle;
   const stats = data.stats || {};
-  const members = data.members || [];
-  const allMembers = data.allMembers || members;
-  const payments = data.payments || [];
-  const disbursements = data.disbursements || [];
-  const advancePayments = data.advancePayments || [];
+  const members = Array.isArray(data.members) ? data.members : [];
+  const allMembers = Array.isArray(data.allMembers) ? data.allMembers : members;
+  const payments = Array.isArray(data.payments) ? data.payments : [];
+  const disbursements = Array.isArray(data.disbursements) ? data.disbursements : [];
+  const advancePayments = Array.isArray(data.advancePayments) ? data.advancePayments : [];
   useEffect(() => { if (currentCycle?.contribution_amount) setCycleAmount(String(currentCycle.contribution_amount)); }, [currentCycle?.contribution_amount]);
   useEffect(() => {
     setSelectedMemberIds(members.map((member: any) => String(member._id)));
@@ -78,7 +78,7 @@ export default function CycleAdmin() {
 
   useEffect(() => { if (tab === "wallet") void loadWallet(); }, [tab, loadWallet]);
   const pendingMembers = useMemo(() => {
-    const paid = new Set((data.paidMemberIds || []).map(String));
+    const paid = new Set((Array.isArray(data.paidMemberIds) ? data.paidMemberIds : []).map(String));
     return members.filter((member: any) => !paid.has(String(member._id)) && !paid.has(String(member.member_id)));
   }, [data.paidMemberIds, members]);
 
