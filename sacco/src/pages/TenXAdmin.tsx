@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Download, Plus, ShieldCheck } from "lucide-react";
 import { api, getApiBaseForDebug } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
@@ -22,7 +22,6 @@ export default function TenXAdmin() {
   const [members, setMembers] = useState<Member[]>([]);
   const [contributions, setContributions] = useState<Contribution[]>([]);
   const [overview, setOverview] = useState<Overview | null>(null);
-  const [search, setSearch] = useState("");
   const [period, setPeriod] = useState(new Date().toISOString().slice(0, 7));
   const [amount, setAmount] = useState("");
   const [audit, setAudit] = useState<AuditEntry[]>([]);
@@ -35,19 +34,19 @@ export default function TenXAdmin() {
       api.get<Contribution[]>("/tenx/admin/contributions"),
       api.get<AuditEntry[]>("/tenx/admin/audit"),
     ]);
+    const allMembersData = await api.get<Member[]>("/members");
+    const enrolledIds = new Set((Array.isArray(membersData) ? membersData : []).map((member) => String(member._id)));
     setOverview(overviewData);
-    setMembers(Array.isArray(membersData) ? membersData : []);
+    setMembers((Array.isArray(allMembersData) ? allMembersData : []).map((member) => ({
+      ...member,
+      is10XMember: enrolledIds.has(String(member._id)) || Boolean(member.is10XMember),
+      memberId: member.memberId || (member as any).member_id,
+    })));
     setContributions(Array.isArray(contributionData) ? contributionData : []);
     setAudit(Array.isArray(auditData) ? auditData : []);
   };
 
   useEffect(() => { load().catch((error) => toast.error(error.message || "Could not load 10X administration")); }, []);
-
-  const filteredMembers = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) return members;
-    return members.filter((member) => `${member.name} ${member.memberId} ${member.phone || ""}`.toLowerCase().includes(query));
-  }, [members, search]);
 
   const setEnrollment = async (member: Member, enrolled: boolean) => {
     try {
@@ -96,7 +95,7 @@ export default function TenXAdmin() {
     <div><h1 className="text-2xl font-heading font-bold">10X Group</h1><p className="text-sm text-muted-foreground">Manage enrolled members and monthly contributions from the SACCO administration.</p></div>
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">{[["Members", overview?.totalMembers], ["Expected", money(overview?.expected)], ["Collected", money(overview?.collected)], ["Outstanding", money(overview?.outstanding)], ["Payment rate", `${overview?.paymentRate || 0}%`]].map(([label, value]) => <Card key={String(label)}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">{label}</CardTitle></CardHeader><CardContent><p className="text-2xl font-semibold">{value ?? "-"}</p></CardContent></Card>)}</div>
     <div className="grid gap-6 lg:grid-cols-2">
-      <Card><CardHeader><CardTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5" />Choose 10X members</CardTitle><Input placeholder="Search existing member" value={search} onChange={(event) => setSearch(event.target.value)} /></CardHeader><CardContent className="max-h-[30rem] space-y-3 overflow-y-auto">{filteredMembers.map((member) => <div className="flex items-center justify-between gap-3 border-b py-2" key={member._id}><div><p className="font-medium">{member.name}</p><p className="text-xs text-muted-foreground">{member.memberId} {member.phone ? `| ${member.phone}` : ""}</p></div><div className="flex items-center gap-2">{member.is10XMember && <Badge variant="secondary">10X</Badge>}{member.is10XMember ? <Button size="sm" variant="outline" disabled={readOnly} onClick={() => setEnrollment(member, false)}>Remove</Button> : <Button size="sm" disabled={readOnly} onClick={() => setEnrollment(member, true)}><Plus className="mr-1 h-4 w-4" />Add</Button>}</div></div>)}</CardContent></Card>
+      <Card><CardHeader><CardTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5" />Choose 10X members</CardTitle><p className="text-sm text-muted-foreground">Select participants from all SACCO members.</p></CardHeader><CardContent className="max-h-[30rem] space-y-3 overflow-y-auto">{members.length === 0 ? <p className="text-sm text-muted-foreground">No SACCO members found.</p> : members.map((member) => <div className="flex items-center justify-between gap-3 border-b py-2" key={member._id}><div><p className="font-medium">{member.name}</p><p className="text-xs text-muted-foreground">{member.memberId} {member.phone ? `| ${member.phone}` : ""}</p></div><div className="flex items-center gap-2">{member.is10XMember && <Badge variant="secondary">10X</Badge>}{member.is10XMember ? <Button size="sm" variant="outline" disabled={readOnly} onClick={() => setEnrollment(member, false)}>Remove</Button> : <Button size="sm" disabled={readOnly} onClick={() => setEnrollment(member, true)}><Plus className="mr-1 h-4 w-4" />Add</Button>}</div></div>)}</CardContent></Card>
       <Card><CardHeader><CardTitle>Contribution period</CardTitle></CardHeader><CardContent className="space-y-4"><div><Label htmlFor="tenx-period">Month</Label><Input id="tenx-period" type="month" value={period} onChange={(event) => setPeriod(event.target.value)} /></div><div><Label htmlFor="tenx-amount">Due amount (KES)</Label><Input id="tenx-amount" type="number" min="0" value={amount} onChange={(event) => setAmount(event.target.value)} /></div><Button disabled={readOnly || !amount} onClick={savePeriod}>Save open period</Button>{overview?.period && <p className="text-sm text-muted-foreground">Open: {overview.period.period} at {money(overview.period.due_amount)}</p>}</CardContent></Card>
     </div>
     <Card><CardHeader><CardTitle>Record manual contribution</CardTitle></CardHeader><CardContent className="grid gap-4 md:grid-cols-2"><div><Label htmlFor="manual-member">Member</Label><select id="manual-member" className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={manual.member_id} onChange={(event) => setManual({ ...manual, member_id: event.target.value })}><option value="">Select enrolled member</option>{members.filter((member) => member.is10XMember).map((member) => <option value={member._id} key={member._id}>{member.name} ({member.memberId})</option>)}</select></div><div><Label htmlFor="manual-period">Period</Label><Input id="manual-period" type="month" value={manual.period} onChange={(event) => setManual({ ...manual, period: event.target.value })} /></div><div><Label htmlFor="manual-amount">Amount paid (KES)</Label><Input id="manual-amount" type="number" min="0" value={manual.amount_paid} onChange={(event) => setManual({ ...manual, amount_paid: event.target.value })} /></div><div><Label htmlFor="manual-method">Payment method</Label><Input id="manual-method" value={manual.payment_method} onChange={(event) => setManual({ ...manual, payment_method: event.target.value })} /></div><div><Label htmlFor="manual-reference">Reference</Label><Input id="manual-reference" value={manual.transaction_reference} onChange={(event) => setManual({ ...manual, transaction_reference: event.target.value })} /></div><div><Label htmlFor="manual-notes">Notes</Label><Input id="manual-notes" value={manual.notes} onChange={(event) => setManual({ ...manual, notes: event.target.value })} /></div><div className="md:col-span-2"><Button disabled={readOnly} onClick={recordManual}>Record manual payment</Button></div></CardContent></Card>
