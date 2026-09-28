@@ -57,6 +57,8 @@ export default function Accounts() {
   const [interestResult, setInterestResult] = useState<any | null>(null);
   const [walletActionId, setWalletActionId] = useState<string | null>(null);
   const [startingCycle, setStartingCycle] = useState(false);
+  const [showCycleMemberChooser, setShowCycleMemberChooser] = useState(false);
+  const [selectedCycleMemberIds, setSelectedCycleMemberIds] = useState<string[]>([]);
 
   const { data: cycleAdminData, isLoading: cycleAdminLoading, refetch: refetchCycleAdmin } = useQuery({
     queryKey: ["cycle-admin-overview"],
@@ -72,6 +74,13 @@ export default function Accounts() {
     queryFn: () => api.get<any>("/tenx/admin/overview"),
     enabled: isAdmin && activeTab === "cycles",
   });
+
+  useEffect(() => {
+    const currentMembers = Array.isArray(cycleAdminData?.members) ? cycleAdminData.members : [];
+    if (currentMembers.length > 0) {
+      setSelectedCycleMemberIds(currentMembers.map((member: any) => String(member._id)));
+    }
+  }, [cycleAdminData?.currentCycle?._id, cycleAdminData?.members?.length]);
 
   const { data: walletAdminData, isLoading: walletAdminLoading, refetch: refetchWalletAdmin } = useQuery({
     queryKey: ["wallet-admin-overview"],
@@ -182,7 +191,10 @@ export default function Accounts() {
     if (!confirm("Set up a new active cycle? The current active cycle will be completed.")) return;
     setStartingCycle(true);
     try {
-      const payload = { contributionAmount: Number(cycleAdminData?.currentCycle?.contribution_amount || 224) };
+      const payload = {
+        contributionAmount: Number(cycleAdminData?.currentCycle?.contribution_amount || 224),
+        memberIds: selectedCycleMemberIds,
+      };
       try {
         await api.post("/cycle-admin/cycles/start", payload);
       } catch (error: any) {
@@ -642,7 +654,8 @@ export default function Accounts() {
         </TabsContent>
 
         <TabsContent value="cycles" className="space-y-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-heading text-lg">Contribution Cycles</h2><p className="text-sm text-muted-foreground">Cycle collections are tracked independently from wallet deposits.</p></div><div className="flex gap-2"><Button variant="outline" className="gap-2" onClick={() => void refetchCycleAdmin()}><RefreshCw className="h-4 w-4" /> Refresh</Button><Button asChild className="gap-2"><Link to="/cycle-admin?tab=members"><CalendarSync className="h-4 w-4" /> Choose members</Link></Button></div></div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-heading text-lg">Contribution Cycles</h2><p className="text-sm text-muted-foreground">Cycle collections are tracked independently from wallet deposits.</p></div><div className="flex gap-2"><Button variant="outline" className="gap-2" onClick={() => void refetchCycleAdmin()}><RefreshCw className="h-4 w-4" /> Refresh</Button><Button className="gap-2" onClick={() => setShowCycleMemberChooser((visible) => !visible)}><CalendarSync className="h-4 w-4" /> {showCycleMemberChooser ? "Hide member list" : "Choose members"}</Button></div></div>
+          {showCycleMemberChooser && <Card><CardHeader><CardTitle>Choose cycle members</CardTitle><p className="text-sm text-muted-foreground">Select members from the complete SACCO member list for the next cycle.</p></CardHeader><CardContent><div className="grid gap-2 sm:grid-cols-2">{members.length === 0 ? <p className="text-sm text-muted-foreground">No SACCO members found.</p> : members.map((member: any) => { const memberId = String(member._id || member.id); const selected = selectedCycleMemberIds.includes(memberId); return <label key={memberId} className="flex cursor-pointer items-center gap-3 rounded-md border p-3"><input type="checkbox" checked={selected} onChange={() => setSelectedCycleMemberIds((current) => selected ? current.filter((id) => id !== memberId) : [...current, memberId])} /><span><span className="block font-medium">{member.name}</span><span className="text-xs text-muted-foreground">{member.member_id || member.memberId} {member.phone ? `| ${member.phone}` : ""}</span></span></label>; })}</div><p className="mt-3 text-xs text-muted-foreground">{selectedCycleMemberIds.length} member{selectedCycleMemberIds.length === 1 ? "" : "s"} selected.</p><Button className="mt-4" onClick={() => void setupNextCycle()} disabled={startingCycle || selectedCycleMemberIds.length === 0}>{startingCycle ? "Setting up..." : "Set up cycle with selected members"}</Button></CardContent></Card>}
           <div className="grid gap-4 lg:grid-cols-2"><Card><CardHeader><CardTitle className="flex items-center gap-2"><CalendarSync className="h-5 w-5" /> Active Cycle #{cycleAdminData?.stats?.cycleNumber || "-"}</CardTitle><p className="text-sm text-muted-foreground">{cycleAdminData?.currentCycle?.status || "No active cycle"}</p></CardHeader><CardContent>{cycleAdminLoading ? <Skeleton className="h-40 w-full" /> : <div className="grid gap-4 sm:grid-cols-2"><div><p className="text-xs text-muted-foreground">Paid members</p><p className="text-2xl font-bold">{cycleAdminData?.stats?.paidMembers || 0}/{cycleAdminData?.stats?.totalMembers || 0}</p></div><div><p className="text-xs text-muted-foreground">Collected</p><p className="text-2xl font-bold">KES {Number(cycleAdminData?.stats?.collected || 0).toLocaleString()}</p></div><div><p className="text-xs text-muted-foreground">Target</p><p className="text-2xl font-bold">KES {Number(cycleAdminData?.stats?.target || 0).toLocaleString()}</p></div><div><p className="text-xs text-muted-foreground">Advance payers</p><p className="text-2xl font-bold"><FastForward className="mr-1 inline h-5 w-5" />{cycleAdminData?.advancePayments?.length || 0}</p></div></div>}</CardContent></Card><Card><CardHeader><div className="flex items-center justify-between"><CardTitle>10X contributions</CardTitle><Button asChild variant="outline" size="sm"><Link to="/tenx">Open 10X admin</Link></Button></div><p className="text-sm text-muted-foreground">Monthly 10X collection status</p></CardHeader><CardContent>{tenXOverview ? <div className="grid grid-cols-2 gap-4 sm:grid-cols-4"><div><p className="text-xs text-muted-foreground">Members</p><p className="text-2xl font-bold">{tenXOverview.totalMembers || 0}</p></div><div><p className="text-xs text-muted-foreground">Collected</p><p className="text-2xl font-bold">KES {Number(tenXOverview.collected || 0).toLocaleString()}</p></div><div><p className="text-xs text-muted-foreground">Outstanding</p><p className="text-2xl font-bold">KES {Number(tenXOverview.outstanding || 0).toLocaleString()}</p></div><div><p className="text-xs text-muted-foreground">Payment rate</p><p className="text-2xl font-bold">{tenXOverview.paymentRate || 0}%</p></div></div> : <p className="py-6 text-sm text-muted-foreground">10X data is unavailable.</p>}</CardContent></Card></div>
           <Card><CardHeader><div className="flex items-center justify-between"><div><CardTitle>Cycle payment records</CardTitle><p className="text-sm text-muted-foreground">STK and manual contributions for the active cycle</p></div><Button asChild variant="outline"><Link to="/cycle-admin">Open full Cycle Admin</Link></Button></div></CardHeader><CardContent>{(cycleAdminData?.payments || []).length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">No cycle payments found.</p> : <div className="space-y-2">{(cycleAdminData?.payments || []).slice(0, 20).map((payment: any) => <div key={String(payment._id)} className="flex items-center justify-between rounded-lg border p-3"><div><p className="font-medium">{payment.member_id?.name || payment.phone || "Member"}</p><p className="text-xs text-muted-foreground">{payment.mpesa_transaction_id || payment.transaction_reference || "Manual"}</p></div><div className="text-right"><p className="font-semibold">KES {Number(payment.amount || 0).toLocaleString()}</p><Badge>{payment.status || "completed"}</Badge></div></div>)}</div>}</CardContent></Card>
         </TabsContent>
