@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import mongoose from 'mongoose';
 import { body, validationResult } from 'express-validator';
 import Member from '../models/Member';
 import User from '../models/User';
@@ -339,12 +340,19 @@ router.get('/', protect, async (req, res, next) => {
     const members = await Member.find()
       .populate('userId', 'email fullName')
       .sort({ createdAt: -1 });
+    const activeCycle = mongoose.connection.db
+      ? await mongoose.connection.db.collection('cycles').findOne({ status: 'active' }, { sort: { cycle_number: -1 } })
+      : null;
+    const cycleMemberIds = Array.isArray(activeCycle?.member_ids)
+      ? new Set(activeCycle.member_ids.map((id: unknown) => String(id)))
+      : null;
 
     const withFallbackEmail = members.map((m: any) => {
       const obj = m.toObject ? m.toObject() : m;
       if (!obj.email && obj.userId && typeof obj.userId === 'object' && obj.userId.email) {
         obj.email = String(obj.userId.email).toLowerCase().trim();
       }
+      obj.isCycleMember = Boolean(activeCycle) && (!cycleMemberIds || cycleMemberIds.has(String(obj._id)));
       return obj;
     });
 

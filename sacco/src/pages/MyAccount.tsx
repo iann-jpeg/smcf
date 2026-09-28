@@ -476,6 +476,10 @@ export default function MyAccount() {
                 Verified Member
               </Badge>
             )}
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {Boolean((unifiedAccount as any)?.tenX?.enrolled) && <Badge variant="secondary" className="border-amber-300 bg-amber-50 text-[10px] text-amber-800">10X Enrolled</Badge>}
+              {Boolean((unifiedAccount as any)?.cycles?.eligible) && <Badge variant="secondary" className="border-sky-300 bg-sky-50 text-[10px] text-sky-800">Cycle Member</Badge>}
+            </div>
           </div>
         </div>
         <div className="flex flex-wrap gap-2 items-center">

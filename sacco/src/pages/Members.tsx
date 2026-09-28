@@ -348,6 +348,8 @@ export default function Members() {
                             {tag.label}
                           </span>
                         ))}
+                        {m.is10XMember && <Badge variant="secondary" className="border-amber-300 bg-amber-50 text-[10px] text-amber-800">10X Enrolled</Badge>}
+                        {m.isCycleMember && <Badge variant="secondary" className="border-sky-300 bg-sky-50 text-[10px] text-sky-800">Cycle Member</Badge>}
                       </div>
                     </TableCell>
                     <TableCell className="text-center">
