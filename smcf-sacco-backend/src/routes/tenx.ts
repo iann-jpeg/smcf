@@ -50,6 +50,14 @@ router.patch('/admin/members/:id', ...writeAccess, async (req: AuthRequest, res,
     const enrolled = Boolean(req.body?.is10XMember);
     const member = await Member.findByIdAndUpdate(req.params.id, { is10XMember: enrolled, tenXJoinedAt: enrolled ? new Date() : null }, { new: true }).select('name memberId is10XMember tenXJoinedAt');
     if (!member) return res.status(404).json({ success: false, message: 'Member not found' });
+    if (enrolled) {
+      const period = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+      await TenXPeriod.findOneAndUpdate(
+        { period },
+        { $setOnInsert: { period, due_amount: 1000, status: 'OPEN', created_by: req.user?._id, updated_by: req.user?._id } },
+        { upsert: true, setDefaultsOnInsert: true },
+      );
+    }
     await recordAudit(req, enrolled ? 'MEMBER_ADDED' : 'MEMBER_REMOVED', `${enrolled ? 'Added' : 'Removed'} ${member.memberId} ${enrolled ? 'to' : 'from'} 10X`, { member_id: member._id });
     return res.json({ success: true, data: member });
   } catch (error) { return next(error); }

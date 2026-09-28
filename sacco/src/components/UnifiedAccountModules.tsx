@@ -119,7 +119,7 @@ export function UnifiedAccountModules({
           {!tenX?.enrolled ? (
             <p className="py-2 text-sm text-muted-foreground">You are not currently enrolled in the 10X Group.</p>
           ) : !tenX.period ? (
-            <p className="py-2 text-sm text-muted-foreground">You are enrolled in 10X. No contribution period is open right now.</p>
+            <div className="space-y-3 py-2"><p className="text-sm text-muted-foreground">You are enrolled in 10X. The current monthly period is being prepared.</p>{onPayTenX && <Button onClick={onPayTenX}><Wallet className="mr-2 h-4 w-4" /> Pay 10X via STK</Button>}</div>
           ) : (
             <div className="space-y-3">
               <div className="grid gap-3 sm:grid-cols-3">

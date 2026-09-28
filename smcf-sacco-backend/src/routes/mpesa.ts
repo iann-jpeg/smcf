@@ -1055,7 +1055,11 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
           if (tenXPayment) {
             const member = await Member.findOne({ _id: memberId, is10XMember: true }).select('_id');
             const periodKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
-            const period = await TenXPeriod.findOne({ period: periodKey, status: 'OPEN' });
+            const period = await TenXPeriod.findOneAndUpdate(
+              { period: periodKey },
+              { $setOnInsert: { period: periodKey, due_amount: 1000, status: 'OPEN' } },
+              { upsert: true, new: true, setDefaultsOnInsert: true },
+            );
             if (!member) return res.status(403).json({ success: false, message: 'You are not enrolled in the 10X Group' });
             if (!period) return res.status(400).json({ success: false, message: 'No 10X contribution period is open' });
             const pending = await TenXContribution.findOne({ member_id: member._id, period_id: period._id, status: 'PENDING' });
