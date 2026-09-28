@@ -89,7 +89,7 @@ export default function MyAccount() {
   const [email, setEmail] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [depositOpen, setDepositOpen] = useState(false);
-  const [depositType, setDepositType] = useState<"savings" | "cycle">("savings");
+  const [depositType, setDepositType] = useState<"savings" | "cycle" | "tenx">("savings");
   const [repayLoan, setRepayLoan] = useState<any | null>(null);
   const [historyLoanId, setHistoryLoanId] = useState<string | null>(null);
   const [shareSubscribeOpen, setShareSubscribeOpen] = useState(false);
@@ -1323,6 +1323,7 @@ export default function MyAccount() {
             memberName={member.name}
             memberId={member.member_id}
             onPayCycle={() => { setDepositType("cycle"); setDepositOpen(true); }}
+            onPayTenX={() => { setDepositType("tenx"); setDepositOpen(true); }}
             onDepositSavings={() => { setDepositType("savings"); setDepositOpen(true); }}
           />
         </TabsContent>

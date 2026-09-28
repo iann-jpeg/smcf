@@ -18,6 +18,8 @@ import { Router, Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
 import Transaction from '../models/Transaction';
 import Member from '../models/Member';
+import TenXContribution from '../models/TenXContribution';
+import TenXPeriod from '../models/TenXPeriod';
 import Loan from '../models/Loan';
 import { protect, authorize, AuthRequest } from '../middleware/auth';
 import { processRepayment } from './repayments';
@@ -63,6 +65,7 @@ interface PendingDeposit {
   resultDesc?: string;
   cyclePayment?: boolean;
   cycleNumber?: number;
+  tenXContributionId?: string;
   createdAt: number;
 }
 
@@ -269,6 +272,7 @@ async function pollSACCOPayment(
             mpesaRef: mpesaReceiptNumber,
             sourceLabel: 'M-Pesa STK',
             cycleNumber: pending?.cyclePayment ? pending.cycleNumber : undefined,
+            tenXContributionId: pending?.tenXContributionId,
             processedAt: new Date(),
           });
           const d = pendingDeposits.get(checkoutRequestId);
@@ -665,6 +669,7 @@ async function settlePendingDeposit(params: {
   mpesaRef: string;
   sourceLabel: string;
   cycleNumber?: number;
+  tenXContributionId?: string;
   processedAt?: Date;
 }) {
   const amount = Math.round(Number(params.amount));
@@ -720,7 +725,16 @@ async function settlePendingDeposit(params: {
     throw new Error('Pending deposit transaction not found');
   }
 
-  if (!cycleNumber) {
+  if (params.tenXContributionId) {
+    await TenXContribution.findByIdAndUpdate(params.tenXContributionId, {
+      status: 'SUCCESSFUL',
+      payment_date: processedAt,
+      transaction_reference: params.mpesaRef,
+      $inc: { amount_paid: amount },
+    });
+  }
+
+  if (!cycleNumber && !params.tenXContributionId) {
     await recordSavingsDeposit({
       memberId: params.memberId,
       amount,
@@ -786,7 +800,56 @@ async function recordCyclePayment(params: {
     deposit_processed: true,
     notes: `Cycle ${params.cycleNumber} contribution via Lipia STK`,
   });
+  await Member.findByIdAndUpdate(memberObjectId, {
+    $inc: { total_cycle_contribution: params.amount, cycle_contribution_count: 1 },
+    $set: { payment_status: 'paid', payment_date: params.processedAt },
+  });
+  await advanceCycleWhenComplete(params.cycleNumber);
   return { _id: result.insertedId };
+}
+
+async function advanceCycleWhenComplete(cycleNumber: number) {
+  const database = mongoose.connection.db;
+  if (!database) return;
+  const cycles = database.collection('cycles');
+  const currentCycle = await cycles.findOne({ cycle_number: cycleNumber, status: 'active' });
+  if (!currentCycle) return;
+  const selectedIds = Array.isArray(currentCycle.member_ids)
+    ? currentCycle.member_ids.map((id: unknown) => String(id))
+    : (await Member.find({ status: { $ne: 'deleted' } }).select('_id').lean()).map((member) => String(member._id));
+  if (selectedIds.length === 0) return;
+  const paidCount = await database.collection('payments').countDocuments({
+    cycle_number: cycleNumber,
+    status: 'completed',
+    member_id: { $in: selectedIds.map((id) => new mongoose.Types.ObjectId(id)) },
+  });
+  if (paidCount < selectedIds.length) return;
+  const closed = await cycles.updateOne(
+    { _id: currentCycle._id, status: 'active' },
+    { $set: { status: 'completed', recipient_paid: true, updated_at: new Date() } },
+  );
+  if (closed.modifiedCount !== 1) return;
+  const nextNumber = Number(currentCycle.cycle_number) + 1;
+  await cycles.insertOne({
+    cycle_number: nextNumber,
+    start_date: new Date(),
+    end_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+    status: 'active',
+    contribution_amount: currentCycle.contribution_amount || 224,
+    expected_amount: selectedIds.length * Number(currentCycle.contribution_amount || 224),
+    total_members: selectedIds.length,
+    member_ids: selectedIds.map((id) => new mongoose.Types.ObjectId(id)),
+    paid_members_count: 0,
+    total_amount_collected: 0,
+    next_recipient: selectedIds[0] ? new mongoose.Types.ObjectId(selectedIds[0]) : null,
+    recipient_paid: false,
+    created_at: new Date(),
+    updated_at: new Date(),
+  });
+  await database.collection('members').updateMany(
+    { _id: { $in: selectedIds.map((id) => new mongoose.Types.ObjectId(id)) } },
+    { $set: { payment_status: 'pending', payment_date: null } },
+  );
 }
 
 function isDuplicateKeyError(err: unknown): err is { code?: number; keyValue?: Record<string, unknown>; keyPattern?: Record<string, unknown> } {
@@ -973,6 +1036,8 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
     const mpesaPhone = normalizePhone(phone);
     const numAmount  = Math.round(Number(amount));
     const cyclePayment = paymentType === 'cycle';
+    const tenXPayment = paymentType === 'tenx';
+    let tenXContributionId: string | undefined;
     let cycleNumber = Number(requestedCycleNumber) || undefined;
 
     if (cyclePayment && !cycleNumber && mongoose.connection.db) {
@@ -986,6 +1051,31 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
       return res.status(400).json({ success: false, message: 'No active cycle is available for payment' });
     }
     if (cyclePayment && mongoose.connection.db) {
+
+          if (tenXPayment) {
+            const member = await Member.findOne({ _id: memberId, is10XMember: true }).select('_id');
+            const periodKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+            const period = await TenXPeriod.findOne({ period: periodKey, status: 'OPEN' });
+            if (!member) return res.status(403).json({ success: false, message: 'You are not enrolled in the 10X Group' });
+            if (!period) return res.status(400).json({ success: false, message: 'No 10X contribution period is open' });
+            const pending = await TenXContribution.findOne({ member_id: member._id, period_id: period._id, status: 'PENDING' });
+            if (pending) return res.status(409).json({ success: false, message: 'A 10X payment is already pending', data: pending });
+            const existingContribution = await TenXContribution.findOne({ member_id: member._id, period_id: period._id, status: 'SUCCESSFUL' });
+            const contribution = existingContribution
+              ? await TenXContribution.findByIdAndUpdate(existingContribution._id, { status: 'PENDING', payment_method: 'mpesa', transaction_reference: `10X-STK-${Date.now()}` }, { new: true })
+              : await TenXContribution.create({
+                  member_id: member._id,
+                  period_id: period._id,
+                  period: period.period,
+                  amount_due: period.due_amount,
+                  amount_paid: 0,
+                  payment_method: 'mpesa',
+                  transaction_reference: `10X-STK-${Date.now()}`,
+                  status: 'PENDING',
+                  source: 'AUTOMATIC',
+                });
+            tenXContributionId = contribution ? String(contribution._id) : undefined;
+          }
       const activeCycle = await mongoose.connection.db.collection('cycles').findOne(
         { cycle_number: cycleNumber },
         { sort: { cycle_number: -1 } },
@@ -1014,6 +1104,7 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
         status: 'pending',
         cyclePayment,
         cycleNumber,
+        tenXContributionId,
         createdAt: Date.now(),
       });
 
@@ -1052,7 +1143,7 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
         if (!d || d.status !== 'pending') return;
         try {
           const ref = `SIM${Date.now()}`;
-          await recordDeposit(d.memberId, d.amount, d.phone, ref, d.cycleNumber, simId);
+          await recordDeposit(d.memberId, d.amount, d.phone, ref, d.cycleNumber, simId, d.tenXContributionId);
           d.status = 'success';
           d.mpesaRef = ref;
         } catch {
@@ -1070,7 +1161,7 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
     }
 
     // ── Real STK Push via Lipia Online ────────────────────────────────────
-    const stkData = await sendLipiaSTK(mpesaPhone, numAmount, 'SMCF-SAVINGS', 'SMCF SACCO Savings Deposit');
+    const stkData = await sendLipiaSTK(mpesaPhone, numAmount, 'SMCF-SAVINGS', tenXPayment ? 'SMCF 10X Contribution' : 'SMCF SACCO Savings Deposit');
 
     // Lipia proxies the Safaricom response — CheckoutRequestID may be top-level
     // or nested under data depending on the Lipia version.
@@ -1091,6 +1182,9 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
       checkoutRequestId,
       cycleNumber,
     });
+    if (tenXContributionId) {
+      await TenXContribution.findByIdAndUpdate(tenXContributionId, { payment_id: txnDoc._id });
+    }
 
     const mapStatus: PendingDeposit['status'] =
       txnDoc.status === 'completed' ? 'success' : txnDoc.status === 'failed' ? 'failed' : 'pending';
@@ -1103,6 +1197,7 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
       mpesaRef: txnDoc.mpesaRef || undefined,
       cyclePayment,
       cycleNumber,
+      tenXContributionId,
       createdAt: Date.now(),
     });
 
@@ -1119,7 +1214,7 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
   }
 });
 
-async function recordDeposit(memberId: string, amount: number, phone: string, mpesaRef: string, cycleNumber?: number, checkoutRequestId?: string) {
+async function recordDeposit(memberId: string, amount: number, phone: string, mpesaRef: string, cycleNumber?: number, checkoutRequestId?: string, tenXContributionId?: string) {
   const transactionRef = createTransactionRef();
   await Transaction.create({
     transactionRef,
@@ -1137,7 +1232,11 @@ async function recordDeposit(memberId: string, amount: number, phone: string, mp
     createdBy: null,
   });
 
-  if (!cycleNumber) {
+  if (tenXContributionId) {
+    await TenXContribution.findByIdAndUpdate(tenXContributionId, {
+      status: 'SUCCESSFUL', payment_date: new Date(), transaction_reference: mpesaRef, $inc: { amount_paid: amount },
+    });
+  } else if (!cycleNumber) {
     await recordSavingsDeposit({
       memberId,
       amount,
@@ -1149,7 +1248,7 @@ async function recordDeposit(memberId: string, amount: number, phone: string, mp
     });
   }
 
-  if (cycleNumber && checkoutRequestId) {
+  if (cycleNumber && checkoutRequestId && !tenXContributionId) {
     await recordCyclePayment({
       memberId,
       amount,

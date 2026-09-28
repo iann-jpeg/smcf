@@ -37,6 +37,8 @@ export interface IMember extends Document {
   registrationFeePendingCheckoutId: string | null;
   is10XMember: boolean;
   tenXJoinedAt: Date | null;
+  total_cycle_contribution: number;
+  cycle_contribution_count: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -186,6 +188,14 @@ const MemberSchema = new Schema<IMember>({
   tenXJoinedAt: {
     type: Date,
     default: null
+  },
+  total_cycle_contribution: {
+    type: Number,
+    default: 0
+  },
+  cycle_contribution_count: {
+    type: Number,
+    default: 0
   }
 }, {
   timestamps: true

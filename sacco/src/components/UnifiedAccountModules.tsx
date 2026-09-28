@@ -7,6 +7,10 @@ import { Button } from "@/components/ui/button";
 import { exportPaymentReceipt } from "@/lib/pdf-export";
 
 type UnifiedAccountData = {
+  member?: {
+    cycleContributionCount?: number;
+    totalCycleContribution?: number;
+  };
   wallet?: {
     balance?: number;
     totalDeposits?: number;
@@ -46,6 +50,7 @@ export function UnifiedAccountModules({
   memberName = "Member",
   memberId = "",
   onPayCycle,
+  onPayTenX,
   onDepositSavings,
 }: {
   data?: UnifiedAccountData;
@@ -53,6 +58,7 @@ export function UnifiedAccountModules({
   memberName?: string;
   memberId?: string;
   onPayCycle?: () => void;
+  onPayTenX?: () => void;
   onDepositSavings?: () => void;
 }) {
   if (isLoading) {
@@ -93,7 +99,8 @@ export function UnifiedAccountModules({
               <div className="grid gap-3 sm:grid-cols-4">
                 <div><p className="text-xs text-muted-foreground">Cycle</p><p className="font-semibold">#{cycle.cycleNumber ?? "—"}</p></div>
                 <div><p className="text-xs text-muted-foreground">Contribution</p><p className="font-semibold">{kes(cycle.memberContribution)}</p></div>
-                <div><p className="text-xs text-muted-foreground">Payments</p><p className="font-semibold">{cycle.paymentCount ?? 0}</p></div>
+                <div><p className="text-xs text-muted-foreground">This cycle</p><p className="font-semibold">{cycle.paymentCount ?? 0}</p></div>
+                <div><p className="text-xs text-muted-foreground">Contributions made</p><p className="font-semibold">{data?.member?.cycleContributionCount ?? 0}</p></div>
                 <div><p className="text-xs text-muted-foreground">Status</p><Badge variant="default">{cycle.status ?? "active"}</Badge></div>
               </div>
               {onPayCycle && cycleEligible && (
@@ -120,7 +127,13 @@ export function UnifiedAccountModules({
                 <div><p className="text-xs text-muted-foreground">Amount due</p><p className="font-semibold">{kes(tenX.amountDue)}</p></div>
                 <div><p className="text-xs text-muted-foreground">Status</p><Badge variant={tenX.status === "SUCCESSFUL" ? "default" : "outline"}>{tenX.status === "SUCCESSFUL" ? "Paid" : "Pending"}</Badge></div>
               </div>
-              <p className="text-sm text-muted-foreground">Paid this period: {kes(tenX.amountPaid)}</p>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm"><span className="text-muted-foreground">Paid this period</span><span className="font-medium">{kes(tenX.amountPaid)}</span></div>
+                <div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary" style={{ width: `${Math.min(100, Math.max(0, (Number(tenX.amountPaid || 0) / Math.max(1, Number(tenX.amountDue || 0))) * 100))}%` }} /></div>
+                <p className="text-xs text-muted-foreground">Remaining: {kes(Math.max(0, Number(tenX.amountDue || 0) - Number(tenX.amountPaid || 0)))}</p>
+              </div>
+              {onPayTenX && Number(tenX.amountPaid || 0) < Number(tenX.amountDue || 0) && <Button className="mt-1" onClick={onPayTenX}><Wallet className="mr-2 h-4 w-4" /> Pay 10X via STK</Button>}
+              {(tenX.contributions ?? []).length > 0 && <div className="space-y-1 border-t pt-3"><p className="text-xs font-medium">Recent 10X payments</p>{tenX.contributions.slice(0, 5).map((item: any) => <div key={String(item._id)} className="flex justify-between text-xs text-muted-foreground"><span>{item.period} · {item.status}</span><span>{kes(item.amount_paid)}</span></div>)}</div>}
             </div>
           )}
         </CardContent>

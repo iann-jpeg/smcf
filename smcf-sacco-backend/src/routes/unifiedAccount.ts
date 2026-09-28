@@ -151,6 +151,8 @@ router.get('/', protect, async (req: AuthRequest, res, next) => {
           memberId: memberCode,
           name: member.name,
           status: member.status,
+          cycleContributionCount: Number(member.cycle_contribution_count || 0),
+          totalCycleContribution: Number(member.total_cycle_contribution || 0),
         },
         wallet: {
           balance: Number(member.savings || 0),
