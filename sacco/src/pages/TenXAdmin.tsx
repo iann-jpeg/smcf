@@ -28,20 +28,26 @@ export default function TenXAdmin() {
   const [manual, setManual] = useState({ member_id: "", period: new Date().toISOString().slice(0, 7), amount_paid: "", payment_method: "cash", transaction_reference: "", notes: "" });
 
   const load = async () => {
-    const [overviewData, membersData, contributionData, auditData] = await Promise.all([
+    const [allMembersData, overviewResult, membersResult, contributionResult, auditResult] = await Promise.all([
+      api.get<Member[]>("/members"),
       api.get<Overview>("/tenx/admin/overview"),
       api.get<Member[]>("/tenx/admin/members"),
       api.get<Contribution[]>("/tenx/admin/contributions"),
       api.get<AuditEntry[]>("/tenx/admin/audit"),
-    ]);
-    const allMembersData = await api.get<Member[]>("/members");
-    const enrolledIds = new Set((Array.isArray(membersData) ? membersData : []).map((member) => String(member._id)));
-    setOverview(overviewData);
-    setMembers((Array.isArray(allMembersData) ? allMembersData : []).map((member) => ({
+    ].map((request) => request.then((value) => ({ status: "fulfilled" as const, value })).catch((reason) => ({ status: "rejected" as const, reason }))));
+    const getValue = <T,>(result: { status: "fulfilled"; value: T } | { status: "rejected"; reason: unknown }) => result.status === "fulfilled" ? result.value : undefined;
+    const allMembers = getValue(allMembersData);
+    const enrolledMembers = getValue(membersResult);
+    const enrolledIds = new Set((Array.isArray(enrolledMembers) ? enrolledMembers : []).map((member) => String(member._id)));
+    const overviewData = getValue(overviewResult);
+    if (overviewData) setOverview(overviewData);
+    setMembers((Array.isArray(allMembers) ? allMembers : []).map((member) => ({
       ...member,
       is10XMember: enrolledIds.has(String(member._id)) || Boolean(member.is10XMember),
       memberId: member.memberId || (member as any).member_id,
     })));
+    const contributionData = getValue(contributionResult);
+    const auditData = getValue(auditResult);
     setContributions(Array.isArray(contributionData) ? contributionData : []);
     setAudit(Array.isArray(auditData) ? auditData : []);
   };
