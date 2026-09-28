@@ -37,3 +37,4 @@ services:
         sync: false
       - key: SACCO_CLIENT_URL
         value: https://smcf.app
+
