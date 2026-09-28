@@ -2,6 +2,8 @@ import { Router } from 'express';
 import mongoose from 'mongoose';
 import Member from '../models/Member';
 import Transaction from '../models/Transaction';
+import TenXContribution from '../models/TenXContribution';
+import TenXPeriod from '../models/TenXPeriod';
 import { protect, AuthRequest } from '../middleware/auth';
 
 const router = Router();
@@ -68,6 +70,7 @@ router.get('/', protect, async (req: AuthRequest, res, next) => {
 
     let cycle: Record<string, unknown> | null = null;
     let cyclePayments: Record<string, unknown>[] = [];
+    let tenX: Record<string, unknown> | null = null;
     const database = mongoose.connection.db;
 
     if (database) {
@@ -82,6 +85,17 @@ router.get('/', protect, async (req: AuthRequest, res, next) => {
       );
 
       if (currentCycle) {
+        const cycleMemberIds = Array.isArray(currentCycle.member_ids)
+          ? currentCycle.member_ids.map((id: unknown) => String(id))
+          : null;
+        const isCycleMember = !cycleMemberIds || cycleMemberIds.includes(memberObjectId);
+        if (!isCycleMember) {
+          cyclePayments = [];
+        }
+        if (!isCycleMember) {
+          // The cycle exists globally, but this member was not selected by the administrator.
+          cycle = null;
+        } else {
         const paymentFilter = {
           cycle_number: currentCycle.cycle_number,
           status: 'completed',
@@ -105,7 +119,28 @@ router.get('/', protect, async (req: AuthRequest, res, next) => {
           paymentCount: cyclePayments.length,
           nextRecipient: currentCycle.next_recipient ?? null,
         };
+        }
       }
+    }
+
+    const [tenXPeriod, tenXContributions] = await Promise.all([
+      TenXPeriod.findOne({ period: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`, status: 'OPEN' }).lean(),
+      TenXContribution.find({ member_id: member._id }).sort({ period: -1, created_at: -1 }).limit(24).lean(),
+    ]);
+    if (member.is10XMember) {
+      const currentContribution = tenXPeriod
+        ? tenXContributions.find((item) => String(item.period_id) === String(tenXPeriod._id))
+        : null;
+      tenX = {
+        enrolled: true,
+        period: tenXPeriod?.period ?? null,
+        amountDue: tenXPeriod?.due_amount ?? 0,
+        status: currentContribution?.status ?? 'PENDING',
+        amountPaid: currentContribution?.amount_paid ?? 0,
+        contributions: tenXContributions,
+      };
+    } else {
+      tenX = { enrolled: false, period: null, amountDue: 0, status: 'NOT_ENROLLED', amountPaid: 0, contributions: [] };
     }
 
     return res.json({
@@ -126,8 +161,10 @@ router.get('/', protect, async (req: AuthRequest, res, next) => {
         },
         cycles: {
           active: cycle,
+          eligible: cycle !== null,
           payments: cyclePayments,
         },
+        tenX,
       },
     });
   } catch (error) {

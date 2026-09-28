@@ -985,6 +985,18 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
     if (cyclePayment && !cycleNumber) {
       return res.status(400).json({ success: false, message: 'No active cycle is available for payment' });
     }
+    if (cyclePayment && mongoose.connection.db) {
+      const activeCycle = await mongoose.connection.db.collection('cycles').findOne(
+        { cycle_number: cycleNumber },
+        { sort: { cycle_number: -1 } },
+      );
+      const selectedMemberIds = Array.isArray(activeCycle?.member_ids)
+        ? activeCycle.member_ids.map((id: unknown) => String(id))
+        : null;
+      if (selectedMemberIds && !selectedMemberIds.includes(String(memberId))) {
+        return res.status(403).json({ success: false, message: 'You are not selected to participate in this cycle' });
+      }
+    }
 
     const reusablePendingTxn = await findReusablePendingDepositTransaction({
       memberId,

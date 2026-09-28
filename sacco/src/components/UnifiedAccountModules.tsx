@@ -2,7 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { CalendarSync, Wallet, Download } from "lucide-react";
+import { CalendarSync, Wallet, Download, UsersRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { exportPaymentReceipt } from "@/lib/pdf-export";
 
@@ -14,6 +14,7 @@ type UnifiedAccountData = {
     transactions?: any[];
   };
   cycles?: {
+    eligible?: boolean;
     active?: {
       cycleNumber?: number;
       status?: string;
@@ -25,6 +26,14 @@ type UnifiedAccountData = {
     } | null;
     payments?: any[];
   };
+  tenX?: {
+    enrolled?: boolean;
+    period?: string | null;
+    amountDue?: number;
+    amountPaid?: number;
+    status?: string;
+    contributions?: any[];
+  } | null;
 };
 
 function kes(value: unknown) {
@@ -52,8 +61,10 @@ export function UnifiedAccountModules({
 
   const wallet = data?.wallet;
   const cycle = data?.cycles?.active;
+  const cycleEligible = data?.cycles?.eligible ?? Boolean(cycle);
   const walletTransactions = wallet?.transactions ?? [];
   const cyclePayments = data?.cycles?.payments ?? [];
+  const tenX = data?.tenX;
 
   return (
     <div className="space-y-4">
@@ -76,7 +87,7 @@ export function UnifiedAccountModules({
         <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><CalendarSync className="h-5 w-5" /> Active Cycle</CardTitle></CardHeader>
         <CardContent>
           {!cycle ? (
-            <div className="py-4"><p className="text-sm text-muted-foreground">No cycle record is currently linked to this SACCO account.</p>{onPayCycle && <Button className="mt-4" onClick={onPayCycle}><Wallet className="mr-2 h-4 w-4" /> Pay Cycle via STK</Button>}</div>
+            <div className="py-4"><p className="text-sm text-muted-foreground">{cycleEligible ? "No cycle record is currently linked to this SACCO account." : "You are not selected to participate in the active cycle."}</p></div>
           ) : (
             <div>
               <div className="grid gap-3 sm:grid-cols-4">
@@ -85,11 +96,31 @@ export function UnifiedAccountModules({
                 <div><p className="text-xs text-muted-foreground">Payments</p><p className="font-semibold">{cycle.paymentCount ?? 0}</p></div>
                 <div><p className="text-xs text-muted-foreground">Status</p><Badge variant="default">{cycle.status ?? "active"}</Badge></div>
               </div>
-              {onPayCycle && (
+              {onPayCycle && cycleEligible && (
                 <Button className="mt-4" onClick={onPayCycle}>
                   <Wallet className="mr-2 h-4 w-4" /> Pay Active Cycle via STK
                 </Button>
               )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><UsersRound className="h-5 w-5" /> 10X Group</CardTitle></CardHeader>
+        <CardContent>
+          {!tenX?.enrolled ? (
+            <p className="py-2 text-sm text-muted-foreground">You are not currently enrolled in the 10X Group.</p>
+          ) : !tenX.period ? (
+            <p className="py-2 text-sm text-muted-foreground">You are enrolled in 10X. No contribution period is open right now.</p>
+          ) : (
+            <div className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div><p className="text-xs text-muted-foreground">Period</p><p className="font-semibold">{tenX.period}</p></div>
+                <div><p className="text-xs text-muted-foreground">Amount due</p><p className="font-semibold">{kes(tenX.amountDue)}</p></div>
+                <div><p className="text-xs text-muted-foreground">Status</p><Badge variant={tenX.status === "SUCCESSFUL" ? "default" : "outline"}>{tenX.status === "SUCCESSFUL" ? "Paid" : "Pending"}</Badge></div>
+              </div>
+              <p className="text-sm text-muted-foreground">Paid this period: {kes(tenX.amountPaid)}</p>
             </div>
           )}
         </CardContent>
