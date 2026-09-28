@@ -1,11 +1,8 @@
 export const BASE = import.meta.env.VITE_SACCO_API_URL as string;
 
-// Use the VPS SACCO gateway path as canonical fallback.
-// Do not fall back to the main app backend (/_/backend), which doesn't serve
-// SACCO financial-statement routes.
-// Some VPS setups expose the main backend only via /_/backend; in that case
-// SACCO proxy endpoints are available under /_/backend/sacco-api.
-const FALLBACK_BASES = ["/sacco-api", "/_/backend/sacco-api"];
+// Keep the SACCO API on its dedicated gateway. The legacy main backend does
+// not expose the cycle and 10X route families.
+const FALLBACK_BASES = ["/sacco-api"];
 
 function normalizeBase(raw: string | undefined): string {
   const value = String(raw || "").trim().replace(/\/+$/, "");
