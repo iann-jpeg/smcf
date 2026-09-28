@@ -134,6 +134,9 @@ curl http://localhost:5001/health
 /sacco-api/* → :5001 (Backend SACCO)
 ```
 
+The `/sacco-api` location must target the TypeScript `smcf-sacco-backend`
+process on port `5001`, not the legacy main backend or port `5000`.
+
 ---
 
 ## **ENVIRONMENT CONFIGURATION REFERENCE**

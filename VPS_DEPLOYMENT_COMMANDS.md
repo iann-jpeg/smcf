@@ -83,7 +83,7 @@ pm2 status
 
 # 2. Restart both backends
 pm2 restart smcf-backend
-pm2 restart sacco-backend
+pm2 restart smcf-sacco-backend
 pm2 save
 
 # 3. Verify they restarted
@@ -210,7 +210,7 @@ pm2 restart smcf-backend
 
 ```bash
 # 1. Stop all services
-pm2 stop smcf-backend sacco-backend
+pm2 stop smcf-backend smcf-sacco-backend
 
 # 2. Revert to previous commit
 git reset --hard HEAD~1
@@ -254,12 +254,12 @@ cd ..
 echo "🔧 Updating SACCO backend..."
 cd smcf-sacco-backend
 npm ci
-node -c quickstart.js
+npm run build
 cd ..
 
 # Phase 4
 echo "♻️ Restarting services..."
-pm2 restart smcf-backend sacco-backend
+pm2 restart smcf-backend smcf-sacco-backend
 pm2 save
 
 # Phase 5
@@ -271,6 +271,7 @@ curl -s http://localhost:4000/health || echo "⚠️ Main backend not responding
 
 echo "Checking SACCO backend (port 5001)..."
 curl -s http://localhost:5001/health || echo "⚠️ SACCO backend not responding"
+pm2 describe smcf-sacco-backend
 
 echo "📊 PM2 Status:"
 pm2 status
