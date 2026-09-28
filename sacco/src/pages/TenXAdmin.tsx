@@ -38,7 +38,11 @@ export default function TenXAdmin() {
     const getValue = <T,>(result: { status: "fulfilled"; value: T } | { status: "rejected"; reason: unknown }) => result.status === "fulfilled" ? result.value : undefined;
     const allMembers = getValue(allMembersData);
     const enrolledMembers = getValue(membersResult);
-    const enrolledIds = new Set((Array.isArray(enrolledMembers) ? enrolledMembers : []).map((member) => String(member._id)));
+    const enrolledIds = new Set(
+      (Array.isArray(enrolledMembers) ? enrolledMembers : [])
+        .filter((member) => Boolean(member.is10XMember))
+        .map((member) => String(member._id)),
+    );
     const overviewData = getValue(overviewResult);
     if (overviewData) setOverview(overviewData);
     setMembers((Array.isArray(allMembers) ? allMembers : []).map((member) => ({
