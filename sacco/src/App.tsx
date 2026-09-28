@@ -190,17 +190,21 @@ function AuthRoute() {
   if (loading) return null;
   if (user) return <Navigate to="/" replace />;
   return (
-    <Suspense fallback={<PageLoader />}>
-      <Auth />
-    </Suspense>
+    <PageErrorBoundary>
+      <Suspense fallback={<PageLoader />}>
+        <Auth />
+      </Suspense>
+    </PageErrorBoundary>
   );
 }
 
 function VerifyEmailRoute() {
   return (
-    <Suspense fallback={<PageLoader />}>
-      <Auth />
-    </Suspense>
+    <PageErrorBoundary>
+      <Suspense fallback={<PageLoader />}>
+        <Auth />
+      </Suspense>
+    </PageErrorBoundary>
   );
 }
 
@@ -215,9 +219,11 @@ const App = () => (
             <Routes>
               <Route path="/auth" element={<AuthRoute />} />
               <Route path="/reset-password" element={
-                <Suspense fallback={<PageLoader />}>
-                  <ResetPassword />
-                </Suspense>
+                <PageErrorBoundary>
+                  <Suspense fallback={<PageLoader />}>
+                    <ResetPassword />
+                  </Suspense>
+                </PageErrorBoundary>
               } />
               <Route path="/verify-email" element={<VerifyEmailRoute />} />
               <Route path="/*" element={<ProtectedRoutes />} />
