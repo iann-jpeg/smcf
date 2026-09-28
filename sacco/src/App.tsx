@@ -6,36 +6,50 @@ import { ThemeProvider } from "next-themes";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, Component, type ErrorInfo, type ReactNode } from "react";
 import { api, normalizeNotification } from "@/lib/api";
 import { fetchDashboardStats, DASHBOARD_STATS_KEY } from "@/hooks/useDashboardStats";
 import { useConnectivityNotifications } from "@/hooks/useConnectivityNotifications";
 
 // Lazy-load every page so only the current route's JS is parsed on startup.
-const Dashboard        = lazy(() => import("./pages/Dashboard"));
-const Members          = lazy(() => import("./pages/Members"));
-const Loans            = lazy(() => import("./pages/Loans"));
-const Accounts         = lazy(() => import("./pages/Accounts"));
-const Guarantors       = lazy(() => import("./pages/Guarantors"));
-const Reports          = lazy(() => import("./pages/Reports"));
-const Compliance       = lazy(() => import("./pages/Compliance"));
-const Documents        = lazy(() => import("./pages/Documents"));
-const RegistrationFee  = lazy(() => import("./pages/RegistrationFee"));
-const SettingsPage     = lazy(() => import("./pages/SettingsPage"));
-const AdminEmail       = lazy(() => import("./pages/AdminEmail"));
-const MemberDetail     = lazy(() => import("./pages/MemberDetail"));
-const RiskScoring      = lazy(() => import("./pages/RiskScoring"));
-const LoanApplication  = lazy(() => import("./pages/LoanApplication"));
-const LoanApprovals    = lazy(() => import("./pages/LoanApprovals"));
-const LoanSimulator    = lazy(() => import("./pages/LoanSimulator"));
-const Notifications    = lazy(() => import("./pages/Notifications"));
-const Auth             = lazy(() => import("./pages/Auth"));
-const ResetPassword    = lazy(() => import("./pages/ResetPassword"));
-const MyAccount        = lazy(() => import("./pages/MyAccount"));
-const FinanceCompliance = lazy(() => import("./pages/FinanceCompliance"));
-const CycleAdmin       = lazy(() => import("./pages/CycleAdmin"));
-const TenXAdmin        = lazy(() => import("./pages/TenXAdmin"));
-const NotFound         = lazy(() => import("./pages/NotFound"));
+const lazyPage = (loader: () => Promise<any>, pageName: string) => lazy(async () => {
+  try {
+    return await loader();
+  } catch (error) {
+    const retryKey = `smcf-chunk-retry:${pageName}`;
+    if (!sessionStorage.getItem(retryKey)) {
+      sessionStorage.setItem(retryKey, "1");
+      window.location.reload();
+      return new Promise(() => undefined);
+    }
+    throw error;
+  }
+});
+
+const Dashboard        = lazyPage(() => import("./pages/Dashboard"), "dashboard");
+const Members          = lazyPage(() => import("./pages/Members"), "members");
+const Loans            = lazyPage(() => import("./pages/Loans"), "loans");
+const Accounts         = lazyPage(() => import("./pages/Accounts"), "accounts");
+const Guarantors       = lazyPage(() => import("./pages/Guarantors"), "guarantors");
+const Reports          = lazyPage(() => import("./pages/Reports"), "reports");
+const Compliance       = lazyPage(() => import("./pages/Compliance"), "compliance");
+const Documents        = lazyPage(() => import("./pages/Documents"), "documents");
+const RegistrationFee  = lazyPage(() => import("./pages/RegistrationFee"), "registration-fee");
+const SettingsPage     = lazyPage(() => import("./pages/SettingsPage"), "settings");
+const AdminEmail       = lazyPage(() => import("./pages/AdminEmail"), "admin-email");
+const MemberDetail     = lazyPage(() => import("./pages/MemberDetail"), "member-detail");
+const RiskScoring      = lazyPage(() => import("./pages/RiskScoring"), "risk-scoring");
+const LoanApplication  = lazyPage(() => import("./pages/LoanApplication"), "loan-application");
+const LoanApprovals    = lazyPage(() => import("./pages/LoanApprovals"), "loan-approvals");
+const LoanSimulator    = lazyPage(() => import("./pages/LoanSimulator"), "loan-simulator");
+const Notifications    = lazyPage(() => import("./pages/Notifications"), "notifications");
+const Auth             = lazyPage(() => import("./pages/Auth"), "auth");
+const ResetPassword    = lazyPage(() => import("./pages/ResetPassword"), "reset-password");
+const MyAccount        = lazyPage(() => import("./pages/MyAccount"), "my-account");
+const FinanceCompliance = lazyPage(() => import("./pages/FinanceCompliance"), "finance-compliance");
+const CycleAdmin       = lazyPage(() => import("./pages/CycleAdmin"), "cycle-admin");
+const TenXAdmin        = lazyPage(() => import("./pages/TenXAdmin"), "tenx");
+const NotFound         = lazyPage(() => import("./pages/NotFound"), "not-found");
 
 // Thin route-level fallback — reuses the CSS spinner already on the page.
 function PageLoader() {
@@ -46,6 +60,33 @@ function PageLoader() {
   );
 }
 
+
+class PageErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("SACCO page failed to load", error, info);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex min-h-screen items-center justify-center px-6 text-center">
+          <div>
+            <h1 className="text-xl font-semibold">This page could not be loaded</h1>
+            <p className="mt-2 text-sm text-muted-foreground">Refresh the page to retry loading the latest version.</p>
+            <button className="mt-4 rounded-md bg-primary px-4 py-2 text-primary-foreground" onClick={() => window.location.reload()}>Refresh page</button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -112,8 +153,9 @@ function ProtectedRoutes() {
 
   return (
     <DashboardLayout>
-      <Suspense fallback={<PageLoader />}>
-        <Routes>
+      <PageErrorBoundary>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/my-account" element={<MyAccount />} />
           <Route path="/members" element={<Members />} />
@@ -136,8 +178,9 @@ function ProtectedRoutes() {
           <Route path="/admin-email" element={<AdminEmail />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="*" element={<NotFound />} />
-        </Routes>
-      </Suspense>
+          </Routes>
+        </Suspense>
+      </PageErrorBoundary>
     </DashboardLayout>
   );
 }
