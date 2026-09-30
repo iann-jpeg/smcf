@@ -224,12 +224,9 @@ router.post("/deposit", protect, async (req, res) => {
       maturity_status: lockPeriod > 0 ? "locked" : "none",
     });
 
-    // Update member's total savings AND wallet_balance (net amount only)
+    // Wallet deposits update the wallet balance only. SACCO savings remain independent.
     await Member.findByIdAndUpdate(memberId, {
-      $inc: { 
-        total_savings: netDeposit,
-        wallet_balance: netDeposit 
-      },
+      $inc: { wallet_balance: netDeposit },
     });
 
     // Record top-up fee if applicable
@@ -945,7 +942,6 @@ router.post("/admin/approve-withdrawal/:id", protect, adminOnly, async (req, res
     } else {
       await Member.findByIdAndUpdate(saving.member_id._id, {
         $inc: {
-          total_savings: -totalDeduction,
           wallet_balance: -totalDeduction,
           total_transaction_fees: withdrawalFee,
         },

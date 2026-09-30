@@ -34,6 +34,27 @@ const savingSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    interest_period: {
+      type: String,
+      default: "",
+    },
+    deposit_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Saving",
+      default: null,
+    },
+    original_amount: {
+      type: Number,
+      default: 0,
+    },
+    current_eligible_amount: {
+      type: Number,
+      default: 0,
+    },
+    receipt_number: {
+      type: String,
+      default: "",
+    },
     status: {
       type: String,
       enum: ["pending", "completed", "failed"],
@@ -121,6 +142,17 @@ const savingSchema = new mongoose.Schema(
 savingSchema.index({ member_id: 1, created_at: -1 });
 savingSchema.index({ transaction_type: 1 });
 savingSchema.index({ status: 1 });
+savingSchema.index(
+  { member_id: 1, interest_period: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      transaction_type: "interest",
+      status: "completed",
+      interest_period: { $exists: true, $ne: "" },
+    },
+  }
+);
 
 // Unique compound index to prevent duplicate M-Pesa transactions
 // Only applies when transaction_ref is not empty (sparse doesn't work on compound, so we use a partial filter)

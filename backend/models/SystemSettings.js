@@ -1,6 +1,34 @@
 import mongoose from "mongoose";
 
 const systemSettingsSchema = new mongoose.Schema({
+  // Wallet settings
+  wallet_interest_rate: {
+    type: Number,
+    default: 3,
+    min: 0,
+    max: 100,
+  },
+  wallet_interest_posting_frequency: {
+    type: String,
+    enum: ["monthly", "quarterly"],
+    default: "monthly",
+  },
+  wallet_withdrawal_lock_months: {
+    type: Number,
+    default: 3,
+    min: 0,
+    max: 24,
+  },
+  wallet_withdrawal_charge_type: {
+    type: String,
+    enum: ["fixed", "percentage"],
+    default: "fixed",
+  },
+  wallet_withdrawal_charge_amount: {
+    type: Number,
+    default: 200,
+    min: 0,
+  },
   // Early Withdrawal Settings
   early_withdrawal_enabled: {
     type: Boolean,

@@ -920,28 +920,57 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
   return (
     <div className="space-y-4 md:space-y-6 p-2 sm:p-4 md:p-0">
       <TenXMemberPanel userData={userData} />
-      {/* Top Saver Badge */}
-      {isTopSaver && (
-        <Card className="bg-gradient-to-r from-yellow-50 to-yellow-100 dark:from-yellow-950 dark:to-yellow-900 border-yellow-300">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2 sm:gap-3">
-              <TopSaverBadge
-                isTopSaver={true}
-                currentBalance={savingsBalance}
-                className="text-sm sm:text-base"
-              />
+
+      <Card className="overflow-hidden border-0 bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 text-white shadow-xl shadow-emerald-800/10">
+        <CardContent className="p-4 sm:p-6">
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+            <div className="space-y-3">
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] text-emerald-100/90">
+                <TrendingUp className="h-3.5 w-3.5" />
+                Member cycle overview
+              </div>
               <div>
-                <p className="font-semibold text-yellow-900 dark:text-yellow-100 text-xs sm:text-base">
-                  Congratulations! You're the Top Saver!
-                </p>
-                <p className="text-xs sm:text-sm text-yellow-700 dark:text-yellow-300">
-                  You have the highest savings balance among all members
+                <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
+                  {userData?.name || "Member"}
+                </h2>
+                <p className="mt-1 text-sm text-slate-300">
+                  {userData?.memberId || userData?.member_id || "Member ID"} • Position #{memberStats.memberPosition || 0}
                 </p>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      )}
+
+            <div className="flex flex-wrap gap-2">
+              <Badge className="rounded-full bg-emerald-500/20 px-3 py-1 text-[11px] font-semibold text-emerald-100 ring-1 ring-emerald-300/30">
+                Cycle #{currentCycleData?.currentCycle || 1}
+              </Badge>
+              <Badge className="rounded-full bg-white/5 px-3 py-1 text-[11px] font-semibold text-slate-100 ring-1 ring-white/10">
+                {memberStats.hasPaidThisCycle ? "Current cycle paid" : "Payment due"}
+              </Badge>
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
+              <p className="text-xs uppercase tracking-[0.14em] text-slate-300">Total contributed</p>
+              <p className="mt-3 text-2xl font-bold text-emerald-300">
+                KES {memberStats.totalContributed.toLocaleString()}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
+              <p className="text-xs uppercase tracking-[0.14em] text-slate-300">Current cycle</p>
+              <p className="mt-3 text-2xl font-bold text-cyan-300">
+                {currentCycleData?.paidMembers || 0}/{currentCycleData?.totalMembers || 0}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
+              <p className="text-xs uppercase tracking-[0.14em] text-slate-300">Expected payout</p>
+              <p className="mt-3 text-2xl font-bold text-amber-300">
+                KES {currentCycleData?.totalAmount?.toLocaleString() || 0}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Top Saver Badge */}
       {isTopSaver && (
@@ -969,21 +998,25 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
       {/* Payment Status Alert - Hidden for wallet-only members */}
       {userData?.member_type !== "wallet_only" && (
         <Card
-          className={`border-l-4 ${
+          className={`border-0 shadow-sm ${
             memberStats.hasPaidThisCycle
-              ? "border-l-financial-success bg-financial-success/5"
-              : "border-l-financial-warning bg-financial-warning/5"
+              ? "bg-gradient-to-r from-emerald-50 to-emerald-100 dark:from-emerald-950/60 dark:to-emerald-900/30"
+              : "bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/60 dark:to-orange-950/30"
           }`}>
           <CardContent className="pt-4 sm:pt-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3">
-            <div className="flex items-center gap-1 sm:gap-2 md:gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
               {memberStats.hasPaidThisCycle ? (
-                <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-financial-success flex-shrink-0" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                  <CheckCircle className="w-5 h-5" />
+                </div>
               ) : (
-                <AlertCircle className="w-4 h-4 md:w-5 md:h-5 text-financial-warning flex-shrink-0" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                  <AlertCircle className="w-5 h-5" />
+                </div>
               )}
               <div>
-                <h3 className="text-xs sm:text-sm md:text-base font-semibold">
+                <h3 className="text-sm sm:text-base md:text-lg font-semibold">
                   {memberStats.hasPaidThisCycle
                     ? "Payment Complete"
                     : "Payment Required"}
@@ -1001,7 +1034,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
               onClick={handleMakePayment}
               variant={memberStats.hasPaidThisCycle ? "default" : "mpesa"}
               size="sm"
-              className="w-full sm:w-auto text-xs sm:text-sm md:text-base">
+              className="w-full sm:w-auto text-xs sm:text-sm md:text-base rounded-full shadow-sm">
               <Phone className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
               {memberStats.hasPaidThisCycle
                 ? "Pay for Next Cycle"
@@ -1174,37 +1207,37 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
 
       <Tabs defaultValue={userData?.member_type === "wallet_only" ? "wallet" : "overview"} className="w-full">
         <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">
-          <TabsList className={`inline-flex w-auto min-w-max h-auto p-2 gap-1 ${userData?.member_type === "wallet_only" ? "md:grid md:w-full md:grid-cols-4" : "md:grid md:w-full md:grid-cols-8"}`}>
+          <TabsList className={`inline-flex w-auto min-w-max h-auto gap-1 rounded-2xl border border-slate-200 bg-slate-100/80 p-1.5 shadow-sm dark:border-slate-800 dark:bg-slate-900/80 ${userData?.member_type === "wallet_only" ? "md:grid md:w-full md:grid-cols-4" : "md:grid md:w-full md:grid-cols-8"}`}>
             {userData?.member_type !== "wallet_only" && (
               <TabsTrigger
                 value="overview"
-                className="text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                className="rounded-xl text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white">
                 Overview
               </TabsTrigger>
             )}
             {userData?.member_type !== "wallet_only" && (
               <TabsTrigger
                 value="announcements"
-                className="text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                className="rounded-xl text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white">
                 <Megaphone className="w-4 h-4 mr-1.5 inline" />
                 Announcements
               </TabsTrigger>
             )}
             <TabsTrigger
               value="wallet"
-              className="text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              className="rounded-xl text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white">
               <Wallet className="w-4 h-4 mr-1.5 inline" />
               Wallet
             </TabsTrigger>
             <TabsTrigger
               value="loans"
-              className="text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              className="rounded-xl text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white">
               <FileText className="w-4 h-4 mr-1.5 inline" />
               My Loans
             </TabsTrigger>
             <TabsTrigger
               value="guarantor"
-              className="text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground relative">
+              className="rounded-xl text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white relative">
               <Shield className="w-4 h-4 mr-1.5 inline" />
               Guarantor
               {pendingGuarantorRequests > 0 && (
@@ -1218,7 +1251,7 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
             {userData?.member_type !== "wallet_only" && (
               <TabsTrigger
                 value="history"
-                className="text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                className="rounded-xl text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white">
                 <Receipt className="w-4 h-4 mr-1.5 inline" />
                 <span className="hidden sm:inline">Payment History</span>
                 <span className="sm:hidden">History</span>
@@ -1227,14 +1260,14 @@ const MemberDashboard = ({ userData, cycleData }: MemberDashboardProps) => {
             {userData?.member_type !== "wallet_only" && (
               <TabsTrigger
                 value="payouts"
-                className="text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                className="rounded-xl text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white">
                 <TrendingUp className="w-4 h-4 mr-1.5 inline" />
                 Payouts
               </TabsTrigger>
             )}
             <TabsTrigger
               value="messages"
-              className="text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              className="rounded-xl text-sm sm:text-base font-medium whitespace-nowrap py-3 px-4 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white">
               <Megaphone className="w-4 h-4 mr-1.5 inline" />
               Messages
             </TabsTrigger>

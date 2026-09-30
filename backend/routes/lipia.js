@@ -417,7 +417,6 @@ router.post("/query-status", protect, async (req, res) => {
           });
 
           await Member.findByIdAndUpdate(payment.member_id, {
-            $inc: { total_savings: depositAmount },
             $set: { wallet_balance: balanceAfter },
           });
           await Payment.findByIdAndUpdate(payment._id, { $set: { deposit_processed: true } });

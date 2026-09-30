@@ -66,6 +66,7 @@ interface PendingDeposit {
   cyclePayment?: boolean;
   cycleNumber?: number;
   tenXContributionId?: string;
+    walletPayment?: boolean;
   createdAt: number;
 }
 
@@ -273,6 +274,7 @@ async function pollSACCOPayment(
             sourceLabel: 'M-Pesa STK',
             cycleNumber: pending?.cyclePayment ? pending.cycleNumber : undefined,
             tenXContributionId: pending?.tenXContributionId,
+            walletPayment: pending?.walletPayment,
             processedAt: new Date(),
           });
           const d = pendingDeposits.get(checkoutRequestId);
@@ -734,7 +736,11 @@ async function settlePendingDeposit(params: {
     });
   }
 
-  if (!cycleNumber && !params.tenXContributionId) {
+  if (params.walletPayment) {
+    const unlockDate = new Date(processedAt);
+    unlockDate.setMonth(unlockDate.getMonth() + 3);
+    await Saving.create({ member_id: params.memberId, amount, transaction_type: 'deposit', balance_before: 0, balance_after: amount, payment_method: 'mpesa', transaction_ref: params.mpesaRef, status: 'completed', lock_period_months: 3, unlock_date: unlockDate, maturity_status: 'locked', notes: 'Wallet deposit via M-Pesa STK' });
+  } else if (!cycleNumber && !params.tenXContributionId) {
     await recordSavingsDeposit({
       memberId: params.memberId,
       amount,
@@ -1037,6 +1043,7 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
     const numAmount  = Math.round(Number(amount));
     const cyclePayment = paymentType === 'cycle';
     const tenXPayment = paymentType === 'tenx';
+    const walletPayment = paymentType === 'wallet';
     let tenXContributionId: string | undefined;
     let cycleNumber = Number(requestedCycleNumber) || undefined;
 
@@ -1109,6 +1116,8 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
         cyclePayment,
         cycleNumber,
         tenXContributionId,
+          walletPayment,
+          walletPayment,
         createdAt: Date.now(),
       });
 
@@ -1147,7 +1156,7 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
         if (!d || d.status !== 'pending') return;
         try {
           const ref = `SIM${Date.now()}`;
-          await recordDeposit(d.memberId, d.amount, d.phone, ref, d.cycleNumber, simId, d.tenXContributionId);
+          await recordDeposit(d.memberId, d.amount, d.phone, ref, d.cycleNumber, simId, d.tenXContributionId, d.walletPayment);
           d.status = 'success';
           d.mpesaRef = ref;
         } catch {
@@ -1165,7 +1174,8 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
     }
 
     // ── Real STK Push via Lipia Online ────────────────────────────────────
-    const stkData = await sendLipiaSTK(mpesaPhone, numAmount, 'SMCF-SAVINGS', tenXPayment ? 'SMCF 10X Contribution' : 'SMCF SACCO Savings Deposit');
+    const stkData = await sendLipiaSTK(mpesaPhone, numAmount, 'SMCF-SAVINGS', tenXPayment ? 'SMCF 10X Contribution' : walletPayment ? 'SMCF Wallet Deposit' : 'SMCF SACCO Savings Deposit');
+  walletPayment,
 
     // Lipia proxies the Safaricom response — CheckoutRequestID may be top-level
     // or nested under data depending on the Lipia version.
@@ -1218,7 +1228,7 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
   }
 });
 
-async function recordDeposit(memberId: string, amount: number, phone: string, mpesaRef: string, cycleNumber?: number, checkoutRequestId?: string, tenXContributionId?: string) {
+async function recordDeposit(memberId: string, amount: number, phone: string, mpesaRef: string, cycleNumber?: number, checkoutRequestId?: string, tenXContributionId?: string, walletPayment?: boolean) {
   const transactionRef = createTransactionRef();
   await Transaction.create({
     transactionRef,
@@ -1236,7 +1246,11 @@ async function recordDeposit(memberId: string, amount: number, phone: string, mp
     createdBy: null,
   });
 
-  if (tenXContributionId) {
+  if (walletPayment) {
+    const unlockDate = new Date();
+    unlockDate.setMonth(unlockDate.getMonth() + 3);
+    await Saving.create({ member_id: memberId, amount, transaction_type: 'deposit', balance_before: 0, balance_after: amount, payment_method: 'mpesa', transaction_ref: mpesaRef, status: 'completed', lock_period_months: 3, unlock_date: unlockDate, maturity_status: 'locked', notes: 'Wallet deposit via M-Pesa STK' });
+  } else if (tenXContributionId) {
     await TenXContribution.findByIdAndUpdate(tenXContributionId, {
       status: 'SUCCESSFUL', payment_date: new Date(), transaction_reference: mpesaRef, $inc: { amount_paid: amount },
     });

@@ -96,6 +96,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
   const [pollCount, setPollCount] = useState(0);
   const [isTopSaver, setIsTopSaver] = useState(false);
   const { toast } = useToast();
+  const availableBalance = Math.max((summary.currentBalance || 0) - (lockedFunds.amount || 0), 0);
 
   // Initialize deposit phone number when deposit dialog opens
   useEffect(() => {
@@ -983,6 +984,10 @@ ${getSmcfPrintStampStyles()}
             <div className="text-3xl font-bold text-blue-700 dark:text-blue-300">
               KES {(summary.currentBalance || 0).toLocaleString()}
             </div>
+            <div className="mt-2 text-xs text-muted-foreground space-y-1">
+              <div>Available: KES {availableBalance.toLocaleString()}</div>
+              <div>Locked: KES {(lockedFunds.amount || 0).toLocaleString()}</div>
+            </div>
           </CardContent>
         </Card>
 
@@ -1146,45 +1151,6 @@ ${getSmcfPrintStampStyles()}
                   <li>• Direct deposits are free (no fee)</li>
                   <li>• STK Push deposits: KES 5 per transaction</li>
                   <li>• Withdrawal fees range from KES 15 to KES 385 (covers M-Pesa costs)</li>
-                </ul>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Lock Period Info Card */}
-      {lockedFunds.amount > 0 && (
-        <Card className="border-l-4 border-l-amber-500 bg-amber-50/50">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Lock className="w-5 h-5 text-amber-600" />
-              Deposit Lock Period Terms
-            </CardTitle>
-            <CardDescription>
-              Your locked deposits must remain until maturity to avoid penalties
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium">Total Locked Funds:</span>
-                <span className="text-lg font-bold text-amber-700">KES {lockedFunds.amount.toLocaleString()}</span>
-              </div>
-              {lockedFunds.earliestUnlockDate && (
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium">Earliest Unlock Date:</span>
-                  <span className="text-sm font-semibold">{new Date(lockedFunds.earliestUnlockDate).toLocaleDateString()}</span>
-                </div>
-              )}
-              <div className="bg-amber-100 border border-amber-300 rounded-lg p-3 text-sm">
-                <p className="font-medium text-amber-900 mb-2">⚠️ Early Withdrawal Terms:</p>
-                <ul className="list-disc list-inside space-y-1 text-amber-800 text-xs">
-                  <li>Early withdrawal before maturity may incur penalties (5%-20%)</li>
-                  <li>Penalty percentages depend on time remaining until unlock date</li>
-                  <li>All penalties are added to the group reserve account</li>
-                  <li>Credit score may be reduced for early withdrawals</li>
-                  <li>Contact admin if you need emergency access to locked funds</li>
                 </ul>
               </div>
             </div>

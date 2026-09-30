@@ -4,6 +4,7 @@ import Member from '../models/Member';
 import Transaction from '../models/Transaction';
 import TenXContribution from '../models/TenXContribution';
 import TenXPeriod from '../models/TenXPeriod';
+import Saving from '../models/Saving';
 import { protect, AuthRequest } from '../middleware/auth';
 
 const router = Router();
@@ -56,9 +57,10 @@ router.get('/', protect, async (req: AuthRequest, res, next) => {
     const memberCode = String(member.memberId);
     const transactionFilter = { memberId: member._id };
 
-    const [transactions, completedTransactions] = await Promise.all([
+    const [transactions, completedTransactions, walletRecords] = await Promise.all([
       Transaction.find(transactionFilter).sort({ processedAt: -1 }).limit(50).lean(),
       Transaction.find({ ...transactionFilter, status: 'completed' }).lean(),
+      Saving.find({ member_id: member._id }).sort({ created_at: -1 }).limit(50).lean(),
     ]);
 
     const deposits = completedTransactions
@@ -67,6 +69,15 @@ router.get('/', protect, async (req: AuthRequest, res, next) => {
     const withdrawals = completedTransactions
       .filter((transaction) => transaction.type === 'withdrawal')
       .reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
+    const completedWallet = walletRecords.filter((record) => record.status === 'completed');
+    const walletBalance = completedWallet.reduce((total, record) => {
+      if (record.transaction_type === 'deposit' || record.transaction_type === 'interest') return total + Number(record.amount || 0);
+      if (record.transaction_type === 'withdrawal') return total - Number(record.amount || 0);
+      return total;
+    }, 0);
+    const walletPrincipal = completedWallet.filter((record) => record.transaction_type === 'deposit').reduce((total, record) => total + Number(record.amount || 0), 0);
+    const walletInterest = completedWallet.filter((record) => record.transaction_type === 'interest').reduce((total, record) => total + Number(record.amount || 0), 0);
+    const lockedWallet = completedWallet.filter((record) => record.transaction_type === 'deposit' && record.unlock_date && new Date(record.unlock_date) > new Date()).reduce((total, record) => total + Number(record.amount || 0), 0);
 
     let cycle: Record<string, unknown> | null = null;
     let cyclePayments: Record<string, unknown>[] = [];
@@ -155,11 +166,15 @@ router.get('/', protect, async (req: AuthRequest, res, next) => {
           totalCycleContribution: Number(member.total_cycle_contribution || 0),
         },
         wallet: {
-          balance: Number(member.savings || 0),
-          totalDeposits: deposits,
-          totalWithdrawals: withdrawals,
-          transactionCount: transactions.length,
-          transactions: transactions.filter((transaction) => !transaction.cycleNumber),
+          balance: walletBalance,
+          principal: walletPrincipal,
+          totalDeposits: walletPrincipal,
+          totalInterestEarned: walletInterest,
+          totalWithdrawals: completedWallet.filter((record) => record.transaction_type === 'withdrawal').reduce((total, record) => total + Number(record.amount || 0), 0),
+          lockedAmount: lockedWallet,
+          availableForWithdrawal: Math.max(0, walletBalance - lockedWallet),
+          transactionCount: walletRecords.length,
+          transactions: walletRecords,
         },
         cycles: {
           active: cycle,

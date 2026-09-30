@@ -2,6 +2,7 @@ import cron from "node-cron";
 import mongoose from "mongoose";
 import Member from "../models/Member.js";
 import Saving from "../models/Saving.js";
+import SystemSettings from "../models/SystemSettings.js";
 
 // Run every day at midnight to check and apply interest
 export const startInterestCronJob = () => {
@@ -20,121 +21,88 @@ export const applyMonthlyInterest = async () => {
   try {
     console.log("\n💰 Running monthly interest calculation...");
     const today = new Date();
-    
-    // Get all members with savings (check both wallet_balance and total_savings)
-    const members = await Member.find({ 
-      $or: [
-        { wallet_balance: { $gt: 0 } },
-        { total_savings: { $gt: 0 } }
-      ]
-    });
 
-    console.log(`📊 Found ${members.length} members with savings`);
+    const systemSettings = await SystemSettings.findOne().lean();
+    const monthlyRate = Number.isFinite(systemSettings?.wallet_interest_rate)
+      ? Number(systemSettings.wallet_interest_rate)
+      : 3;
+
+    const members = await Member.find({ wallet_balance: { $gt: 0 } });
+    console.log(`📊 Found ${members.length} members with wallet balances`);
 
     let interestAppliedCount = 0;
     let totalInterestApplied = 0;
 
     for (const member of members) {
       try {
-        // Get all deposits for this member
         const deposits = await Saving.find({
           member_id: member._id,
           transaction_type: "deposit",
           status: "completed",
-          amount: { $gt: 0 }
+          amount: { $gt: 0 },
         }).sort({ created_at: 1 });
 
-        for (const deposit of deposits) {
-          // Use created_at as the deposit date (transaction_date is often undefined)
-          const depositDate = new Date(deposit.transaction_date || deposit.created_at || deposit.createdAt);
-          
-          // Skip if we can't determine the deposit date
-          if (isNaN(depositDate.getTime())) {
-            console.log(`⚠️ Skipping deposit ${deposit._id} - invalid date`);
-            continue;
-          }
+        if (deposits.length === 0) continue;
 
-          const daysSinceDeposit = Math.floor(
-            (today - depositDate) / (1000 * 60 * 60 * 24)
-          );
+        const firstDepositDate = new Date(deposits[0].created_at || deposits[0].createdAt);
+        if (Number.isNaN(firstDepositDate.getTime())) continue;
 
-          // Check if 30+ days have passed
-          if (daysSinceDeposit >= 30) {
-            const expectedPeriods = Math.floor(daysSinceDeposit / 30);
-            const depositDateStr = depositDate.toDateString();
-            
-            // Check how many interest payments have been made for this specific deposit
-            const existingInterests = await Saving.find({
+        const daysSinceFirstDeposit = Math.floor((today - firstDepositDate) / (1000 * 60 * 60 * 24));
+        const periodsDue = Math.max(0, Math.floor(daysSinceFirstDeposit / 30));
+        if (periodsDue < 1) continue;
+
+        const existingPeriods = new Set(
+          (await Saving.find({
+            member_id: member._id,
+            transaction_type: "interest",
+            status: "completed",
+            interest_period: { $ne: "" },
+          }).select("interest_period").lean()).map((item) => item.interest_period)
+        );
+
+        for (let periodIndex = 1; periodIndex <= periodsDue; periodIndex++) {
+          const periodDate = new Date(firstDepositDate);
+          periodDate.setDate(periodDate.getDate() + periodIndex * 30);
+          const interestPeriod = `${periodDate.getUTCFullYear()}-${String(periodDate.getUTCMonth() + 1).padStart(2, "0")}`;
+
+          if (existingPeriods.has(interestPeriod)) continue;
+
+          const currentBalance = Number(member.wallet_balance || 0);
+          const interestAmount = Math.round(currentBalance * (monthlyRate / 100));
+          if (interestAmount <= 0) continue;
+
+          try {
+            await Saving.create({
               member_id: member._id,
+              amount: interestAmount,
               transaction_type: "interest",
+              balance_before: currentBalance,
+              balance_after: currentBalance + interestAmount,
+              interest_rate: monthlyRate,
+              interest_amount: interestAmount,
+              interest_period: interestPeriod,
+              payment_method: "auto_interest",
               status: "completed",
-              notes: { $regex: depositDateStr, $options: "i" }
+              created_at: today,
+              notes: `${monthlyRate}% monthly wallet interest for ${interestPeriod}`,
             });
 
-            const appliedPeriods = existingInterests.length;
+            await Member.updateOne({ _id: member._id }, { $inc: { wallet_balance: interestAmount } });
+            member.wallet_balance = Number(member.wallet_balance || 0) + interestAmount;
+            existingPeriods.add(interestPeriod);
+            interestAppliedCount++;
+            totalInterestApplied += interestAmount;
 
-            // Apply interest for any missing periods
-            if (appliedPeriods < expectedPeriods) {
-              const periodsToApply = expectedPeriods - appliedPeriods;
-              
-              for (let i = 0; i < periodsToApply; i++) {
-                // Calculate 3% interest
-                const interestAmount = Math.round(deposit.amount * 0.03);
-                
-                if (interestAmount <= 0) continue;
-
-                // Get current balance
-                const lastTransaction = await Saving.findOne({
-                  member_id: member._id,
-                  status: "completed"
-                }).sort({ created_at: -1 });
-                
-                const currentBalance = lastTransaction?.balance_after || 
-                                       member.wallet_balance || 
-                                       member.total_savings || 0;
-
-                // Create interest transaction
-                await Saving.create({
-                  member_id: member._id,
-                  amount: interestAmount,
-                  transaction_type: "interest",
-                  balance_before: currentBalance,
-                  balance_after: currentBalance + interestAmount,
-                  interest_rate: 3,
-                  interest_amount: interestAmount,
-                  payment_method: "auto_interest",
-                  status: "completed",
-                  created_at: today,
-                  notes: `3% monthly interest on deposit from ${depositDateStr}`,
-                });
-
-                // Update member's wallet balance
-                await Member.updateOne(
-                  { _id: member._id },
-                  {
-                    $inc: {
-                      wallet_balance: interestAmount,
-                      total_savings: interestAmount,
-                    },
-                  }
-                );
-
-                console.log(
-                  `✅ Applied KES ${interestAmount} interest to ${member.name} (${member.member_id}) for deposit from ${depositDateStr}`
-                );
-                interestAppliedCount++;
-                totalInterestApplied += interestAmount;
-
-                // Emit socket event for real-time update
-                if (global.io) {
-                  global.io.emit("interestApplied", {
-                    member_id: member._id,
-                    memberName: member.name,
-                    amount: interestAmount,
-                  });
-                }
-              }
+            if (global.io) {
+              global.io.emit("interestApplied", {
+                member_id: member._id,
+                memberName: member.name,
+                amount: interestAmount,
+                interestPeriod,
+              });
             }
+          } catch (error) {
+            if (error?.code !== 11000) throw error;
           }
         }
       } catch (error) {
@@ -152,10 +120,10 @@ export const applyMonthlyInterest = async () => {
     } else {
       console.log("\n✓ No interest due today");
     }
-    
+
     return {
       appliedCount: interestAppliedCount,
-      totalAmount: totalInterestApplied
+      totalAmount: totalInterestApplied,
     };
   } catch (error) {
     console.error("❌ Error in interest calculation:", error);

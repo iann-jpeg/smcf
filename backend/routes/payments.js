@@ -400,11 +400,10 @@ async function pollLipiaPaymentStatus(
           maturity_status: lockPeriod > 0 ? "locked" : "none",
         });
 
-        // Update member's total_savings AND wallet_balance with FULL amount
+        // Update the wallet balance only; SACCO savings remain separate.
         await Member.findByIdAndUpdate(memberId, {
-          $inc: {
-            total_savings: actualAmount,
-            wallet_balance: actualAmount,
+          $set: {
+            wallet_balance: balanceAfter,
           },
         });
 
@@ -843,12 +842,9 @@ router.post("/lipia-callback", async (req, res) => {
           maturity_status: lockPeriod > 0 ? "locked" : "none",
         });
 
-        // Update member's total_savings AND wallet_balance
+        // Wallet deposits update the wallet balance only. SACCO savings remain independent.
         await Member.findByIdAndUpdate(payment.member_id, {
-          $inc: { 
-            total_savings: payment.amount,
-            wallet_balance: payment.amount 
-          },
+          $set: { wallet_balance: balanceAfter },
         });
 
         console.log("✅ Wallet deposit completed via callback:", {
@@ -1038,7 +1034,9 @@ router.post("/manual-complete/:paymentId", protect, async (req, res) => {
       await Member.findByIdAndUpdate(payment.member_id, {
         $inc: {
           total_contributed: payment.amount,
-          total_savings: payment.amount,
+        },
+        $set: {
+          wallet_balance: balanceAfter,
         },
       });
 

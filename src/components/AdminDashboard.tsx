@@ -3037,123 +3037,87 @@ Thank you for your cooperation! ðŸ™`;
         </div>
 
         <TabsContent value="members" className="space-y-6">
-          {/* Cycle Overview */}
-          <Card className="bg-gradient-to-br from-primary/5 to-accent/5 border-primary/20">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="w-5 h-5" />
-                Current Cycle #
-                {currentCycle?.cycle_number ||
-                  currentCycle?.data?.cycle_number ||
-                  userData?.cycleData?.currentCycle ||
-                  "â€”"}
-              </CardTitle>
-              <CardDescription>
-                Started:{" "}
-                {currentCycle?.start_date
-                  ? new Date(currentCycle.start_date).toLocaleDateString()
-                  : currentCycle?.data?.start_date
-                  ? new Date(currentCycle.data.start_date).toLocaleDateString()
-                  : userData?.cycleData?.cycleStartDate || "Not Started"}{" "}
-                | Status:{" "}
-                {currentCycle?.status ||
-                  currentCycle?.data?.status ||
-                  "Inactive"}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card className="overflow-hidden border-0 bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 text-white shadow-xl shadow-emerald-900/10">
+            <CardContent className="p-5 sm:p-6">
+              <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
                 <div>
-                  <div className="text-sm text-muted-foreground">
-                    Collection Progress
-                  </div>
-                  <div className="text-2xl font-bold">
-                    {paidMembers.length}/{safeMembers.length}
-                  </div>
-                  <Progress
-                    value={
-                      safeMembers.length > 0
-                        ? (paidMembers.length / safeMembers.length) * 100
-                        : 0
-                    }
-                    className="mt-2"
-                  />
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-200/80">SACCO cycle control</p>
+                  <h3 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
+                    Cycle #{currentCycle?.cycle_number || currentCycle?.data?.cycle_number || userData?.cycleData?.currentCycle || "—"}
+                  </h3>
+                  <p className="mt-2 text-sm text-slate-300">
+                    Started {currentCycle?.start_date ? new Date(currentCycle.start_date).toLocaleDateString() : currentCycle?.data?.start_date ? new Date(currentCycle.data.start_date).toLocaleDateString() : userData?.cycleData?.cycleStartDate || "Not Started"} • Status {currentCycle?.status || currentCycle?.data?.status || "Inactive"}
+                  </p>
                 </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">
-                    Amount Collected
-                  </div>
-                  <div className="text-2xl font-bold text-financial-success">
-                    KES {totalCollected.toLocaleString()}
-                  </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Badge className="rounded-full bg-emerald-500/20 px-3 py-1 text-[11px] font-semibold text-emerald-100 ring-1 ring-emerald-300/30">
+                    {paidMembers.length}/{safeMembers.length} paid
+                  </Badge>
+                  <Badge className="rounded-full bg-white/5 px-3 py-1 text-[11px] font-semibold text-slate-100 ring-1 ring-white/10">
+                    {currentCycle?.disbursement_status || currentCycle?.data?.disbursement_status || "Pending"}
+                  </Badge>
                 </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">
-                    Target Amount
-                  </div>
-                  <div className="text-2xl font-bold">
-                    KES{" "}
-                    {(
-                      (safeMembers.length || 14) * contributionAmount
-                    ).toLocaleString()}
-                  </div>
+              </div>
+
+              <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
+                  <p className="text-xs uppercase tracking-[0.14em] text-slate-300">Collection progress</p>
+                  <p className="mt-3 text-2xl font-bold text-emerald-300">{paidMembers.length}/{safeMembers.length}</p>
+                  <Progress value={safeMembers.length > 0 ? (paidMembers.length / safeMembers.length) * 100 : 0} className="mt-3 h-2 bg-white/10" />
                 </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">
-                    Disbursement
-                  </div>
-                  <div className="text-xl font-bold">
-                    {currentCycle?.disbursement_status ||
-                      currentCycle?.data?.disbursement_status ||
-                      "Pending"}
-                  </div>
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
+                  <p className="text-xs uppercase tracking-[0.14em] text-slate-300">Collected</p>
+                  <p className="mt-3 text-2xl font-bold text-emerald-300">KES {totalCollected.toLocaleString()}</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
+                  <p className="text-xs uppercase tracking-[0.14em] text-slate-300">Target</p>
+                  <p className="mt-3 text-2xl font-bold text-cyan-300">KES {((safeMembers.length || 14) * contributionAmount).toLocaleString()}</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
+                  <p className="text-xs uppercase tracking-[0.14em] text-slate-300">Next recipient</p>
+                  <p className="mt-3 text-lg font-bold text-amber-300">{currentCycle?.recipient_id?.name || currentCycle?.data?.next_recipient?.name || "TBD"}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* System Reset & Start Fresh */}
-          <Card className="border-red-500 bg-red-50 dark:bg-red-950/20">
+          <Card className="border-red-500 bg-red-50/80 dark:bg-red-950/20">
             <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                   <h3 className="font-semibold mb-1 text-red-700 dark:text-red-400">
                     Reset System & Start from Cycle #1
                   </h3>
                   <p className="text-sm text-muted-foreground">
-                    Clear all payments, disbursements, and cycles. Start fresh
-                    from Cycle #1 with Member #1
+                    Clear all payments, disbursements, and cycles. Start fresh from Cycle #1 with Member #1
                   </p>
                 </div>
                 <Button
                   onClick={async () => {
                     if (
                       !window.confirm(
-                        "âš ï¸ WARNING: This will DELETE all payments, disbursements, and cycles. Are you sure?"
+                        "⚠️ WARNING: This will DELETE all payments, disbursements, and cycles. Are you sure?"
                       )
                     ) {
                       return;
                     }
                     try {
-                      // Delete all payments
                       await fetch(`${API_BASE}/api/payments`, {
                         method: "DELETE",
                         headers: { ...authService.getAuthHeaders() },
                       });
 
-                      // Delete all disbursements
                       await fetch(`${API_BASE}/api/disbursements`, {
                         method: "DELETE",
                         headers: { ...authService.getAuthHeaders() },
                       });
 
-                      // Delete all cycles
                       await fetch(`${API_BASE}/api/cycles`, {
                         method: "DELETE",
                         headers: { ...authService.getAuthHeaders() },
                       });
 
-                      // Reset all members' payment status
                       const members = await fetch(`${API_BASE}/api/members`, {
                         headers: { ...authService.getAuthHeaders() },
                       }).then((r) => r.json());
@@ -3173,7 +3137,6 @@ Thank you for your cooperation! ðŸ™`;
                         });
                       }
 
-                      // Start fresh cycle #1 with first member
                       const firstMember = members.sort(
                         (a, b) => a.position - b.position
                       )[0];
@@ -3194,7 +3157,6 @@ Thank you for your cooperation! ðŸ™`;
                           "All data cleared. Starting fresh from Cycle #1",
                       });
 
-                      // Refresh all data
                       setTimeout(() => {
                         window.location.reload();
                       }, 1500);
@@ -3215,17 +3177,16 @@ Thank you for your cooperation! ðŸ™`;
             </CardContent>
           </Card>
 
-          {/* Member Status Overview */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card>
+            <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950/30 dark:to-green-950/20">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CheckCircle className="w-5 h-5 text-financial-success" />
+                <CardTitle className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
+                  <CheckCircle className="w-5 h-5" />
                   Paid Members
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold text-financial-success mb-2">
+                <div className="text-3xl font-bold text-emerald-700 dark:text-emerald-300 mb-2">
                   {paidMembers.length}
                 </div>
                 <div className="text-sm text-muted-foreground">
@@ -3234,38 +3195,31 @@ Thank you for your cooperation! ðŸ™`;
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5 text-financial-warning" />
+                <CardTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+                  <AlertTriangle className="w-5 h-5" />
                   Pending Members
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold text-financial-warning mb-2">
+                <div className="text-3xl font-bold text-amber-700 dark:text-amber-300 mb-2">
                   {pendingMembers.length}
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  KES{" "}
-                  {(
-                    pendingMembers.length * contributionAmount
-                  ).toLocaleString()}{" "}
-                  outstanding
+                  KES {(pendingMembers.length * contributionAmount).toLocaleString()} outstanding
                 </div>
               </CardContent>
             </Card>
 
-            {/* Online Members Card */}
             <OnlineMembersCard currentUser={userData} />
           </div>
 
-          {/* Member List */}
-          <Card>
-            <CardHeader>
-              <CardTitle>All Members</CardTitle>
+          <Card className="overflow-hidden border-0 shadow-sm">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-xl">All Members</CardTitle>
               <CardDescription>
-                Cycle #{currentCycle?.cycle_number || 1} | Expected by now: KES {((currentCycle?.cycle_number || 1) * 200).toLocaleString()} per member | 
-                Breakdown: KES 200 (Cycle) + KES 20 (Credit) + KES 4 (Fee) = KES 224 total payment
+                Cycle #{currentCycle?.cycle_number || 1} | Expected by now: KES {((currentCycle?.cycle_number || 1) * 200).toLocaleString()} per member | Breakdown: KES 200 (Cycle) + KES 20 (Credit) + KES 4 (Fee) = KES 224 total payment
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -3285,14 +3239,13 @@ Thank you for your cooperation! ðŸ™`;
                   </TableHeader>
                   <TableBody>
                     {(() => {
-                      // Debug: Log payment data state with expanded details
                       const paymentsWithCycles = allPayments.filter((p: any) => typeof p.cycle_number === 'number');
                       const completedPayments = allPayments.filter((p: any) => p.status === 'completed');
                       const allCycles = Array.from(new Set(allPayments.map((p: any) => p.cycle_number).filter(Boolean))).sort((a, b) => a - b);
                       const paymentTypes = Array.from(new Set(allPayments.map((p: any) => p.type).filter(Boolean)));
-                      
+
                       if (import.meta.env.DEV) {
-                        devLog('ðŸ’³ Payment Data State:', {
+                        devLog('Payment Data State:', {
                           totalPayments: allPayments.length,
                           currentCycle: currentCycle?.cycle_number || 'NOT SET',
                           paymentsWithCycles: paymentsWithCycles.length,
@@ -3310,38 +3263,24 @@ Thank you for your cooperation! ðŸ™`;
                           }))
                         });
                       }
-                      
-                      // Alert if no payment data
+
                       if (import.meta.env.DEV && allPayments.length === 0) {
                         devWarn('NO PAYMENT DATA LOADED - Advance badges will not show!');
                       }
                       return null;
                     })()}
                     {orderedMembers.map((member, index) => {
-                      // Calculate cycles in advance based on STORED total_cycle_contribution
-                      // This is more reliable than summing payments
                       const CYCLE_AMOUNT = 200;
-                      
-                      // Use the stored total_cycle_contribution from member data
                       const totalPaid = member.total_cycle_contribution || 0;
-                      
-                      // Calculate how many cycles have been paid for
                       const cyclesPaidFor = Math.floor(totalPaid / CYCLE_AMOUNT);
-                      
-                      // Current cycle number
                       const currCycle = currentCycle?.cycle_number || 1;
-                      
-                      // Calculate advance cycles (if paid for more cycles than current)
                       const advanceCycles = cyclesPaidFor > currCycle ? cyclesPaidFor - currCycle : 0;
-                      
-                      // Cycles paid (at least current or more)
                       const cyclesPaid = cyclesPaidFor >= currCycle ? 1 : 0;
-                      
-                      // Debug logging for first 5 members to see calculations
+
                       if (import.meta.env.DEV && index < 5) {
                         const expectedAmount = currCycle * CYCLE_AMOUNT;
                         const overpayment = totalPaid - expectedAmount;
-                        devLog(`ðŸ” Cycle Payment Analysis for ${member.name} (#${member.position || index + 1}):`, {
+                        devLog(`Cycle Payment Analysis for ${member.name} (#${member.position || index + 1}):`, {
                           dataSource: 'member.total_cycle_contribution (STORED)',
                           currentCycle: `#${currCycle}`,
                           expectedByNow: `KES ${expectedAmount}`,
@@ -3349,23 +3288,17 @@ Thank you for your cooperation! ðŸ™`;
                           difference: overpayment > 0 ? `+KES ${overpayment} (OVERPAID)` : overpayment < 0 ? `-KES ${Math.abs(overpayment)} (UNDERPAID)` : 'EXACT',
                           cyclesPaidFor: `${cyclesPaidFor} cycles`,
                           advanceCycles: advanceCycles > 0 ? `+${advanceCycles} cycles ahead` : advanceCycles === 0 && cyclesPaidFor >= currCycle ? 'Current only' : 'Not paid',
-                          calculation: `${totalPaid} Ã· ${CYCLE_AMOUNT} = ${cyclesPaidFor} cycles paid | ${cyclesPaidFor} - ${currCycle} = ${advanceCycles} advance`,
+                          calculation: `${totalPaid} / ${CYCLE_AMOUNT} = ${cyclesPaidFor} cycles paid | ${cyclesPaidFor} - ${currCycle} = ${advanceCycles} advance`,
                           noteForNextCycle: advanceCycles > 0 ? `At cycle #${currCycle + 1}, advance will be ${advanceCycles - 1}` : 'N/A',
-                          badge: advanceCycles > 0 ? 'ðŸ”µ CYAN BADGE' : cyclesPaidFor >= currCycle ? 'âœ… GREEN BADGE' : 'â³ PENDING'
+                          badge: advanceCycles > 0 ? 'CYAN BADGE' : cyclesPaidFor >= currCycle ? 'GREEN BADGE' : 'PENDING'
                         });
                       }
                       return (
-                        <TableRow key={member._id || member.id || index}>
+                        <TableRow key={member._id || member.id || index} className="align-top">
                           <TableCell>
                             <div className="flex items-center gap-2">
-                              <div
-                                className={`w-2 h-2 rounded-full ${
-                                  cyclesPaid > 0
-                                    ? "bg-financial-success"
-                                    : "bg-financial-warning"
-                                }`}
-                              />
-                              <Avatar className="w-10 h-10">
+                              <div className={`h-2.5 w-2.5 rounded-full ${cyclesPaid > 0 ? "bg-financial-success" : "bg-financial-warning"}`} />
+                              <Avatar className="h-10 w-10">
                                 <AvatarImage src={member.profile_picture} alt={member.name} />
                                 <AvatarFallback>
                                   {member.name
@@ -3378,8 +3311,7 @@ Thank you for your cooperation! ðŸ™`;
                               </Avatar>
                               <div>
                                 <div className="font-medium flex items-center gap-2">
-                                  {member.name} {" "}
-                                  {member.position ? `(#${member.position})` : ""}
+                                  {member.name} {member.position ? `(#${member.position})` : ""}
                                   {member.member_type === "wallet_only" && (
                                     <Badge variant="outline" className="text-xs">
                                       Wallet Only
@@ -3387,7 +3319,7 @@ Thank you for your cooperation! ðŸ™`;
                                   )}
                                 </div>
                                 <div className="text-xs text-muted-foreground">
-                                  {member.member_id} â€¢ {member.phone}
+                                  {member.member_id} • {member.phone}
                                 </div>
                               </div>
                             </div>
@@ -3399,9 +3331,7 @@ Thank you for your cooperation! ðŸ™`;
                               </Badge>
                             ) : (
                               <Badge
-                                variant={
-                                  cyclesPaid > 0 ? "default" : "secondary"
-                                }
+                                variant={cyclesPaid > 0 ? "default" : "secondary"}
                                 className={advanceCycles > 0 ? "bg-cyan-500 hover:bg-cyan-600 text-white font-bold border-0" : ""}>
                                 {cyclesPaid > 0
                                   ? advanceCycles > 0
@@ -3459,101 +3389,51 @@ Thank you for your cooperation! ðŸ™`;
                           </TableCell>
                           <TableCell>
                             <div className="flex justify-center gap-1">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => moveMemberUp(member)}
-                                title={isReadOnly ? "Read-only access" : "Move up"}
-                                disabled={isReadOnly}>
-                                â†‘
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => moveMemberDown(member)}
-                                title={isReadOnly ? "Read-only access" : "Move down"}
-                                disabled={isReadOnly}>
-                                â†“
-                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => moveMemberUp(member)} title={isReadOnly ? "Read-only access" : "Move up"} disabled={isReadOnly}>↑</Button>
+                              <Button size="sm" variant="ghost" onClick={() => moveMemberDown(member)} title={isReadOnly ? "Read-only access" : "Move down"} disabled={isReadOnly}>↓</Button>
                               {member.member_type !== "wallet_only" && (
                                 <>
-                                  <Button
-                                    size="sm"
-                                    variant={
-                                      cyclesPaid > 0 ? "outline" : "default"
-                                    }
-                                    onClick={() => togglePaymentStatusRemote(member)}
-                                    disabled={isReadOnly}
-                                    title={isReadOnly ? "Read-only access" : undefined}>
-                                    {cyclesPaid > 0 ? "Unpay" : "Mark Paid"}
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="secondary"
-                                    onClick={async () => {
-                                      const id = member._id || member.id;
-                                      // Mark member as paid for current cycle WITHOUT adding payment record
-                                      try {
-                                        const res = await fetch(`${API_BASE}/api/members/${id}/mark-paid`, {
-                                          method: "PUT",
-                                          headers: {
-                                            "Content-Type": "application/json",
-                                            ...authService.getAuthHeaders(),
-                                          },
-                                          body: JSON.stringify({ cycle_number: currCycle, no_payment: true }),
-                                        });
-                                        if (!res.ok) throw new Error("Failed to mark as paid");
-                                        
-                                        // Refresh all data to show updated status
-                                        if (typeof refreshMembers === "function") {
-                                          await refreshMembers();
-                                        }
-                                        await fetchCurrentCycle();
-                                        await fetchPayments();
-                                        
-                                        toast({
-                                          title: "Member Marked as Paid",
-                                          description: `${member.name} marked as paid for cycle #${currCycle}`,
-                                        });
-                                      } catch (err: any) {
-                                        toast({
-                                          title: "Error",
-                                          description: err.message || "Could not mark member as paid",
-                                          variant: "destructive",
-                                        });
+                                  <Button size="sm" variant={cyclesPaid > 0 ? "outline" : "default"} onClick={() => togglePaymentStatusRemote(member)} disabled={isReadOnly} title={isReadOnly ? "Read-only access" : undefined}>{cyclesPaid > 0 ? "Unpay" : "Mark Paid"}</Button>
+                                  <Button size="sm" variant="secondary" onClick={async () => {
+                                    const id = member._id || member.id;
+                                    try {
+                                      const res = await fetch(`${API_BASE}/api/members/${id}/mark-paid`, {
+                                        method: "PUT",
+                                        headers: {
+                                          "Content-Type": "application/json",
+                                          ...authService.getAuthHeaders(),
+                                        },
+                                        body: JSON.stringify({ cycle_number: currCycle, no_payment: true }),
+                                      });
+                                      if (!res.ok) throw new Error("Failed to mark as paid");
+
+                                      if (typeof refreshMembers === "function") {
+                                        await refreshMembers();
                                       }
-                                    }}
-                                    disabled={isReadOnly}
-                                    title={isReadOnly ? "Read-only access" : "Mark as Paid (No Payment)"}
-                                  >
-                                    Mark Paid (No Payment)
-                                  </Button>
+                                      await fetchCurrentCycle();
+                                      await fetchPayments();
+
+                                      toast({
+                                        title: "Member Marked as Paid",
+                                        description: `${member.name} marked as paid for cycle #${currCycle}`,
+                                      });
+                                    } catch (err: any) {
+                                      toast({
+                                        title: "Error",
+                                        description: err.message || "Could not mark member as paid",
+                                        variant: "destructive",
+                                      });
+                                    }
+                                  }} disabled={isReadOnly} title={isReadOnly ? "Read-only access" : "Mark as Paid (No Payment)"}>Mark Paid (No Payment)</Button>
                                 </>
                               )}
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => deleteMemberRemote(member)}
-                                className="text-destructive hover:text-destructive"
-                                disabled={isReadOnly}
-                                title={isReadOnly ? "Read-only access" : undefined}>
-                                <Trash2 className="w-3 h-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleEditMember(member._id || member.id)}
-                                disabled={isReadOnly}
-                                title={isReadOnly ? "Read-only access" : "Edit Member"}
-                              >
-                                Edit
-                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => deleteMemberRemote(member)} className="text-destructive hover:text-destructive" disabled={isReadOnly} title={isReadOnly ? "Read-only access" : undefined}><Trash2 className="w-3 h-3" /></Button>
+                              <Button size="sm" variant="outline" onClick={() => handleEditMember(member._id || member.id)} disabled={isReadOnly} title={isReadOnly ? "Read-only access" : "Edit Member"}>Edit</Button>
                             </div>
                           </TableCell>
                         </TableRow>
                       );
                     })}
-                    {/* Totals Row */}
                     <TableRow className="bg-muted/50 font-bold border-t-2">
                       <TableCell colSpan={2} className="text-right">
                         <span className="text-lg">GRAND TOTALS:</span>
