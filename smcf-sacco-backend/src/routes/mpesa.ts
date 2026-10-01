@@ -20,6 +20,7 @@ import Transaction from '../models/Transaction';
 import Member from '../models/Member';
 import TenXContribution from '../models/TenXContribution';
 import TenXPeriod from '../models/TenXPeriod';
+import Saving from '../models/Saving';
 import Loan from '../models/Loan';
 import { protect, authorize, AuthRequest } from '../middleware/auth';
 import { processRepayment } from './repayments';
@@ -672,6 +673,7 @@ async function settlePendingDeposit(params: {
   sourceLabel: string;
   cycleNumber?: number;
   tenXContributionId?: string;
+  walletPayment?: boolean;
   processedAt?: Date;
 }) {
   const amount = Math.round(Number(params.amount));
@@ -681,7 +683,7 @@ async function settlePendingDeposit(params: {
 
   const processedAt = params.processedAt ?? new Date();
   const existingCompletedTxn = await Transaction.findOne({
-    type: 'deposit',
+    type: params.walletPayment ? 'wallet_deposit' : 'deposit',
     mpesaRef: params.mpesaRef,
     status: 'completed',
   }).select('_id');
@@ -694,7 +696,7 @@ async function settlePendingDeposit(params: {
   const claimedTxn = await Transaction.findOneAndUpdate(
     {
       checkoutRequestId: params.checkoutRequestId,
-      type: 'deposit',
+      type: params.walletPayment ? 'wallet_deposit' : 'deposit',
       depositProcessed: { $ne: true },
     },
     {
@@ -704,7 +706,9 @@ async function settlePendingDeposit(params: {
         paymentGateway: 'lipia',
         cycleNumber: cycleNumber ?? null,
         amount,
-        description: cycleNumber
+        description: params.walletPayment
+          ? `Wallet deposit via Lipia STK - Ref: ${params.mpesaRef} - ${params.phone || 'unknown'}`
+          : cycleNumber
           ? `Cycle ${cycleNumber} contribution via Lipia STK — Ref: ${params.mpesaRef} — ${params.phone || 'unknown'}`
           : `M-Pesa Savings Deposit — Ref: ${params.mpesaRef} — ${params.phone || 'unknown'}`,
         processedAt,
@@ -717,7 +721,7 @@ async function settlePendingDeposit(params: {
   if (!claimedTxn) {
     const pendingTxn = await Transaction.findOne({
       checkoutRequestId: params.checkoutRequestId,
-      type: 'deposit',
+      type: params.walletPayment ? 'wallet_deposit' : 'deposit',
     }).select('_id status depositProcessed');
 
     if (pendingTxn) {
@@ -737,9 +741,18 @@ async function settlePendingDeposit(params: {
   }
 
   if (params.walletPayment) {
+    const existingWalletRecord = await Saving.findOne({
+      member_id: params.memberId,
+      transaction_ref: params.mpesaRef,
+      transaction_type: 'deposit',
+    });
+    if (existingWalletRecord) return { applied: false, duplicate: true };
+
+    const lastWalletRecord = await Saving.findOne({ member_id: params.memberId }).sort({ created_at: -1 });
+    const balanceBefore = Number(lastWalletRecord?.balance_after || 0);
     const unlockDate = new Date(processedAt);
     unlockDate.setMonth(unlockDate.getMonth() + 3);
-    await Saving.create({ member_id: params.memberId, amount, transaction_type: 'deposit', balance_before: 0, balance_after: amount, payment_method: 'mpesa', transaction_ref: params.mpesaRef, status: 'completed', lock_period_months: 3, unlock_date: unlockDate, maturity_status: 'locked', notes: 'Wallet deposit via M-Pesa STK' });
+    await Saving.create({ member_id: params.memberId, amount, transaction_type: 'deposit', balance_before: balanceBefore, balance_after: balanceBefore + amount, payment_method: 'mpesa', transaction_ref: params.mpesaRef, status: 'completed', lock_period_months: 3, unlock_date: unlockDate, maturity_status: 'locked', notes: 'Wallet deposit via M-Pesa STK' });
   } else if (!cycleNumber && !params.tenXContributionId) {
     await recordSavingsDeposit({
       memberId: params.memberId,
@@ -887,12 +900,13 @@ async function findReusablePendingDepositTransaction(params: {
   memberId: string;
   amount: number;
   phone: string;
+  walletPayment?: boolean;
 }) {
   const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
 
   return Transaction.findOne({
     memberId: params.memberId,
-    type: 'deposit',
+    type: params.walletPayment ? 'wallet_deposit' : 'deposit',
     status: 'pending',
     depositProcessed: { $ne: true },
     amount: params.amount,
@@ -910,8 +924,12 @@ async function createOrGetPendingDepositTransaction(params: {
   phone: string;
   checkoutRequestId: string;
   cycleNumber?: number;
+  walletPayment?: boolean;
 }) {
-  const description = `M-Pesa Savings Deposit — STK Pending — ${params.phone}`;
+  const transactionType = params.walletPayment ? 'wallet_deposit' : 'deposit';
+  const description = params.walletPayment
+    ? `Wallet deposit - STK Pending - ${params.phone}`
+    : `M-Pesa Savings Deposit — STK Pending — ${params.phone}`;
 
   for (let attempt = 0; attempt < 3; attempt++) {
     const txnRef = createTransactionRef();
@@ -920,13 +938,13 @@ async function createOrGetPendingDepositTransaction(params: {
       const txnDoc = await Transaction.findOneAndUpdate(
         {
           checkoutRequestId: params.checkoutRequestId,
-          type: 'deposit',
+          type: transactionType,
         },
         {
           $setOnInsert: {
             transactionRef: txnRef,
             memberId: params.memberId,
-            type: 'deposit',
+            type: transactionType,
             amount: params.amount,
             description,
             status: 'pending',
@@ -952,7 +970,7 @@ async function createOrGetPendingDepositTransaction(params: {
 
       const existingByCheckout = await Transaction.findOne({
         checkoutRequestId: params.checkoutRequestId,
-        type: 'deposit',
+        type: transactionType,
       }).select('_id checkoutRequestId memberId amount status mpesaRef depositProcessed');
 
       if (existingByCheckout) {
@@ -963,6 +981,7 @@ async function createOrGetPendingDepositTransaction(params: {
         memberId: params.memberId,
         amount: params.amount,
         phone: params.phone,
+        walletPayment: params.walletPayment,
       });
 
       if (existingSimilarPending?.checkoutRequestId) {
@@ -1103,6 +1122,7 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
       memberId,
       amount: numAmount,
       phone: mpesaPhone,
+      walletPayment,
     });
 
     if (reusablePendingTxn?.checkoutRequestId) {
@@ -1116,8 +1136,7 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
         cyclePayment,
         cycleNumber,
         tenXContributionId,
-          walletPayment,
-          walletPayment,
+        walletPayment,
         createdAt: Date.now(),
       });
 
@@ -1147,6 +1166,7 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
         status: 'pending',
         cyclePayment,
         cycleNumber,
+        walletPayment,
         createdAt: Date.now(),
       });
 
@@ -1175,8 +1195,6 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
 
     // ── Real STK Push via Lipia Online ────────────────────────────────────
     const stkData = await sendLipiaSTK(mpesaPhone, numAmount, 'SMCF-SAVINGS', tenXPayment ? 'SMCF 10X Contribution' : walletPayment ? 'SMCF Wallet Deposit' : 'SMCF SACCO Savings Deposit');
-  walletPayment,
-
     // Lipia proxies the Safaricom response — CheckoutRequestID may be top-level
     // or nested under data depending on the Lipia version.
     const checkoutRequestId = extractCheckoutRequestId(stkData);
@@ -1195,6 +1213,7 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
       phone: mpesaPhone,
       checkoutRequestId,
       cycleNumber,
+      walletPayment,
     });
     if (tenXContributionId) {
       await TenXContribution.findByIdAndUpdate(tenXContributionId, { payment_id: txnDoc._id });
@@ -1212,6 +1231,7 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
       cyclePayment,
       cycleNumber,
       tenXContributionId,
+      walletPayment,
       createdAt: Date.now(),
     });
 
@@ -1233,11 +1253,13 @@ async function recordDeposit(memberId: string, amount: number, phone: string, mp
   await Transaction.create({
     transactionRef,
     memberId,
-    type: 'deposit',
+    type: walletPayment ? 'wallet_deposit' : 'deposit',
     paymentGateway: 'lipia',
     cycleNumber: cycleNumber ?? null,
     amount,
-    description: cycleNumber
+    description: walletPayment
+      ? `Wallet deposit via Lipia STK - Ref: ${mpesaRef} - ${phone}`
+      : cycleNumber
       ? `Cycle ${cycleNumber} contribution via Lipia STK — Ref: ${mpesaRef} — ${phone}`
       : `M-Pesa Savings Deposit — Ref: ${mpesaRef} — ${phone}`,
     status: 'completed',
@@ -1247,9 +1269,11 @@ async function recordDeposit(memberId: string, amount: number, phone: string, mp
   });
 
   if (walletPayment) {
+    const lastWalletRecord = await Saving.findOne({ member_id: memberId }).sort({ created_at: -1 });
+    const balanceBefore = Number(lastWalletRecord?.balance_after || 0);
     const unlockDate = new Date();
     unlockDate.setMonth(unlockDate.getMonth() + 3);
-    await Saving.create({ member_id: memberId, amount, transaction_type: 'deposit', balance_before: 0, balance_after: amount, payment_method: 'mpesa', transaction_ref: mpesaRef, status: 'completed', lock_period_months: 3, unlock_date: unlockDate, maturity_status: 'locked', notes: 'Wallet deposit via M-Pesa STK' });
+    await Saving.create({ member_id: memberId, amount, transaction_type: 'deposit', balance_before: balanceBefore, balance_after: balanceBefore + amount, payment_method: 'mpesa', transaction_ref: mpesaRef, status: 'completed', lock_period_months: 3, unlock_date: unlockDate, maturity_status: 'locked', notes: 'Wallet deposit via M-Pesa STK' });
   } else if (tenXContributionId) {
     await TenXContribution.findByIdAndUpdate(tenXContributionId, {
       status: 'SUCCESSFUL', payment_date: new Date(), transaction_reference: mpesaRef, $inc: { amount_paid: amount },
@@ -1554,8 +1578,10 @@ router.post('/callback', async (req: Request, res: Response) => {
 
     const mpesaRef = get('MpesaReceiptNumber') as string || `MPESA${Date.now()}`;
     const paidAmt  = Number(get('Amount'));
-    const depositTxn = await Transaction.findOne({ checkoutRequestId: CheckoutRequestID, type: 'deposit' })
-      .select('memberId amount description');
+    const depositTxn = await Transaction.findOne({
+      checkoutRequestId: CheckoutRequestID,
+      type: { $in: ['deposit', 'wallet_deposit'] },
+    }).select('memberId amount description type');
 
     // ── Savings deposit ──────────────────────────────────────────────────
     const deposit = pendingDeposits.get(CheckoutRequestID);
@@ -1567,7 +1593,7 @@ router.post('/callback', async (req: Request, res: Response) => {
           pendingDeposits.set(CheckoutRequestID, deposit);
         }
         await Transaction.findOneAndUpdate(
-          { checkoutRequestId: CheckoutRequestID, type: 'deposit' },
+          { checkoutRequestId: CheckoutRequestID, type: { $in: ['deposit', 'wallet_deposit'] } },
           { status: 'failed', processedAt: new Date() }
         ).catch(() => {});
       } else {
@@ -1585,6 +1611,7 @@ router.post('/callback', async (req: Request, res: Response) => {
           phone,
           mpesaRef,
           sourceLabel: 'M-Pesa STK',
+          walletPayment: deposit?.walletPayment || depositTxn?.type === 'wallet_deposit',
           processedAt: new Date(),
         });
 

@@ -21,7 +21,7 @@ interface Props {
   onClose: () => void;
   memberId: string;
   memberPhone?: string | null;
-  paymentType?: "savings" | "cycle" | "tenx";
+  paymentType?: "wallet" | "savings" | "cycle" | "tenx";
   cycleNumber?: number | null;
 }
 
@@ -130,10 +130,10 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
                 <div className="p-1.5 rounded-full bg-green-100 dark:bg-green-900/30">
                   <Wallet className="h-5 w-5 text-green-600 dark:text-green-400" />
                 </div>
-                {paymentType === "cycle" ? `Pay Cycle ${cycleNumber ? `#${cycleNumber} ` : ""}via M-Pesa` : paymentType === "tenx" ? "Pay 10X Contribution via M-Pesa" : "Deposit Savings via M-Pesa"}
+                {paymentType === "wallet" ? "Deposit to Wallet via M-Pesa" : paymentType === "cycle" ? `Pay Cycle ${cycleNumber ? `#${cycleNumber} ` : ""}via M-Pesa` : paymentType === "tenx" ? "Pay 10X Contribution via M-Pesa" : "Deposit Savings via M-Pesa"}
               </DialogTitle>
               <DialogDescription>
-                Select any amount below. An M-Pesa STK push will be sent to your phone — just enter your PIN to complete the {paymentType === "cycle" ? "cycle contribution" : paymentType === "tenx" ? "10X contribution" : "savings deposit"}.
+                Select any amount below. An M-Pesa STK push will be sent to your phone — just enter your PIN to complete the {paymentType === "wallet" ? "wallet deposit" : paymentType === "cycle" ? "cycle contribution" : paymentType === "tenx" ? "10X contribution" : "savings deposit"}.
               </DialogDescription>
             </DialogHeader>
 

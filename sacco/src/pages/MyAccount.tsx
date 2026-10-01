@@ -89,7 +89,7 @@ export default function MyAccount() {
   const [email, setEmail] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [depositOpen, setDepositOpen] = useState(false);
-  const [depositType, setDepositType] = useState<"savings" | "cycle" | "tenx">("savings");
+  const [depositType, setDepositType] = useState<"wallet" | "savings" | "cycle" | "tenx">("savings");
   const [repayLoan, setRepayLoan] = useState<any | null>(null);
   const [historyLoanId, setHistoryLoanId] = useState<string | null>(null);
   const [shareSubscribeOpen, setShareSubscribeOpen] = useState(false);
@@ -538,7 +538,7 @@ export default function MyAccount() {
           </Button>
           <Button
             className="bg-green-600 hover:bg-green-700 text-white gap-2"
-            onClick={() => { setDepositType("savings"); setDepositOpen(true); }}
+            onClick={() => { setDepositType("wallet"); setDepositOpen(true); }}
           >
             <Wallet className="h-4 w-4" />
             Wallet Deposit
