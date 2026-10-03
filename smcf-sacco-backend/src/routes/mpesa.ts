@@ -183,6 +183,16 @@ function normalizePayHeroBaseUrl(rawUrl?: string): string {
   return value || 'https://api.payhero.africa';
 }
 
+function parsePayHeroResourceId(value: string | undefined, name: string): number {
+  const normalized = String(value || '').trim();
+  if (!/^\d+$/.test(normalized) || Number(normalized) <= 0) {
+    const err = new Error(`PayHero ${name} must be a positive numeric ID`) as Error & { statusCode?: number };
+    err.statusCode = 503;
+    throw err;
+  }
+  return Number(normalized);
+}
+
 // Purge stale entries every 10 min
 setInterval(() => {
   const cutoff = Date.now() - 10 * 60 * 1000;
@@ -401,6 +411,8 @@ async function sendPayHeroSTK(phone: string, amount: number, reference: string, 
     err.statusCode = 503;
     throw err;
   }
+  const numericChannelId = parsePayHeroResourceId(channelId, 'channel ID');
+  const numericAccountId = parsePayHeroResourceId(accountId, 'account ID');
 
   const auth = Buffer.from(`${username}:${password}`).toString('base64');
   const requestUrl = `${normalizePayHeroBaseUrl(process.env.PAYHERO_API_URL)}/api/v2/payments`;
@@ -409,8 +421,8 @@ async function sendPayHeroSTK(phone: string, amount: number, reference: string, 
     currency: 'KES',
     phone_number: normalizePhoneForPayHero(phone),
     provider: 'm-pesa',
-    channel_id: Number(channelId) || channelId,
-    account_id: Number(accountId) || accountId,
+    channel_id: numericChannelId,
+    account_id: numericAccountId,
     external_reference: reference,
     callback_url: callbackUrl,
     description,
@@ -442,14 +454,18 @@ async function sendPayHeroSTK(phone: string, amount: number, reference: string, 
   const dataRecord = asRecord(data);
   const checkoutRequestId = extractCheckoutRequestId(data);
   if (!res.ok || !checkoutRequestId) {
-    const message = extractProviderErrorMessage(data, 'Payment request could not be initiated. Please try again.');
+    const providerCode = dataRecord?.code ?? dataRecord?.error_code ?? dataRecord?.errorCode;
+    const providerMessage = extractProviderErrorMessage(data, 'Payment request could not be initiated. Please try again.');
+    const message = providerCode === 'resource_not_found'
+      ? 'PayHero rejected the configured account or channel. Verify PAYHERO_ACCOUNT_ID and PAYHERO_CHANNEL_ID in the VPS environment against active resources in the PayHero dashboard.'
+      : providerMessage;
     console.error('[PayHero] payment rejected', {
       endpoint: requestUrl,
       httpStatus: res.status,
       reference,
       amount,
       phoneSuffix: normalizePhoneForPayHero(phone).slice(-4),
-      providerCode: dataRecord?.code ?? dataRecord?.error_code ?? dataRecord?.errorCode ?? null,
+      providerCode: providerCode ?? null,
       message,
     });
     const err = new Error(message) as Error & { statusCode?: number };
@@ -993,6 +1009,8 @@ router.get('/provider-diagnostics', protect, authorize('admin', 'treasurer', 'me
   const accountId = process.env.PAYHERO_ACCOUNT_ID;
   const callbackUrl = process.env.PAYHERO_CALLBACK_URL;
   const apiUrl = normalizePayHeroBaseUrl(process.env.PAYHERO_API_URL);
+  const channelIdIsValid = /^\d+$/.test(String(channelId || '').trim()) && Number(channelId) > 0;
+  const accountIdIsValid = /^\d+$/.test(String(accountId || '').trim()) && Number(accountId) > 0;
 
   return res.json({
     success: true,
@@ -1002,6 +1020,9 @@ router.get('/provider-diagnostics', protect, authorize('admin', 'treasurer', 'me
         channelId: !!channelId,
         accountId: !!accountId,
         callbackUrl: !!callbackUrl,
+        channelIdIsValid,
+        accountIdIsValid,
+        readyForCollection: Boolean(username && channelIdIsValid && accountIdIsValid && callbackUrl),
       },
       values: {
         apiUrl,
@@ -1015,7 +1036,7 @@ router.get('/provider-diagnostics', protect, authorize('admin', 'treasurer', 'me
       fingerprints: {
         username: envFingerprint(username),
       },
-      notes: 'Use fingerprints to confirm both services are using the same PayHero credentials without exposing secrets.',
+      notes: 'PAYHERO_CHANNEL_ID must be an active channel ID from PayHero payment_channels, and PAYHERO_ACCOUNT_ID must be the matching PayHero account ID. The M-Pesa till, paybill, phone number, or customer account number is not a valid replacement.',
     },
   });
 });
