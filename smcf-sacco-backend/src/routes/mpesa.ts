@@ -133,6 +133,51 @@ function toErrorMessage(err: unknown, fallback = 'Unknown error'): string {
   return fallback;
 }
 
+function extractProviderErrorMessage(payload: unknown, fallback: string): string {
+  const record = asRecord(payload);
+  if (!record) return fallback;
+
+  const candidates = [
+    record.message,
+    record.error,
+    record.error_message,
+    record.errorMessage,
+    record.detail,
+    getPathValue(record, ['data', 'message']),
+    getPathValue(record, ['data', 'error']),
+    getPathValue(record, ['data', 'error_message']),
+    getPathValue(record, ['data', 'errorMessage']),
+    getPathValue(record, ['data', 'detail']),
+  ];
+
+  const message = candidates.find((value): value is string => typeof value === 'string' && Boolean(value.trim()));
+  if (message) return message.trim();
+
+  const errors = record.errors ?? getPathValue(record, ['data', 'errors']);
+  if (Array.isArray(errors)) {
+    const messages = errors
+      .map((item) => {
+        if (typeof item === 'string') return item;
+        const itemRecord = asRecord(item);
+        return itemRecord ? toErrorMessage(itemRecord, '') : '';
+      })
+      .filter(Boolean);
+    if (messages.length > 0) return messages.join('; ');
+  }
+
+  if (errors && typeof errors === 'object') {
+    const messages = Object.entries(errors as Record<string, unknown>)
+      .flatMap(([field, value]) => {
+        if (Array.isArray(value)) return value.map((item) => `${field}: ${String(item)}`);
+        return [`${field}: ${String(value)}`];
+      })
+      .filter((value) => value.trim());
+    if (messages.length > 0) return messages.join('; ');
+  }
+
+  return fallback;
+}
+
 function normalizePayHeroBaseUrl(rawUrl?: string): string {
   const value = String(rawUrl || '').trim().replace(/\/+$/, '');
   return value || 'https://api.payhero.africa';
@@ -358,28 +403,56 @@ async function sendPayHeroSTK(phone: string, amount: number, reference: string, 
   }
 
   const auth = Buffer.from(`${username}:${password}`).toString('base64');
-  const res = await fetch(`${normalizePayHeroBaseUrl(process.env.PAYHERO_API_URL)}/api/v2/payments`, {
-    method: 'POST',
-    headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+  const requestUrl = `${normalizePayHeroBaseUrl(process.env.PAYHERO_API_URL)}/api/v2/payments`;
+  const requestBody = {
+    amount,
+    currency: 'KES',
+    phone_number: normalizePhoneForPayHero(phone),
+    provider: 'm-pesa',
+    channel_id: Number(channelId) || channelId,
+    account_id: Number(accountId) || accountId,
+    external_reference: reference,
+    callback_url: callbackUrl,
+    description,
+  };
+
+  let res: Awaited<ReturnType<typeof fetch>>;
+  try {
+    res = await fetch(requestUrl, {
+      method: 'POST',
+      headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+    });
+  } catch (err) {
+    console.error('[PayHero] request failed', {
+      endpoint: requestUrl,
+      reference,
       amount,
-      phone_number: normalizePhoneForPayHero(phone),
-      provider: 'm-pesa',
-      channel_id: Number(channelId) || channelId,
-      account_id: Number(accountId) || accountId,
-      external_reference: reference,
-      callback_url: callbackUrl,
-      description,
-    }),
-  });
+      phoneSuffix: normalizePhoneForPayHero(phone).slice(-4),
+      error: toErrorMessage(err, 'Network error'),
+    });
+    const networkError = new Error('PayHero could not be reached. Please try again.') as Error & { statusCode?: number };
+    networkError.statusCode = 502;
+    throw networkError;
+  }
+
   const responseText = await res.text().catch(() => '');
   let data: unknown = {};
   try { data = responseText ? JSON.parse(responseText) : {}; } catch { data = { message: 'Unexpected response from PayHero' }; }
   const dataRecord = asRecord(data);
   const checkoutRequestId = extractCheckoutRequestId(data);
   if (!res.ok || !checkoutRequestId) {
-    const rawMessage = dataRecord?.message ?? dataRecord?.error ?? 'Payment request could not be initiated. Please try again.';
-    const err = new Error(typeof rawMessage === 'string' ? rawMessage : 'Payment request could not be initiated. Please try again.') as Error & { statusCode?: number };
+    const message = extractProviderErrorMessage(data, 'Payment request could not be initiated. Please try again.');
+    console.error('[PayHero] payment rejected', {
+      endpoint: requestUrl,
+      httpStatus: res.status,
+      reference,
+      amount,
+      phoneSuffix: normalizePhoneForPayHero(phone).slice(-4),
+      providerCode: dataRecord?.code ?? dataRecord?.error_code ?? dataRecord?.errorCode ?? null,
+      message,
+    });
+    const err = new Error(message) as Error & { statusCode?: number };
     err.statusCode = res.ok ? 502 : res.status >= 400 && res.status < 500 ? 400 : 502;
     throw err;
   }
