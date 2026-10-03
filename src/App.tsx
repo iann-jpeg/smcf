@@ -6,7 +6,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import Admin from "./pages/Admin";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import { useSocketNotifications } from "@/hooks/use-socket-notifications";
@@ -62,9 +61,9 @@ const App = () => (
             <BrowserRouter>
               <Routes>
                 <Route path="/" element={<Index />} />
-                <Route path="/auth" element={<SaccoBridge />} />
+                <Route path="/auth" element={<Navigate to="/sacco/auth" replace />} />
                 <Route path="/sacco/*" element={<SaccoBridge />} />
-                <Route path="/admin" element={<SaccoBridge />} />
+                <Route path="/admin" element={<Navigate to="/sacco/auth" replace />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>
