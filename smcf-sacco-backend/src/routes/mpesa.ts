@@ -1,15 +1,15 @@
 /**
- * M-Pesa STK Push via Lipia Online (kreativelabske.com)
- * Payments are directed to SMCF SACCO till number 6938069.
+ * M-Pesa STK Push via PayHero.
  *
  * Environment variables needed (add to .env):
- *   LIPIA_API_KEY    – Lipia Online API key
- *   LIPIA_API_URL    – Lipia API base URL  (e.g. https://lipia-api.kreativelabske.com/api/v2)
- *   LIPIA_APP_ID     – Lipia application ID
- *   LIPIA_APP_NAME   – Lipia application name  (e.g. smcf)
- *   MPESA_CALLBACK_URL – Public URL Lipia will POST the payment result to
+ *   PAYHERO_API_URL       – PayHero API base URL
+ *   PAYHERO_API_USERNAME  – PayHero Basic Auth username
+ *   PAYHERO_API_PASSWORD  – PayHero Basic Auth password
+ *   PAYHERO_CHANNEL_ID    – PayHero payment channel ID
+ *   PAYHERO_ACCOUNT_ID    – PayHero account ID
+ *   PAYHERO_CALLBACK_URL  – Public URL PayHero will POST the payment result to
  *
- * If LIPIA_API_KEY is not set the route runs in simulation mode:
+ * If PayHero credentials are not set the route runs in simulation mode:
  * the STK push is faked and auto-succeeds after ~5 seconds so you can demo the
  * full UI flow without real credentials.
  */
@@ -31,10 +31,10 @@ import { createTransactionRef } from '../utils/transactionRef';
 
 const router = Router();
 
-// ─── In-memory: Lipia payment-link payments (not STK) ───────────────────────
-// Created when member clicks "Pay via Lipia"; confirmed when member clicks "I've Paid"
+// ─── In-memory: PayHero payment-link payments (not STK) ───────────────────────
+// Created when member clicks "Pay via PayHero"; confirmed when member clicks "I've Paid"
 
-interface PendingLipiaPayment {
+interface PendingManualPayment {
   type: 'deposit' | 'loan_repay';
   memberId: string;
   loanId?: string;
@@ -44,12 +44,12 @@ interface PendingLipiaPayment {
   createdAt: number;
 }
 
-const pendingLipiaPayments = new Map<string, PendingLipiaPayment>(); // key: txnRef
+const pendingManualPayments = new Map<string, PendingManualPayment>(); // key: txnRef
 
 setInterval(() => {
   const cutoff = Date.now() - 30 * 60 * 1000; // 30 min TTL
-  for (const [k, v] of pendingLipiaPayments.entries()) {
-    if (v.createdAt < cutoff) pendingLipiaPayments.delete(k);
+  for (const [k, v] of pendingManualPayments.entries()) {
+    if (v.createdAt < cutoff) pendingManualPayments.delete(k);
   }
 }, 10 * 60 * 1000);
 
@@ -99,11 +99,14 @@ const pendingRegistrationFees = new Map<string, PendingRegistrationFee>();
 
 type LooseRecord = Record<string, unknown>;
 
-type LipiaStkResponse = LooseRecord & {
-  CheckoutRequestID: string;
-  checkoutRequestId: string;
+type PayHeroPaymentResponse = LooseRecord & {
+  success: boolean;
+  provider: 'payhero';
+  checkoutRequestId?: string;
+  providerReference?: string;
+  externalReference?: string;
+  status?: string;
   message?: unknown;
-  error?: unknown;
 };
 
 function asRecord(value: unknown): LooseRecord | null {
@@ -130,19 +133,9 @@ function toErrorMessage(err: unknown, fallback = 'Unknown error'): string {
   return fallback;
 }
 
-function normalizeLipiaBaseUrl(rawUrl?: string): string {
-  let value = String(rawUrl || '').trim().replace(/\/+$/, '');
-  if (!value) return 'https://lipia-api.kreativelabske.com/api/v2';
-
-  // Force /v2 if missing 
-  if (value.endsWith("/api")) {
-    value += "/v2";
-  }
-
-  // Guard against env values that accidentally include endpoint paths.
-  return value
-    .replace(/\/(payments\/stk-push|request\/stk)(\/.*)?$/i, '')
-    .replace(/\/+$/, '');
+function normalizePayHeroBaseUrl(rawUrl?: string): string {
+  const value = String(rawUrl || '').trim().replace(/\/+$/, '');
+  return value || 'https://api.payhero.africa';
 }
 
 // Purge stale entries every 10 min
@@ -159,67 +152,46 @@ setInterval(() => {
   }
 }, 10 * 60 * 1000);
 
-/** Query Lipia Online for the current status of an STK push by its CheckoutRequestID / reference */
-async function queryLipiaStatus(checkoutRequestId: string): Promise<{
+/** Query PayHero for the current status of an STK push by its request ID. */
+async function queryPayHeroStatus(checkoutRequestId: string): Promise<{
   success: boolean;
-  status: string;      // 'pending' | 'success' | 'failed'
+  status: string;
   mpesaReceiptNumber?: string;
   resultCode?: string | number;
   resultDesc?: string;
   amount?: number;
 }> {
-  const apiKey  = process.env.LIPIA_API_KEY!;
-  const baseUrl = normalizeLipiaBaseUrl(process.env.LIPIA_API_URL);
-
+  const username = process.env.PAYHERO_API_USERNAME;
+  const password = process.env.PAYHERO_API_PASSWORD;
+  const baseUrl = normalizePayHeroBaseUrl(process.env.PAYHERO_API_URL);
   try {
-    // Main SMCF flow uses /payments/status; keep /request/status as fallback.
-    const urls = [
-      `${baseUrl}/payments/status?reference=${encodeURIComponent(checkoutRequestId)}`,
-      `${baseUrl}/request/status?reference=${encodeURIComponent(checkoutRequestId)}`,
-    ];
-
-    let data: unknown = null;
-    let ok = false;
-    for (const url of urls) {
-      const res = await fetch(url, { headers: { 'Authorization': `Bearer ${apiKey}` } });
-      if (!res.ok) continue;
-      ok = true;
-      data = await res.json().catch(() => ({}));
-      break;
-    }
-
-    if (!ok || !data) return { success: false, status: 'pending' };
-
+    if (!username || !password) return { success: false, status: 'pending' };
+    const auth = Buffer.from(`${username}:${password}`).toString('base64');
+    const res = await fetch(`${baseUrl}/api/global/transaction-status`, {
+      method: 'POST',
+      headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ request_id: checkoutRequestId }),
+    });
+    if (!res.ok) return { success: false, status: 'pending' };
+    const data: unknown = await res.json().catch(() => ({}));
     const dataRecord = asRecord(data);
     if (!dataRecord) return { success: false, status: 'pending' };
-
-    const payload = asRecord(getPathValue(dataRecord, ['data', 'response']))
-      ?? asRecord(dataRecord.data)
-      ?? dataRecord;
-
-    const rawResultCode = payload['ResultCode'] ?? payload['resultCode'] ?? dataRecord['ResultCode'] ?? dataRecord['resultCode'];
-    const resultCode =
-      typeof rawResultCode === 'string' || typeof rawResultCode === 'number'
-        ? rawResultCode
-        : undefined;
-    const receipt = payload['MpesaReceiptNumber'] ?? payload['mpesaReceiptNumber'] ?? payload['TransactionID'] ?? payload['transactionId'];
-    const resultDesc = payload['ResultDesc'] ?? payload['resultDesc'] ?? payload['ResultDescription'] ?? dataRecord['message'];
-    const rawAmount = payload['Amount'] ?? payload['amount'];
-    const payloadStatus = payload['status'];
-
-    const isSuccess = (String(resultCode) === '0' || String(payloadStatus).toLowerCase() === 'success') && !!receipt;
-    const isFailed  = !isSuccess && (
-      (resultCode !== undefined && String(resultCode) !== '0' && String(resultCode) !== 'pending') ||
-      ['failed', 'cancelled'].includes(String(payloadStatus).toLowerCase())
-    );
-
+    const payload = asRecord(getPathValue(dataRecord, ['data', 'response'])) ?? asRecord(dataRecord.data) ?? dataRecord;
+    const rawResultCode = payload.ResultCode ?? payload.resultCode ?? dataRecord.ResultCode ?? dataRecord.resultCode;
+    const resultCode = typeof rawResultCode === 'string' || typeof rawResultCode === 'number' ? rawResultCode : undefined;
+    const receipt = payload.MpesaReceiptNumber ?? payload.mpesaReceiptNumber ?? payload.receipt_number ?? payload.receiptNumber ?? payload.TransactionID ?? payload.transactionId;
+    const resultDesc = payload.ResultDesc ?? payload.resultDesc ?? payload.ResultDescription ?? payload.message ?? dataRecord.message;
+    const rawAmount = payload.Amount ?? payload.amount;
+    const status = String(payload.status ?? payload.Status ?? '').toLowerCase();
+    const isSuccess = (String(resultCode) === '0' || ['success', 'successful', 'completed', 'complete'].includes(status)) && Boolean(receipt);
+    const isFailed = !isSuccess && ((resultCode !== undefined && String(resultCode) !== '0' && String(resultCode) !== 'pending') || ['failed', 'cancelled', 'canceled', 'rejected'].includes(status));
     return {
       success: true,
       status: isSuccess ? 'success' : isFailed ? 'failed' : 'pending',
       mpesaReceiptNumber: typeof receipt === 'string' ? receipt : String(receipt || ''),
       resultCode,
       resultDesc: typeof resultDesc === 'string' ? resultDesc : undefined,
-      amount: rawAmount ? Number(rawAmount) : undefined,
+      amount: rawAmount === undefined ? undefined : Number(rawAmount),
     };
   } catch {
     return { success: false, status: 'pending' };
@@ -259,7 +231,7 @@ async function pollSACCOPayment(
       return;
     }
 
-    const { status, mpesaReceiptNumber, amount: paidAmt, resultDesc } = await queryLipiaStatus(checkoutRequestId);
+    const { status, mpesaReceiptNumber, amount: paidAmt, resultDesc } = await queryPayHeroStatus(checkoutRequestId);
 
     if (status === 'success' && mpesaReceiptNumber) {
       const confirmedAmount = paidAmt || amount;
@@ -372,137 +344,60 @@ async function pollSACCOPayment(
   setTimeout(tick, INTERVAL);
 }
 
-/** Send STK push via Lipia Online to till 6938069 */
-async function sendLipiaSTK(phone: string, amount: number, reference: string, description: string): Promise<LipiaStkResponse> {
-  const apiKey  = process.env.LIPIA_API_KEY!;
-  const baseUrl = normalizeLipiaBaseUrl(process.env.LIPIA_API_URL);
-  const callbackUrl = process.env.MPESA_CALLBACK_URL;
-  const appId = process.env.LIPIA_APP_ID;
-  const appName = process.env.LIPIA_APP_NAME;
-
-  const phone07 = normalizePhoneForLipia(phone);
-  const phone254 = normalizePhone(phone);
-  const phonePlus254 = `+${phone254}`;
-  const phoneCandidates = Array.from(new Set([phone07, phone254, phonePlus254]));
-
-  const attempts = phoneCandidates.flatMap((phoneValue) => [
-    {
-      url: `${baseUrl}/payments/stk-push`,
-      body: {
-        phone_number: phoneValue,
-        phone: phoneValue,
-        amount,
-        external_reference: reference,
-        reference,
-        ...(appId ? { app_id: appId } : {}),
-        ...(appName ? { app_name: appName } : {}),
-        ...(callbackUrl ? { callback_url: callbackUrl } : {}),
-        description,
-      },
-    },
-    {
-      url: `${baseUrl}/payments/stk-push`,
-      body: {
-        phone: phoneValue,
-        phone_number: phoneValue,
-        amount,
-        reference,
-        external_reference: reference,
-        ...(appId ? { app_id: appId } : {}),
-        ...(appName ? { app_name: appName } : {}),
-        description,
-        ...(callbackUrl ? { callback_url: callbackUrl } : {}),
-      },
-    },
-  ]);
-
-  let lastStatus = 500;
-  let lastReason = 'Unknown error';
-
-  for (const attempt of attempts) {
-    const res = await fetch(attempt.url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(attempt.body),
-    });
-
-    const responseText = await res.text().catch(() => '');
-    let data: unknown = {};
-    try {
-      data = responseText ? JSON.parse(responseText) : {};
-    } catch {
-      data = { message: responseText || 'Unexpected response from payment service' };
-    }
-
-    const dataRecord = asRecord(data);
-    const errorRecord = asRecord(dataRecord?.error);
-    const mpesaErrorRecord = asRecord(errorRecord?.mpesaError);
-
-    if (!res.ok) {
-      lastStatus = res.status;
-      const rawReason =
-        typeof data === 'string'
-          ? data
-          : (errorRecord?.message ?? dataRecord?.message ?? dataRecord?.error);
-      lastReason = typeof rawReason === 'string' ? rawReason : 'Unknown error';
-
-      // Some provider responses indicate suspension in body text even when status is not 403.
-      if (looksLikeSuspended(lastReason)) {
-        lastStatus = 403;
-      }
-      continue;
-    }
-
-    if (dataRecord?.success === false) {
-      lastStatus = 400;
-      const rawReason =
-        mpesaErrorRecord?.errorMessage
-        ?? errorRecord?.message
-        ?? dataRecord?.message;
-      lastReason = typeof rawReason === 'string' ? rawReason : 'Payment initiation failed';
-
-      // Treat policy suspension as service-unavailable for clearer API semantics.
-      if (looksLikeSuspended(lastReason)) {
-        lastStatus = 403;
-      }
-      continue;
-    }
-
-    const checkoutRequestId = extractCheckoutRequestId(data);
-
-    // Some Lipia variants return a successful envelope but move the request id
-    // into different keys. Keep trying other endpoint variants before failing.
-    if (!checkoutRequestId) {
-      lastStatus = 502;
-      lastReason = 'Payment service response missing checkout request id';
-      continue;
-    }
-
-    return {
-      ...(dataRecord || {}),
-      CheckoutRequestID: checkoutRequestId,
-      checkoutRequestId,
-    };
-  }
-
-  if (lastStatus === 403) {
-    const err = new Error(`Payment service suspended — please contact SMCF admin. (${lastReason})`) as Error & { statusCode?: number };
+/** Initiate a PayHero M-Pesa collection and return the normalized provider response. */
+async function sendPayHeroSTK(phone: string, amount: number, reference: string, description: string): Promise<PayHeroPaymentResponse> {
+  const username = process.env.PAYHERO_API_USERNAME;
+  const password = process.env.PAYHERO_API_PASSWORD;
+  const channelId = process.env.PAYHERO_CHANNEL_ID;
+  const accountId = process.env.PAYHERO_ACCOUNT_ID;
+  const callbackUrl = process.env.PAYHERO_CALLBACK_URL;
+  if (!username || !password || !channelId || !accountId || !callbackUrl) {
+    const err = new Error('PayHero payment configuration is incomplete') as Error & { statusCode?: number };
     err.statusCode = 503;
     throw err;
   }
 
-  if (lastStatus >= 400 && lastStatus < 500) {
-    const err = new Error(`Payment request rejected: ${lastReason}`) as Error & { statusCode?: number };
-    err.statusCode = 400;
+  const auth = Buffer.from(`${username}:${password}`).toString('base64');
+  const res = await fetch(`${normalizePayHeroBaseUrl(process.env.PAYHERO_API_URL)}/api/v2/payments`, {
+    method: 'POST',
+    headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      amount,
+      phone_number: normalizePhoneForPayHero(phone),
+      provider: 'm-pesa',
+      channel_id: Number(channelId) || channelId,
+      account_id: Number(accountId) || accountId,
+      external_reference: reference,
+      callback_url: callbackUrl,
+      description,
+    }),
+  });
+  const responseText = await res.text().catch(() => '');
+  let data: unknown = {};
+  try { data = responseText ? JSON.parse(responseText) : {}; } catch { data = { message: 'Unexpected response from PayHero' }; }
+  const dataRecord = asRecord(data);
+  const checkoutRequestId = extractCheckoutRequestId(data);
+  if (!res.ok || !checkoutRequestId) {
+    const rawMessage = dataRecord?.message ?? dataRecord?.error ?? 'Payment request could not be initiated. Please try again.';
+    const err = new Error(typeof rawMessage === 'string' ? rawMessage : 'Payment request could not be initiated. Please try again.') as Error & { statusCode?: number };
+    err.statusCode = res.ok ? 502 : res.status >= 400 && res.status < 500 ? 400 : 502;
     throw err;
   }
-
-  const err = new Error(`Lipia STK push failed (HTTP ${lastStatus}): ${lastReason}`) as Error & { statusCode?: number };
-  err.statusCode = 502;
-  throw err;
+  const providerReference = [
+    getPathValue(data, ['merchant_reference']),
+    getPathValue(data, ['merchantReference']),
+    getPathValue(data, ['transaction_reference']),
+    getPathValue(data, ['transactionReference']),
+  ].find((value): value is string => typeof value === 'string' && Boolean(value.trim()));
+  return {
+    success: true,
+    provider: 'payhero',
+    checkoutRequestId,
+    providerReference,
+    externalReference: reference,
+    status: typeof dataRecord?.status === 'string' ? dataRecord.status : 'accepted',
+    message: dataRecord?.message,
+  };
 }
 
 function looksLikeSuspended(message: string): boolean {
@@ -518,17 +413,25 @@ function extractCheckoutRequestId(payload: unknown): string | undefined {
     getPathValue(payload, ['data', 'checkout_request_id']),
     getPathValue(payload, ['data', 'checkoutRequestID']),
     getPathValue(payload, ['data', 'requestId']),
+    getPathValue(payload, ['data', 'request_id']),
+    getPathValue(payload, ['data', 'CheckoutRequestID']),
+    getPathValue(payload, ['data', 'checkout_request_id']),
     getPathValue(payload, ['data', 'reference']),
     getPathValue(payload, ['CheckoutRequestID']),
     getPathValue(payload, ['checkoutRequestId']),
     getPathValue(payload, ['checkout_request_id']),
     getPathValue(payload, ['transactionReference']),
+    getPathValue(payload, ['request_id']),
+    getPathValue(payload, ['requestId']),
     getPathValue(payload, ['reference']),
   ];
 
   for (const candidate of candidates) {
     if (typeof candidate === 'string' && candidate.trim()) {
       return candidate;
+    }
+    if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+      return String(candidate);
     }
   }
 
@@ -542,8 +445,8 @@ function normalizePhone(raw: string): string {
   return p;
 }
 
-// Lipia Online requires 07XXXXXXXXX / 01XXXXXXXXX format (not 254-prefix)
-function normalizePhoneForLipia(raw: string): string {
+// PayHero requires 07XXXXXXXXX / 01XXXXXXXXX format (not 254-prefix)
+function normalizePhoneForPayHero(raw: string): string {
   let p = String(raw).trim().replace(/\s+/g, '').replace(/^\+/, '');
   if (p.startsWith('254')) p = '0' + p.slice(3);
   if (!p.startsWith('0')) p = '0' + p;
@@ -703,13 +606,13 @@ async function settlePendingDeposit(params: {
       $set: {
         status: 'completed',
         mpesaRef: params.mpesaRef,
-        paymentGateway: 'lipia',
+        paymentGateway: 'payhero',
         cycleNumber: cycleNumber ?? null,
         amount,
         description: params.walletPayment
-          ? `Wallet deposit via Lipia STK - Ref: ${params.mpesaRef} - ${params.phone || 'unknown'}`
+          ? `Wallet deposit via PayHero STK - Ref: ${params.mpesaRef} - ${params.phone || 'unknown'}`
           : cycleNumber
-          ? `Cycle ${cycleNumber} contribution via Lipia STK — Ref: ${params.mpesaRef} — ${params.phone || 'unknown'}`
+          ? `Cycle ${cycleNumber} contribution via PayHero STK — Ref: ${params.mpesaRef} — ${params.phone || 'unknown'}`
           : `M-Pesa Savings Deposit — Ref: ${params.mpesaRef} — ${params.phone || 'unknown'}`,
         processedAt,
         depositProcessed: true,
@@ -810,14 +713,14 @@ async function recordCyclePayment(params: {
     mpesa_transaction_id: params.mpesaRef,
     checkout_request_id: params.checkoutRequestId,
     transaction_reference: params.mpesaRef,
-    payment_method: 'lipia',
+    payment_method: 'payhero',
     status: 'completed',
     type: 'cycle_payment',
     cycle_number: params.cycleNumber,
     date: params.processedAt,
     created_at: params.processedAt,
     deposit_processed: true,
-    notes: `Cycle ${params.cycleNumber} contribution via Lipia STK`,
+    notes: `Cycle ${params.cycleNumber} contribution via PayHero STK`,
   });
   await Member.findByIdAndUpdate(memberObjectId, {
     $inc: { total_cycle_contribution: params.amount, cycle_contribution_count: 1 },
@@ -950,7 +853,7 @@ async function createOrGetPendingDepositTransaction(params: {
             status: 'pending',
             checkoutRequestId: params.checkoutRequestId,
             cycleNumber: params.cycleNumber ?? null,
-            paymentGateway: 'lipia',
+            paymentGateway: 'payhero',
             createdBy: null,
           },
           $set: params.cycleNumber ? { cycleNumber: params.cycleNumber } : {},
@@ -1012,35 +915,34 @@ async function createOrGetPendingDepositTransaction(params: {
 // Admin diagnostics endpoint: returns masked provider config to compare environments
 
 router.get('/provider-diagnostics', protect, authorize('admin', 'treasurer', 'member'), async (_req: AuthRequest, res: Response) => {
-  const apiKey = process.env.LIPIA_API_KEY;
-  const appId = process.env.LIPIA_APP_ID;
-  const appName = process.env.LIPIA_APP_NAME;
-  const callbackUrl = process.env.MPESA_CALLBACK_URL;
-  const apiUrl = normalizeLipiaBaseUrl(process.env.LIPIA_API_URL);
+  const username = process.env.PAYHERO_API_USERNAME;
+  const channelId = process.env.PAYHERO_CHANNEL_ID;
+  const accountId = process.env.PAYHERO_ACCOUNT_ID;
+  const callbackUrl = process.env.PAYHERO_CALLBACK_URL;
+  const apiUrl = normalizePayHeroBaseUrl(process.env.PAYHERO_API_URL);
 
   return res.json({
     success: true,
     data: {
       configured: {
-        apiKey: !!apiKey,
-        appId: !!appId,
-        appName: !!appName,
+        username: !!username,
+        channelId: !!channelId,
+        accountId: !!accountId,
         callbackUrl: !!callbackUrl,
       },
       values: {
         apiUrl,
         callbackUrl,
-        appName,
-        apiKeyMasked: maskSecret(apiKey),
-        appIdMasked: maskSecret(appId),
+        usernameMasked: maskSecret(username),
+        channelId,
+        accountId,
         service: 'smcf-sacco-backend',
         commit: process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || null,
       },
       fingerprints: {
-        apiKey: envFingerprint(apiKey),
-        appId: envFingerprint(appId),
+        username: envFingerprint(username),
       },
-      notes: 'Use fingerprints to confirm both services are using the same Lipia credentials without exposing secrets.',
+      notes: 'Use fingerprints to confirm both services are using the same PayHero credentials without exposing secrets.',
     },
   });
 });
@@ -1154,7 +1056,7 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
     }
 
     // ── Simulation mode (no credentials set) ──────────────────────────────
-    const hasCredentials = !!(process.env.LIPIA_API_KEY);
+    const hasCredentials = !!(process.env.PAYHERO_API_USERNAME && process.env.PAYHERO_API_PASSWORD && process.env.PAYHERO_CHANNEL_ID && process.env.PAYHERO_ACCOUNT_ID);
 
     if (!hasCredentials) {
       const simId = `SIM-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
@@ -1193,16 +1095,16 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
       });
     }
 
-    // ── Real STK Push via Lipia Online ────────────────────────────────────
-    const stkData = await sendLipiaSTK(mpesaPhone, numAmount, 'SMCF-SAVINGS', tenXPayment ? 'SMCF 10X Contribution' : walletPayment ? 'SMCF Wallet Deposit' : 'SMCF SACCO Savings Deposit');
-    // Lipia proxies the Safaricom response — CheckoutRequestID may be top-level
-    // or nested under data depending on the Lipia version.
+    // ── Real STK Push via PayHero ────────────────────────────────────
+    const stkData = await sendPayHeroSTK(mpesaPhone, numAmount, 'SMCF-SAVINGS', tenXPayment ? 'SMCF 10X Contribution' : walletPayment ? 'SMCF Wallet Deposit' : 'SMCF SACCO Savings Deposit');
+    // PayHero proxies the Safaricom response — CheckoutRequestID may be top-level
+    // or nested under data depending on the PayHero version.
     const checkoutRequestId = extractCheckoutRequestId(stkData);
 
     if (!checkoutRequestId) {
       return res.status(400).json({
         success: false,
-        message: stkData.message || stkData.error || 'STK Push failed. Payment service did not return a checkout request ID.',
+        message: stkData.message || 'Payment request could not be initiated. Please try again.',
       });
     }
 
@@ -1235,7 +1137,7 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
       createdAt: Date.now(),
     });
 
-    // Start server-side Lipia polling — no callback dependency
+    // Start server-side PayHero polling — no callback dependency
     if (txnDoc.status === 'pending' && txnDoc.depositProcessed !== true) {
       pollSACCOPayment('deposit', checkoutRequestId, String(txnDoc._id), memberId, numAmount, mpesaPhone).catch(
         (err) => console.error('[pollSACCOPayment deposit]', err)
@@ -1254,13 +1156,13 @@ async function recordDeposit(memberId: string, amount: number, phone: string, mp
     transactionRef,
     memberId,
     type: walletPayment ? 'wallet_deposit' : 'deposit',
-    paymentGateway: 'lipia',
+    paymentGateway: 'payhero',
     cycleNumber: cycleNumber ?? null,
     amount,
     description: walletPayment
-      ? `Wallet deposit via Lipia STK - Ref: ${mpesaRef} - ${phone}`
+      ? `Wallet deposit via PayHero STK - Ref: ${mpesaRef} - ${phone}`
       : cycleNumber
-      ? `Cycle ${cycleNumber} contribution via Lipia STK — Ref: ${mpesaRef} — ${phone}`
+      ? `Cycle ${cycleNumber} contribution via PayHero STK — Ref: ${mpesaRef} — ${phone}`
       : `M-Pesa Savings Deposit — Ref: ${mpesaRef} — ${phone}`,
     status: 'completed',
     checkoutRequestId: checkoutRequestId || null,
@@ -1317,7 +1219,7 @@ router.post('/share-purchase', protect, async (req: AuthRequest, res: Response, 
 
     const mpesaPhone = normalizePhone(phone);
     const numAmount  = Math.round(Number(amount));
-    const hasCredentials = !!(process.env.LIPIA_API_KEY);
+    const hasCredentials = !!(process.env.PAYHERO_API_USERNAME && process.env.PAYHERO_API_PASSWORD && process.env.PAYHERO_CHANNEL_ID && process.env.PAYHERO_ACCOUNT_ID);
 
     if (!hasCredentials) {
       const simId = `SHRSIM-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
@@ -1363,13 +1265,13 @@ router.post('/share-purchase', protect, async (req: AuthRequest, res: Response, 
       });
     }
 
-    const stkData = await sendLipiaSTK(mpesaPhone, numAmount, 'SMCF-SHARES', 'SMCF SACCO Share Purchase');
+    const stkData = await sendPayHeroSTK(mpesaPhone, numAmount, 'SMCF-SHARES', 'SMCF SACCO Share Purchase');
     const checkoutRequestId = extractCheckoutRequestId(stkData);
 
     if (!checkoutRequestId) {
       return res.status(400).json({
         success: false,
-        message: stkData.message || stkData.error || 'STK Push failed. Payment service did not return a checkout request ID.',
+        message: stkData.message || 'Payment request could not be initiated. Please try again.',
       });
     }
 
@@ -1424,7 +1326,7 @@ router.post('/registration-fee/initiate', protect, async (req: AuthRequest, res:
     }
 
     const numAmount = REGISTRATION_FEE_AMOUNT;
-    const hasCredentials = !!process.env.LIPIA_API_KEY;
+    const hasCredentials = !!process.env.PAYHERO_API_USERNAME && process.env.PAYHERO_API_PASSWORD && process.env.PAYHERO_CHANNEL_ID && process.env.PAYHERO_ACCOUNT_ID;
 
     if (!hasCredentials) {
       const simId = `REGSIM-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
@@ -1482,13 +1384,13 @@ router.post('/registration-fee/initiate', protect, async (req: AuthRequest, res:
       return res.json({ success: true, simulated: true, data: { checkoutRequestId: simId } });
     }
 
-    const stkData = await sendLipiaSTK(mpesaPhone, numAmount, 'SMCF-REGFEE', 'SMCF SACCO Registration Fee');
+    const stkData = await sendPayHeroSTK(mpesaPhone, numAmount, 'SMCF-REGFEE', 'SMCF SACCO Registration Fee');
     const checkoutRequestId = extractCheckoutRequestId(stkData);
 
     if (!checkoutRequestId) {
       return res.status(400).json({
         success: false,
-        message: stkData.message || stkData.error || 'STK Push failed. Payment service did not return a checkout request ID.',
+        message: stkData.message || 'Payment request could not be initiated. Please try again.',
       });
     }
 
@@ -1561,8 +1463,202 @@ router.post('/registration-fee/reconcile-manual', protect, authorize('admin', 't
   }
 });
 
+// ─── POST /api/mpesa/payhero/callback ────────────────────────────────────────
+// PayHero posts the final provider result here. Business settlement remains in
+// the existing SACCO settlement functions above.
+
+router.post('/payhero/callback', async (req: Request, res: Response) => {
+  res.status(200).json({ success: true });
+
+  try {
+    const payload = asRecord(req.body);
+    const checkoutRequestId = extractCheckoutRequestId(payload);
+    const externalReference = [
+      getPathValue(payload, ['ExternalReference']),
+      getPathValue(payload, ['external_reference']),
+      getPathValue(payload, ['externalReference']),
+      getPathValue(payload, ['merchant_reference']),
+    ].find((value): value is string => typeof value === 'string' && Boolean(value.trim()));
+    const status = String(
+      getPathValue(payload, ['status'])
+      ?? getPathValue(payload, ['Status'])
+      ?? getPathValue(payload, ['transaction_status'])
+      ?? getPathValue(payload, ['ResultCode'])
+      ?? ''
+    ).toLowerCase();
+    const success = ['0', 'success', 'successful', 'completed', 'complete'].includes(status);
+    const amountValue = getPathValue(payload, ['amount']) ?? getPathValue(payload, ['Amount']);
+    const callbackAmount = amountValue === undefined ? undefined : Number(amountValue);
+    const mpesaRef = [
+      getPathValue(payload, ['MpesaReceiptNumber']),
+      getPathValue(payload, ['mpesaReceiptNumber']),
+      getPathValue(payload, ['receipt_number']),
+      getPathValue(payload, ['receiptNumber']),
+      getPathValue(payload, ['transaction_id']),
+      getPathValue(payload, ['TransactionID']),
+    ].find((value): value is string => typeof value === 'string' && Boolean(value.trim()));
+    const resultDesc = String(
+      getPathValue(payload, ['message'])
+      ?? getPathValue(payload, ['ResultDesc'])
+      ?? getPathValue(payload, ['description'])
+      ?? 'Payment failed or was cancelled'
+    );
+
+    console.info('[payhero callback]', {
+      checkoutRequestId: checkoutRequestId || null,
+      externalReference: externalReference || null,
+      status,
+      hasReceipt: Boolean(mpesaRef),
+      amount: Number.isFinite(callbackAmount) ? callbackAmount : null,
+    });
+
+    if (!checkoutRequestId) return;
+
+    const transaction = await Transaction.findOne({
+      $or: [
+        { checkoutRequestId },
+        ...(externalReference ? [{ transactionRef: externalReference }] : []),
+      ],
+      type: { $in: ['deposit', 'wallet_deposit', 'share_purchase', 'registration_fee', 'loan_repayment'] },
+    }).select('_id memberId amount type loanId cycleNumber status depositProcessed');
+
+    if (!transaction) {
+      console.warn('[payhero callback] pending transaction not found', { checkoutRequestId });
+      return;
+    }
+
+    if (!success || !mpesaRef) {
+      await Transaction.findOneAndUpdate(
+        { _id: transaction._id, status: 'pending' },
+        { status: 'failed', processedAt: new Date() },
+      );
+      for (const pending of [pendingDeposits, pendingSharePurchases, pendingRegistrationFees, pendingRepayments]) {
+        const item = pending.get(checkoutRequestId);
+        if (item) {
+          item.status = 'failed';
+          item.resultDesc = resultDesc;
+          pending.set(checkoutRequestId, item);
+        }
+      }
+      return;
+    }
+
+    if (Number.isFinite(callbackAmount) && callbackAmount !== Number(transaction.amount)) {
+      await Transaction.findOneAndUpdate(
+        { _id: transaction._id, status: 'pending' },
+        { status: 'failed', processedAt: new Date() },
+      );
+      console.warn('[payhero callback] amount mismatch', {
+        checkoutRequestId,
+        expectedAmount: Number(transaction.amount),
+        receivedAmount: callbackAmount,
+      });
+      return;
+    }
+
+    const paidAmount = Number.isFinite(callbackAmount) ? Number(callbackAmount) : Number(transaction.amount);
+    const memberId = String(transaction.memberId);
+
+    if (transaction.type === 'deposit' || transaction.type === 'wallet_deposit') {
+      const pending = pendingDeposits.get(checkoutRequestId);
+      await settlePendingDeposit({
+        checkoutRequestId,
+        memberId,
+        amount: paidAmount,
+        phone: pending?.phone,
+        mpesaRef,
+        sourceLabel: 'PayHero STK',
+        cycleNumber: pending?.cyclePayment ? pending.cycleNumber : transaction.cycleNumber ?? undefined,
+        tenXContributionId: pending?.tenXContributionId,
+        walletPayment: transaction.type === 'wallet_deposit' || pending?.walletPayment,
+        processedAt: new Date(),
+      });
+      if (pending) {
+        pending.status = 'success';
+        pending.mpesaRef = mpesaRef;
+        pending.amount = paidAmount;
+        pendingDeposits.set(checkoutRequestId, pending);
+      }
+      return;
+    }
+
+    if (transaction.type === 'share_purchase') {
+      const claimed = await Transaction.findOneAndUpdate(
+        { _id: transaction._id, status: 'pending', depositProcessed: { $ne: true } },
+        {
+          status: 'completed',
+          mpesaRef,
+          amount: paidAmount,
+          description: `M-Pesa Share Purchase — Ref: ${mpesaRef}`,
+          processedAt: new Date(),
+          depositProcessed: true,
+          paymentGateway: 'payhero',
+        },
+        { new: true },
+      );
+      if (claimed) {
+        await Member.findByIdAndUpdate(memberId, { $inc: { shares: paidAmount } });
+        await recalculateMemberRiskScore(memberId);
+      }
+      const pending = pendingSharePurchases.get(checkoutRequestId);
+      if (pending) {
+        pending.status = 'success';
+        pending.mpesaRef = mpesaRef;
+        pending.amount = paidAmount;
+        pendingSharePurchases.set(checkoutRequestId, pending);
+      }
+      return;
+    }
+
+    if (transaction.type === 'registration_fee') {
+      const pending = pendingRegistrationFees.get(checkoutRequestId);
+      await settleRegistrationFeePayment({
+        memberId,
+        amount: paidAmount,
+        phone: pending?.phone || '',
+        mpesaRef,
+        checkoutRequestId,
+        source: 'callback',
+      });
+      if (pending) {
+        pending.status = 'success';
+        pending.mpesaRef = mpesaRef;
+        pending.amount = paidAmount;
+        pendingRegistrationFees.set(checkoutRequestId, pending);
+      }
+      return;
+    }
+
+    if (transaction.type === 'loan_repayment' && transaction.loanId) {
+      const claimed = await Transaction.findOneAndUpdate(
+        { _id: transaction._id, status: 'pending', depositProcessed: { $ne: true } },
+        { status: 'completed', mpesaRef, amount: paidAmount, processedAt: new Date(), depositProcessed: true, paymentGateway: 'payhero' },
+        { new: true },
+      );
+      if (!claimed) return;
+      const result = await processRepayment(
+        transaction.loanId,
+        paidAmount,
+        'mpesa',
+        `PayHero Ref: ${mpesaRef}`,
+        null,
+      );
+      const pending = pendingRepayments.get(checkoutRequestId);
+      if (pending) {
+        pending.status = 'success';
+        pending.mpesaRef = mpesaRef;
+        pending.amount = paidAmount;
+        pending.loanCompleted = result.loanCompleted;
+        pendingRepayments.set(checkoutRequestId, pending);
+      }
+    }
+  } catch (err) {
+    console.error('[payhero callback error]', toErrorMessage(err, 'Unable to process callback'));
+  }
+});
+
 // ─── POST /api/mpesa/callback ────────────────────────────────────────────────
-// Safaricom posts the result here. Handles both savings deposits and loan repayments.
+// Safaricom-compatible callback kept for backwards compatibility.
 
 router.post('/callback', async (req: Request, res: Response) => {
   res.json({ ResultCode: 0, ResultDesc: 'Accepted' });
@@ -1837,7 +1933,7 @@ router.post('/loan-repay', protect, async (req: AuthRequest, res: Response, next
     const mpesaPhone = normalizePhone(phone);
     const numAmount  = Math.min(Math.round(Number(amount)), Math.round(loan.balance));
 
-    const hasCredentials = !!(process.env.LIPIA_API_KEY);
+    const hasCredentials = !!(process.env.PAYHERO_API_USERNAME && process.env.PAYHERO_API_PASSWORD && process.env.PAYHERO_CHANNEL_ID && process.env.PAYHERO_ACCOUNT_ID);
 
     if (!hasCredentials) {
       const simId = `REPSIM-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
@@ -1869,8 +1965,8 @@ router.post('/loan-repay', protect, async (req: AuthRequest, res: Response, next
       return res.json({ success: true, simulated: true, data: { checkoutRequestId: simId } });
     }
 
-    // ── Real STK Push via Lipia Online ────────────────────────────────────
-    const stkData = await sendLipiaSTK(
+    // ── Real STK Push via PayHero ────────────────────────────────────
+    const stkData = await sendPayHeroSTK(
       mpesaPhone,
       numAmount,
       loan.loanNumber,
@@ -1880,7 +1976,7 @@ router.post('/loan-repay', protect, async (req: AuthRequest, res: Response, next
     const checkoutRequestId = extractCheckoutRequestId(stkData);
 
     if (!checkoutRequestId) {
-      return res.status(400).json({ success: false, message: stkData.message || stkData.error || 'STK Push failed' });
+      return res.status(400).json({ success: false, message: stkData.message || 'Payment request could not be initiated. Please try again.' });
     }
 
     const memberId = String(loan.memberId);
@@ -1908,7 +2004,7 @@ router.post('/loan-repay', protect, async (req: AuthRequest, res: Response, next
       createdAt: Date.now(),
     });
 
-    // Start server-side Lipia polling
+    // Start server-side PayHero polling
     pollSACCOPayment('loan_repay', checkoutRequestId, String(txnDoc._id), memberId, numAmount, mpesaPhone, loanId).catch(
       (err) => console.error('[pollSACCOPayment loan-repay]', err)
     );
@@ -1954,7 +2050,7 @@ router.get('/repay-status/:checkoutRequestId', protect, async (req: AuthRequest,
 });
 
 // ─── POST /api/mpesa/payment-initiated ──────────────────────────────────────
-// Called BEFORE opening Lipia payment link.
+// Called BEFORE opening PayHero payment link.
 // Creates a pending transaction in DB immediately (shows in member history).
 // Body: { memberId, amount, phone, type: 'deposit'|'loan_repay', loanId? }
 
@@ -1991,12 +2087,12 @@ router.post('/payment-initiated', protect, async (req: AuthRequest, res: Respons
       memberId,
       type: txnType,
       amount: numAmount,
-      description: `M-Pesa via Lipia Online — Pending admin confirmation${loanTag}`,
+      description: `M-Pesa via PayHero — Pending admin confirmation${loanTag}`,
       status: 'pending',
       createdBy: null,
     });
 
-    pendingLipiaPayments.set(txnRef, {
+    pendingManualPayments.set(txnRef, {
       type,
       memberId,
       loanId,
@@ -2024,12 +2120,12 @@ router.post('/payment-confirm', protect, async (req: AuthRequest, res: Response,
       return res.status(400).json({ success: false, message: 'transactionRef is required' });
     }
 
-    const pending = pendingLipiaPayments.get(transactionRef);
+    const pending = pendingManualPayments.get(transactionRef);
     if (!pending) {
       return res.status(404).json({ success: false, message: 'Payment record not found or expired' });
     }
 
-    const mpesaRef = `LIPIA-CONFIRM-${Date.now()}`;
+    const mpesaRef = `PAYHERO-CONFIRM-${Date.now()}`;
 
     if (pending.type === 'deposit') {
       // Mark transaction completed + add to savings
@@ -2037,7 +2133,7 @@ router.post('/payment-confirm', protect, async (req: AuthRequest, res: Response,
         { transactionRef },
         {
           status: 'completed',
-          description: `M-Pesa Savings Deposit via Lipia Online — Member confirmed`,
+          description: `M-Pesa Savings Deposit via PayHero — Member confirmed`,
           processedAt: new Date(),
           depositProcessed: true,
         }
@@ -2047,7 +2143,7 @@ router.post('/payment-confirm', protect, async (req: AuthRequest, res: Response,
           memberId: pending.memberId,
           amount: pending.amount,
           reference: mpesaRef,
-          sourceLabel: 'Lipia payment link',
+          sourceLabel: 'PayHero payment link',
           processedAt: new Date(),
           note: `Transaction ${transactionRef}`,
           notificationPath: '/accounts',
@@ -2068,12 +2164,12 @@ router.post('/payment-confirm', protect, async (req: AuthRequest, res: Response,
         pending.loanId,
         pending.amount,
         'mpesa',
-        `Lipia Online payment — Member confirmed — ${mpesaRef}`,
+        `PayHero payment — Member confirmed — ${mpesaRef}`,
         null
       );
     }
 
-    pendingLipiaPayments.delete(transactionRef);
+    pendingManualPayments.delete(transactionRef);
     return res.json({ success: true, data: { message: 'Payment confirmed and recorded.' } });
   } catch (err) {
     next(err);

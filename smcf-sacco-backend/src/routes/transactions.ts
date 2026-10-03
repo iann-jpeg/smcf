@@ -184,7 +184,7 @@ router.put(
 );
 
 // @route   PATCH /api/transactions/:id/confirm
-// @desc    Admin confirms a pending Lipia payment — marks complete and updates balances
+// @desc    Admin confirms a pending payment — marks complete and updates balances
 // @access  Admin / Treasurer
 router.patch(
   '/:id/confirm',
@@ -265,7 +265,7 @@ router.patch(
           loanId,
           txn.amount,
           'mpesa',
-          `Lipia Online confirmed by admin on ${new Date().toLocaleDateString('en-KE')}`,
+          `PayHero confirmed by admin on ${new Date().toLocaleDateString('en-KE')}`,
           req.userId!
         );
       }
