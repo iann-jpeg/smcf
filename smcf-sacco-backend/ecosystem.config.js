@@ -3,8 +3,8 @@ module.exports = {
     {
       name: 'smcf-sacco-backend',
       script: './dist/server.js',
-      instances: 'max',
-      exec_mode: 'cluster',
+      instances: 1,
+      exec_mode: 'fork',
       env: {
         NODE_ENV: 'production',
       },

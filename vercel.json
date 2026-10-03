@@ -20,6 +20,10 @@
       "destination": "/sacco/index.html"
     },
     {
+      "source": "/api/:path*",
+      "destination": "https://smcf-sacco-backend.onrender.com/api/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
