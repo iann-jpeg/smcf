@@ -109,6 +109,11 @@ type PayHeroPaymentResponse = LooseRecord & {
   message?: unknown;
 };
 
+type PayHeroCustomerContext = {
+  name?: string | null;
+  email?: string | null;
+};
+
 function asRecord(value: unknown): LooseRecord | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return null;
@@ -183,7 +188,15 @@ function normalizePayHeroBaseUrl(rawUrl?: string): string {
   return value || 'https://api.payhero.africa';
 }
 
-function parsePayHeroResourceId(value: string | undefined, name: string): number {
+function hasPayHeroCredentials(): boolean {
+  return Boolean(
+    process.env.PAYHERO_API_USERNAME &&
+    process.env.PAYHERO_API_PASSWORD &&
+    process.env.PAYHERO_CALLBACK_URL
+  );
+}
+
+function parsePositiveId(value: string | undefined, name: string): number {
   const normalized = String(value || '').trim();
   if (!/^\d+$/.test(normalized) || Number(normalized) <= 0) {
     const err = new Error(`PayHero ${name} must be a positive numeric ID`) as Error & { statusCode?: number };
@@ -191,6 +204,193 @@ function parsePayHeroResourceId(value: string | undefined, name: string): number
     throw err;
   }
   return Number(normalized);
+}
+
+function splitCustomerName(name?: string | null): { first_name: string; last_name: string } {
+  const normalized = String(name || '').trim().replace(/\s+/g, ' ');
+  if (!normalized) return { first_name: 'SMCF', last_name: 'Member' };
+  const parts = normalized.split(' ');
+  if (parts.length === 1) {
+    return { first_name: parts[0], last_name: 'Member' };
+  }
+  return {
+    first_name: parts.shift() || 'SMCF',
+    last_name: parts.join(' ') || 'Member',
+  };
+}
+
+async function discoverPayHeroNetwork(baseUrl: string, authHeader: string, countryCode = 'KE') {
+  const endpoints = [
+    `${baseUrl}/api/global/discovery/payment-world/country/${encodeURIComponent(countryCode)}`,
+    `${baseUrl}/api/global/discovery/payment-world/country?country=${encodeURIComponent(countryCode)}`,
+  ];
+
+  let lastMessage = '';
+  for (const endpoint of endpoints) {
+    try {
+      const res = await fetch(endpoint, {
+        method: 'GET',
+        headers: { Authorization: authHeader, Accept: 'application/json' },
+      });
+
+      const text = await res.text().catch(() => '');
+      let data: unknown = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        data = { message: text || 'Unexpected discovery response' };
+      }
+
+      if (!res.ok) {
+        lastMessage = extractProviderErrorMessage(data, `PayHero discovery failed with HTTP ${res.status}`);
+        continue;
+      }
+
+      const record = asRecord(data);
+      const payload = asRecord(record?.data) ?? record ?? {};
+      const providerNetworks = asRecord(getPathValue(payload, ['provider_networks']))
+        ?? asRecord(getPathValue(payload, ['data', 'provider_networks']))
+        ?? asRecord(getPathValue(data, ['provider_networks']));
+
+      const candidates = providerNetworks?.['m-pesa'] ?? providerNetworks?.m_pesa ?? providerNetworks?.mpesa;
+      if (Array.isArray(candidates) && candidates.length > 0) {
+        return candidates[0] as LooseRecord;
+      }
+
+      lastMessage = 'PayHero discovery completed but no m-pesa provider network was returned';
+    } catch (err) {
+      lastMessage = toErrorMessage(err, 'PayHero discovery failed');
+    }
+  }
+
+  const error = new Error(lastMessage || 'Unable to discover PayHero provider network') as Error & { statusCode?: number };
+  error.statusCode = 502;
+  throw error;
+}
+
+async function sendPayHeroGlobalPayment(
+  phone: string,
+  amount: number,
+  reference: string,
+  description: string,
+  customerContext?: PayHeroCustomerContext,
+): Promise<PayHeroPaymentResponse> {
+  const username = process.env.PAYHERO_API_USERNAME;
+  const password = process.env.PAYHERO_API_PASSWORD;
+  const callbackUrl = process.env.PAYHERO_CALLBACK_URL;
+  const vendorId = process.env.PAYHERO_VENDOR_ID || process.env.PAYHERO_ACCOUNT_ID;
+
+  if (!username || !password || !callbackUrl || !vendorId) {
+    const err = new Error('PayHero payment configuration is incomplete') as Error & { statusCode?: number };
+    err.statusCode = 503;
+    throw err;
+  }
+
+  const auth = Buffer.from(`${username}:${password}`).toString('base64');
+  const baseUrl = normalizePayHeroBaseUrl(process.env.PAYHERO_API_URL);
+  const network = await discoverPayHeroNetwork(baseUrl, `Basic ${auth}`, 'KE');
+  const { first_name, last_name } = splitCustomerName(customerContext?.name);
+  const customerEmail = String(customerContext?.email || '').trim() || 'payments@smcf.app';
+  const customerPhone = `+${normalizePhone(phone)}`;
+
+  const requestBody = {
+    request_type: 'payment',
+    transaction_channel: 'momo',
+    provider: 'yellowcard',
+    amount,
+    currency: 'KES',
+    country: 'KE',
+    customer: {
+      first_name,
+      last_name,
+      email: customerEmail,
+      phone: customerPhone,
+      country: 'KE',
+    },
+    vendor_config: {
+      vendor_id: parsePositiveId(vendorId, 'vendor ID'),
+    },
+    provider_config: network,
+    payment_config: {
+      account_number: customerPhone,
+      callback_url: callbackUrl,
+    },
+    external_reference: reference,
+    description,
+  };
+
+  const requestUrl = `${baseUrl}/api/global/payments`;
+  let res: Awaited<ReturnType<typeof fetch>>;
+  try {
+    res = await fetch(requestUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${auth}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    });
+  } catch (err) {
+    console.error('[PayHero] global payment request failed', {
+      endpoint: requestUrl,
+      reference,
+      amount,
+      phoneSuffix: normalizePhoneForPayHero(phone).slice(-4),
+      error: toErrorMessage(err, 'Network error'),
+    });
+    const networkError = new Error('PayHero could not be reached. Please try again.') as Error & { statusCode?: number };
+    networkError.statusCode = 502;
+    throw networkError;
+  }
+
+  const responseText = await res.text().catch(() => '');
+  let data: unknown = {};
+  try {
+    data = responseText ? JSON.parse(responseText) : {};
+  } catch {
+    data = { message: 'Unexpected response from PayHero' };
+  }
+  const dataRecord = asRecord(data);
+  const checkoutRequestId = extractCheckoutRequestId(data);
+
+  if (!res.ok || !checkoutRequestId) {
+    const providerCode = dataRecord?.code ?? dataRecord?.error_code ?? dataRecord?.errorCode ?? dataRecord?.status_code ?? null;
+    const providerMessage = extractProviderErrorMessage(data, 'Payment request could not be initiated. Please try again.');
+    const message = providerCode === 'resource_not_found'
+      ? 'PayHero could not resolve the requested resource for this tenant. Check that the API username/password belong to the same PayHero workspace as the discovered network and vendor ID.'
+      : providerMessage;
+
+    console.error('[PayHero] global payment rejected', {
+      endpoint: requestUrl,
+      httpStatus: res.status,
+      reference,
+      amount,
+      phoneSuffix: normalizePhone(phone).slice(-4),
+      providerCode,
+      message,
+    });
+
+    const err = new Error(message) as Error & { statusCode?: number };
+    err.statusCode = res.ok ? 502 : res.status >= 400 && res.status < 500 ? 400 : 502;
+    throw err;
+  }
+
+  const providerReference = [
+    getPathValue(data, ['merchant_reference']),
+    getPathValue(data, ['merchantReference']),
+    getPathValue(data, ['transaction_reference']),
+    getPathValue(data, ['transactionReference']),
+  ].find((value): value is string => typeof value === 'string' && Boolean(value.trim()));
+
+  return {
+    success: true,
+    provider: 'payhero',
+    checkoutRequestId,
+    providerReference,
+    externalReference: reference,
+    status: typeof dataRecord?.status === 'string' ? dataRecord.status : 'accepted',
+    message: dataRecord?.message,
+  };
 }
 
 // Purge stale entries every 10 min
@@ -400,93 +600,20 @@ async function pollSACCOPayment(
 }
 
 /** Initiate a PayHero M-Pesa collection and return the normalized provider response. */
-async function sendPayHeroSTK(phone: string, amount: number, reference: string, description: string): Promise<PayHeroPaymentResponse> {
-  const username = process.env.PAYHERO_API_USERNAME;
-  const password = process.env.PAYHERO_API_PASSWORD;
-  const channelId = process.env.PAYHERO_CHANNEL_ID;
-  const accountId = process.env.PAYHERO_ACCOUNT_ID;
-  const callbackUrl = process.env.PAYHERO_CALLBACK_URL;
-  if (!username || !password || !channelId || !accountId || !callbackUrl) {
+async function sendPayHeroSTK(
+  phone: string,
+  amount: number,
+  reference: string,
+  description: string,
+  customerContext?: PayHeroCustomerContext,
+): Promise<PayHeroPaymentResponse> {
+  if (!hasPayHeroCredentials()) {
     const err = new Error('PayHero payment configuration is incomplete') as Error & { statusCode?: number };
     err.statusCode = 503;
     throw err;
   }
-  const numericChannelId = parsePayHeroResourceId(channelId, 'channel ID');
-  const numericAccountId = parsePayHeroResourceId(accountId, 'account ID');
 
-  const auth = Buffer.from(`${username}:${password}`).toString('base64');
-  const requestUrl = `${normalizePayHeroBaseUrl(process.env.PAYHERO_API_URL)}/api/v2/payments`;
-  const requestBody = {
-    amount,
-    currency: 'KES',
-    phone_number: normalizePhoneForPayHero(phone),
-    provider: 'm-pesa',
-    channel_id: numericChannelId,
-    account_id: numericAccountId,
-    external_reference: reference,
-    callback_url: callbackUrl,
-    description,
-  };
-
-  let res: Awaited<ReturnType<typeof fetch>>;
-  try {
-    res = await fetch(requestUrl, {
-      method: 'POST',
-      headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody),
-    });
-  } catch (err) {
-    console.error('[PayHero] request failed', {
-      endpoint: requestUrl,
-      reference,
-      amount,
-      phoneSuffix: normalizePhoneForPayHero(phone).slice(-4),
-      error: toErrorMessage(err, 'Network error'),
-    });
-    const networkError = new Error('PayHero could not be reached. Please try again.') as Error & { statusCode?: number };
-    networkError.statusCode = 502;
-    throw networkError;
-  }
-
-  const responseText = await res.text().catch(() => '');
-  let data: unknown = {};
-  try { data = responseText ? JSON.parse(responseText) : {}; } catch { data = { message: 'Unexpected response from PayHero' }; }
-  const dataRecord = asRecord(data);
-  const checkoutRequestId = extractCheckoutRequestId(data);
-  if (!res.ok || !checkoutRequestId) {
-    const providerCode = dataRecord?.code ?? dataRecord?.error_code ?? dataRecord?.errorCode;
-    const providerMessage = extractProviderErrorMessage(data, 'Payment request could not be initiated. Please try again.');
-    const message = providerCode === 'resource_not_found'
-      ? 'PayHero rejected the configured account or channel. Verify PAYHERO_ACCOUNT_ID and PAYHERO_CHANNEL_ID in the VPS environment against active resources in the PayHero dashboard.'
-      : providerMessage;
-    console.error('[PayHero] payment rejected', {
-      endpoint: requestUrl,
-      httpStatus: res.status,
-      reference,
-      amount,
-      phoneSuffix: normalizePhoneForPayHero(phone).slice(-4),
-      providerCode: providerCode ?? null,
-      message,
-    });
-    const err = new Error(message) as Error & { statusCode?: number };
-    err.statusCode = res.ok ? 502 : res.status >= 400 && res.status < 500 ? 400 : 502;
-    throw err;
-  }
-  const providerReference = [
-    getPathValue(data, ['merchant_reference']),
-    getPathValue(data, ['merchantReference']),
-    getPathValue(data, ['transaction_reference']),
-    getPathValue(data, ['transactionReference']),
-  ].find((value): value is string => typeof value === 'string' && Boolean(value.trim()));
-  return {
-    success: true,
-    provider: 'payhero',
-    checkoutRequestId,
-    providerReference,
-    externalReference: reference,
-    status: typeof dataRecord?.status === 'string' ? dataRecord.status : 'accepted',
-    message: dataRecord?.message,
-  };
+  return sendPayHeroGlobalPayment(phone, amount, reference, description, customerContext);
 }
 
 function looksLikeSuspended(message: string): boolean {
@@ -1005,10 +1132,12 @@ async function createOrGetPendingDepositTransaction(params: {
 
 router.get('/provider-diagnostics', protect, authorize('admin', 'treasurer', 'member'), async (_req: AuthRequest, res: Response) => {
   const username = process.env.PAYHERO_API_USERNAME;
+  const vendorId = process.env.PAYHERO_VENDOR_ID || process.env.PAYHERO_ACCOUNT_ID;
   const channelId = process.env.PAYHERO_CHANNEL_ID;
   const accountId = process.env.PAYHERO_ACCOUNT_ID;
   const callbackUrl = process.env.PAYHERO_CALLBACK_URL;
   const apiUrl = normalizePayHeroBaseUrl(process.env.PAYHERO_API_URL);
+  const vendorIdIsValid = /^\d+$/.test(String(vendorId || '').trim()) && Number(vendorId) > 0;
   const channelIdIsValid = /^\d+$/.test(String(channelId || '').trim()) && Number(channelId) > 0;
   const accountIdIsValid = /^\d+$/.test(String(accountId || '').trim()) && Number(accountId) > 0;
 
@@ -1017,17 +1146,20 @@ router.get('/provider-diagnostics', protect, authorize('admin', 'treasurer', 'me
     data: {
       configured: {
         username: !!username,
+        vendorId: !!vendorId,
         channelId: !!channelId,
         accountId: !!accountId,
         callbackUrl: !!callbackUrl,
+        vendorIdIsValid,
         channelIdIsValid,
         accountIdIsValid,
-        readyForCollection: Boolean(username && channelIdIsValid && accountIdIsValid && callbackUrl),
+        readyForCollection: Boolean(username && vendorIdIsValid && callbackUrl),
       },
       values: {
         apiUrl,
         callbackUrl,
         usernameMasked: maskSecret(username),
+        vendorId,
         channelId,
         accountId,
         service: 'smcf-sacco-backend',
@@ -1036,7 +1168,7 @@ router.get('/provider-diagnostics', protect, authorize('admin', 'treasurer', 'me
       fingerprints: {
         username: envFingerprint(username),
       },
-      notes: 'PAYHERO_CHANNEL_ID must be an active channel ID from PayHero payment_channels, and PAYHERO_ACCOUNT_ID must be the matching PayHero account ID. The M-Pesa till, paybill, phone number, or customer account number is not a valid replacement.',
+      notes: 'The global PayHero flow uses PAYHERO_VENDOR_ID (or PAYHERO_ACCOUNT_ID as fallback) plus API credentials and callback URL. PAYHERO_CHANNEL_ID / PAYHERO_ACCOUNT_ID are retained only for legacy v2 debugging and are not required by the new payment flow.',
     },
   });
 });
@@ -1053,6 +1185,11 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
     if (!phone)    return res.status(400).json({ success: false, message: 'Phone number is required' });
     if (!amount || Number(amount) < 10)
       return res.status(400).json({ success: false, message: 'Minimum deposit is KES 10' });
+
+    const payHeroMember = await Member.findById(memberId).select('name email phone');
+    if (!payHeroMember) {
+      return res.status(404).json({ success: false, message: 'Member not found' });
+    }
 
     const mpesaPhone = normalizePhone(phone);
     const numAmount  = Math.round(Number(amount));
@@ -1150,7 +1287,7 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
     }
 
     // ── Simulation mode (no credentials set) ──────────────────────────────
-    const hasCredentials = !!(process.env.PAYHERO_API_USERNAME && process.env.PAYHERO_API_PASSWORD && process.env.PAYHERO_CHANNEL_ID && process.env.PAYHERO_ACCOUNT_ID);
+    const hasCredentials = hasPayHeroCredentials();
 
     if (!hasCredentials) {
       const simId = `SIM-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
@@ -1190,7 +1327,13 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
     }
 
     // ── Real STK Push via PayHero ────────────────────────────────────
-    const stkData = await sendPayHeroSTK(mpesaPhone, numAmount, 'SMCF-SAVINGS', tenXPayment ? 'SMCF 10X Contribution' : walletPayment ? 'SMCF Wallet Deposit' : 'SMCF SACCO Savings Deposit');
+    const stkData = await sendPayHeroSTK(
+      mpesaPhone,
+      numAmount,
+      'SMCF-SAVINGS',
+      tenXPayment ? 'SMCF 10X Contribution' : walletPayment ? 'SMCF Wallet Deposit' : 'SMCF SACCO Savings Deposit',
+      { name: String(payHeroMember.name || ''), email: payHeroMember.email ? String(payHeroMember.email) : null }
+    );
     // PayHero proxies the Safaricom response — CheckoutRequestID may be top-level
     // or nested under data depending on the PayHero version.
     const checkoutRequestId = extractCheckoutRequestId(stkData);
@@ -1311,9 +1454,14 @@ router.post('/share-purchase', protect, async (req: AuthRequest, res: Response, 
     if (!amount || Number(amount) < 100)
       return res.status(400).json({ success: false, message: 'Minimum share purchase is KES 100' });
 
+    const payHeroMember = await Member.findById(memberId).select('name email phone');
+    if (!payHeroMember) {
+      return res.status(404).json({ success: false, message: 'Member not found' });
+    }
+
     const mpesaPhone = normalizePhone(phone);
     const numAmount  = Math.round(Number(amount));
-    const hasCredentials = !!(process.env.PAYHERO_API_USERNAME && process.env.PAYHERO_API_PASSWORD && process.env.PAYHERO_CHANNEL_ID && process.env.PAYHERO_ACCOUNT_ID);
+    const hasCredentials = hasPayHeroCredentials();
 
     if (!hasCredentials) {
       const simId = `SHRSIM-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
@@ -1359,7 +1507,13 @@ router.post('/share-purchase', protect, async (req: AuthRequest, res: Response, 
       });
     }
 
-    const stkData = await sendPayHeroSTK(mpesaPhone, numAmount, 'SMCF-SHARES', 'SMCF SACCO Share Purchase');
+    const stkData = await sendPayHeroSTK(
+      mpesaPhone,
+      numAmount,
+      'SMCF-SHARES',
+      'SMCF SACCO Share Purchase',
+      { name: String(payHeroMember.name || ''), email: payHeroMember.email ? String(payHeroMember.email) : null }
+    );
     const checkoutRequestId = extractCheckoutRequestId(stkData);
 
     if (!checkoutRequestId) {
@@ -1408,7 +1562,7 @@ router.post('/registration-fee/initiate', protect, async (req: AuthRequest, res:
 
     if (!memberId) return res.status(400).json({ success: false, message: 'memberId is required' });
 
-    const member = await Member.findById(memberId).select('phone registrationFeePaid registrationFeePendingCheckoutId');
+    const member = await Member.findById(memberId).select('name email phone registrationFeePaid registrationFeePendingCheckoutId');
     if (!member) return res.status(404).json({ success: false, message: 'Member not found' });
     if (member.registrationFeePaid) {
       return res.status(409).json({ success: false, message: 'Registration fee already paid' });
@@ -1420,7 +1574,7 @@ router.post('/registration-fee/initiate', protect, async (req: AuthRequest, res:
     }
 
     const numAmount = REGISTRATION_FEE_AMOUNT;
-    const hasCredentials = !!process.env.PAYHERO_API_USERNAME && process.env.PAYHERO_API_PASSWORD && process.env.PAYHERO_CHANNEL_ID && process.env.PAYHERO_ACCOUNT_ID;
+    const hasCredentials = hasPayHeroCredentials();
 
     if (!hasCredentials) {
       const simId = `REGSIM-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
@@ -1478,7 +1632,13 @@ router.post('/registration-fee/initiate', protect, async (req: AuthRequest, res:
       return res.json({ success: true, simulated: true, data: { checkoutRequestId: simId } });
     }
 
-    const stkData = await sendPayHeroSTK(mpesaPhone, numAmount, 'SMCF-REGFEE', 'SMCF SACCO Registration Fee');
+    const stkData = await sendPayHeroSTK(
+      mpesaPhone,
+      numAmount,
+      'SMCF-REGFEE',
+      'SMCF SACCO Registration Fee',
+      { name: String(member.name || ''), email: member.email ? String(member.email) : null }
+    );
     const checkoutRequestId = extractCheckoutRequestId(stkData);
 
     if (!checkoutRequestId) {
@@ -2024,10 +2184,12 @@ router.post('/loan-repay', protect, async (req: AuthRequest, res: Response, next
     if (!['disbursed', 'active'].includes(loan.status))
       return res.status(400).json({ success: false, message: 'Loan is not active' });
 
+    const payHeroMember = await Member.findById(loan.memberId).select('name email phone');
+
     const mpesaPhone = normalizePhone(phone);
     const numAmount  = Math.min(Math.round(Number(amount)), Math.round(loan.balance));
 
-    const hasCredentials = !!(process.env.PAYHERO_API_USERNAME && process.env.PAYHERO_API_PASSWORD && process.env.PAYHERO_CHANNEL_ID && process.env.PAYHERO_ACCOUNT_ID);
+    const hasCredentials = hasPayHeroCredentials();
 
     if (!hasCredentials) {
       const simId = `REPSIM-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
@@ -2065,6 +2227,7 @@ router.post('/loan-repay', protect, async (req: AuthRequest, res: Response, next
       numAmount,
       loan.loanNumber,
       `SMCF Loan Repayment ${loan.loanNumber}`,
+      { name: String(payHeroMember?.name || ''), email: payHeroMember?.email ? String(payHeroMember.email) : null }
     );
 
     const checkoutRequestId = extractCheckoutRequestId(stkData);
