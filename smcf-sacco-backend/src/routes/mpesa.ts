@@ -1214,7 +1214,6 @@ async function createOrGetPendingDepositTransaction(params: {
             paymentGateway: 'payhero',
             createdBy: null,
           },
-          $set: params.cycleNumber ? { cycleNumber: params.cycleNumber } : {},
         },
         { upsert: true, new: true }
       ).select('_id checkoutRequestId memberId amount status mpesaRef depositProcessed');
