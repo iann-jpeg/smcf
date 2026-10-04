@@ -4,6 +4,7 @@ import Member from '../models/Member';
 import TenXAuditLog from '../models/TenXAuditLog';
 import TenXContribution from '../models/TenXContribution';
 import TenXPeriod from '../models/TenXPeriod';
+import Transaction from '../models/Transaction';
 import { AuthRequest, authorize, protect } from '../middleware/auth';
 
 const router = Router();
@@ -94,7 +95,26 @@ router.post('/admin/contributions/manual', ...writeAccess, async (req: AuthReque
     const member = await Member.findOne({ _id: member_id, is10XMember: true }).select('name memberId');
     const periodDoc = await TenXPeriod.findOne({ period });
     if (!member || !periodDoc) return res.status(400).json({ success: false, message: '10X member and period are required' });
-    const contribution = await TenXContribution.create({ member_id, period_id: periodDoc._id, period, amount_due: periodDoc.due_amount, amount_paid: Number(amount_paid), payment_date: payment_date || new Date(), payment_method: payment_method || 'manual', transaction_reference, status: 'SUCCESSFUL', source: 'MANUAL', receipt_number: await nextReceiptNumber(), recorded_by: req.user?._id, notes });
+    const paidAmount = Number(amount_paid);
+    if (!Number.isFinite(paidAmount) || paidAmount <= 0) return res.status(400).json({ success: false, message: 'A positive amount is required' });
+    const reference = transaction_reference || `10X-MANUAL-${Date.now()}`;
+    const contribution = await TenXContribution.create({ member_id, period_id: periodDoc._id, period, amount_due: periodDoc.due_amount, amount_paid: paidAmount, payment_date: payment_date || new Date(), payment_method: payment_method || 'manual', transaction_reference: reference, status: 'SUCCESSFUL', source: 'MANUAL', receipt_number: await nextReceiptNumber(), recorded_by: req.user?._id, notes });
+    await Transaction.create({
+      transactionRef: reference,
+      memberId: member._id,
+      type: 'tenx_contribution',
+      amount: paidAmount,
+      grossAmount: paidAmount,
+      feeAmount: 0,
+      netAmount: paidAmount,
+      feeType: 'none',
+      description: `Manual 10X contribution for ${period}`,
+      status: 'completed',
+      processedAt: payment_date || new Date(),
+      createdBy: req.user?._id || null,
+      mpesaRef: reference,
+      paymentGateway: 'manual',
+    });
     await recordAudit(req, 'MANUAL_PAYMENT_RECORDED', `Recorded manual 10X payment for ${member.memberId}`, { member_id, contribution_id: contribution._id });
     return res.status(201).json({ success: true, data: contribution });
   } catch (error) { return next(error); }

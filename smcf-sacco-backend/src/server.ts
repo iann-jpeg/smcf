@@ -11,6 +11,7 @@ dotenv.config();
 
 // Database
 import connectDB from './config/database';
+import Transaction from './models/Transaction';
 
 // Middleware
 import errorHandler from './middleware/errorHandler';
@@ -50,7 +51,21 @@ const app: Application = express();
 app.set('trust proxy', 1);
 
 // Connect to database
-connectDB();
+connectDB()
+  .then(async () => {
+    // Older deployments created a unique cycleNumber index. It prevents
+    // multiple cycle payments and also conflicts with pending transactions.
+    // Remove only that known obsolete index; all other indexes are untouched.
+    const indexes = await Transaction.collection.listIndexes().toArray();
+    const obsoleteCycleIndex = indexes.find((index) => index.name === 'cycleNumber_1' && index.unique);
+    if (obsoleteCycleIndex?.name) {
+      await Transaction.collection.dropIndex(obsoleteCycleIndex.name);
+      console.log('[Database] Removed obsolete unique cycleNumber index');
+    }
+  })
+  .catch((error) => {
+    console.error('[Database] Startup index migration failed', error);
+  });
 
 const overdueIntervalMinutes = Number(process.env.OVERDUE_JOB_INTERVAL_MINUTES) || 60;
 startOverdueRepaymentJob(overdueIntervalMinutes);

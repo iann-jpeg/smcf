@@ -67,7 +67,8 @@ interface PendingDeposit {
   cyclePayment?: boolean;
   cycleNumber?: number;
   tenXContributionId?: string;
-    walletPayment?: boolean;
+  tenXPayment?: boolean;
+  walletPayment?: boolean;
   createdAt: number;
 }
 
@@ -775,14 +776,14 @@ const UNIFIED_TRANSACTION_FEE = 10;
 const REGISTRATION_FEE_AMOUNT = 100;
 const REGISTRATION_GROSS_AMOUNT = REGISTRATION_FEE_AMOUNT + UNIFIED_TRANSACTION_FEE;
 
-type FeeableTransactionType = 'deposit' | 'wallet_deposit' | 'share_purchase' | 'registration_fee' | 'loan_repayment';
+type FeeableTransactionType = 'deposit' | 'wallet_deposit' | 'tenx_contribution' | 'share_purchase' | 'registration_fee' | 'loan_repayment';
 
 function calculateTransactionAmounts(grossAmount: number, type: FeeableTransactionType, cyclePayment = false) {
   const gross = Math.round(Number(grossAmount));
   if (!Number.isFinite(gross) || gross <= 0) {
     throw new Error('Payment amount must be a positive number');
   }
-  const fee = type === 'deposit' && cyclePayment ? 0 : UNIFIED_TRANSACTION_FEE;
+  const fee = (type === 'deposit' || type === 'tenx_contribution') && cyclePayment ? 0 : UNIFIED_TRANSACTION_FEE;
   const net = gross - fee;
   if (fee > 0 && net <= 0) {
     throw new Error(`Amount must be greater than KES ${fee} after the transaction fee`);
@@ -920,7 +921,7 @@ async function settlePendingDeposit(params: {
   const cycleNumber = params.cycleNumber;
   const feeAmounts = calculateTransactionAmounts(
     params.amount,
-    params.walletPayment ? 'wallet_deposit' : 'deposit',
+    params.walletPayment ? 'wallet_deposit' : params.tenXContributionId ? 'tenx_contribution' : 'deposit',
     Boolean(cycleNumber),
   );
   const amount = feeAmounts.grossAmount;
@@ -928,7 +929,7 @@ async function settlePendingDeposit(params: {
 
   const processedAt = params.processedAt ?? new Date();
   const existingCompletedTxn = await Transaction.findOne({
-    type: params.walletPayment ? 'wallet_deposit' : 'deposit',
+    type: params.walletPayment ? 'wallet_deposit' : params.tenXContributionId ? 'tenx_contribution' : 'deposit',
     mpesaRef: params.mpesaRef,
     status: 'completed',
   }).select('_id');
@@ -948,7 +949,7 @@ async function settlePendingDeposit(params: {
         status: 'completed',
         mpesaRef: params.mpesaRef,
         paymentGateway: 'payhero',
-        cycleNumber: cycleNumber ?? null,
+        ...(cycleNumber ? { cycleNumber } : {}),
         amount,
         grossAmount: amount,
         feeAmount: feeAmounts.feeAmount,
@@ -958,6 +959,8 @@ async function settlePendingDeposit(params: {
           ? `Wallet deposit via PayHero STK - Ref: ${params.mpesaRef} - ${params.phone || 'unknown'}`
           : cycleNumber
           ? `Cycle ${cycleNumber} contribution via PayHero STK — Ref: ${params.mpesaRef} — ${params.phone || 'unknown'}`
+          : params.tenXContributionId
+          ? `10X contribution via PayHero STK — Ref: ${params.mpesaRef} — ${params.phone || 'unknown'}`
           : `M-Pesa Savings Deposit — Ref: ${params.mpesaRef} — ${params.phone || 'unknown'}`,
         processedAt,
         depositProcessed: true,
@@ -969,7 +972,7 @@ async function settlePendingDeposit(params: {
   if (!claimedTxn) {
     const pendingTxn = await Transaction.findOne({
       checkoutRequestId: params.checkoutRequestId,
-      type: params.walletPayment ? 'wallet_deposit' : 'deposit',
+      type: params.walletPayment ? 'wallet_deposit' : params.tenXContributionId ? 'tenx_contribution' : 'deposit',
     }).select('_id status depositProcessed');
 
     if (pendingTxn) {
@@ -1149,12 +1152,13 @@ async function findReusablePendingDepositTransaction(params: {
   amount: number;
   phone: string;
   walletPayment?: boolean;
+  tenXPayment?: boolean;
 }) {
   const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
 
   return Transaction.findOne({
     memberId: params.memberId,
-    type: params.walletPayment ? 'wallet_deposit' : 'deposit',
+    type: params.walletPayment ? 'wallet_deposit' : params.tenXPayment ? 'tenx_contribution' : 'deposit',
     status: 'pending',
     depositProcessed: { $ne: true },
     amount: params.amount,
@@ -1173,15 +1177,18 @@ async function createOrGetPendingDepositTransaction(params: {
   checkoutRequestId: string;
   cycleNumber?: number;
   walletPayment?: boolean;
+  tenXPayment?: boolean;
 }) {
-  const transactionType = params.walletPayment ? 'wallet_deposit' : 'deposit';
+  const transactionType = params.walletPayment ? 'wallet_deposit' : params.tenXPayment ? 'tenx_contribution' : 'deposit';
   const feeAmounts = calculateTransactionAmounts(
     params.amount,
     transactionType,
-    Boolean(params.cycleNumber),
+    transactionType === 'deposit' && Boolean(params.cycleNumber),
   );
   const description = params.walletPayment
     ? `Wallet deposit - STK Pending - ${params.phone}`
+    : params.tenXPayment
+      ? `10X contribution - STK Pending - ${params.phone}`
     : `M-Pesa Savings Deposit — STK Pending — ${params.phone}`;
 
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -1203,7 +1210,7 @@ async function createOrGetPendingDepositTransaction(params: {
             description,
             status: 'pending',
             checkoutRequestId: params.checkoutRequestId,
-            cycleNumber: params.cycleNumber ?? null,
+            ...(params.cycleNumber ? { cycleNumber: params.cycleNumber } : {}),
             paymentGateway: 'payhero',
             createdBy: null,
           },
@@ -1236,6 +1243,7 @@ async function createOrGetPendingDepositTransaction(params: {
         amount: params.amount,
         phone: params.phone,
         walletPayment: params.walletPayment,
+        tenXPayment: params.tenXPayment,
       });
 
       if (existingSimilarPending?.checkoutRequestId) {
@@ -1355,12 +1363,15 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
     }
     let feeAmounts;
     try {
-      feeAmounts = calculateTransactionAmounts(numAmount, walletPayment ? 'wallet_deposit' : 'deposit', cyclePayment);
+      feeAmounts = calculateTransactionAmounts(
+        numAmount,
+        walletPayment ? 'wallet_deposit' : tenXPayment ? 'tenx_contribution' : 'deposit',
+        cyclePayment,
+      );
     } catch (error) {
       return res.status(400).json({ success: false, message: toErrorMessage(error, 'Invalid deposit amount') });
     }
-    if (cyclePayment && mongoose.connection.db) {
-
+    if (mongoose.connection.db) {
           if (tenXPayment) {
             const member = await Member.findOne({ _id: memberId, is10XMember: true }).select('_id');
             const periodKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
@@ -1389,15 +1400,17 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
                 });
             tenXContributionId = contribution ? String(contribution._id) : undefined;
           }
-      const activeCycle = await mongoose.connection.db.collection('cycles').findOne(
-        { cycle_number: cycleNumber },
-        { sort: { cycle_number: -1 } },
-      );
-      const selectedMemberIds = Array.isArray(activeCycle?.member_ids)
-        ? activeCycle.member_ids.map((id: unknown) => String(id))
-        : null;
-      if (selectedMemberIds && !selectedMemberIds.includes(String(memberId))) {
-        return res.status(403).json({ success: false, message: 'You are not selected to participate in this cycle' });
+      if (cyclePayment) {
+        const activeCycle = await mongoose.connection.db.collection('cycles').findOne(
+          { cycle_number: cycleNumber },
+          { sort: { cycle_number: -1 } },
+        );
+        const selectedMemberIds = Array.isArray(activeCycle?.member_ids)
+          ? activeCycle.member_ids.map((id: unknown) => String(id))
+          : null;
+        if (selectedMemberIds && !selectedMemberIds.includes(String(memberId))) {
+          return res.status(403).json({ success: false, message: 'You are not selected to participate in this cycle' });
+        }
       }
     }
 
@@ -1406,6 +1419,7 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
       amount: numAmount,
       phone: mpesaPhone,
       walletPayment,
+      tenXPayment,
     });
 
     if (reusablePendingTxn?.checkoutRequestId) {
@@ -1419,6 +1433,7 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
         cyclePayment,
         cycleNumber,
         tenXContributionId,
+        tenXPayment,
         walletPayment,
         createdAt: Date.now(),
       });
@@ -1451,6 +1466,7 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
         cyclePayment,
         cycleNumber,
         tenXContributionId,
+        tenXPayment,
         walletPayment,
         createdAt: Date.now(),
       });
@@ -1505,6 +1521,7 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
       checkoutRequestId,
       cycleNumber,
       walletPayment,
+      tenXPayment,
     });
     if (tenXContributionId) {
       await TenXContribution.findByIdAndUpdate(tenXContributionId, { payment_id: txnDoc._id });
@@ -1522,6 +1539,7 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
       cyclePayment,
       cycleNumber,
       tenXContributionId,
+      tenXPayment,
       walletPayment,
       createdAt: Date.now(),
     });
@@ -1540,21 +1558,23 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
 });
 
 async function recordDeposit(memberId: string, amount: number, phone: string, mpesaRef: string, cycleNumber?: number, checkoutRequestId?: string, tenXContributionId?: string, walletPayment?: boolean) {
-  const feeAmounts = calculateTransactionAmounts(amount, walletPayment ? 'wallet_deposit' : 'deposit', Boolean(cycleNumber));
+  const feeAmounts = calculateTransactionAmounts(amount, walletPayment ? 'wallet_deposit' : tenXContributionId ? 'tenx_contribution' : 'deposit', Boolean(cycleNumber));
   const creditedAmount = feeAmounts.netAmount;
   const transactionRef = createTransactionRef();
   await Transaction.create({
     transactionRef,
     memberId,
-    type: walletPayment ? 'wallet_deposit' : 'deposit',
+    type: walletPayment ? 'wallet_deposit' : tenXContributionId ? 'tenx_contribution' : 'deposit',
     paymentGateway: 'payhero',
-    cycleNumber: cycleNumber ?? null,
+    ...(cycleNumber ? { cycleNumber } : {}),
     amount: feeAmounts.grossAmount,
     ...feeAmounts,
     description: walletPayment
       ? `Wallet deposit via PayHero STK - Ref: ${mpesaRef} - ${phone}`
       : cycleNumber
       ? `Cycle ${cycleNumber} contribution via PayHero STK — Ref: ${mpesaRef} — ${phone}`
+      : tenXContributionId
+      ? `10X contribution via PayHero STK — Ref: ${mpesaRef} — ${phone}`
       : `M-Pesa Savings Deposit — Ref: ${mpesaRef} — ${phone}`,
     status: 'completed',
     checkoutRequestId: checkoutRequestId || null,

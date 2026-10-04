@@ -3,7 +3,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface ITransaction extends Document {
   transactionRef: string;
   memberId: mongoose.Types.ObjectId;
-  type: 'deposit' | 'wallet_deposit' | 'withdrawal' | 'loan_disbursement' | 'loan_repayment' | 'share_purchase' | 'share_transfer' | 'dividend' | 'savings_interest' | 'registration_fee';
+  type: 'deposit' | 'wallet_deposit' | 'tenx_contribution' | 'withdrawal' | 'loan_disbursement' | 'loan_repayment' | 'share_purchase' | 'share_transfer' | 'dividend' | 'savings_interest' | 'registration_fee';
   amount: number;
   grossAmount?: number;
   feeAmount?: number;
@@ -36,7 +36,7 @@ const TransactionSchema = new Schema<ITransaction>({
   },
   type: { 
     type: String, 
-    enum: ['deposit', 'wallet_deposit', 'withdrawal', 'loan_disbursement', 'loan_repayment', 'share_purchase', 'share_transfer', 'dividend', 'savings_interest', 'registration_fee'],
+    enum: ['deposit', 'wallet_deposit', 'tenx_contribution', 'withdrawal', 'loan_disbursement', 'loan_repayment', 'share_purchase', 'share_transfer', 'dividend', 'savings_interest', 'registration_fee'],
     required: true 
   },
   amount: { 
@@ -72,7 +72,7 @@ const TransactionSchema = new Schema<ITransaction>({
   checkoutRequestId: { type: String, default: null },
   mpesaRef: { type: String, default: null },
   paymentGateway: { type: String, default: null },
-  cycleNumber: { type: Number, default: null },
+  cycleNumber: { type: Number, default: undefined, sparse: true },
   loanId: { type: String, default: null },
   depositProcessed: { type: Boolean, default: false },
 });

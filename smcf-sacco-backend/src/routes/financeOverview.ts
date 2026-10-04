@@ -136,6 +136,7 @@ router.get('/', protect, authorize(...STAFF_ROLES), async (req, res, next) => {
           loanDisbursements: summary.byType.loan_disbursement?.amount || 0,
           loanRepayments: summary.byType.loan_repayment?.amount || 0,
           sharePurchases: summary.byType.share_purchase?.amount || 0,
+          tenXContributions: summary.byType.tenx_contribution?.amount || 0,
         },
         organizationalFunds: {
           income: transactionFees + loanInterest + adjustmentIncome,

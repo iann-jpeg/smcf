@@ -120,6 +120,14 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
   const feeAmount = paymentType === "cycle" ? 0 : 10;
   const netAmount = Math.max(0, amountNum - feeAmount);
   const minimumAmount = paymentType === "cycle" ? 1 : 11;
+  const destinationLabel = paymentType === "wallet"
+    ? "your wallet"
+    : paymentType === "cycle"
+      ? `Cycle${cycleNumber ? ` #${cycleNumber}` : ""}`
+      : paymentType === "tenx"
+        ? "the 10X Group"
+        : "your savings account";
+  const creditVerb = paymentType === "cycle" || paymentType === "tenx" ? "Contributing" : "Depositing";
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) { stopPolling(); onClose(); } }}>
@@ -291,7 +299,7 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
             <div className="space-y-1">
               <h3 className="font-heading font-bold text-lg text-green-700 dark:text-green-400">Deposit Confirmed!</h3>
               <p className="text-muted-foreground text-sm max-w-xs">
-                KES {netAmount.toLocaleString()} has been added to your savings account.
+                {creditVerb} KES {netAmount.toLocaleString()} to {destinationLabel}.
               </p>
             </div>
 
