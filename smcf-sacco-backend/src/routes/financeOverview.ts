@@ -2,6 +2,7 @@ import { Router } from 'express';
 import AuditLog from '../models/AuditLog';
 import Transaction from '../models/Transaction';
 import Loan from '../models/Loan';
+import FinancialStatementAdjustment from '../models/FinancialStatementAdjustment';
 import { protect, authorize } from '../middleware/auth';
 
 const router = Router();
@@ -23,7 +24,7 @@ router.get('/', protect, authorize(...STAFF_ROLES), async (req, res, next) => {
 
     const trendStart = new Date(startDate);
     trendStart.setMonth(trendStart.getMonth() - 5);
-    const [transactions, completedSummary, auditLogs, monthlySummary, loanInterestSummary] = await Promise.all([
+    const [transactions, completedSummary, auditLogs, monthlySummary, loanInterestSummary, approvedAdjustments] = await Promise.all([
       Transaction.find(completedFilter)
         .populate('memberId', 'name memberId')
         .sort({ processedAt: -1 })
@@ -61,6 +62,11 @@ router.get('/', protect, authorize(...STAFF_ROLES), async (req, res, next) => {
         { $match: { status: { $in: ['disbursed', 'active', 'completed', 'defaulted'] } } },
         { $group: { _id: null, total: { $sum: '$totalInterest' } } },
       ]),
+      FinancialStatementAdjustment.find({
+        status: 'approved',
+        startDate: { $lte: endDate },
+        endDate: { $gte: startDate },
+      }).sort({ createdAt: -1 }).lean(),
     ]);
 
     const summary = completedSummary.reduce(
@@ -84,6 +90,34 @@ router.get('/', protect, authorize(...STAFF_ROLES), async (req, res, next) => {
       0,
     );
     const loanInterest = Number(loanInterestSummary[0]?.total || 0);
+    const isExpenseAdjustment = (adjustment: { lineKey?: string; category?: string }) =>
+      /expense|cost|charge|tax|hosting|domain|maintenance|bank/i.test(
+        `${adjustment.lineKey || ''} ${adjustment.category || ''}`,
+      );
+    const expenseAdjustments = approvedAdjustments.filter(isExpenseAdjustment);
+    const incomeAdjustments = approvedAdjustments.filter((adjustment) => !isExpenseAdjustment(adjustment));
+    const adjustmentIncome = incomeAdjustments.reduce((total, adjustment) => total + Math.max(0, Number(adjustment.amount || 0)), 0);
+    const adjustmentExpenses = expenseAdjustments.reduce((total, adjustment) => total + Math.abs(Number(adjustment.amount || 0)), 0);
+    const expenseBreakdown = {
+      hosting: 0,
+      domain: 0,
+      paymentApi: 0,
+      maintenance: 0,
+      bankCharges: 0,
+      taxes: 0,
+      other: 0,
+    };
+    expenseAdjustments.forEach((adjustment) => {
+      const text = `${adjustment.lineKey || ''} ${adjustment.category || ''}`.toLowerCase();
+      const key = text.includes('host') ? 'hosting'
+        : text.includes('domain') ? 'domain'
+          : text.includes('payment') || text.includes('api') ? 'paymentApi'
+            : text.includes('maint') || text.includes('repair') ? 'maintenance'
+              : text.includes('bank') || text.includes('charge') ? 'bankCharges'
+                : text.includes('tax') ? 'taxes'
+                  : 'other';
+      expenseBreakdown[key] += Math.abs(Number(adjustment.amount || 0));
+    });
     const monthly = monthlySummary.map((item) => ({
       label: new Date(Number(item._id.year), Number(item._id.month) - 1, 1).toLocaleDateString('en-KE', { month: 'short' }),
       income: Number(item.income || 0),
@@ -104,14 +138,17 @@ router.get('/', protect, authorize(...STAFF_ROLES), async (req, res, next) => {
           sharePurchases: summary.byType.share_purchase?.amount || 0,
         },
         organizationalFunds: {
-          income: transactionFees + loanInterest,
-          expenses: 0,
+          income: transactionFees + loanInterest + adjustmentIncome,
+          expenses: adjustmentExpenses,
           transactionFees,
           loanInterest,
-          otherIncome: 0,
-          netPosition: transactionFees + loanInterest,
+          otherIncome: adjustmentIncome,
+          netPosition: transactionFees + loanInterest + adjustmentIncome - adjustmentExpenses,
           classificationRequired: summary.verifiedTransactionCount,
-          message: 'Expenses are not classified in the current ledger and are shown as zero until finance records are entered.',
+          approvedAdjustmentCount: approvedAdjustments.length,
+          message: approvedAdjustments.length
+            ? 'Approved finance adjustments are included in income and expense totals.'
+            : 'No approved finance adjustments exist for this period. Expense totals reflect classified records only.',
         },
         monthlyPerformance: monthly,
         incomeSources: {
@@ -119,14 +156,8 @@ router.get('/', protect, authorize(...STAFF_ROLES), async (req, res, next) => {
           loanInterest,
           otherIncome: 0,
         },
-        expenseBreakdown: {
-          hosting: 0,
-          domain: 0,
-          paymentApi: 0,
-          maintenance: 0,
-          bankCharges: 0,
-          taxes: 0,
-        },
+        expenseBreakdown,
+        approvedAdjustments,
         recentTransactions: transactions,
         recentAuditActivity: auditLogs,
       },

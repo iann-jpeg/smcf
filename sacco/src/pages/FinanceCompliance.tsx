@@ -39,16 +39,26 @@ type FinanceOverview = {
     loanInterest?: number;
     otherIncome?: number;
     netPosition?: number;
+    approvedAdjustmentCount?: number;
   };
   monthlyPerformance?: { label: string; income: number; expenses: number; volume: number }[];
   incomeSources?: { transactionFees: number; loanInterest: number; otherIncome: number };
   expenseBreakdown?: Record<string, number>;
+  approvedAdjustments?: Array<{ _id: string; category: string; lineKey: string; amount: number; note: string; status: string }>;
   recentTransactions: FinanceTransaction[];
   recentAuditActivity: AuditActivity[];
 };
 
 type FinancialStatementOverview = {
+  netProfitOrLoss?: number;
+  totalAssets?: number;
+  totalLiabilities?: number;
+  totalEquity?: number;
+  openingCashBalance?: number;
   closingCashBalance?: number;
+  cashMovementSummary?: number;
+  statementStatus?: { income?: string; balance?: string; cash?: string };
+  historyCount?: number;
 };
 
 function kes(value: unknown) {
@@ -87,6 +97,8 @@ export default function FinanceCompliance() {
     { name: "Loan Interest", value: incomeSources.loanInterest, color: "#c9a227" },
     { name: "Other Income", value: incomeSources.otherIncome, color: "#7c3aed" },
   ];
+  const statementStatus = statements?.statementStatus ?? {};
+  const approvedAdjustments = finance?.approvedAdjustments ?? [];
 
   const downloadKraReport = () => {
     exportKraFilingReport({
@@ -141,6 +153,25 @@ export default function FinanceCompliance() {
       </div>
 
       <Card>
+        <CardHeader><CardTitle className="text-lg">Statement Engine</CardTitle><p className="text-sm text-muted-foreground">Live values from the income statement, balance sheet, and cash-flow calculations.</p></CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            ["Net profit or loss", statements?.netProfitOrLoss],
+            ["Total assets", statements?.totalAssets],
+            ["Total liabilities", statements?.totalLiabilities],
+            ["Total equity", statements?.totalEquity],
+            ["Opening cash", statements?.openingCashBalance],
+            ["Closing cash", statements?.closingCashBalance],
+            ["Cash movement", statements?.cashMovementSummary],
+            ["Generated statements", statements?.historyCount],
+          ].map(([label, value]) => <div key={String(label)} className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 text-lg font-semibold">{label === "Generated statements" ? (value ?? 0) : kes(value)}</p></div>)}
+        </CardContent>
+        <CardContent className="flex flex-wrap gap-2 border-t pt-4 text-sm">
+          {Object.entries(statementStatus).map(([name, status]) => <Badge key={name} variant={status === "valid" ? "default" : "destructive"}>{readableLabel(name)}: {status}</Badge>)}
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><TrendingUp className="h-5 w-5" /> Income vs Expenses</CardTitle><p className="text-sm text-muted-foreground">Monthly performance</p></CardHeader>
         <CardContent className="h-72">
           <ResponsiveContainer width="100%" height="100%">
@@ -151,7 +182,7 @@ export default function FinanceCompliance() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><CircleDollarSign className="h-5 w-5" /> Income Sources</CardTitle></CardHeader><CardContent className="grid gap-4 md:grid-cols-2"><div className="h-56"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={sourceChart} dataKey="value" nameKey="name" innerRadius={55} outerRadius={82} paddingAngle={2}>{sourceChart.map((entry) => <Cell key={entry.name} fill={entry.color} />)}</Pie><Tooltip formatter={(value: number) => kes(value)} /></PieChart></ResponsiveContainer></div><div className="space-y-3 self-center">{sourceChart.map((entry) => <div key={entry.name} className="flex justify-between gap-4 text-sm"><span>{entry.name}</span><strong>{kes(entry.value)}</strong></div>)}</div></CardContent></Card>
-        <Card><CardHeader><CardTitle className="text-lg">Expense Breakdown</CardTitle></CardHeader><CardContent className="space-y-3">{Object.entries({ hosting: expenses.hosting, domain: expenses.domain, paymentApi: expenses.paymentApi, maintenance: expenses.maintenance, bankCharges: expenses.bankCharges, taxes: expenses.taxes }).map(([key, value]) => <div key={key} className="flex justify-between text-sm"><span className="capitalize text-muted-foreground">{readableLabel(key)}</span><strong>{kes(value)}</strong></div>)}<div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">Expense categories are ready for classification. No expense records are currently stored in the SACCO ledger.</div></CardContent></Card>
+        <Card><CardHeader><CardTitle className="text-lg">Expense Breakdown</CardTitle></CardHeader><CardContent className="space-y-3">{Object.entries({ hosting: expenses.hosting, domain: expenses.domain, paymentApi: expenses.paymentApi, maintenance: expenses.maintenance, bankCharges: expenses.bankCharges, taxes: expenses.taxes, other: expenses.other }).map(([key, value]) => <div key={key} className="flex justify-between text-sm"><span className="capitalize text-muted-foreground">{readableLabel(key)}</span><strong>{kes(value)}</strong></div>)}<div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">{approvedAdjustments.length ? `${approvedAdjustments.length} approved finance adjustment(s) included.` : "No approved expense adjustments are recorded for this period."}</div></CardContent></Card>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -159,7 +190,7 @@ export default function FinanceCompliance() {
         <Card><CardHeader><CardTitle className="text-lg">Organizational Finance</CardTitle></CardHeader><CardContent className="space-y-3"><div className="flex justify-between"><span className="text-muted-foreground">Recorded income</span><strong>{kes(organizationalFunds.income)}</strong></div><div className="flex justify-between"><span className="text-muted-foreground">Recorded expenses</span><strong>{kes(organizationalFunds.expenses)}</strong></div><div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">{organizationalFunds.message}</div><p className="text-xs text-muted-foreground">Unclassified verified transactions: {organizationalFunds.classificationRequired ?? 0}</p></CardContent></Card>
       </div>
 
-      <Card><CardHeader><CardTitle className="text-lg">Recent Verified Transactions</CardTitle></CardHeader><CardContent>{recentTransactions.length === 0 ? <p className="py-4 text-sm text-muted-foreground">No verified transactions in the selected period.</p> : <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Member</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>{recentTransactions.map((transaction) => <TableRow key={transaction._id}><TableCell>{transaction.processedAt ? new Date(transaction.processedAt).toLocaleDateString() : "—"}</TableCell><TableCell className="capitalize">{readableTransactionType(transaction.type)}</TableCell><TableCell>{transaction.memberId?.name ?? "—"}</TableCell><TableCell className="text-right font-medium">{kes(transaction.amount)}</TableCell><TableCell><Badge>Verified</Badge></TableCell></TableRow>)}</TableBody></Table></div>}</CardContent></Card>
+      <Card><CardHeader><CardTitle className="text-lg">Recent Verified Transactions</CardTitle></CardHeader><CardContent>{recentTransactions.length === 0 ? <p className="py-4 text-sm text-muted-foreground">No verified transactions in the selected period.</p> : <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Member</TableHead><TableHead className="text-right">Charged</TableHead><TableHead className="text-right">Fee</TableHead><TableHead className="text-right">Credited</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>{recentTransactions.map((transaction) => <TableRow key={transaction._id}><TableCell>{transaction.processedAt ? new Date(transaction.processedAt).toLocaleDateString() : "—"}</TableCell><TableCell className="capitalize">{readableTransactionType(transaction.type)}</TableCell><TableCell>{transaction.memberId?.name ?? "—"}</TableCell><TableCell className="text-right font-medium">{kes(transaction.amount)}</TableCell><TableCell className="text-right">{kes(transaction.feeAmount)}</TableCell><TableCell className="text-right">{kes((transaction.amount || 0) - (transaction.feeAmount || 0))}</TableCell><TableCell><Badge>Verified</Badge></TableCell></TableRow>)}</TableBody></Table></div>}</CardContent></Card>
 
       <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><FileCheck2 className="h-5 w-5" /> Recent Audit Activity</CardTitle></CardHeader><CardContent>{recentAuditActivity.length === 0 ? <p className="py-4 text-sm text-muted-foreground">No audit activity in the selected period.</p> : <div className="space-y-2">{recentAuditActivity.map((entry) => <div key={entry._id} className="flex justify-between gap-4 border-b py-2 text-sm last:border-0"><span>{entry.action} <span className="text-muted-foreground">on {entry.tableName}</span></span><span className="shrink-0 text-xs text-muted-foreground">{entry.createdAt ? new Date(entry.createdAt).toLocaleString() : "—"}</span></div>)}</div>}</CardContent></Card>
     </div>
