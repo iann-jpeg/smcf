@@ -437,7 +437,7 @@ setInterval(() => {
 }, 10 * 60 * 1000);
 
 /** Query PayHero for the current status of an STK push by its request ID. */
-async function queryPayHeroStatus(checkoutRequestId: string): Promise<{
+async function queryPayHeroStatus(reference: string): Promise<{
   success: boolean;
   status: string;
   mpesaReceiptNumber?: string;
@@ -451,10 +451,10 @@ async function queryPayHeroStatus(checkoutRequestId: string): Promise<{
   try {
     if (!username || !password) return { success: false, status: 'pending' };
     const auth = Buffer.from(`${username}:${password}`).toString('base64');
-    const res = await fetch(`${baseUrl}/api/global/transaction-status`, {
-      method: 'POST',
-      headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ request_id: checkoutRequestId }),
+    const statusUrl = `${baseUrl}/api/v2/transaction-status?reference=${encodeURIComponent(reference)}`;
+    const res = await fetch(statusUrl, {
+      method: 'GET',
+      headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' },
     });
     if (!res.ok) return { success: false, status: 'pending' };
     const data: unknown = await res.json().catch(() => ({}));
@@ -463,7 +463,18 @@ async function queryPayHeroStatus(checkoutRequestId: string): Promise<{
     const payload = asRecord(getPathValue(dataRecord, ['data', 'response'])) ?? asRecord(dataRecord.data) ?? dataRecord;
     const rawResultCode = findProviderValue(data, ['ResultCode', 'resultCode', 'result_code']);
     const resultCode = typeof rawResultCode === 'string' || typeof rawResultCode === 'number' ? rawResultCode : undefined;
-    const receipt = findProviderValue(data, ['MpesaReceiptNumber', 'receipt_number', 'receiptNumber', 'TransactionID', 'transactionId', 'transaction_id']);
+    const receipt = findProviderValue(data, [
+      'provider_reference',
+      'providerReference',
+      'third_party_reference',
+      'thirdPartyReference',
+      'MpesaReceiptNumber',
+      'receipt_number',
+      'receiptNumber',
+      'TransactionID',
+      'transactionId',
+      'transaction_id',
+    ]);
     const resultDesc = findProviderValue(data, ['ResultDesc', 'resultDesc', 'ResultDescription', 'message', 'description']);
     const rawAmount = findProviderValue(data, ['Amount', 'amount']);
     const rawStatus = findProviderValue(data, ['status', 'transaction_status', 'payment_status']);
@@ -476,7 +487,7 @@ async function queryPayHeroStatus(checkoutRequestId: string): Promise<{
     const normalizedReceipt = typeof receipt === 'string' && receipt.trim()
       ? receipt.trim()
       : isSuccess
-        ? `PAYHERO-${checkoutRequestId}`
+        ? `PAYHERO-${reference}`
         : '';
     return {
       success: true,
@@ -2028,7 +2039,17 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
     const success = isSuccessfulProviderStatus(status);
     const amountValue = findProviderValue(payload, ['amount', 'Amount']);
     const callbackAmount = amountValue === undefined ? undefined : Number(amountValue);
-    const rawMpesaRef = findProviderValue(payload, ['MpesaReceiptNumber', 'receipt_number', 'receiptNumber', 'transaction_id', 'TransactionID']);
+    const rawMpesaRef = findProviderValue(payload, [
+      'provider_reference',
+      'providerReference',
+      'third_party_reference',
+      'thirdPartyReference',
+      'MpesaReceiptNumber',
+      'receipt_number',
+      'receiptNumber',
+      'transaction_id',
+      'TransactionID',
+    ]);
     const mpesaRef = typeof rawMpesaRef === 'string' && rawMpesaRef.trim()
       ? rawMpesaRef.trim()
       : success ? `PAYHERO-${checkoutRequestId || externalReference || Date.now()}` : undefined;
