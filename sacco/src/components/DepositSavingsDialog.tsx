@@ -69,8 +69,17 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
       try {
         const res = await api.get(`/mpesa/status/${id}`);
         const d = ((res as any)?.data ?? res) as any;
-        const status = String(d?.status ?? "").toLowerCase();
-        if (["success", "successful", "completed", "complete", "paid", "approved", "confirmed"].includes(status)) {
+        const statusValues = [
+          d?.status,
+          d?.providerStatus,
+          d?.paymentStatus,
+          d?.transaction_status,
+        ].map((value) => String(value ?? "").trim().toLowerCase());
+        const isFinanciallyComplete = String(d?.financialPostingStatus ?? "").toLowerCase() === "completed";
+        const isSuccess = statusValues.some((value) => ["success", "successful", "completed", "complete", "paid", "approved", "confirmed"].includes(value))
+          && (!d?.financialPostingStatus || isFinanciallyComplete);
+        const isFailed = statusValues.some((value) => ["failed", "cancelled", "canceled", "declined", "reversed"].includes(value));
+        if (isSuccess) {
           stopPolling();
           playAtmDepositSound();
           setMpesaRef(d.mpesaRef ?? null);
@@ -84,7 +93,7 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
           queryClient.invalidateQueries({ queryKey: ["my-guarantor-requests"] });
           queryClient.invalidateQueries({ queryKey: ["members"] });
           queryClient.invalidateQueries({ queryKey: ["transactions"] });
-        } else if (status === "failed" || status === "cancelled" || status === "canceled") {
+        } else if (isFailed) {
           stopPolling();
           setFailReason(d.resultDesc || "Payment cancelled or failed. Please try again.");
           setStep("failed");
