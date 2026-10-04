@@ -518,6 +518,13 @@ async function pollSACCOPayment(
 
     if (status === 'success' && mpesaReceiptNumber) {
       const confirmedAmount = paidAmt || amount;
+      await Transaction.findByIdAndUpdate(pendingTxnId, {
+        providerStatus: 'success',
+        financialPostingStatus: 'pending',
+        reconciliationStatus: 'none',
+        lastReconciliationAt: new Date(),
+        $inc: { reconciliationAttempts: 1 },
+      });
       try {
         if (type === 'deposit') {
           const pending = pendingDeposits.get(checkoutRequestId);
@@ -590,21 +597,32 @@ async function pollSACCOPayment(
           const r = pendingRepayments.get(checkoutRequestId);
           if (r) { r.status = 'success'; r.mpesaRef = mpesaReceiptNumber; r.amount = confirmedAmount; r.loanCompleted = result.loanCompleted; pendingRepayments.set(checkoutRequestId, r); }
         }
+        await Transaction.findByIdAndUpdate(pendingTxnId, {
+          financialPostingStatus: 'completed',
+          reconciliationStatus: 'reconciled',
+        }).catch(() => {});
       } catch (err) {
         console.error('[pollSACCOPayment] post-confirm error', err);
-        await Transaction.findByIdAndUpdate(pendingTxnId, { status: 'failed', processedAt: new Date() }).catch(() => {});
+        await Transaction.findByIdAndUpdate(pendingTxnId, {
+          providerStatus: 'success',
+          financialPostingStatus: 'failed',
+          reconciliationStatus: 'requires_reconciliation',
+          lastReconciliationAt: new Date(),
+          $inc: { reconciliationAttempts: 1 },
+          processedAt: new Date(),
+        }).catch(() => {});
         if (type === 'deposit') {
           const d = pendingDeposits.get(checkoutRequestId);
-          if (d) { d.status = 'failed'; d.resultDesc = 'Processing error after payment confirmed'; pendingDeposits.set(checkoutRequestId, d); }
+          if (d) { d.status = 'pending'; d.resultDesc = 'Payment confirmed; financial posting will be retried'; pendingDeposits.set(checkoutRequestId, d); }
         } else if (type === 'share_purchase') {
           const s = pendingSharePurchases.get(checkoutRequestId);
-          if (s) { s.status = 'failed'; s.resultDesc = 'Processing error after payment confirmed'; pendingSharePurchases.set(checkoutRequestId, s); }
+          if (s) { s.status = 'pending'; s.resultDesc = 'Payment confirmed; financial posting will be retried'; pendingSharePurchases.set(checkoutRequestId, s); }
         } else if (type === 'registration_fee') {
           const f = pendingRegistrationFees.get(checkoutRequestId);
-          if (f) { f.status = 'failed'; f.resultDesc = 'Processing error after payment confirmed'; pendingRegistrationFees.set(checkoutRequestId, f); }
+          if (f) { f.status = 'pending'; f.resultDesc = 'Payment confirmed; financial posting will be retried'; pendingRegistrationFees.set(checkoutRequestId, f); }
         } else {
           const r = pendingRepayments.get(checkoutRequestId);
-          if (r) { r.status = 'failed'; r.resultDesc = 'Processing error after payment confirmed'; pendingRepayments.set(checkoutRequestId, r); }
+          if (r) { r.status = 'pending'; r.resultDesc = 'Payment confirmed; financial posting will be retried'; pendingRepayments.set(checkoutRequestId, r); }
         }
       }
       return;
@@ -2057,7 +2075,14 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
     if (Number.isFinite(callbackAmount) && callbackAmount !== Number(transaction.amount)) {
       await Transaction.findOneAndUpdate(
         { _id: transaction._id, status: 'pending' },
-        { status: 'failed', processedAt: new Date() },
+        {
+          providerStatus: 'success',
+          financialPostingStatus: 'failed',
+          reconciliationStatus: 'requires_reconciliation',
+          lastReconciliationAt: new Date(),
+          $inc: { reconciliationAttempts: 1 },
+          processedAt: new Date(),
+        },
       );
       console.warn('[payhero callback] amount mismatch', {
         checkoutRequestId: settlementCheckoutId,
@@ -2069,6 +2094,13 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
 
     const paidAmount = Number.isFinite(callbackAmount) ? Number(callbackAmount) : Number(transaction.amount);
     const memberId = String(transaction.memberId);
+    await Transaction.findByIdAndUpdate(transaction._id, {
+      providerStatus: 'success',
+      financialPostingStatus: 'pending',
+      reconciliationStatus: 'none',
+      lastReconciliationAt: new Date(),
+      $inc: { reconciliationAttempts: 1 },
+    });
 
     if (transaction.type === 'deposit' || transaction.type === 'wallet_deposit' || transaction.type === 'tenx_contribution') {
       const pending = pendingDeposits.get(settlementCheckoutId);
@@ -2090,6 +2122,10 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
         pending.amount = paidAmount;
         pendingDeposits.set(settlementCheckoutId, pending);
       }
+      await Transaction.findByIdAndUpdate(transaction._id, {
+        financialPostingStatus: 'completed',
+        reconciliationStatus: 'reconciled',
+      });
       return;
     }
 
@@ -2109,6 +2145,9 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
           processedAt: new Date(),
           depositProcessed: true,
           paymentGateway: 'payhero',
+          providerStatus: 'success',
+          financialPostingStatus: 'completed',
+          reconciliationStatus: 'reconciled',
         },
         { new: true },
       );
@@ -2142,6 +2181,10 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
         pending.amount = paidAmount;
         pendingRegistrationFees.set(settlementCheckoutId, pending);
       }
+      await Transaction.findByIdAndUpdate(transaction._id, {
+        financialPostingStatus: 'completed',
+        reconciliationStatus: 'reconciled',
+      });
       return;
     }
 
@@ -2149,7 +2192,18 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
       const repaymentAmounts = calculateTransactionAmounts(paidAmount, 'loan_repayment');
       const claimed = await Transaction.findOneAndUpdate(
         { _id: transaction._id, status: 'pending', depositProcessed: { $ne: true } },
-        { status: 'completed', mpesaRef, amount: paidAmount, ...repaymentAmounts, processedAt: new Date(), depositProcessed: true, paymentGateway: 'payhero' },
+        {
+          status: 'completed',
+          mpesaRef,
+          amount: paidAmount,
+          ...repaymentAmounts,
+          processedAt: new Date(),
+          depositProcessed: true,
+          paymentGateway: 'payhero',
+          providerStatus: 'success',
+          financialPostingStatus: 'completed',
+          reconciliationStatus: 'reconciled',
+        },
         { new: true },
       );
       if (!claimed) return;
@@ -2171,6 +2225,19 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
     }
   } catch (err) {
     console.error('[payhero callback error]', toErrorMessage(err, 'Unable to process callback'));
+    const checkoutRequestId = extractCheckoutRequestId(asRecord(req.body));
+    if (checkoutRequestId) {
+      await Transaction.findOneAndUpdate(
+        { checkoutRequestId },
+        {
+          providerStatus: 'success',
+          financialPostingStatus: 'failed',
+          reconciliationStatus: 'requires_reconciliation',
+          lastReconciliationAt: new Date(),
+          $inc: { reconciliationAttempts: 1 },
+        },
+      ).catch(() => {});
+    }
   }
 });
 
@@ -2373,7 +2440,7 @@ router.get('/status/:checkoutRequestId', protect, async (req: AuthRequest, res: 
     const txn = await Transaction.findOne({
       checkoutRequestId,
       type: { $in: ['deposit', 'wallet_deposit', 'share_purchase', 'registration_fee', 'loan_repayment', 'tenx_contribution'] },
-    }).select('status mpesaRef amount type depositProcessed memberId loanId cycleNumber grossAmount netAmount');
+    }).select('status providerStatus financialPostingStatus reconciliationStatus mpesaRef amount type depositProcessed memberId loanId cycleNumber grossAmount netAmount');
     if (txn) {
       if (txn.status === 'pending') {
         const provider = await queryPayHeroStatus(checkoutRequestId);
@@ -2399,11 +2466,19 @@ router.get('/status/:checkoutRequestId', protect, async (req: AuthRequest, res: 
             pendingDeposit?.phone || pendingShare?.phone || pendingRegistration?.phone || pendingRepayment?.phone || String(member?.phone || ''),
             txn.loanId || undefined,
           );
-          const settled = await Transaction.findById(txn._id).select('status mpesaRef amount');
+          const settled = await Transaction.findById(txn._id).select('status mpesaRef amount providerStatus financialPostingStatus reconciliationStatus');
           if (settled?.status === 'completed') {
             return res.json({
               success: true,
-              data: { type: txn.type, status: 'success', mpesaRef: settled.mpesaRef, amount: settled.amount },
+              data: {
+                type: txn.type,
+                status: 'success',
+                mpesaRef: settled.mpesaRef,
+                amount: settled.amount,
+                providerStatus: settled.providerStatus,
+                financialPostingStatus: settled.financialPostingStatus,
+                reconciliationStatus: settled.reconciliationStatus,
+              },
             });
           }
         }
@@ -2415,6 +2490,9 @@ router.get('/status/:checkoutRequestId', protect, async (req: AuthRequest, res: 
           status:   txn.status === 'completed' ? 'success' : txn.status === 'failed' ? 'failed' : 'pending',
           mpesaRef: txn.mpesaRef,
           amount:   txn.amount,
+          providerStatus: txn.providerStatus,
+          financialPostingStatus: txn.financialPostingStatus,
+          reconciliationStatus: txn.reconciliationStatus,
         },
       });
     }

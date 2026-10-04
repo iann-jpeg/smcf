@@ -11,6 +11,11 @@ export interface ITransaction extends Document {
   feeType?: 'unified_transaction_fee' | 'none';
   description: string | null;
   status: 'pending' | 'completed' | 'failed' | 'reversed' | 'declined';
+  providerStatus?: 'pending' | 'success' | 'failed' | 'unknown';
+  financialPostingStatus?: 'pending' | 'completed' | 'failed';
+  reconciliationStatus?: 'none' | 'reconciled' | 'requires_reconciliation';
+  reconciliationAttempts?: number;
+  lastReconciliationAt?: Date;
   processedAt: Date;
   createdBy: mongoose.Types.ObjectId | null;
   createdAt: Date;
@@ -56,6 +61,11 @@ const TransactionSchema = new Schema<ITransaction>({
     enum: ['pending', 'completed', 'failed', 'reversed', 'declined'],
     default: 'pending' 
   },
+  providerStatus: { type: String, enum: ['pending', 'success', 'failed', 'unknown'], default: 'pending' },
+  financialPostingStatus: { type: String, enum: ['pending', 'completed', 'failed'], default: 'pending' },
+  reconciliationStatus: { type: String, enum: ['none', 'reconciled', 'requires_reconciliation'], default: 'none' },
+  reconciliationAttempts: { type: Number, default: 0 },
+  lastReconciliationAt: { type: Date, default: null },
   processedAt: { 
     type: Date, 
     default: Date.now 
@@ -82,6 +92,7 @@ TransactionSchema.index({ memberId: 1 });
 TransactionSchema.index({ type: 1 });
 TransactionSchema.index({ processedAt: -1 });
 TransactionSchema.index({ status: 1 });
+TransactionSchema.index({ providerStatus: 1, financialPostingStatus: 1 });
 TransactionSchema.index({ checkoutRequestId: 1 });
 TransactionSchema.index({ mpesaRef: 1 }, { sparse: true });
 TransactionSchema.index({ memberId: 1, cycleNumber: 1, processedAt: -1 });
