@@ -144,6 +144,9 @@ export default function Accounts() {
         qc.invalidateQueries({ queryKey: ["members"] }),
         qc.invalidateQueries({ queryKey: ["loans"] }),
         qc.invalidateQueries({ queryKey: ["dashboard-stats"] }),
+        qc.invalidateQueries({ queryKey: ["my-unified-account"] }),
+        qc.invalidateQueries({ queryKey: ["my-savings-history"] }),
+        qc.invalidateQueries({ queryKey: ["wallet"] }),
       ]);
     } catch (err: any) {
       toast.error(err?.message || "Failed to confirm payment.");

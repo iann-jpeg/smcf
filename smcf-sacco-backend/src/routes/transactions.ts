@@ -10,6 +10,8 @@ import { notifyMember } from '../utils/notify';
 import { recalculateMemberRiskScore } from '../utils/riskScore';
 import { recordSavingsDeposit } from '../utils/depositLedger';
 import { createTransactionRef } from '../utils/transactionRef';
+import Saving from '../models/Saving';
+import TenXContribution from '../models/TenXContribution';
 
 const router = Router();
 
@@ -233,6 +235,80 @@ router.patch(
           'approval',
           '/my-account'
         );
+
+      } else if (txn.type === 'wallet_deposit') {
+        const walletAmount = Number(txn.netAmount ?? Math.max(0, Number(txn.amount) - Number(txn.feeAmount || 0)));
+        if (!Number.isFinite(walletAmount) || walletAmount <= 0) {
+          return res.status(400).json({ success: false, message: 'Wallet credit amount is invalid' });
+        }
+        const reference = txn.mpesaRef || txn.transactionRef;
+        const existingWalletRecord = await Saving.findOne({
+          member_id: txn.memberId,
+          transaction_ref: reference,
+          transaction_type: 'deposit',
+        });
+        if (!existingWalletRecord) {
+          const lastWalletRecord = await Saving.findOne({ member_id: txn.memberId }).sort({ created_at: -1 });
+          const balanceBefore = Number(lastWalletRecord?.balance_after || 0);
+          const unlockDate = new Date(txn.processedAt || txn.createdAt || new Date());
+          unlockDate.setMonth(unlockDate.getMonth() + 3);
+          await Saving.create({
+            member_id: txn.memberId,
+            amount: walletAmount,
+            transaction_type: 'deposit',
+            balance_before: balanceBefore,
+            balance_after: balanceBefore + walletAmount,
+            payment_method: 'mpesa',
+            transaction_ref: reference,
+            status: 'completed',
+            lock_period_months: 3,
+            unlock_date: unlockDate,
+            maturity_status: 'locked',
+            notes: `Wallet deposit confirmed by admin (KES ${Number(txn.feeAmount || 0)} transaction fee)`,
+          });
+        }
+        await Transaction.findByIdAndUpdate(txn._id, {
+          status: 'completed',
+          providerStatus: txn.providerStatus || 'unknown',
+          financialPostingStatus: 'completed',
+          reconciliationStatus: 'reconciled',
+          mpesaRef: txn.mpesaRef || reference,
+          processedAt: new Date(),
+          depositProcessed: true,
+          description: txn.description?.replace('STK Pending', 'Confirmed by admin'),
+        });
+        notifyMember(
+          txn.memberId,
+          'Wallet Deposit Confirmed ✅',
+          `Your Wallet deposit of KES ${walletAmount.toLocaleString()} has been confirmed and added to your Wallet.`,
+          'approval',
+          '/my-account',
+        );
+
+      } else if (txn.type === 'tenx_contribution') {
+        const contribution = await TenXContribution.findOne({
+          $or: [
+            { payment_id: txn._id },
+            { transaction_reference: txn.mpesaRef || txn.transactionRef },
+          ],
+        });
+        if (contribution) {
+          contribution.status = 'SUCCESSFUL';
+          contribution.payment_date = new Date();
+          contribution.transaction_reference = txn.mpesaRef || txn.transactionRef;
+          if (Number(contribution.amount_paid || 0) === 0) {
+            contribution.amount_paid = Number(txn.netAmount ?? txn.amount);
+          }
+          await contribution.save();
+        }
+        await Transaction.findByIdAndUpdate(txn._id, {
+          status: 'completed',
+          financialPostingStatus: 'completed',
+          reconciliationStatus: 'reconciled',
+          processedAt: new Date(),
+          depositProcessed: true,
+          description: txn.description?.replace('STK Pending', 'Confirmed by admin'),
+        });
 
       } else if (txn.type === 'share_purchase') {
         // Update share capital
