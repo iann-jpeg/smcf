@@ -65,7 +65,7 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
         const response = await api.get<{ status: string; mpesaRef?: string; loanCompleted?: boolean; resultDesc?: string }>(`/mpesa/repay-status/${id}`);
         const d = ((response as any)?.data ?? response) as { status?: string; mpesaRef?: string; loanCompleted?: boolean; resultDesc?: string };
         const status = String(d.status ?? "").toLowerCase();
-        if (status === "success" || status === "completed") {
+        if (["success", "successful", "completed", "complete", "paid", "approved", "confirmed"].includes(status)) {
           stopPolling();
           setMpesaRef(d.mpesaRef ?? null);
           setLoanCompleted(!!d.loanCompleted);

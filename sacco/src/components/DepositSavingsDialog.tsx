@@ -70,7 +70,7 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
         const res = await api.get(`/mpesa/status/${id}`);
         const d = ((res as any)?.data ?? res) as any;
         const status = String(d?.status ?? "").toLowerCase();
-        if (status === "success" || status === "completed") {
+        if (["success", "successful", "completed", "complete", "paid", "approved", "confirmed"].includes(status)) {
           stopPolling();
           playAtmDepositSound();
           setMpesaRef(d.mpesaRef ?? null);

@@ -155,6 +155,11 @@ function findProviderValue(input: unknown, keys: string[], depth = 0): unknown {
   return undefined;
 }
 
+function isSuccessfulProviderStatus(value: unknown): boolean {
+  const status = String(value ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  return ['0', 'success', 'successful', 'completed', 'complete', 'paid', 'approved', 'confirmed', 'successfully_paid'].includes(status);
+}
+
 function toErrorMessage(err: unknown, fallback = 'Unknown error'): string {
   if (typeof err === 'string' && err.trim()) return err;
   const message = asRecord(err)?.message;
@@ -466,7 +471,7 @@ async function queryPayHeroStatus(checkoutRequestId: string): Promise<{
     // PayHero can report a completed payment before exposing the M-Pesa
     // receipt in the same response. Do not leave a paid transaction pending
     // just because that optional field is delayed or named differently.
-    const isSuccess = String(resultCode) === '0' || ['success', 'successful', 'completed', 'complete'].includes(status);
+    const isSuccess = isSuccessfulProviderStatus(resultCode) || isSuccessfulProviderStatus(status);
     const isFailed = !isSuccess && ((resultCode !== undefined && String(resultCode) !== '0' && String(resultCode) !== 'pending') || ['failed', 'cancelled', 'canceled', 'rejected'].includes(status));
     const normalizedReceipt = typeof receipt === 'string' && receipt.trim()
       ? receipt.trim()
@@ -2002,7 +2007,7 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
       : undefined;
     const rawStatus = findProviderValue(payload, ['status', 'transaction_status', 'ResultCode', 'resultCode']);
     const status = String(rawStatus ?? '').toLowerCase();
-    const success = ['0', 'success', 'successful', 'completed', 'complete', 'paid'].includes(status);
+    const success = isSuccessfulProviderStatus(status);
     const amountValue = findProviderValue(payload, ['amount', 'Amount']);
     const callbackAmount = amountValue === undefined ? undefined : Number(amountValue);
     const rawMpesaRef = findProviderValue(payload, ['MpesaReceiptNumber', 'receipt_number', 'receiptNumber', 'transaction_id', 'TransactionID']);
@@ -2339,8 +2344,32 @@ router.get('/status/:checkoutRequestId', protect, async (req: AuthRequest, res: 
   try {
     const { checkoutRequestId } = req.params;
 
-    // The database is authoritative. The in-memory map can still say
-    // "pending" while a callback has already completed the ledger entry.
+    // A successful in-memory result must not be hidden by a stale pending DB
+    // placeholder while the callback settlement finishes.
+    const memoryResults = [
+      pendingDeposits.get(checkoutRequestId),
+      pendingSharePurchases.get(checkoutRequestId),
+      pendingRegistrationFees.get(checkoutRequestId),
+      pendingRepayments.get(checkoutRequestId),
+    ].filter(Boolean);
+    const successfulMemoryResult = memoryResults.find((item) => item?.status === 'success');
+    if (successfulMemoryResult) {
+      const loanCompleted = 'loanCompleted' in successfulMemoryResult
+        ? successfulMemoryResult.loanCompleted
+        : undefined;
+      return res.json({
+        success: true,
+        data: {
+          status: 'success',
+          mpesaRef: successfulMemoryResult.mpesaRef,
+          amount: successfulMemoryResult.amount,
+          loanCompleted,
+        },
+      });
+    }
+
+    // The database is authoritative for pending/failed records and survives
+    // process restarts.
     const txn = await Transaction.findOne({
       checkoutRequestId,
       type: { $in: ['deposit', 'wallet_deposit', 'share_purchase', 'registration_fee', 'loan_repayment', 'tenx_contribution'] },
