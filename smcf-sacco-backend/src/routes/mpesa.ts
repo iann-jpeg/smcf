@@ -439,12 +439,20 @@ async function queryPayHeroStatus(checkoutRequestId: string): Promise<{
     const resultDesc = payload.ResultDesc ?? payload.resultDesc ?? payload.ResultDescription ?? payload.message ?? dataRecord.message;
     const rawAmount = payload.Amount ?? payload.amount;
     const status = String(payload.status ?? payload.Status ?? '').toLowerCase();
-    const isSuccess = (String(resultCode) === '0' || ['success', 'successful', 'completed', 'complete'].includes(status)) && Boolean(receipt);
+    // PayHero can report a completed payment before exposing the M-Pesa
+    // receipt in the same response. Do not leave a paid transaction pending
+    // just because that optional field is delayed or named differently.
+    const isSuccess = String(resultCode) === '0' || ['success', 'successful', 'completed', 'complete'].includes(status);
     const isFailed = !isSuccess && ((resultCode !== undefined && String(resultCode) !== '0' && String(resultCode) !== 'pending') || ['failed', 'cancelled', 'canceled', 'rejected'].includes(status));
+    const normalizedReceipt = typeof receipt === 'string' && receipt.trim()
+      ? receipt.trim()
+      : isSuccess
+        ? `PAYHERO-${checkoutRequestId}`
+        : '';
     return {
       success: true,
       status: isSuccess ? 'success' : isFailed ? 'failed' : 'pending',
-      mpesaReceiptNumber: typeof receipt === 'string' ? receipt : String(receipt || ''),
+      mpesaReceiptNumber: normalizedReceipt,
       resultCode,
       resultDesc: typeof resultDesc === 'string' ? resultDesc : undefined,
       amount: rawAmount === undefined ? undefined : Number(rawAmount),
@@ -463,27 +471,17 @@ async function pollSACCOPayment(
   phone: string,
   loanId?: string,
 ): Promise<void> {
-  const MAX_MS   = 90_000;
+  // Provider callbacks can arrive after the initial STK request has settled.
+  // Keep the transaction pending during that window instead of marking a
+  // potentially paid transaction as failed.
+  const MAX_MS   = 5 * 60_000;
   const INTERVAL = 3_000;
   const start    = Date.now();
 
   const tick = async (): Promise<void> => {
     if (Date.now() - start > MAX_MS) {
-      // Timeout — mark failed in DB and update Maps
-      await Transaction.findByIdAndUpdate(pendingTxnId, { status: 'failed', processedAt: new Date() });
-      if (type === 'deposit') {
-        const d = pendingDeposits.get(checkoutRequestId);
-        if (d) { d.status = 'failed'; d.resultDesc = 'Payment timed out'; pendingDeposits.set(checkoutRequestId, d); }
-      } else if (type === 'share_purchase') {
-        const s = pendingSharePurchases.get(checkoutRequestId);
-        if (s) { s.status = 'failed'; s.resultDesc = 'Payment timed out'; pendingSharePurchases.set(checkoutRequestId, s); }
-      } else if (type === 'registration_fee') {
-        const f = pendingRegistrationFees.get(checkoutRequestId);
-        if (f) { f.status = 'failed'; f.resultDesc = 'Payment timed out'; pendingRegistrationFees.set(checkoutRequestId, f); }
-      } else {
-        const r = pendingRepayments.get(checkoutRequestId);
-        if (r) { r.status = 'failed'; r.resultDesc = 'Payment timed out'; pendingRepayments.set(checkoutRequestId, r); }
-      }
+      // Leave the DB record and in-memory state pending. A callback may still
+      // settle it, and only an explicit provider failure is authoritative.
       return;
     }
 
@@ -511,7 +509,9 @@ async function pollSACCOPayment(
 
         } else if (type === 'share_purchase') {
           const shareAmounts = calculateTransactionAmounts(confirmedAmount, 'share_purchase');
-          await Transaction.findByIdAndUpdate(pendingTxnId, {
+          const claimedShare = await Transaction.findOneAndUpdate(
+            { _id: pendingTxnId, status: 'pending', depositProcessed: { $ne: true } },
+            {
             status: 'completed',
             mpesaRef: mpesaReceiptNumber,
             amount: confirmedAmount,
@@ -519,9 +519,13 @@ async function pollSACCOPayment(
             description: `M-Pesa Share Purchase — Ref: ${mpesaReceiptNumber} — ${phone}`,
             processedAt: new Date(),
             depositProcessed: true,
-          });
-          await Member.findByIdAndUpdate(memberId, { $inc: { shares: shareAmounts.netAmount } });
-          await recalculateMemberRiskScore(memberId);
+            },
+            { new: true },
+          );
+          if (claimedShare) {
+            await Member.findByIdAndUpdate(memberId, { $inc: { shares: shareAmounts.netAmount } });
+            await recalculateMemberRiskScore(memberId);
+          }
           const s = pendingSharePurchases.get(checkoutRequestId);
           if (s) { s.status = 'success'; s.mpesaRef = mpesaReceiptNumber; s.amount = confirmedAmount; pendingSharePurchases.set(checkoutRequestId, s); }
 
@@ -2314,7 +2318,7 @@ router.get('/status/:checkoutRequestId', protect, async (req: AuthRequest, res: 
     // Fallback: DB lookup (handles server restart where Map was cleared)
     const txn = await Transaction.findOne({
       checkoutRequestId,
-      type: { $in: ['deposit', 'share_purchase', 'registration_fee'] },
+      type: { $in: ['deposit', 'wallet_deposit', 'share_purchase', 'registration_fee', 'loan_repayment', 'tenx_contribution'] },
     }).select('status mpesaRef amount type');
     if (txn) {
       return res.json({

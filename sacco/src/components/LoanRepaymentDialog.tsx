@@ -88,7 +88,7 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
       stopPolling();
       setFailReason("Payment timed out. If you completed the payment, contact support.");
       setStep("failed");
-    }, 2 * 60 * 1000);
+    }, 5 * 60 * 1000);
   }
 
   async function handlePay() {
