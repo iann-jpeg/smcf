@@ -781,6 +781,10 @@ function looksLikeSuspended(message: string): boolean {
 
 function extractCheckoutRequestId(payload: unknown): string | undefined {
   const candidates = [
+    // PayHero's transaction-status endpoint requires its reference UUID.
+    // Prefer it over provider/legacy transaction identifiers.
+    getPathValue(payload, ['data', 'reference']),
+    getPathValue(payload, ['reference']),
     getPathValue(payload, ['data', 'TransactionReference']),
     getPathValue(payload, ['data', 'CheckoutRequestID']),
     getPathValue(payload, ['data', 'checkoutRequestId']),
@@ -790,14 +794,12 @@ function extractCheckoutRequestId(payload: unknown): string | undefined {
     getPathValue(payload, ['data', 'request_id']),
     getPathValue(payload, ['data', 'CheckoutRequestID']),
     getPathValue(payload, ['data', 'checkout_request_id']),
-    getPathValue(payload, ['data', 'reference']),
     getPathValue(payload, ['CheckoutRequestID']),
     getPathValue(payload, ['checkoutRequestId']),
     getPathValue(payload, ['checkout_request_id']),
     getPathValue(payload, ['transactionReference']),
     getPathValue(payload, ['request_id']),
     getPathValue(payload, ['requestId']),
-    getPathValue(payload, ['reference']),
   ];
 
   for (const candidate of candidates) {
