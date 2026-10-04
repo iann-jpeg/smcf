@@ -1,10 +1,16 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { AlertTriangle, Download, FileCheck2, Landmark, ReceiptText, ShieldCheck, Wallet, TrendingUp, CircleDollarSign } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 import { api } from "@/lib/api";
 import { exportKraFilingReport } from "@/lib/pdf-export";
 
@@ -74,6 +80,13 @@ function readableTransactionType(value: string) {
 }
 
 export default function FinanceCompliance() {
+  const queryClient = useQueryClient();
+  const { roles } = useAuth();
+  const { toast } = useToast();
+  const canEditFinance = roles.includes("admin") || roles.includes("treasurer");
+  const [expenseCategory, setExpenseCategory] = useState("hosting");
+  const [expenseAmount, setExpenseAmount] = useState("");
+  const [expenseNote, setExpenseNote] = useState("");
   const { data: finance, isLoading: financeLoading } = useQuery({
     queryKey: ["finance-overview"],
     queryFn: async () => api.get<FinanceOverview>("/finance/overview"),
@@ -99,6 +112,31 @@ export default function FinanceCompliance() {
   ];
   const statementStatus = statements?.statementStatus ?? {};
   const approvedAdjustments = finance?.approvedAdjustments ?? [];
+  const createExpenseMutation = useMutation({
+    mutationFn: async () => {
+      const amount = Number(expenseAmount);
+      if (!Number.isFinite(amount) || amount <= 0) throw new Error("Enter an expense amount greater than zero.");
+      if (!expenseNote.trim()) throw new Error("Add a note or reference for this expense.");
+      return api.post("/financial-statements/adjustments", {
+        periodType: "monthly",
+        year: new Date().getFullYear(),
+        month: new Date().getMonth() + 1,
+        targetStatement: "all",
+        lineKey: expenseCategory,
+        category: expenseCategory,
+        amount: -amount,
+        note: expenseNote.trim(),
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Expense recorded", description: "The expense is now included in the finance dashboard." });
+      setExpenseAmount("");
+      setExpenseNote("");
+      queryClient.invalidateQueries({ queryKey: ["finance-overview"] });
+      queryClient.invalidateQueries({ queryKey: ["finance-statements-overview"] });
+    },
+    onError: (error: Error) => toast({ title: "Could not record expense", description: error.message, variant: "destructive" }),
+  });
 
   const downloadKraReport = () => {
     exportKraFilingReport({
@@ -171,6 +209,16 @@ export default function FinanceCompliance() {
         </CardContent>
       </Card>
 
+      {canEditFinance && <Card>
+        <CardHeader><CardTitle className="text-lg">Record Expense</CardTitle><p className="text-sm text-muted-foreground">Enter a real organization expense manually. Admin entries are approved immediately; treasurer entries require approval.</p></CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-4">
+          <div className="space-y-2"><Label htmlFor="expense-category">Category</Label><select id="expense-category" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={expenseCategory} onChange={(event) => setExpenseCategory(event.target.value)}><option value="hosting">Hosting</option><option value="domain">Domain</option><option value="paymentApi">Payment API</option><option value="maintenance">Maintenance</option><option value="bankCharges">Bank Charges</option><option value="taxes">Taxes</option><option value="other">Other</option></select></div>
+          <div className="space-y-2"><Label htmlFor="expense-amount">Amount (KES)</Label><Input id="expense-amount" type="number" min="1" value={expenseAmount} onChange={(event) => setExpenseAmount(event.target.value)} placeholder="0" /></div>
+          <div className="space-y-2 md:col-span-2"><Label htmlFor="expense-note">Reference / note</Label><Textarea id="expense-note" value={expenseNote} onChange={(event) => setExpenseNote(event.target.value)} placeholder="e.g. October hosting invoice" rows={2} /></div>
+          <div className="md:col-span-4"><Button onClick={() => createExpenseMutation.mutate()} disabled={createExpenseMutation.isPending}>{createExpenseMutation.isPending ? "Saving..." : "Save Expense"}</Button></div>
+        </CardContent>
+      </Card>}
+
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><TrendingUp className="h-5 w-5" /> Income vs Expenses</CardTitle><p className="text-sm text-muted-foreground">Monthly performance</p></CardHeader>
         <CardContent className="h-72">
@@ -191,6 +239,8 @@ export default function FinanceCompliance() {
       </div>
 
       <Card><CardHeader><CardTitle className="text-lg">Recent Verified Transactions</CardTitle></CardHeader><CardContent>{recentTransactions.length === 0 ? <p className="py-4 text-sm text-muted-foreground">No verified transactions in the selected period.</p> : <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Member</TableHead><TableHead className="text-right">Charged</TableHead><TableHead className="text-right">Fee</TableHead><TableHead className="text-right">Credited</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>{recentTransactions.map((transaction) => <TableRow key={transaction._id}><TableCell>{transaction.processedAt ? new Date(transaction.processedAt).toLocaleDateString() : "—"}</TableCell><TableCell className="capitalize">{readableTransactionType(transaction.type)}</TableCell><TableCell>{transaction.memberId?.name ?? "—"}</TableCell><TableCell className="text-right font-medium">{kes(transaction.amount)}</TableCell><TableCell className="text-right">{kes(transaction.feeAmount)}</TableCell><TableCell className="text-right">{kes((transaction.amount || 0) - (transaction.feeAmount || 0))}</TableCell><TableCell><Badge>Verified</Badge></TableCell></TableRow>)}</TableBody></Table></div>}</CardContent></Card>
+
+      <Card><CardHeader><CardTitle className="text-lg">Finance Adjustments</CardTitle><p className="text-sm text-muted-foreground">Manual finance records included in the dashboard calculations.</p></CardHeader><CardContent>{approvedAdjustments.length === 0 ? <p className="text-sm text-muted-foreground">No approved adjustments for this period.</p> : <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Category</TableHead><TableHead>Note</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>{approvedAdjustments.map((adjustment) => <TableRow key={adjustment._id}><TableCell className="capitalize">{readableLabel(adjustment.category)}</TableCell><TableCell>{adjustment.note}</TableCell><TableCell className="text-right">{kes(adjustment.amount)}</TableCell><TableCell><Badge>{adjustment.status}</Badge></TableCell></TableRow>)}</TableBody></Table></div>}</CardContent></Card>
 
       <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><FileCheck2 className="h-5 w-5" /> Recent Audit Activity</CardTitle></CardHeader><CardContent>{recentAuditActivity.length === 0 ? <p className="py-4 text-sm text-muted-foreground">No audit activity in the selected period.</p> : <div className="space-y-2">{recentAuditActivity.map((entry) => <div key={entry._id} className="flex justify-between gap-4 border-b py-2 text-sm last:border-0"><span>{entry.action} <span className="text-muted-foreground">on {entry.tableName}</span></span><span className="shrink-0 text-xs text-muted-foreground">{entry.createdAt ? new Date(entry.createdAt).toLocaleString() : "—"}</span></div>)}</div>}</CardContent></Card>
     </div>
