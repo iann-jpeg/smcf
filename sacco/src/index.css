@@ -144,6 +144,6 @@
   }
 
   .auth-bg-image {
-    background-image: url('/sacco/placeholder.svg');
+    background-image: url('./assets/placeholder.svg');
   }
 }
