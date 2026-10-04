@@ -14,13 +14,21 @@ router.get('/overview', ...adminOnly, async (_req: AuthRequest, res, next) => {
     const database = mongoose.connection.db;
     if (!database) return res.status(503).json({ success: false, message: 'Database unavailable' });
 
-    const [allMembers, currentCycle, cycles, payments, disbursements] = await Promise.all([
+    const [allMembers, currentCycle, cycles, payments, rawDisbursements] = await Promise.all([
       Member.find({ status: { $ne: 'deleted' } }).sort({ position: 1, memberId: 1 }).lean(),
       database.collection('cycles').findOne({ status: 'active' }, { sort: { cycle_number: -1 } }),
       database.collection('cycles').find({}).sort({ cycle_number: -1 }).limit(24).toArray(),
       database.collection('payments').find({}).sort({ date: -1, created_at: -1 }).limit(250).toArray(),
       database.collection('disbursements').find({}).sort({ disbursement_date: -1, created_at: -1 }).limit(100).toArray(),
     ]);
+    const disbursements = rawDisbursements.map((disbursement) => {
+      const recipient = allMembers.find((member: any) =>
+        String(member._id) === String(disbursement.recipient_id || disbursement.member_id),
+      );
+      return recipient && !disbursement.recipient_name
+        ? { ...disbursement, recipient_name: recipient.name }
+        : disbursement;
+    });
 
     const cycleNumber = Number(currentCycle?.cycle_number || 0);
     const selectedMemberIds = Array.isArray(currentCycle?.member_ids) && currentCycle.member_ids.length > 0
@@ -102,6 +110,72 @@ router.post('/payments/manual', ...adminOnly, async (req: AuthRequest, res, next
       deposit_processed: true,
     });
     return res.status(201).json({ success: true, data: { id: payment.insertedId, reference, member: member.name } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/disbursements', ...adminOnly, async (req: AuthRequest, res, next) => {
+  try {
+    const database = mongoose.connection.db;
+    if (!database) return res.status(503).json({ success: false, message: 'Database unavailable' });
+
+    const cycleNumber = Number(req.body?.cycleNumber);
+    const amount = Math.round(Number(req.body?.amount));
+    const recipientId = String(req.body?.recipientId || '');
+    const paymentMethod = String(req.body?.paymentMethod || 'manual').trim();
+    const reference = String(req.body?.reference || '').trim();
+    const notes = String(req.body?.notes || '').trim();
+
+    if (!Number.isInteger(cycleNumber) || cycleNumber <= 0 || !recipientId || !amount || amount <= 0) {
+      return res.status(400).json({ success: false, message: 'cycleNumber, recipientId and a positive amount are required' });
+    }
+    if (!mongoose.Types.ObjectId.isValid(recipientId)) {
+      return res.status(400).json({ success: false, message: 'A valid recipient is required' });
+    }
+
+    const member = await Member.findById(recipientId).select('_id name memberId phone');
+    if (!member) return res.status(404).json({ success: false, message: 'Recipient member not found' });
+
+    const cycle = await database.collection('cycles').findOne({ cycle_number: cycleNumber });
+    if (!cycle) return res.status(404).json({ success: false, message: `Cycle #${cycleNumber} not found` });
+
+    const existing = await database.collection('disbursements').findOne({
+      cycle_number: cycleNumber,
+      recipient_id: member._id,
+      status: { $in: ['completed', 'paid'] },
+    });
+    if (existing) {
+      return res.status(409).json({ success: false, message: `Cycle #${cycleNumber} has already been paid to this recipient` });
+    }
+
+    const now = new Date();
+    const disbursement = {
+      cycle_number: cycleNumber,
+      recipient_id: member._id,
+      member_id: member._id,
+      recipient_name: member.name,
+      amount,
+      payment_method: paymentMethod,
+      mpesa_transaction_id: reference || null,
+      transaction_reference: reference || null,
+      status: 'completed',
+      notes: notes || `Cycle #${cycleNumber} payout to ${member.name}`,
+      disbursement_date: now,
+      created_at: now,
+      created_by: req.userId ? new mongoose.Types.ObjectId(req.userId) : null,
+    };
+    const result = await database.collection('disbursements').insertOne(disbursement);
+    await database.collection('cycles').updateOne(
+      { _id: cycle._id },
+      { $set: { recipient_paid: true, recipient_paid_at: now, updated_at: now } },
+    );
+
+    return res.status(201).json({
+      success: true,
+      data: { ...disbursement, _id: result.insertedId },
+      message: `Cycle #${cycleNumber} payout recorded`,
+    });
   } catch (error) {
     return next(error);
   }

@@ -16,7 +16,7 @@ const date = (value: unknown) => value ? new Date(String(value)).toLocaleString(
 export default function CycleAdmin() {
   const { hasRole } = useAuth();
   const { toast } = useToast();
-  const isAdmin = hasRole("admin");
+  const isAdmin = hasRole("admin") || hasRole("treasurer");
   const [data, setData] = useState<any>({});
   const [loading, setLoading] = useState(true);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -30,6 +30,12 @@ export default function CycleAdmin() {
   const [walletDrafts, setWalletDrafts] = useState<Record<string, string>>({});
   const [startingCycle, setStartingCycle] = useState(false);
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [payoutRecipientId, setPayoutRecipientId] = useState("");
+  const [payoutAmount, setPayoutAmount] = useState("");
+  const [payoutMethod, setPayoutMethod] = useState("manual");
+  const [payoutReference, setPayoutReference] = useState("");
+  const [payoutNotes, setPayoutNotes] = useState("");
+  const [recordingPayout, setRecordingPayout] = useState(false);
 
   const load = useCallback(async () => {
     if (!isAdmin) return;
@@ -57,6 +63,12 @@ export default function CycleAdmin() {
   useEffect(() => {
     setSelectedMemberIds(members.map((member: any) => String(member._id)));
   }, [data.currentCycle?._id, members.length]);
+  useEffect(() => {
+    const recipient = currentCycle?.next_recipient;
+    const recipientId = typeof recipient === "object" ? recipient?._id : recipient;
+    setPayoutRecipientId((current) => current || (recipientId ? String(recipientId) : String(members[0]?._id || "")));
+    setPayoutAmount((current) => current || String(currentCycle?.expected_amount || stats.collected || ""));
+  }, [currentCycle?._id, currentCycle?.next_recipient, currentCycle?.expected_amount, stats.collected, members]);
   const loadWallet = useCallback(async () => {
     setWalletLoading(true);
     try {
@@ -137,6 +149,32 @@ export default function CycleAdmin() {
     }
   };
 
+  const recordPayout = async () => {
+    if (!currentCycle?.cycle_number || !payoutRecipientId || !Number(payoutAmount)) {
+      toast({ title: "Payout details required", description: "Select a recipient and enter a positive payout amount.", variant: "destructive" });
+      return;
+    }
+    setRecordingPayout(true);
+    try {
+      await api.post("/cycle-admin/disbursements", {
+        cycleNumber: currentCycle.cycle_number,
+        recipientId: payoutRecipientId,
+        amount: Number(payoutAmount),
+        paymentMethod: payoutMethod,
+        reference: payoutReference.trim() || undefined,
+        notes: payoutNotes.trim() || undefined,
+      });
+      toast({ title: "Payout recorded", description: `Cycle #${currentCycle.cycle_number} disbursement has been saved.` });
+      setPayoutReference("");
+      setPayoutNotes("");
+      await load();
+    } catch (error: any) {
+      toast({ title: "Could not record payout", description: error?.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setRecordingPayout(false);
+    }
+  };
+
   const actOnWithdrawal = async (withdrawalId: string, action: "approve" | "reject") => {
     setWalletAction(withdrawalId);
     try {
@@ -200,7 +238,7 @@ export default function CycleAdmin() {
 
         <TabsContent value="advance"><Card><CardHeader><CardTitle className="flex items-center gap-2"><FastForward className="h-4 w-4" /> Paid in advance</CardTitle><CardDescription>Members whose recorded contribution is ahead of the active cycle.</CardDescription></CardHeader><CardContent>{advancePayments.length === 0 ? <Empty text="No advance payments found." /> : advancePayments.map((item: any) => <div key={item.memberId} className="flex items-center justify-between border-b py-3 last:border-0"><div><p className="font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.memberId} · {item.cyclesPaid} cycles paid</p></div><Badge variant="secondary">+{item.cyclesAhead} ahead</Badge></div>)}</CardContent></Card></TabsContent>
 
-        <TabsContent value="disbursements"><Card><CardHeader><CardTitle className="flex items-center gap-2"><Landmark className="h-4 w-4" /> Disbursement & payout history</CardTitle><CardDescription>Previous cycle payouts and recipient records.</CardDescription></CardHeader><CardContent>{disbursements.length === 0 ? <Empty text="No disbursement records found." /> : disbursements.map((item: any) => <div key={String(item._id)} className="flex items-center justify-between border-b py-3 last:border-0"><div><p className="font-medium">{item.recipient_id?.name || item.member_id || "Recipient"}</p><p className="text-xs text-muted-foreground">Cycle #{item.cycle_id?.cycle_number || item.cycle_number || "-"} · {item.mpesa_transaction_id || item.phone || "Manual"}</p></div><div className="text-right"><p className="font-semibold">{money(item.amount)}</p><Badge>{item.status || "completed"}</Badge></div></div>)}</CardContent></Card></TabsContent>
+        <TabsContent value="disbursements" className="space-y-4"><Card><CardHeader><CardTitle className="flex items-center gap-2"><Landmark className="h-4 w-4" /> Record cycle payout</CardTitle><CardDescription>Record the active cycle recipient payout and close the payout state for this cycle.</CardDescription></CardHeader><CardContent className="grid gap-3 md:grid-cols-2"><label className="space-y-1 text-sm"><span>Recipient</span><select className="h-10 w-full rounded-md border bg-background px-3" value={payoutRecipientId} onChange={(event) => setPayoutRecipientId(event.target.value)}><option value="">Select recipient</option>{members.map((member: any) => <option key={String(member._id)} value={String(member._id)}>{member.name} ({member.member_id || member.memberId})</option>)}</select></label><label className="space-y-1 text-sm"><span>Amount</span><Input type="number" min="1" value={payoutAmount} onChange={(event) => setPayoutAmount(event.target.value)} /></label><label className="space-y-1 text-sm"><span>Payment method</span><select className="h-10 w-full rounded-md border bg-background px-3" value={payoutMethod} onChange={(event) => setPayoutMethod(event.target.value)}><option value="manual">Manual</option><option value="mpesa">M-Pesa</option><option value="bank">Bank transfer</option></select></label><label className="space-y-1 text-sm"><span>Reference (optional)</span><Input value={payoutReference} onChange={(event) => setPayoutReference(event.target.value)} placeholder="M-Pesa or bank reference" /></label><label className="space-y-1 text-sm md:col-span-2"><span>Notes (optional)</span><Input value={payoutNotes} onChange={(event) => setPayoutNotes(event.target.value)} /></label><div className="md:col-span-2"><Button onClick={() => void recordPayout()} disabled={recordingPayout || !currentCycle?.cycle_number}>{recordingPayout ? "Saving payout..." : "Record payout"}</Button></div></CardContent></Card><Card><CardHeader><CardTitle className="flex items-center gap-2"><Landmark className="h-4 w-4" /> Disbursement & payout history</CardTitle><CardDescription>Previous cycle payouts and recipient records.</CardDescription></CardHeader><CardContent>{disbursements.length === 0 ? <Empty text="No disbursement records found." /> : disbursements.map((item: any) => <div key={String(item._id)} className="flex items-center justify-between border-b py-3 last:border-0"><div><p className="font-medium">{item.recipient_name || item.recipient_id?.name || item.member_id || "Recipient"}</p><p className="text-xs text-muted-foreground">Cycle #{item.cycle_id?.cycle_number || item.cycle_number || "-"} · {item.mpesa_transaction_id || item.phone || "Manual"}</p></div><div className="text-right"><p className="font-semibold">{money(item.amount)}</p><Badge>{item.status || "completed"}</Badge></div></div>)}</CardContent></Card></TabsContent>
 
         <TabsContent value="analytics"><Card><CardHeader><CardTitle className="flex items-center gap-2"><BarChart3 className="h-4 w-4" /> Cycle analytics</CardTitle><CardDescription>Operational rates calculated from the active-cycle ledger.</CardDescription></CardHeader><CardContent className="grid gap-3 sm:grid-cols-3"><Row label="Payment rate" value={`${stats.totalMembers ? Math.round((stats.paidMembers / stats.totalMembers) * 100) : 0}%`} /><Row label="Average payment" value={money(stats.paidMembers ? Number(stats.collected) / Number(stats.paidMembers) : 0)} /><Row label="Cycles completed" value={String(Math.max(0, Number(stats.cycleNumber || 0) - 1))} /></CardContent></Card></TabsContent>
 
