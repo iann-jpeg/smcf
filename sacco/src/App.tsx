@@ -50,6 +50,7 @@ const FinanceCompliance = lazyPage(() => import("./pages/FinanceCompliance"), "f
 const CycleAdmin       = lazyPage(() => import("./pages/CycleAdmin"), "cycle-admin");
 const TenXAdmin        = lazyPage(() => import("./pages/TenXAdmin"), "tenx");
 const NotFound         = lazyPage(() => import("./pages/NotFound"), "not-found");
+const Landing          = lazyPage(() => import("./pages/Landing"), "landing");
 
 // Thin route-level fallback — reuses the CSS spinner already on the page.
 function PageLoader() {
@@ -208,6 +209,16 @@ function VerifyEmailRoute() {
   );
 }
 
+function LandingRoute() {
+  return (
+    <PageErrorBoundary>
+      <Suspense fallback={<PageLoader />}>
+        <Landing />
+      </Suspense>
+    </PageErrorBoundary>
+  );
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
@@ -217,6 +228,7 @@ const App = () => (
           <Sonner />
           <BrowserRouter basename={routerBasename}>
             <Routes>
+              <Route path="/" element={<LandingRoute />} />
               <Route path="/auth" element={<AuthRoute />} />
               <Route path="/reset-password" element={
                 <PageErrorBoundary>
