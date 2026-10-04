@@ -600,6 +600,90 @@ async function pollSACCOPayment(
 }
 
 /** Initiate a PayHero M-Pesa collection and return the normalized provider response. */
+async function sendPayHeroChannelPayment(
+  phone: string,
+  amount: number,
+  reference: string,
+  description: string,
+): Promise<PayHeroPaymentResponse> {
+  const username = process.env.PAYHERO_API_USERNAME;
+  const password = process.env.PAYHERO_API_PASSWORD;
+  const channelId = process.env.PAYHERO_CHANNEL_ID;
+  const accountId = process.env.PAYHERO_ACCOUNT_ID;
+  const callbackUrl = process.env.PAYHERO_CALLBACK_URL;
+  if (!username || !password || !channelId || !accountId || !callbackUrl) {
+    const err = new Error('PayHero channel payment configuration is incomplete') as Error & { statusCode?: number };
+    err.statusCode = 503;
+    throw err;
+  }
+
+  const auth = Buffer.from(`${username}:${password}`).toString('base64');
+  const requestUrl = `${normalizePayHeroBaseUrl(process.env.PAYHERO_API_URL)}/api/v2/payments`;
+  const requestBody = {
+    amount,
+    currency: 'KES',
+    phone_number: normalizePhoneForPayHero(phone),
+    provider: 'm-pesa',
+    channel_id: Number(channelId) || channelId,
+    account_id: Number(accountId) || accountId,
+    external_reference: reference,
+    callback_url: callbackUrl,
+    description,
+  };
+
+  let res: Awaited<ReturnType<typeof fetch>>;
+  try {
+    res = await fetch(requestUrl, {
+      method: 'POST',
+      headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+    });
+  } catch (err) {
+    console.error('[PayHero] channel request failed', { endpoint: requestUrl, channelId, reference, amount, phoneSuffix: normalizePhoneForPayHero(phone).slice(-4), error: toErrorMessage(err, 'Network error') });
+    const networkError = new Error('PayHero could not be reached. Please try again.') as Error & { statusCode?: number };
+    networkError.statusCode = 502;
+    throw networkError;
+  }
+
+  const responseText = await res.text().catch(() => '');
+  let data: unknown = {};
+  try { data = responseText ? JSON.parse(responseText) : {}; } catch { data = { message: 'Unexpected response from PayHero' }; }
+  const dataRecord = asRecord(data);
+  const checkoutRequestId = extractCheckoutRequestId(data);
+  if (!res.ok || !checkoutRequestId) {
+    const message = extractProviderErrorMessage(data, 'Payment request could not be initiated. Please try again.');
+    console.error('[PayHero] channel payment rejected', {
+      endpoint: requestUrl,
+      httpStatus: res.status,
+      channelId,
+      reference,
+      amount,
+      phoneSuffix: normalizePhoneForPayHero(phone).slice(-4),
+      providerCode: dataRecord?.code ?? dataRecord?.error_code ?? dataRecord?.errorCode ?? null,
+      message,
+    });
+    const err = new Error(message) as Error & { statusCode?: number };
+    err.statusCode = res.ok ? 502 : res.status >= 400 && res.status < 500 ? 400 : 502;
+    throw err;
+  }
+
+  const providerReference = [
+    getPathValue(data, ['merchant_reference']),
+    getPathValue(data, ['merchantReference']),
+    getPathValue(data, ['transaction_reference']),
+    getPathValue(data, ['transactionReference']),
+  ].find((value): value is string => typeof value === 'string' && Boolean(value.trim()));
+  return {
+    success: true,
+    provider: 'payhero',
+    checkoutRequestId,
+    providerReference,
+    externalReference: reference,
+    status: typeof dataRecord?.status === 'string' ? dataRecord.status : 'accepted',
+    message: dataRecord?.message,
+  };
+}
+
 async function sendPayHeroSTK(
   phone: string,
   amount: number,
@@ -613,6 +697,10 @@ async function sendPayHeroSTK(
     throw err;
   }
 
+  const paymentMode = String(process.env.PAYHERO_PAYMENT_MODE || '').trim().toLowerCase();
+  if (paymentMode === 'channel' || (!paymentMode && process.env.PAYHERO_CHANNEL_ID && process.env.PAYHERO_ACCOUNT_ID)) {
+    return sendPayHeroChannelPayment(phone, amount, reference, description);
+  }
   return sendPayHeroGlobalPayment(phone, amount, reference, description, customerContext);
 }
 
@@ -1130,11 +1218,14 @@ async function createOrGetPendingDepositTransaction(params: {
 // ─── GET /api/mpesa/provider-diagnostics ─────────────────────────────────────
 // Admin diagnostics endpoint: returns masked provider config to compare environments
 
-router.get('/provider-diagnostics', protect, authorize('admin', 'treasurer', 'member'), async (_req: AuthRequest, res: Response) => {
+router.get('/provider-diagnostics', protect, authorize('admin'), async (_req: AuthRequest, res: Response) => {
   const username = process.env.PAYHERO_API_USERNAME;
   const vendorId = process.env.PAYHERO_VENDOR_ID || process.env.PAYHERO_ACCOUNT_ID;
   const channelId = process.env.PAYHERO_CHANNEL_ID;
   const accountId = process.env.PAYHERO_ACCOUNT_ID;
+  const tillNumber = process.env.PAYHERO_TILL_NUMBER || '6938069';
+  const configuredMode = String(process.env.PAYHERO_PAYMENT_MODE || '').trim().toLowerCase();
+  const paymentMode = configuredMode || (channelId && accountId ? 'channel' : 'global');
   const callbackUrl = process.env.PAYHERO_CALLBACK_URL;
   const apiUrl = normalizePayHeroBaseUrl(process.env.PAYHERO_API_URL);
   const vendorIdIsValid = /^\d+$/.test(String(vendorId || '').trim()) && Number(vendorId) > 0;
@@ -1153,22 +1244,28 @@ router.get('/provider-diagnostics', protect, authorize('admin', 'treasurer', 'me
         vendorIdIsValid,
         channelIdIsValid,
         accountIdIsValid,
-        readyForCollection: Boolean(username && vendorIdIsValid && callbackUrl),
+        readyForCollection: paymentMode === 'channel'
+          ? Boolean(username && channelIdIsValid && accountIdIsValid && callbackUrl)
+          : Boolean(username && vendorIdIsValid && callbackUrl),
       },
       values: {
         apiUrl,
         callbackUrl,
         usernameMasked: maskSecret(username),
-        vendorId,
+        vendorId: vendorId ? maskSecret(vendorId) : null,
         channelId,
-        accountId,
+        accountId: accountId ? maskSecret(accountId) : null,
+        tillNumber: tillNumber ? maskSecret(tillNumber) : null,
+        paymentMode,
         service: 'smcf-sacco-backend',
         commit: process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || null,
       },
       fingerprints: {
         username: envFingerprint(username),
       },
-      notes: 'The global PayHero flow uses PAYHERO_VENDOR_ID (or PAYHERO_ACCOUNT_ID as fallback) plus API credentials and callback URL. PAYHERO_CHANNEL_ID / PAYHERO_ACCOUNT_ID are retained only for legacy v2 debugging and are not required by the new payment flow.',
+      notes: paymentMode === 'channel'
+        ? 'Payments use the PayHero v2 channel flow. The channel ID must identify the active Till channel, while account ID must be the PayHero account resource ID, not the Till number.'
+        : 'Payments use the PayHero global flow. Set PAYHERO_PAYMENT_MODE=channel with the matching PayHero account and channel IDs to route through a specific channel.',
     },
   });
 });
