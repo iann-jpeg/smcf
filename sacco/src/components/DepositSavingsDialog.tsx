@@ -81,18 +81,20 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
         const isFailed = statusValues.some((value) => ["failed", "cancelled", "canceled", "declined", "reversed"].includes(value));
         if (isSuccess) {
           stopPolling();
-          playAtmDepositSound();
-          setMpesaRef(d.mpesaRef ?? null);
-          setStep("success");
-          queryClient.invalidateQueries({ queryKey: ["my-member"] });
-          queryClient.invalidateQueries({ queryKey: ["my-transactions"] });
-          queryClient.invalidateQueries({ queryKey: ["my-savings-history"] });
-          queryClient.invalidateQueries({ queryKey: ["my-unified-account"] });
-          queryClient.invalidateQueries({ queryKey: ["my-loans"] });
-          queryClient.invalidateQueries({ queryKey: ["my-repayments"] });
-          queryClient.invalidateQueries({ queryKey: ["my-guarantor-requests"] });
-          queryClient.invalidateQueries({ queryKey: ["members"] });
-          queryClient.invalidateQueries({ queryKey: ["transactions"] });
+            await Promise.all([
+              queryClient.invalidateQueries({ queryKey: ["my-member"], refetchType: "active" }),
+              queryClient.invalidateQueries({ queryKey: ["my-transactions"], refetchType: "active" }),
+              queryClient.invalidateQueries({ queryKey: ["my-savings-history"], refetchType: "active" }),
+              queryClient.invalidateQueries({ queryKey: ["my-unified-account"], refetchType: "active" }),
+              queryClient.invalidateQueries({ queryKey: ["my-loans"], refetchType: "active" }),
+              queryClient.invalidateQueries({ queryKey: ["my-repayments"], refetchType: "active" }),
+              queryClient.invalidateQueries({ queryKey: ["my-guarantor-requests"], refetchType: "active" }),
+              queryClient.invalidateQueries({ queryKey: ["members"], refetchType: "active" }),
+              queryClient.invalidateQueries({ queryKey: ["transactions"], refetchType: "active" }),
+            ]);
+            playAtmDepositSound();
+            setMpesaRef(d.mpesaRef ?? null);
+            setStep("success");
         } else if (isFailed) {
           stopPolling();
           setFailReason(d.resultDesc || "Payment cancelled or failed. Please try again.");
