@@ -193,6 +193,7 @@ export default function MyAccount() {
 
   const registrationFeePaid = Boolean((member as any)?.registration_fee_paid);
   const registrationFeeAmount = Number((member as any)?.registration_fee_amount ?? 100);
+  const registrationPaymentAmount = registrationFeeAmount + 10;
   const registrationFeeMpesaCode = (member as any)?.registration_fee_mpesa_code as string | null;
   const registrationFeeDate = (member as any)?.registration_fee_date as string | null;
   const sharePurchaseEnabled = (systemConfig as any)?.sharePurchaseEnabled !== false;
@@ -742,7 +743,15 @@ export default function MyAccount() {
         <CardContent className="space-y-2 text-sm">
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Amount</span>
-            <span className="font-semibold">KES {registrationFeeAmount.toLocaleString()}</span>
+            <span className="font-semibold">KES {registrationPaymentAmount.toLocaleString()}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Registration fee</span>
+            <span>KES {registrationFeeAmount.toLocaleString()}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Transaction fee</span>
+            <span>KES 10</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Status</span>

@@ -120,6 +120,8 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
   }
 
   const amountNum = Number(amount) || 0;
+  const feeAmount = 10;
+  const netAmount = Math.max(0, amountNum - feeAmount);
   const pct       = loan.balance > 0 ? Math.min(100, Math.round((amountNum / loan.balance) * 100)) : 0;
   const isFull    = amountNum >= loan.balance;
 
@@ -233,7 +235,7 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
                       className="h-1.5 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:bg-blue-500 [&::-moz-progress-bar]:bg-blue-500"
                     />
                     <p className="text-xs text-muted-foreground">
-                      Paying <span className="font-semibold text-blue-600">{pct}%</span> of outstanding balance.
+                      Paying <span className="font-semibold text-blue-600">{Math.min(100, Math.round((netAmount / loan.balance) * 100))}%</span> of outstanding balance after the KES 10 fee.
                       {isFull && <span className="text-green-600 font-semibold ml-1">This will fully clear the loan!</span>}
                     </p>
                   </div>
@@ -270,7 +272,7 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
               <Button
                 className="flex-1 gap-2"
                 onClick={handlePay}
-                disabled={loading || !amount || amountNum < 10 || !phone.trim()}
+                disabled={loading || !amount || amountNum <= 10 || !phone.trim()}
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Smartphone className="h-4 w-4" />}
                 {loading ? "Sending..." : "Send M-Pesa Prompt"}
@@ -307,6 +309,14 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
                 <span className="font-bold text-blue-600">KES {amountNum.toLocaleString()}</span>
               </div>
               <div className="flex justify-between px-4 py-2.5">
+                <span className="text-muted-foreground">Transaction fee</span>
+                <span className="font-semibold">KES {feeAmount.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between px-4 py-2.5">
+                <span className="text-muted-foreground">Applied to loan</span>
+                <span className="font-bold text-blue-600">KES {netAmount.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between px-4 py-2.5">
                 <span className="text-muted-foreground">Status</span>
                 <span className="flex items-center gap-1.5 text-blue-600 font-medium">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" /> Awaiting PIN...
@@ -337,7 +347,7 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
                 {loanCompleted ? "Loan Fully Cleared! 🎉" : "Repayment Confirmed!"}
               </h3>
               <p className="text-muted-foreground text-sm max-w-xs">
-                KES {amountNum.toLocaleString()} has been applied to loan {loan.loan_number}.
+                KES {netAmount.toLocaleString()} has been applied to loan {loan.loan_number}.
                 {loanCompleted && " Your loan is now fully cleared."}
               </p>
             </div>
@@ -345,7 +355,15 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
             <div className="w-full rounded-xl border bg-muted/40 divide-y text-sm">
               <div className="flex justify-between px-4 py-2.5">
                 <span className="text-muted-foreground">Amount Paid</span>
-                <span className="font-bold text-green-600">KES {amountNum.toLocaleString()}</span>
+                <span className="font-bold text-green-600">KES {netAmount.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between px-4 py-2.5">
+                <span className="text-muted-foreground">Amount charged</span>
+                <span className="font-semibold">KES {amountNum.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between px-4 py-2.5">
+                <span className="text-muted-foreground">Transaction fee</span>
+                <span className="font-semibold">KES {feeAmount.toLocaleString()}</span>
               </div>
               {mpesaRef && (
                 <div className="flex justify-between px-4 py-2.5">

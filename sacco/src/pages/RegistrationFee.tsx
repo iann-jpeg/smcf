@@ -71,7 +71,7 @@ export default function RegistrationFee() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-heading font-bold">Registration Fee</h1>
-        <p className="text-sm text-muted-foreground">Track one-time KES 100 registration fee payment for all members.</p>
+        <p className="text-sm text-muted-foreground">Track the KES 100 registration fee and KES 10 transaction fee for all members.</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">

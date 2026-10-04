@@ -117,6 +117,9 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
   }
 
   const amountNum = Number(amount) || 0;
+  const feeAmount = paymentType === "cycle" ? 0 : 10;
+  const netAmount = Math.max(0, amountNum - feeAmount);
+  const minimumAmount = paymentType === "cycle" ? 1 : 11;
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) { stopPolling(); onClose(); } }}>
@@ -175,11 +178,11 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
                   />
                 </div>
                 {amountNum > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    Depositing{" "}
-                    <span className="font-semibold text-green-600">KES {amountNum.toLocaleString()}</span>{" "}
-                    into your savings account.
-                  </p>
+                  <div className="rounded-lg border bg-muted/40 divide-y text-xs">
+                    <div className="flex justify-between px-3 py-2"><span>Amount charged</span><span className="font-semibold">KES {amountNum.toLocaleString()}</span></div>
+                    <div className="flex justify-between px-3 py-2"><span>Transaction fee</span><span className="font-semibold">KES {feeAmount.toLocaleString()}</span></div>
+                    <div className="flex justify-between px-3 py-2"><span>Amount credited</span><span className="font-semibold text-green-600">KES {netAmount.toLocaleString()}</span></div>
+                  </div>
                 )}
               </div>
 
@@ -213,7 +216,7 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
               <Button
                 className="flex-1 gap-2 bg-green-600 hover:bg-green-700 text-white"
                 onClick={handlePay}
-                disabled={loading || !amount || amountNum < 1 || !phone.trim()}
+                disabled={loading || !amount || amountNum < minimumAmount || !phone.trim()}
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Smartphone className="h-4 w-4" />}
                 {loading ? "Sending..." : "Send M-Pesa Prompt"}
@@ -250,6 +253,14 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
                 <span className="font-bold text-green-600">KES {amountNum.toLocaleString()}</span>
               </div>
               <div className="flex justify-between px-4 py-2.5">
+                <span className="text-muted-foreground">Transaction fee</span>
+                <span className="font-semibold">KES {feeAmount.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between px-4 py-2.5">
+                <span className="text-muted-foreground">Amount credited</span>
+                <span className="font-bold text-green-600">KES {netAmount.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between px-4 py-2.5">
                 <span className="text-muted-foreground">Status</span>
                 <span className="flex items-center gap-1.5 text-green-600 font-medium">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" /> Awaiting PIN...
@@ -280,14 +291,22 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
             <div className="space-y-1">
               <h3 className="font-heading font-bold text-lg text-green-700 dark:text-green-400">Deposit Confirmed!</h3>
               <p className="text-muted-foreground text-sm max-w-xs">
-                KES {amountNum.toLocaleString()} has been added to your savings account.
+                KES {netAmount.toLocaleString()} has been added to your savings account.
               </p>
             </div>
 
             <div className="w-full rounded-xl border bg-muted/40 divide-y text-sm">
               <div className="flex justify-between px-4 py-2.5">
                 <span className="text-muted-foreground">Amount Deposited</span>
-                <span className="font-bold text-green-600">KES {amountNum.toLocaleString()}</span>
+                <span className="font-bold text-green-600">KES {netAmount.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between px-4 py-2.5">
+                <span className="text-muted-foreground">Amount charged</span>
+                <span className="font-semibold">KES {amountNum.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between px-4 py-2.5">
+                <span className="text-muted-foreground">Transaction fee</span>
+                <span className="font-semibold">KES {feeAmount.toLocaleString()}</span>
               </div>
               {mpesaRef && (
                 <div className="flex justify-between px-4 py-2.5">

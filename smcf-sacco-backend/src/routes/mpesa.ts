@@ -509,15 +509,17 @@ async function pollSACCOPayment(
           if (d) { d.status = 'success'; d.mpesaRef = mpesaReceiptNumber; d.amount = confirmedAmount; pendingDeposits.set(checkoutRequestId, d); }
 
         } else if (type === 'share_purchase') {
+          const shareAmounts = calculateTransactionAmounts(confirmedAmount, 'share_purchase');
           await Transaction.findByIdAndUpdate(pendingTxnId, {
             status: 'completed',
             mpesaRef: mpesaReceiptNumber,
             amount: confirmedAmount,
+            ...shareAmounts,
             description: `M-Pesa Share Purchase — Ref: ${mpesaReceiptNumber} — ${phone}`,
             processedAt: new Date(),
             depositProcessed: true,
           });
-          await Member.findByIdAndUpdate(memberId, { $inc: { shares: confirmedAmount } });
+          await Member.findByIdAndUpdate(memberId, { $inc: { shares: shareAmounts.netAmount } });
           await recalculateMemberRiskScore(memberId);
           const s = pendingSharePurchases.get(checkoutRequestId);
           if (s) { s.status = 'success'; s.mpesaRef = mpesaReceiptNumber; s.amount = confirmedAmount; pendingSharePurchases.set(checkoutRequestId, s); }
@@ -544,10 +546,11 @@ async function pollSACCOPayment(
           if (f) { f.status = 'success'; f.mpesaRef = mpesaReceiptNumber; f.amount = confirmedAmount; pendingRegistrationFees.set(checkoutRequestId, f); }
 
         } else if (type === 'loan_repay' && loanId) {
+          const repaymentAmounts = calculateTransactionAmounts(confirmedAmount, 'loan_repayment');
           // Delete placeholder, processRepayment creates the real transaction
           await Transaction.findByIdAndDelete(pendingTxnId);
           const result = await processRepayment(
-            loanId, confirmedAmount, 'mpesa',
+            loanId, repaymentAmounts.netAmount, 'mpesa',
             `Phone: ${phone} Ref: ${mpesaReceiptNumber}`, null
           );
           const r = pendingRepayments.get(checkoutRequestId);
@@ -768,7 +771,29 @@ function envFingerprint(value?: string): string | null {
   return `${value.length}:${value.charCodeAt(0)}:${value.charCodeAt(value.length - 1)}`;
 }
 
+const UNIFIED_TRANSACTION_FEE = 10;
 const REGISTRATION_FEE_AMOUNT = 100;
+const REGISTRATION_GROSS_AMOUNT = REGISTRATION_FEE_AMOUNT + UNIFIED_TRANSACTION_FEE;
+
+type FeeableTransactionType = 'deposit' | 'wallet_deposit' | 'share_purchase' | 'registration_fee' | 'loan_repayment';
+
+function calculateTransactionAmounts(grossAmount: number, type: FeeableTransactionType, cyclePayment = false) {
+  const gross = Math.round(Number(grossAmount));
+  if (!Number.isFinite(gross) || gross <= 0) {
+    throw new Error('Payment amount must be a positive number');
+  }
+  const fee = type === 'deposit' && cyclePayment ? 0 : UNIFIED_TRANSACTION_FEE;
+  const net = gross - fee;
+  if (fee > 0 && net <= 0) {
+    throw new Error(`Amount must be greater than KES ${fee} after the transaction fee`);
+  }
+  return {
+    grossAmount: gross,
+    feeAmount: fee,
+    netAmount: net,
+    feeType: fee > 0 ? 'unified_transaction_fee' as const : 'none' as const,
+  };
+}
 
 function isSamePhone(left: string, right: string): boolean {
   const l = normalizePhone(left || '');
@@ -794,9 +819,10 @@ async function settleRegistrationFeePayment(params: {
   source: 'callback' | 'polling' | 'reconcile';
 }) {
   const { memberId, amount, phone, mpesaRef, checkoutRequestId, source } = params;
+  const feeAmounts = calculateTransactionAmounts(amount, 'registration_fee');
 
-  if (Number(amount) !== REGISTRATION_FEE_AMOUNT) {
-    throw new Error(`Registration fee must be exactly KES ${REGISTRATION_FEE_AMOUNT}`);
+  if (feeAmounts.grossAmount !== REGISTRATION_GROSS_AMOUNT) {
+    throw new Error(`Registration payment must be exactly KES ${REGISTRATION_GROSS_AMOUNT}`);
   }
 
   const duplicate = await Transaction.findOne({
@@ -835,7 +861,11 @@ async function settleRegistrationFeePayment(params: {
     {
       status: 'completed',
       mpesaRef,
-      amount: REGISTRATION_FEE_AMOUNT,
+      amount: feeAmounts.grossAmount,
+      grossAmount: feeAmounts.grossAmount,
+      feeAmount: feeAmounts.feeAmount,
+      netAmount: feeAmounts.netAmount,
+      feeType: feeAmounts.feeType,
       description: `M-Pesa Registration Fee - Ref: ${mpesaRef} - ${normalizePhone(phone)}`,
       processedAt: new Date(),
       depositProcessed: true,
@@ -859,7 +889,11 @@ async function settleRegistrationFeePayment(params: {
       transactionRef,
       memberId,
       type: 'registration_fee',
-      amount: REGISTRATION_FEE_AMOUNT,
+      amount: feeAmounts.grossAmount,
+      grossAmount: feeAmounts.grossAmount,
+      feeAmount: feeAmounts.feeAmount,
+      netAmount: feeAmounts.netAmount,
+      feeType: feeAmounts.feeType,
       description: `M-Pesa Registration Fee (${source}) - Ref: ${mpesaRef} - ${normalizePhone(phone)}`,
       status: 'completed',
       mpesaRef,
@@ -883,10 +917,14 @@ async function settlePendingDeposit(params: {
   walletPayment?: boolean;
   processedAt?: Date;
 }) {
-  const amount = Math.round(Number(params.amount));
-  if (!Number.isFinite(amount) || amount <= 0) {
-    throw new Error('Deposit amount must be a positive number');
-  }
+  const cycleNumber = params.cycleNumber;
+  const feeAmounts = calculateTransactionAmounts(
+    params.amount,
+    params.walletPayment ? 'wallet_deposit' : 'deposit',
+    Boolean(cycleNumber),
+  );
+  const amount = feeAmounts.grossAmount;
+  const creditedAmount = feeAmounts.netAmount;
 
   const processedAt = params.processedAt ?? new Date();
   const existingCompletedTxn = await Transaction.findOne({
@@ -899,7 +937,6 @@ async function settlePendingDeposit(params: {
     return { applied: false, duplicate: true };
   }
 
-  const cycleNumber = params.cycleNumber;
   const claimedTxn = await Transaction.findOneAndUpdate(
     {
       checkoutRequestId: params.checkoutRequestId,
@@ -913,6 +950,10 @@ async function settlePendingDeposit(params: {
         paymentGateway: 'payhero',
         cycleNumber: cycleNumber ?? null,
         amount,
+        grossAmount: amount,
+        feeAmount: feeAmounts.feeAmount,
+        netAmount: creditedAmount,
+        feeType: feeAmounts.feeType,
         description: params.walletPayment
           ? `Wallet deposit via PayHero STK - Ref: ${params.mpesaRef} - ${params.phone || 'unknown'}`
           : cycleNumber
@@ -943,7 +984,7 @@ async function settlePendingDeposit(params: {
       status: 'SUCCESSFUL',
       payment_date: processedAt,
       transaction_reference: params.mpesaRef,
-      $inc: { amount_paid: amount },
+      $inc: { amount_paid: creditedAmount },
     });
   }
 
@@ -959,11 +1000,11 @@ async function settlePendingDeposit(params: {
     const balanceBefore = Number(lastWalletRecord?.balance_after || 0);
     const unlockDate = new Date(processedAt);
     unlockDate.setMonth(unlockDate.getMonth() + 3);
-    await Saving.create({ member_id: params.memberId, amount, transaction_type: 'deposit', balance_before: balanceBefore, balance_after: balanceBefore + amount, payment_method: 'mpesa', transaction_ref: params.mpesaRef, status: 'completed', lock_period_months: 3, unlock_date: unlockDate, maturity_status: 'locked', notes: 'Wallet deposit via M-Pesa STK' });
+    await Saving.create({ member_id: params.memberId, amount: creditedAmount, transaction_type: 'deposit', balance_before: balanceBefore, balance_after: balanceBefore + creditedAmount, payment_method: 'mpesa', transaction_ref: params.mpesaRef, status: 'completed', lock_period_months: 3, unlock_date: unlockDate, maturity_status: 'locked', notes: `Wallet deposit via M-Pesa STK (KES ${feeAmounts.feeAmount} transaction fee)` });
   } else if (!cycleNumber && !params.tenXContributionId) {
     await recordSavingsDeposit({
       memberId: params.memberId,
-      amount,
+      amount: creditedAmount,
       reference: params.mpesaRef,
       sourceLabel: params.sourceLabel,
       processedAt,
@@ -975,7 +1016,7 @@ async function settlePendingDeposit(params: {
   if (cycleNumber) {
     await recordCyclePayment({
       memberId: params.memberId,
-      amount,
+      amount: creditedAmount,
       phone: params.phone,
       cycleNumber,
       checkoutRequestId: params.checkoutRequestId,
@@ -984,7 +1025,7 @@ async function settlePendingDeposit(params: {
     });
   }
 
-  return { applied: true, duplicate: false };
+  return { applied: true, duplicate: false, ...feeAmounts };
 }
 
 async function recordCyclePayment(params: {
@@ -1134,6 +1175,11 @@ async function createOrGetPendingDepositTransaction(params: {
   walletPayment?: boolean;
 }) {
   const transactionType = params.walletPayment ? 'wallet_deposit' : 'deposit';
+  const feeAmounts = calculateTransactionAmounts(
+    params.amount,
+    transactionType,
+    Boolean(params.cycleNumber),
+  );
   const description = params.walletPayment
     ? `Wallet deposit - STK Pending - ${params.phone}`
     : `M-Pesa Savings Deposit — STK Pending — ${params.phone}`;
@@ -1152,7 +1198,8 @@ async function createOrGetPendingDepositTransaction(params: {
             transactionRef: txnRef,
             memberId: params.memberId,
             type: transactionType,
-            amount: params.amount,
+            amount: feeAmounts.grossAmount,
+            ...feeAmounts,
             description,
             status: 'pending',
             checkoutRequestId: params.checkoutRequestId,
@@ -1280,8 +1327,8 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
 
     if (!memberId) return res.status(400).json({ success: false, message: 'memberId is required' });
     if (!phone)    return res.status(400).json({ success: false, message: 'Phone number is required' });
-    if (!amount || Number(amount) < 10)
-      return res.status(400).json({ success: false, message: 'Minimum deposit is KES 10' });
+    if (!amount || Number(amount) <= 0)
+      return res.status(400).json({ success: false, message: 'Deposit amount must be positive' });
 
     const payHeroMember = await Member.findById(memberId).select('name email phone');
     if (!payHeroMember) {
@@ -1305,6 +1352,12 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
     }
     if (cyclePayment && !cycleNumber) {
       return res.status(400).json({ success: false, message: 'No active cycle is available for payment' });
+    }
+    let feeAmounts;
+    try {
+      feeAmounts = calculateTransactionAmounts(numAmount, walletPayment ? 'wallet_deposit' : 'deposit', cyclePayment);
+    } catch (error) {
+      return res.status(400).json({ success: false, message: toErrorMessage(error, 'Invalid deposit amount') });
     }
     if (cyclePayment && mongoose.connection.db) {
 
@@ -1379,6 +1432,7 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
         data: {
           checkoutRequestId: existingCheckoutRequestId,
           reused: true,
+          ...feeAmounts,
         },
       });
     }
@@ -1396,6 +1450,7 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
         status: 'pending',
         cyclePayment,
         cycleNumber,
+        tenXContributionId,
         walletPayment,
         createdAt: Date.now(),
       });
@@ -1419,7 +1474,7 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
       return res.json({
         success: true,
         simulated: true,
-        data: { checkoutRequestId: simId },
+        data: { checkoutRequestId: simId, ...feeAmounts },
       });
     }
 
@@ -1478,13 +1533,15 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
       );
     }
 
-    return res.json({ success: true, data: { checkoutRequestId } });
+    return res.json({ success: true, data: { checkoutRequestId, ...feeAmounts } });
   } catch (err) {
     next(err);
   }
 });
 
 async function recordDeposit(memberId: string, amount: number, phone: string, mpesaRef: string, cycleNumber?: number, checkoutRequestId?: string, tenXContributionId?: string, walletPayment?: boolean) {
+  const feeAmounts = calculateTransactionAmounts(amount, walletPayment ? 'wallet_deposit' : 'deposit', Boolean(cycleNumber));
+  const creditedAmount = feeAmounts.netAmount;
   const transactionRef = createTransactionRef();
   await Transaction.create({
     transactionRef,
@@ -1492,7 +1549,8 @@ async function recordDeposit(memberId: string, amount: number, phone: string, mp
     type: walletPayment ? 'wallet_deposit' : 'deposit',
     paymentGateway: 'payhero',
     cycleNumber: cycleNumber ?? null,
-    amount,
+    amount: feeAmounts.grossAmount,
+    ...feeAmounts,
     description: walletPayment
       ? `Wallet deposit via PayHero STK - Ref: ${mpesaRef} - ${phone}`
       : cycleNumber
@@ -1509,15 +1567,15 @@ async function recordDeposit(memberId: string, amount: number, phone: string, mp
     const balanceBefore = Number(lastWalletRecord?.balance_after || 0);
     const unlockDate = new Date();
     unlockDate.setMonth(unlockDate.getMonth() + 3);
-    await Saving.create({ member_id: memberId, amount, transaction_type: 'deposit', balance_before: balanceBefore, balance_after: balanceBefore + amount, payment_method: 'mpesa', transaction_ref: mpesaRef, status: 'completed', lock_period_months: 3, unlock_date: unlockDate, maturity_status: 'locked', notes: 'Wallet deposit via M-Pesa STK' });
+    await Saving.create({ member_id: memberId, amount: creditedAmount, transaction_type: 'deposit', balance_before: balanceBefore, balance_after: balanceBefore + creditedAmount, payment_method: 'mpesa', transaction_ref: mpesaRef, status: 'completed', lock_period_months: 3, unlock_date: unlockDate, maturity_status: 'locked', notes: `Wallet deposit via M-Pesa STK (KES ${feeAmounts.feeAmount} transaction fee)` });
   } else if (tenXContributionId) {
     await TenXContribution.findByIdAndUpdate(tenXContributionId, {
-      status: 'SUCCESSFUL', payment_date: new Date(), transaction_reference: mpesaRef, $inc: { amount_paid: amount },
+      status: 'SUCCESSFUL', payment_date: new Date(), transaction_reference: mpesaRef, $inc: { amount_paid: creditedAmount },
     });
   } else if (!cycleNumber) {
     await recordSavingsDeposit({
       memberId,
-      amount,
+      amount: creditedAmount,
       reference: mpesaRef,
       sourceLabel: 'M-Pesa',
       processedAt: new Date(),
@@ -1529,7 +1587,7 @@ async function recordDeposit(memberId: string, amount: number, phone: string, mp
   if (cycleNumber && checkoutRequestId && !tenXContributionId) {
     await recordCyclePayment({
       memberId,
-      amount,
+      amount: creditedAmount,
       phone,
       cycleNumber,
       checkoutRequestId,
@@ -1558,6 +1616,7 @@ router.post('/share-purchase', protect, async (req: AuthRequest, res: Response, 
 
     const mpesaPhone = normalizePhone(phone);
     const numAmount  = Math.round(Number(amount));
+    const feeAmounts = calculateTransactionAmounts(numAmount, 'share_purchase');
     const hasCredentials = hasPayHeroCredentials();
 
     if (!hasCredentials) {
@@ -1580,13 +1639,14 @@ router.post('/share-purchase', protect, async (req: AuthRequest, res: Response, 
             transactionRef: txnRef,
             memberId,
             type: 'share_purchase',
-            amount: numAmount,
+            amount: feeAmounts.grossAmount,
+            ...feeAmounts,
             description: `M-Pesa Share Purchase — Ref: ${ref} — ${mpesaPhone}`,
             status: 'completed',
             mpesaRef: ref,
             createdBy: null,
           });
-          await Member.findByIdAndUpdate(memberId, { $inc: { shares: numAmount } });
+          await Member.findByIdAndUpdate(memberId, { $inc: { shares: feeAmounts.netAmount } });
           await recalculateMemberRiskScore(memberId);
           s.status = 'success';
           s.mpesaRef = ref;
@@ -1600,7 +1660,7 @@ router.post('/share-purchase', protect, async (req: AuthRequest, res: Response, 
       return res.json({
         success: true,
         simulated: true,
-        data: { checkoutRequestId: simId },
+        data: { checkoutRequestId: simId, ...feeAmounts },
       });
     }
 
@@ -1625,7 +1685,8 @@ router.post('/share-purchase', protect, async (req: AuthRequest, res: Response, 
       transactionRef: txnRef,
       memberId,
       type: 'share_purchase',
-      amount: numAmount,
+      amount: feeAmounts.grossAmount,
+      ...feeAmounts,
       description: `M-Pesa Share Purchase — STK Pending — ${mpesaPhone}`,
       status: 'pending',
       checkoutRequestId,
@@ -1644,14 +1705,14 @@ router.post('/share-purchase', protect, async (req: AuthRequest, res: Response, 
       (err) => console.error('[pollSACCOPayment share-purchase]', err)
     );
 
-    return res.json({ success: true, data: { checkoutRequestId } });
+    return res.json({ success: true, data: { checkoutRequestId, ...feeAmounts } });
   } catch (err) {
     next(err);
   }
 });
 
 // ─── POST /api/mpesa/registration-fee/initiate ───────────────────────────────
-// Initiates one-time registration fee payment (KES 100).
+// Initiates one-time registration payment (KES 100 registration fee + KES 10 transaction fee).
 
 router.post('/registration-fee/initiate', protect, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
@@ -1670,7 +1731,8 @@ router.post('/registration-fee/initiate', protect, async (req: AuthRequest, res:
       return res.status(400).json({ success: false, message: 'Valid phone number is required' });
     }
 
-    const numAmount = REGISTRATION_FEE_AMOUNT;
+    const numAmount = REGISTRATION_GROSS_AMOUNT;
+    const feeAmounts = calculateTransactionAmounts(numAmount, 'registration_fee');
     const hasCredentials = hasPayHeroCredentials();
 
     if (!hasCredentials) {
@@ -1697,6 +1759,7 @@ router.post('/registration-fee/initiate', protect, async (req: AuthRequest, res:
         memberId,
         type: 'registration_fee',
         amount: numAmount,
+        ...feeAmounts,
         description: `M-Pesa Registration Fee - STK Pending - ${mpesaPhone}`,
         status: 'pending',
         checkoutRequestId: simId,
@@ -1710,7 +1773,7 @@ router.post('/registration-fee/initiate', protect, async (req: AuthRequest, res:
           const ref = `REGSIM${Date.now()}`;
           await settleRegistrationFeePayment({
             memberId: f.memberId,
-            amount: REGISTRATION_FEE_AMOUNT,
+            amount: numAmount,
             phone: f.phone,
             mpesaRef: ref,
             checkoutRequestId: simId,
@@ -1751,6 +1814,7 @@ router.post('/registration-fee/initiate', protect, async (req: AuthRequest, res:
       memberId,
       type: 'registration_fee',
       amount: numAmount,
+      ...feeAmounts,
       description: `M-Pesa Registration Fee - STK Pending - ${mpesaPhone}`,
       status: 'pending',
       checkoutRequestId,
@@ -1776,7 +1840,7 @@ router.post('/registration-fee/initiate', protect, async (req: AuthRequest, res:
       (err) => console.error('[pollSACCOPayment registration-fee]', err)
     );
 
-    return res.json({ success: true, data: { checkoutRequestId } });
+    return res.json({ success: true, data: { checkoutRequestId, ...feeAmounts } });
   } catch (err) {
     next(err);
   }
@@ -1790,8 +1854,8 @@ router.post('/registration-fee/reconcile-manual', protect, authorize('admin', 't
     const { phone, mpesaRef, amount } = req.body;
     const normalizedRef = String(mpesaRef || '').trim().toUpperCase();
     if (!normalizedRef) return res.status(400).json({ success: false, message: 'mpesaRef is required' });
-    if (Number(amount) !== REGISTRATION_FEE_AMOUNT) {
-      return res.status(400).json({ success: false, message: 'Amount must be KES 100 for registration fee' });
+    if (Number(amount) !== REGISTRATION_GROSS_AMOUNT) {
+      return res.status(400).json({ success: false, message: `Amount must be KES ${REGISTRATION_GROSS_AMOUNT} including the KES ${UNIFIED_TRANSACTION_FEE} transaction fee` });
     }
 
     const member = await findMemberByPhoneForRegistration(String(phone || ''));
@@ -1801,7 +1865,8 @@ router.post('/registration-fee/reconcile-manual', protect, authorize('admin', 't
 
     await settleRegistrationFeePayment({
       memberId: String(memberDoc._id),
-      amount: REGISTRATION_FEE_AMOUNT,
+      amount: REGISTRATION_GROSS_AMOUNT,
+      ...calculateTransactionAmounts(REGISTRATION_GROSS_AMOUNT, 'registration_fee'),
       phone: String(memberDoc.phone || phone),
       mpesaRef: normalizedRef,
       checkoutRequestId: normalizedRef,
@@ -1871,7 +1936,7 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
         ...(externalReference ? [{ transactionRef: externalReference }] : []),
       ],
       type: { $in: ['deposit', 'wallet_deposit', 'share_purchase', 'registration_fee', 'loan_repayment'] },
-    }).select('_id memberId amount type loanId cycleNumber status depositProcessed');
+    }).select('_id memberId amount grossAmount feeAmount netAmount type loanId cycleNumber status depositProcessed');
 
     if (!transaction) {
       console.warn('[payhero callback] pending transaction not found', { checkoutRequestId });
@@ -1934,12 +1999,17 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
     }
 
     if (transaction.type === 'share_purchase') {
+      const shareAmounts = calculateTransactionAmounts(paidAmount, 'share_purchase');
       const claimed = await Transaction.findOneAndUpdate(
         { _id: transaction._id, status: 'pending', depositProcessed: { $ne: true } },
         {
           status: 'completed',
           mpesaRef,
           amount: paidAmount,
+          grossAmount: shareAmounts.grossAmount,
+          feeAmount: shareAmounts.feeAmount,
+          netAmount: shareAmounts.netAmount,
+          feeType: shareAmounts.feeType,
           description: `M-Pesa Share Purchase — Ref: ${mpesaRef}`,
           processedAt: new Date(),
           depositProcessed: true,
@@ -1948,7 +2018,7 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
         { new: true },
       );
       if (claimed) {
-        await Member.findByIdAndUpdate(memberId, { $inc: { shares: paidAmount } });
+        await Member.findByIdAndUpdate(memberId, { $inc: { shares: shareAmounts.netAmount } });
         await recalculateMemberRiskScore(memberId);
       }
       const pending = pendingSharePurchases.get(checkoutRequestId);
@@ -1981,15 +2051,16 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
     }
 
     if (transaction.type === 'loan_repayment' && transaction.loanId) {
+      const repaymentAmounts = calculateTransactionAmounts(paidAmount, 'loan_repayment');
       const claimed = await Transaction.findOneAndUpdate(
         { _id: transaction._id, status: 'pending', depositProcessed: { $ne: true } },
-        { status: 'completed', mpesaRef, amount: paidAmount, processedAt: new Date(), depositProcessed: true, paymentGateway: 'payhero' },
+        { status: 'completed', mpesaRef, amount: paidAmount, ...repaymentAmounts, processedAt: new Date(), depositProcessed: true, paymentGateway: 'payhero' },
         { new: true },
       );
       if (!claimed) return;
       const result = await processRepayment(
         transaction.loanId,
-        paidAmount,
+        repaymentAmounts.netAmount,
         'mpesa',
         `PayHero Ref: ${mpesaRef}`,
         null,
@@ -2080,12 +2151,14 @@ router.post('/callback', async (req: Request, res: Response) => {
         sharePurchase.resultDesc = ResultDesc || 'Payment cancelled or failed';
       } else {
         const amt = paidAmt || sharePurchase.amount;
+        const shareAmounts = calculateTransactionAmounts(amt, 'share_purchase');
         const txn = await Transaction.findOneAndUpdate(
           { checkoutRequestId: CheckoutRequestID, type: 'share_purchase', status: 'pending' },
           {
             status: 'completed',
             mpesaRef,
             amount: amt,
+            ...shareAmounts,
             description: `M-Pesa Share Purchase — Ref: ${mpesaRef} — ${sharePurchase.phone}`,
             processedAt: new Date(),
             depositProcessed: true,
@@ -2095,7 +2168,7 @@ router.post('/callback', async (req: Request, res: Response) => {
 
         // Only increment once if pending transaction existed.
         if (txn) {
-          await Member.findByIdAndUpdate(sharePurchase.memberId, { $inc: { shares: amt } });
+          await Member.findByIdAndUpdate(sharePurchase.memberId, { $inc: { shares: shareAmounts.netAmount } });
           await recalculateMemberRiskScore(sharePurchase.memberId);
           const member = await Member.findById(sharePurchase.memberId).select('name memberId');
           const displayName = member?.name || member?.memberId || 'Member';
@@ -2123,7 +2196,7 @@ router.post('/callback', async (req: Request, res: Response) => {
         regFee.resultDesc = ResultDesc || 'Payment cancelled or failed';
       } else {
         const amt = paidAmt || regFee.amount;
-        if (amt === REGISTRATION_FEE_AMOUNT) {
+        if (amt === REGISTRATION_GROSS_AMOUNT) {
           await settleRegistrationFeePayment({
             memberId: regFee.memberId,
             amount: amt,
@@ -2152,8 +2225,9 @@ router.post('/callback', async (req: Request, res: Response) => {
         repayment.resultDesc = ResultDesc || 'Payment cancelled or failed';
       } else {
         const amt = paidAmt || repayment.amount;
+        const repaymentAmounts = calculateTransactionAmounts(amt, 'loan_repayment');
         const result = await processRepayment(
-          repayment.loanId, amt, 'mpesa',
+          repayment.loanId, repaymentAmounts.netAmount, 'mpesa',
           `Phone: ${repayment.phone} Ref: ${mpesaRef}`, null
         );
         repayment.status       = 'success';
@@ -2273,8 +2347,8 @@ router.post('/loan-repay', protect, async (req: AuthRequest, res: Response, next
 
     if (!loanId)  return res.status(400).json({ success: false, message: 'loanId is required' });
     if (!phone)   return res.status(400).json({ success: false, message: 'Phone number is required' });
-    if (!amount || Number(amount) < 10)
-      return res.status(400).json({ success: false, message: 'Minimum repayment is KES 10' });
+    if (!amount || Number(amount) <= UNIFIED_TRANSACTION_FEE)
+      return res.status(400).json({ success: false, message: `Minimum repayment is greater than KES ${UNIFIED_TRANSACTION_FEE}` });
 
     const loan = await Loan.findById(loanId);
     if (!loan) return res.status(404).json({ success: false, message: 'Loan not found' });
@@ -2284,7 +2358,11 @@ router.post('/loan-repay', protect, async (req: AuthRequest, res: Response, next
     const payHeroMember = await Member.findById(loan.memberId).select('name email phone');
 
     const mpesaPhone = normalizePhone(phone);
-    const numAmount  = Math.min(Math.round(Number(amount)), Math.round(loan.balance));
+    const numAmount  = Math.round(Number(amount));
+    const feeAmounts = calculateTransactionAmounts(numAmount, 'loan_repayment');
+    if (feeAmounts.netAmount > Math.round(loan.balance)) {
+      return res.status(400).json({ success: false, message: `Amount after the KES ${UNIFIED_TRANSACTION_FEE} fee cannot exceed the outstanding balance of KES ${Math.round(loan.balance).toLocaleString()}` });
+    }
 
     const hasCredentials = hasPayHeroCredentials();
 
@@ -2293,7 +2371,8 @@ router.post('/loan-repay', protect, async (req: AuthRequest, res: Response, next
       pendingRepayments.set(simId, {
         loanId,
         memberId: String(loan.memberId),
-        amount: numAmount,
+        amount: feeAmounts.grossAmount,
+        ...feeAmounts,
         phone: mpesaPhone,
         status: 'pending',
         createdAt: Date.now(),
@@ -2304,7 +2383,7 @@ router.post('/loan-repay', protect, async (req: AuthRequest, res: Response, next
         if (!r || r.status !== 'pending') return;
         try {
           const ref = `REPSIM${Date.now()}`;
-          const result = await processRepayment(r.loanId, r.amount, 'mpesa', `Phone: ${r.phone} Ref: ${ref}`, null);
+          const result = await processRepayment(r.loanId, feeAmounts.netAmount, 'mpesa', `Phone: ${r.phone} Ref: ${ref}`, null);
           r.status = 'success';
           r.mpesaRef = ref;
           r.loanCompleted = result.loanCompleted;
@@ -2341,7 +2420,8 @@ router.post('/loan-repay', protect, async (req: AuthRequest, res: Response, next
       transactionRef: txnRef,
       memberId,
       type: 'loan_repayment',
-      amount: numAmount,
+      amount: feeAmounts.grossAmount,
+      ...feeAmounts,
       description: `M-Pesa Loan Repayment — STK Pending — Loan ${loan.loanNumber}`,
       status: 'pending',
       checkoutRequestId,
@@ -2363,7 +2443,7 @@ router.post('/loan-repay', protect, async (req: AuthRequest, res: Response, next
       (err) => console.error('[pollSACCOPayment loan-repay]', err)
     );
 
-    return res.json({ success: true, data: { checkoutRequestId } });
+    return res.json({ success: true, data: { checkoutRequestId, ...feeAmounts } });
   } catch (err) {
     next(err);
   }
@@ -2428,7 +2508,13 @@ router.post('/payment-initiated', protect, async (req: AuthRequest, res: Respons
       return res.status(400).json({ success: false, message: 'memberId is required' });
     }
     const numAmount = Math.round(Number(amount));
-    if (numAmount < 10) return res.status(400).json({ success: false, message: 'Minimum amount is KES 10' });
+    const manualType: FeeableTransactionType = type === 'loan_repay' ? 'loan_repayment' : 'deposit';
+    let feeAmounts;
+    try {
+      feeAmounts = calculateTransactionAmounts(numAmount, manualType);
+    } catch (error) {
+      return res.status(400).json({ success: false, message: toErrorMessage(error, 'Invalid payment amount') });
+    }
 
     const normPhone = phone ? normalizePhone(String(phone)) : 'unknown';
     const txnType   = type === 'loan_repay' ? 'loan_repayment' : type === 'share_subscribe' ? 'share_purchase' : 'deposit';
@@ -2440,7 +2526,8 @@ router.post('/payment-initiated', protect, async (req: AuthRequest, res: Respons
       transactionRef: txnRef,
       memberId,
       type: txnType,
-      amount: numAmount,
+      amount: feeAmounts.grossAmount,
+      ...feeAmounts,
       description: `M-Pesa via PayHero — Pending admin confirmation${loanTag}`,
       status: 'pending',
       createdBy: null,
@@ -2456,7 +2543,7 @@ router.post('/payment-initiated', protect, async (req: AuthRequest, res: Respons
       createdAt: Date.now(),
     });
 
-    return res.json({ success: true, data: { transactionRef: txnRef } });
+    return res.json({ success: true, data: { transactionRef: txnRef, ...feeAmounts } });
   } catch (err) {
     next(err);
   }
@@ -2480,6 +2567,10 @@ router.post('/payment-confirm', protect, async (req: AuthRequest, res: Response,
     }
 
     const mpesaRef = `PAYHERO-CONFIRM-${Date.now()}`;
+    const pendingFeeAmounts = calculateTransactionAmounts(
+      pending.amount,
+      pending.type === 'loan_repay' ? 'loan_repayment' : 'deposit',
+    );
 
     if (pending.type === 'deposit') {
       // Mark transaction completed + add to savings
@@ -2487,6 +2578,7 @@ router.post('/payment-confirm', protect, async (req: AuthRequest, res: Response,
         { transactionRef },
         {
           status: 'completed',
+          ...pendingFeeAmounts,
           description: `M-Pesa Savings Deposit via PayHero — Member confirmed`,
           processedAt: new Date(),
           depositProcessed: true,
@@ -2495,7 +2587,7 @@ router.post('/payment-confirm', protect, async (req: AuthRequest, res: Response,
       try {
         await recordSavingsDeposit({
           memberId: pending.memberId,
-          amount: pending.amount,
+          amount: pendingFeeAmounts.netAmount,
           reference: mpesaRef,
           sourceLabel: 'PayHero payment link',
           processedAt: new Date(),
@@ -2516,7 +2608,7 @@ router.post('/payment-confirm', protect, async (req: AuthRequest, res: Response,
 
       await processRepayment(
         pending.loanId,
-        pending.amount,
+        pendingFeeAmounts.netAmount,
         'mpesa',
         `PayHero payment — Member confirmed — ${mpesaRef}`,
         null

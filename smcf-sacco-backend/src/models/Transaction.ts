@@ -5,6 +5,10 @@ export interface ITransaction extends Document {
   memberId: mongoose.Types.ObjectId;
   type: 'deposit' | 'wallet_deposit' | 'withdrawal' | 'loan_disbursement' | 'loan_repayment' | 'share_purchase' | 'share_transfer' | 'dividend' | 'savings_interest' | 'registration_fee';
   amount: number;
+  grossAmount?: number;
+  feeAmount?: number;
+  netAmount?: number;
+  feeType?: 'unified_transaction_fee' | 'none';
   description: string | null;
   status: 'pending' | 'completed' | 'failed' | 'reversed' | 'declined';
   processedAt: Date;
@@ -39,6 +43,10 @@ const TransactionSchema = new Schema<ITransaction>({
     type: Number, 
     required: true 
   },
+  grossAmount: { type: Number, default: null },
+  feeAmount: { type: Number, default: 0 },
+  netAmount: { type: Number, default: null },
+  feeType: { type: String, enum: ['unified_transaction_fee', 'none'], default: 'none' },
   description: { 
     type: String, 
     default: null 

@@ -119,7 +119,9 @@ export function ShareSubscriptionDialog({ open, onClose, memberId, memberPhone, 
   }
 
   const amountNum = Number(amount) || 0;
-  const newShareCapital = Number(currentShares) + amountNum;
+  const feeAmount = 10;
+  const netAmount = Math.max(0, amountNum - feeAmount);
+  const newShareCapital = Number(currentShares) + netAmount;
   const currentUnits = Number((Number(currentShares) / SHARE_UNIT_PRICE).toFixed(2));
   const newUnits = Number((newShareCapital / SHARE_UNIT_PRICE).toFixed(2));
 
@@ -182,7 +184,7 @@ export function ShareSubscriptionDialog({ open, onClose, memberId, memberPhone, 
                 </div>
                 {amountNum > 0 && (
                   <p className="text-xs text-muted-foreground">
-                    New share capital balance will be{" "}
+                    Amount charged: <span className="font-semibold">KES {amountNum.toLocaleString()}</span>; fee: <span className="font-semibold">KES {feeAmount}</span>; share capital credited:{" "}
                     <span className="font-semibold text-purple-600">
                       KES {newShareCapital.toLocaleString()}
                     </span>{" "}
@@ -270,6 +272,14 @@ export function ShareSubscriptionDialog({ open, onClose, memberId, memberPhone, 
                 <span className="font-bold text-purple-600">KES {amountNum.toLocaleString()}</span>
               </div>
               <div className="flex justify-between px-4 py-2.5">
+                <span className="text-muted-foreground">Transaction fee</span>
+                <span className="font-semibold">KES {feeAmount.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between px-4 py-2.5">
+                <span className="text-muted-foreground">Share capital credited</span>
+                <span className="font-bold text-purple-600">KES {netAmount.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between px-4 py-2.5">
                 <span className="text-muted-foreground">Status</span>
                 <span className="flex items-center gap-1.5 text-purple-600 font-medium">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" /> Awaiting PIN...
@@ -304,7 +314,7 @@ export function ShareSubscriptionDialog({ open, onClose, memberId, memberPhone, 
             <div className="space-y-1">
               <h3 className="font-heading font-bold text-lg text-green-700 dark:text-green-400">Share Purchase Confirmed!</h3>
               <p className="text-muted-foreground text-sm max-w-xs">
-                KES {amountNum.toLocaleString()} has been added to your share capital.
+                KES {netAmount.toLocaleString()} has been added to your share capital.
               </p>
             </div>
 
@@ -312,6 +322,10 @@ export function ShareSubscriptionDialog({ open, onClose, memberId, memberPhone, 
               <div className="flex justify-between px-4 py-2.5">
                 <span className="text-muted-foreground">Share Capital</span>
                 <span className="font-bold text-purple-600">KES {newShareCapital.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between px-4 py-2.5">
+                <span className="text-muted-foreground">Transaction fee</span>
+                <span className="font-semibold">KES {feeAmount.toLocaleString()}</span>
               </div>
               <div className="flex justify-between px-4 py-2.5">
                 <span className="text-muted-foreground">Units Held</span>
