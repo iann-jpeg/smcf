@@ -2373,8 +2373,41 @@ router.get('/status/:checkoutRequestId', protect, async (req: AuthRequest, res: 
     const txn = await Transaction.findOne({
       checkoutRequestId,
       type: { $in: ['deposit', 'wallet_deposit', 'share_purchase', 'registration_fee', 'loan_repayment', 'tenx_contribution'] },
-    }).select('status mpesaRef amount type depositProcessed');
+    }).select('status mpesaRef amount type depositProcessed memberId loanId cycleNumber grossAmount netAmount');
     if (txn) {
+      if (txn.status === 'pending') {
+        const provider = await queryPayHeroStatus(checkoutRequestId);
+        if (provider.status === 'success') {
+          const member = await Member.findById(txn.memberId).select('phone');
+          const pendingDeposit = pendingDeposits.get(checkoutRequestId);
+          const pendingShare = pendingSharePurchases.get(checkoutRequestId);
+          const pendingRegistration = pendingRegistrationFees.get(checkoutRequestId);
+          const pendingRepayment = pendingRepayments.get(checkoutRequestId);
+          const pollType = txn.type === 'loan_repayment'
+            ? 'loan_repay'
+            : txn.type === 'share_purchase'
+              ? 'share_purchase'
+              : txn.type === 'registration_fee'
+                ? 'registration_fee'
+                : 'deposit';
+          await pollSACCOPayment(
+            pollType,
+            checkoutRequestId,
+            String(txn._id),
+            String(txn.memberId),
+            Number(provider.amount || txn.amount),
+            pendingDeposit?.phone || pendingShare?.phone || pendingRegistration?.phone || pendingRepayment?.phone || String(member?.phone || ''),
+            txn.loanId || undefined,
+          );
+          const settled = await Transaction.findById(txn._id).select('status mpesaRef amount');
+          if (settled?.status === 'completed') {
+            return res.json({
+              success: true,
+              data: { type: txn.type, status: 'success', mpesaRef: settled.mpesaRef, amount: settled.amount },
+            });
+          }
+        }
+      }
       return res.json({
         success: true,
         data: {
@@ -2549,25 +2582,41 @@ router.get('/repay-status/:checkoutRequestId', protect, async (req: AuthRequest,
   try {
     const { checkoutRequestId } = req.params;
 
-    // Fast path: in-memory Map
+    const txn = await Transaction.findOne({ checkoutRequestId, type: 'loan_repayment' }).select('status mpesaRef amount loanId memberId');
+    if (txn) {
+      if (txn.status === 'pending' && txn.loanId) {
+        const provider = await queryPayHeroStatus(checkoutRequestId);
+        if (provider.status === 'success') {
+          const member = await Member.findById(txn.memberId).select('phone');
+          const pending = pendingRepayments.get(checkoutRequestId);
+          await pollSACCOPayment(
+            'loan_repay',
+            checkoutRequestId,
+            String(txn._id),
+            String(txn.memberId),
+            Number(provider.amount || txn.amount),
+            pending?.phone || String(member?.phone || ''),
+            txn.loanId,
+          );
+        }
+      }
+      const settled = await Transaction.findById(txn._id).select('status mpesaRef amount');
+      return res.json({
+        success: true,
+        data: {
+          status:   settled?.status === 'completed' ? 'success' : settled?.status === 'failed' ? 'failed' : 'pending',
+          mpesaRef: settled?.mpesaRef,
+          amount:   settled?.amount,
+          loanCompleted: pendingRepayments.get(checkoutRequestId)?.loanCompleted,
+        },
+      });
+    }
+
     const r = pendingRepayments.get(checkoutRequestId);
     if (r) {
       return res.json({
         success: true,
         data: { status: r.status, mpesaRef: r.mpesaRef, amount: r.amount, loanCompleted: r.loanCompleted, resultDesc: r.resultDesc },
-      });
-    }
-
-    // Fallback: DB lookup
-    const txn = await Transaction.findOne({ checkoutRequestId, type: 'loan_repayment' }).select('status mpesaRef amount loanId');
-    if (txn) {
-      return res.json({
-        success: true,
-        data: {
-          status:   txn.status === 'completed' ? 'success' : txn.status === 'failed' ? 'failed' : 'pending',
-          mpesaRef: txn.mpesaRef,
-          amount:   txn.amount,
-        },
       });
     }
 

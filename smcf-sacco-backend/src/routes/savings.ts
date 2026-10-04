@@ -87,6 +87,9 @@ router.get('/admin/pending-withdrawals', ...adminOnly, async (_req, res, next) =
 
 router.post('/admin/:memberId/adjustment', protect, authorize('admin'), async (req: AuthRequest, res, next) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.memberId)) {
+      return res.status(400).json({ success: false, message: 'Invalid member ID for wallet adjustment' });
+    }
     const member = await Member.findOne({ _id: req.params.memberId, status: { $ne: 'deleted' } }).select('_id name memberId');
     const amount = Math.round(Number(req.body?.amount));
     const direction = req.body?.direction === 'debit' ? 'debit' : req.body?.direction === 'credit' ? 'credit' : null;
