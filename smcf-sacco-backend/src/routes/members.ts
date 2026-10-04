@@ -8,6 +8,39 @@ import { protect, authorize, AuthRequest } from '../middleware/auth';
 import { auditLog } from '../middleware/auditLog';
 
 const router = Router();
+export const WALLET_AGREEMENT_VERSION = '2026-10-04';
+
+router.get('/me/wallet-agreement', protect, async (req: AuthRequest, res, next) => {
+  try {
+    const member = await Member.findOne({ userId: req.userId }).select('walletAgreementVersion walletAgreementAcceptedAt');
+    if (!member) return res.status(404).json({ success: false, message: 'Member profile not found' });
+    return res.json({
+      success: true,
+      data: {
+        version: WALLET_AGREEMENT_VERSION,
+        accepted: member.walletAgreementVersion === WALLET_AGREEMENT_VERSION,
+        acceptedVersion: member.walletAgreementVersion,
+        acceptedAt: member.walletAgreementAcceptedAt,
+      },
+    });
+  } catch (error) { return next(error); }
+});
+
+router.post('/me/wallet-agreement', protect, auditLog('members', 'wallet_agreement_accepted'), async (req: AuthRequest, res, next) => {
+  try {
+    if (String(req.body?.version || '') !== WALLET_AGREEMENT_VERSION) {
+      return res.status(400).json({ success: false, message: 'Wallet agreement version is out of date' });
+    }
+    const acceptedAt = new Date();
+    const member = await Member.findOneAndUpdate(
+      { userId: req.userId },
+      { walletAgreementVersion: WALLET_AGREEMENT_VERSION, walletAgreementAcceptedAt: acceptedAt },
+      { new: true },
+    ).select('walletAgreementVersion walletAgreementAcceptedAt');
+    if (!member) return res.status(404).json({ success: false, message: 'Member profile not found' });
+    return res.json({ success: true, data: { version: member.walletAgreementVersion, accepted: true, acceptedAt: member.walletAgreementAcceptedAt } });
+  } catch (error) { return next(error); }
+});
 
 // @route   PUT /api/members/me/profile
 // @desc    Member self-update extended profile fields

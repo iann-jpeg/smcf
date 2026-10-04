@@ -35,6 +35,8 @@ export interface IMember extends Document {
   registrationFeePhone: string | null;
   registrationFeeTransactionId: string | null;
   registrationFeePendingCheckoutId: string | null;
+  walletAgreementVersion: string | null;
+  walletAgreementAcceptedAt: Date | null;
   is10XMember: boolean;
   tenXJoinedAt: Date | null;
   total_cycle_contribution: number;
@@ -180,6 +182,8 @@ const MemberSchema = new Schema<IMember>({
     type: String,
     default: null
   },
+  walletAgreementVersion: { type: String, default: null },
+  walletAgreementAcceptedAt: { type: Date, default: null },
   is10XMember: {
     type: Boolean,
     default: false,

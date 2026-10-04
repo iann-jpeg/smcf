@@ -14,7 +14,8 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { playAtmDepositSound } from "@/lib/sound";
 
-type Step = "input" | "processing" | "success" | "failed";
+type Step = "agreement" | "input" | "processing" | "success" | "failed";
+const WALLET_AGREEMENT_VERSION = "2026-10-04";
 
 interface Props {
   open: boolean;
@@ -35,6 +36,8 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
   const [checkoutId,  setCheckoutId]  = useState<string | null>(null);
   const [mpesaRef,    setMpesaRef]    = useState<string | null>(null);
   const [failReason,  setFailReason]  = useState<string | null>(null);
+  const [walletAgreementChecked, setWalletAgreementChecked] = useState(false);
+  const [walletAgreementLoading, setWalletAgreementLoading] = useState(false);
   const pollRef    = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const queryClient = useQueryClient();
@@ -46,17 +49,28 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
 
   useEffect(() => {
     if (open) {
-      setStep("input");
+      setStep(paymentType === "wallet" ? "agreement" : "input");
       setAmount("");
       setPhone(memberPhone ?? "");
       setLoading(false);
       setCheckoutId(null);
       setMpesaRef(null);
       setFailReason(null);
+      setWalletAgreementChecked(false);
       stopPolling();
+      if (paymentType === "wallet") {
+        setWalletAgreementLoading(true);
+        api.get("/members/me/wallet-agreement")
+          .then((response: any) => {
+            const data = response?.data ?? response;
+            if (data?.accepted && data?.version === WALLET_AGREEMENT_VERSION) setStep("input");
+          })
+          .catch(() => toast.error("Unable to load the Wallet agreement. Please try again."))
+          .finally(() => setWalletAgreementLoading(false));
+      }
     }
     return () => stopPolling();
-  }, [open, memberPhone, stopPolling]);
+  }, [open, memberPhone, paymentType, stopPolling]);
 
   function startPolling(id: string) {
     pollRef.current = setInterval(async () => {
@@ -132,6 +146,49 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) { stopPolling(); onClose(); } }}>
       <DialogContent className="sm:max-w-md">
+
+        {step === "agreement" && paymentType === "wallet" && (
+          <div className="space-y-5">
+            <DialogHeader>
+              <DialogTitle className="font-heading">Wallet Deposit Agreement</DialogTitle>
+              <DialogDescription>Please review these important Wallet terms before your first deposit.</DialogDescription>
+            </DialogHeader>
+            <div className="rounded-xl border bg-muted/30 p-4 text-sm leading-relaxed">
+              <ul className="list-disc space-y-2 pl-5">
+                <li>Wallet deposits cannot be withdrawn for at least 3 months from the deposit date.</li>
+                <li>Withdrawals after maturity are subject to the applicable withdrawal fee.</li>
+                <li>Approved withdrawals are normally processed within 3 working days.</li>
+                <li>Applicable transaction fees are shown before payment.</li>
+                <li>The Wallet is separate from SACCO Savings and Cycles.</li>
+                <li>Review your transaction details before confirming.</li>
+              </ul>
+            </div>
+            <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm">
+              <input type="checkbox" className="mt-0.5 h-4 w-4" checked={walletAgreementChecked} onChange={(event) => setWalletAgreementChecked(event.target.checked)} />
+              <span>By continuing, I confirm that I have read and understood the Wallet terms.</span>
+            </label>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={onClose} disabled={walletAgreementLoading}>Cancel</Button>
+              <Button
+                className="flex-1 bg-green-600 text-white hover:bg-green-700"
+                disabled={!walletAgreementChecked || walletAgreementLoading}
+                onClick={async () => {
+                  setWalletAgreementLoading(true);
+                  try {
+                    await api.post("/members/me/wallet-agreement", { version: WALLET_AGREEMENT_VERSION });
+                    setStep("input");
+                  } catch (error: any) {
+                    toast.error(error?.message || "Unable to accept the Wallet agreement.");
+                  } finally {
+                    setWalletAgreementLoading(false);
+                  }
+                }}
+              >
+                {walletAgreementLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Accept & Continue"}
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Step 1: Input */}
         {step === "input" && (
