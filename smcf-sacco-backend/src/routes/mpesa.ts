@@ -526,9 +526,9 @@ async function pollSACCOPayment(
       return;
     }
 
-    const transactionForStatus = await Transaction.findById(pendingTxnId).select('transactionRef');
+    const transactionForStatus = await Transaction.findById(pendingTxnId).select('checkoutRequestId transactionRef');
     const { status, mpesaReceiptNumber, amount: paidAmt, resultDesc } = await queryPayHeroStatus(
-      transactionForStatus?.transactionRef || checkoutRequestId,
+      transactionForStatus?.checkoutRequestId || checkoutRequestId || transactionForStatus?.transactionRef || '',
     );
 
     if (status === 'success' && mpesaReceiptNumber) {
@@ -2498,7 +2498,7 @@ router.get('/status/:checkoutRequestId', protect, async (req: AuthRequest, res: 
     }).select('status providerStatus financialPostingStatus reconciliationStatus mpesaRef amount type depositProcessed memberId loanId cycleNumber grossAmount netAmount transactionRef');
     if (txn) {
       if (txn.status === 'pending' || (txn.providerStatus === 'success' && txn.financialPostingStatus !== 'completed')) {
-        const provider = await queryPayHeroStatus(txn.transactionRef || checkoutRequestId);
+        const provider = await queryPayHeroStatus(txn.checkoutRequestId || checkoutRequestId || txn.transactionRef || '');
         if (provider.status === 'success') {
           const member = await Member.findById(txn.memberId).select('phone');
           const pendingDeposit = pendingDeposits.get(checkoutRequestId);
@@ -2720,10 +2720,10 @@ router.get('/repay-status/:checkoutRequestId', protect, async (req: AuthRequest,
   try {
     const { checkoutRequestId } = req.params;
 
-    const txn = await Transaction.findOne({ checkoutRequestId, type: 'loan_repayment' }).select('status mpesaRef amount loanId memberId transactionRef');
+    const txn = await Transaction.findOne({ checkoutRequestId, type: 'loan_repayment' }).select('status mpesaRef amount loanId memberId checkoutRequestId transactionRef');
     if (txn) {
       if (txn.status === 'pending' && txn.loanId) {
-        const provider = await queryPayHeroStatus(txn.transactionRef || checkoutRequestId);
+        const provider = await queryPayHeroStatus(txn.checkoutRequestId || checkoutRequestId || txn.transactionRef || '');
         if (provider.status === 'success') {
           const member = await Member.findById(txn.memberId).select('phone');
           const pending = pendingRepayments.get(checkoutRequestId);
