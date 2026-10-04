@@ -58,18 +58,8 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
       setFailReason(null);
       setWalletAgreementChecked(false);
       stopPolling();
-      if (paymentType === "wallet") {
-        setWalletAgreementLoading(true);
-        api.get("/members/me/wallet-agreement")
-          .then((response: any) => {
-            const data = response?.data ?? response;
-            if (data?.accepted && data?.version === WALLET_AGREEMENT_VERSION && data?.hasWalletDeposit) {
-              setStep("input");
-            }
-          })
-          .catch(() => toast.error("Unable to load the Wallet agreement. Please try again."))
-          .finally(() => setWalletAgreementLoading(false));
-      }
+      // Wallet terms must be accepted before every Wallet deposit.
+      setWalletAgreementLoading(false);
     }
     return () => stopPolling();
   }, [open, memberPhone, paymentType, stopPolling]);
@@ -161,7 +151,7 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
           <div className="space-y-5">
             <DialogHeader>
               <DialogTitle className="font-heading">Wallet Deposit Agreement</DialogTitle>
-              <DialogDescription>Please review these important Wallet terms before your first deposit.</DialogDescription>
+              <DialogDescription>Please review these important Wallet terms before this deposit.</DialogDescription>
             </DialogHeader>
             <div className="rounded-xl border bg-muted/30 p-4 text-sm leading-relaxed">
               <ul className="list-disc space-y-2 pl-5">
