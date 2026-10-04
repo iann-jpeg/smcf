@@ -74,6 +74,7 @@ export function ShareSubscriptionDialog({ open, onClose, memberId, memberPhone, 
           setStep("success");
           queryClient.invalidateQueries({ queryKey: ["my-member"] });
           queryClient.invalidateQueries({ queryKey: ["my-transactions"] });
+          queryClient.invalidateQueries({ queryKey: ["my-unified-account"] });
           queryClient.invalidateQueries({ queryKey: ["members"] });
           queryClient.invalidateQueries({ queryKey: ["transactions"] });
           queryClient.invalidateQueries({ queryKey: ["my-share-summary"] });

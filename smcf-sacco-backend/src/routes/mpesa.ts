@@ -132,6 +132,29 @@ function getPathValue(input: unknown, path: string[]): unknown {
   return current;
 }
 
+function findProviderValue(input: unknown, keys: string[], depth = 0): unknown {
+  if (depth > 4 || input === null || input === undefined) return undefined;
+  const record = asRecord(input);
+  if (record) {
+    for (const key of keys) {
+      const match = Object.keys(record).find((candidate) => candidate.toLowerCase() === key.toLowerCase());
+      if (match !== undefined && record[match] !== null && record[match] !== undefined) {
+        return record[match];
+      }
+    }
+    for (const value of Object.values(record)) {
+      const found = findProviderValue(value, keys, depth + 1);
+      if (found !== undefined) return found;
+    }
+  } else if (Array.isArray(input)) {
+    for (const value of input) {
+      const found = findProviderValue(value, keys, depth + 1);
+      if (found !== undefined) return found;
+    }
+  }
+  return undefined;
+}
+
 function toErrorMessage(err: unknown, fallback = 'Unknown error'): string {
   if (typeof err === 'string' && err.trim()) return err;
   const message = asRecord(err)?.message;
@@ -433,12 +456,13 @@ async function queryPayHeroStatus(checkoutRequestId: string): Promise<{
     const dataRecord = asRecord(data);
     if (!dataRecord) return { success: false, status: 'pending' };
     const payload = asRecord(getPathValue(dataRecord, ['data', 'response'])) ?? asRecord(dataRecord.data) ?? dataRecord;
-    const rawResultCode = payload.ResultCode ?? payload.resultCode ?? dataRecord.ResultCode ?? dataRecord.resultCode;
+    const rawResultCode = findProviderValue(data, ['ResultCode', 'resultCode', 'result_code']);
     const resultCode = typeof rawResultCode === 'string' || typeof rawResultCode === 'number' ? rawResultCode : undefined;
-    const receipt = payload.MpesaReceiptNumber ?? payload.mpesaReceiptNumber ?? payload.receipt_number ?? payload.receiptNumber ?? payload.TransactionID ?? payload.transactionId;
-    const resultDesc = payload.ResultDesc ?? payload.resultDesc ?? payload.ResultDescription ?? payload.message ?? dataRecord.message;
-    const rawAmount = payload.Amount ?? payload.amount;
-    const status = String(payload.status ?? payload.Status ?? '').toLowerCase();
+    const receipt = findProviderValue(data, ['MpesaReceiptNumber', 'receipt_number', 'receiptNumber', 'TransactionID', 'transactionId', 'transaction_id']);
+    const resultDesc = findProviderValue(data, ['ResultDesc', 'resultDesc', 'ResultDescription', 'message', 'description']);
+    const rawAmount = findProviderValue(data, ['Amount', 'amount']);
+    const rawStatus = findProviderValue(data, ['status', 'transaction_status', 'payment_status']);
+    const status = String(rawStatus ?? '').toLowerCase();
     // PayHero can report a completed payment before exposing the M-Pesa
     // receipt in the same response. Do not leave a paid transaction pending
     // just because that optional field is delayed or named differently.
@@ -930,10 +954,11 @@ async function settlePendingDeposit(params: {
   );
   const amount = feeAmounts.grossAmount;
   const creditedAmount = feeAmounts.netAmount;
+  const transactionType = params.walletPayment ? 'wallet_deposit' : params.tenXContributionId ? 'tenx_contribution' : 'deposit';
 
   const processedAt = params.processedAt ?? new Date();
   const existingCompletedTxn = await Transaction.findOne({
-    type: params.walletPayment ? 'wallet_deposit' : params.tenXContributionId ? 'tenx_contribution' : 'deposit',
+    type: transactionType,
     mpesaRef: params.mpesaRef,
     status: 'completed',
   }).select('_id');
@@ -945,7 +970,7 @@ async function settlePendingDeposit(params: {
   const claimedTxn = await Transaction.findOneAndUpdate(
     {
       checkoutRequestId: params.checkoutRequestId,
-      type: params.walletPayment ? 'wallet_deposit' : 'deposit',
+      type: transactionType,
       depositProcessed: { $ne: true },
     },
     {
@@ -976,7 +1001,7 @@ async function settlePendingDeposit(params: {
   if (!claimedTxn) {
     const pendingTxn = await Transaction.findOne({
       checkoutRequestId: params.checkoutRequestId,
-      type: params.walletPayment ? 'wallet_deposit' : params.tenXContributionId ? 'tenx_contribution' : 'deposit',
+      type: transactionType,
     }).select('_id status depositProcessed');
 
     if (pendingTxn) {
@@ -1911,37 +1936,26 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
 
   try {
     const payload = asRecord(req.body);
-    const checkoutRequestId = extractCheckoutRequestId(payload);
-    const externalReference = [
-      getPathValue(payload, ['ExternalReference']),
-      getPathValue(payload, ['external_reference']),
-      getPathValue(payload, ['externalReference']),
-      getPathValue(payload, ['merchant_reference']),
-    ].find((value): value is string => typeof value === 'string' && Boolean(value.trim()));
-    const status = String(
-      getPathValue(payload, ['status'])
-      ?? getPathValue(payload, ['Status'])
-      ?? getPathValue(payload, ['transaction_status'])
-      ?? getPathValue(payload, ['ResultCode'])
-      ?? ''
-    ).toLowerCase();
-    const success = ['0', 'success', 'successful', 'completed', 'complete'].includes(status);
-    const amountValue = getPathValue(payload, ['amount']) ?? getPathValue(payload, ['Amount']);
+    const checkoutRequestId = (findProviderValue(payload, [
+      'TransactionReference', 'CheckoutRequestID', 'checkoutRequestId',
+      'checkout_request_id', 'requestId', 'request_id', 'reference',
+    ]) ?? extractCheckoutRequestId(payload));
+    const externalReferenceValue = findProviderValue(payload, [
+      'ExternalReference', 'external_reference', 'externalReference', 'merchant_reference',
+    ]);
+    const externalReference = typeof externalReferenceValue === 'string' && externalReferenceValue.trim()
+      ? externalReferenceValue.trim()
+      : undefined;
+    const rawStatus = findProviderValue(payload, ['status', 'transaction_status', 'ResultCode', 'resultCode']);
+    const status = String(rawStatus ?? '').toLowerCase();
+    const success = ['0', 'success', 'successful', 'completed', 'complete', 'paid'].includes(status);
+    const amountValue = findProviderValue(payload, ['amount', 'Amount']);
     const callbackAmount = amountValue === undefined ? undefined : Number(amountValue);
-    const mpesaRef = [
-      getPathValue(payload, ['MpesaReceiptNumber']),
-      getPathValue(payload, ['mpesaReceiptNumber']),
-      getPathValue(payload, ['receipt_number']),
-      getPathValue(payload, ['receiptNumber']),
-      getPathValue(payload, ['transaction_id']),
-      getPathValue(payload, ['TransactionID']),
-    ].find((value): value is string => typeof value === 'string' && Boolean(value.trim()));
-    const resultDesc = String(
-      getPathValue(payload, ['message'])
-      ?? getPathValue(payload, ['ResultDesc'])
-      ?? getPathValue(payload, ['description'])
-      ?? 'Payment failed or was cancelled'
-    );
+    const rawMpesaRef = findProviderValue(payload, ['MpesaReceiptNumber', 'receipt_number', 'receiptNumber', 'transaction_id', 'TransactionID']);
+    const mpesaRef = typeof rawMpesaRef === 'string' && rawMpesaRef.trim()
+      ? rawMpesaRef.trim()
+      : success ? `PAYHERO-${checkoutRequestId || externalReference || Date.now()}` : undefined;
+    const resultDesc = String(findProviderValue(payload, ['message', 'ResultDesc', 'description']) ?? 'Payment failed or was cancelled');
 
     console.info('[payhero callback]', {
       checkoutRequestId: checkoutRequestId || null,
@@ -1951,32 +1965,31 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
       amount: Number.isFinite(callbackAmount) ? callbackAmount : null,
     });
 
-    if (!checkoutRequestId) return;
-
     const transaction = await Transaction.findOne({
       $or: [
-        { checkoutRequestId },
+        ...(checkoutRequestId ? [{ checkoutRequestId }] : []),
         ...(externalReference ? [{ transactionRef: externalReference }] : []),
       ],
-      type: { $in: ['deposit', 'wallet_deposit', 'share_purchase', 'registration_fee', 'loan_repayment'] },
-    }).select('_id memberId amount grossAmount feeAmount netAmount type loanId cycleNumber status depositProcessed');
+      type: { $in: ['deposit', 'wallet_deposit', 'share_purchase', 'registration_fee', 'loan_repayment', 'tenx_contribution'] },
+    }).select('_id memberId amount grossAmount feeAmount netAmount type loanId cycleNumber checkoutRequestId status depositProcessed');
 
     if (!transaction) {
-      console.warn('[payhero callback] pending transaction not found', { checkoutRequestId });
+      console.warn('[payhero callback] pending transaction not found', { checkoutRequestId, externalReference });
       return;
     }
+    const settlementCheckoutId = String(transaction.checkoutRequestId || checkoutRequestId || externalReference || transaction._id);
 
-    if (!success || !mpesaRef) {
+    if (!success) {
       await Transaction.findOneAndUpdate(
         { _id: transaction._id, status: 'pending' },
         { status: 'failed', processedAt: new Date() },
       );
       for (const pending of [pendingDeposits, pendingSharePurchases, pendingRegistrationFees, pendingRepayments]) {
-        const item = pending.get(checkoutRequestId);
+        const item = pending.get(settlementCheckoutId);
         if (item) {
           item.status = 'failed';
           item.resultDesc = resultDesc;
-          pending.set(checkoutRequestId, item);
+          pending.set(settlementCheckoutId, item);
         }
       }
       return;
@@ -1988,7 +2001,7 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
         { status: 'failed', processedAt: new Date() },
       );
       console.warn('[payhero callback] amount mismatch', {
-        checkoutRequestId,
+        checkoutRequestId: settlementCheckoutId,
         expectedAmount: Number(transaction.amount),
         receivedAmount: callbackAmount,
       });
@@ -1998,10 +2011,10 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
     const paidAmount = Number.isFinite(callbackAmount) ? Number(callbackAmount) : Number(transaction.amount);
     const memberId = String(transaction.memberId);
 
-    if (transaction.type === 'deposit' || transaction.type === 'wallet_deposit') {
-      const pending = pendingDeposits.get(checkoutRequestId);
+    if (transaction.type === 'deposit' || transaction.type === 'wallet_deposit' || transaction.type === 'tenx_contribution') {
+      const pending = pendingDeposits.get(settlementCheckoutId);
       await settlePendingDeposit({
-        checkoutRequestId,
+        checkoutRequestId: settlementCheckoutId,
         memberId,
         amount: paidAmount,
         phone: pending?.phone,
@@ -2016,7 +2029,7 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
         pending.status = 'success';
         pending.mpesaRef = mpesaRef;
         pending.amount = paidAmount;
-        pendingDeposits.set(checkoutRequestId, pending);
+        pendingDeposits.set(settlementCheckoutId, pending);
       }
       return;
     }
@@ -2044,31 +2057,31 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
         await Member.findByIdAndUpdate(memberId, { $inc: { shares: shareAmounts.netAmount } });
         await recalculateMemberRiskScore(memberId);
       }
-      const pending = pendingSharePurchases.get(checkoutRequestId);
+      const pending = pendingSharePurchases.get(settlementCheckoutId);
       if (pending) {
         pending.status = 'success';
         pending.mpesaRef = mpesaRef;
         pending.amount = paidAmount;
-        pendingSharePurchases.set(checkoutRequestId, pending);
+        pendingSharePurchases.set(settlementCheckoutId, pending);
       }
       return;
     }
 
     if (transaction.type === 'registration_fee') {
-      const pending = pendingRegistrationFees.get(checkoutRequestId);
+      const pending = pendingRegistrationFees.get(settlementCheckoutId);
       await settleRegistrationFeePayment({
         memberId,
         amount: paidAmount,
         phone: pending?.phone || '',
         mpesaRef,
-        checkoutRequestId,
+        checkoutRequestId: settlementCheckoutId,
         source: 'callback',
       });
       if (pending) {
         pending.status = 'success';
         pending.mpesaRef = mpesaRef;
         pending.amount = paidAmount;
-        pendingRegistrationFees.set(checkoutRequestId, pending);
+        pendingRegistrationFees.set(settlementCheckoutId, pending);
       }
       return;
     }
@@ -2088,13 +2101,13 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
         `PayHero Ref: ${mpesaRef}`,
         null,
       );
-      const pending = pendingRepayments.get(checkoutRequestId);
+      const pending = pendingRepayments.get(settlementCheckoutId);
       if (pending) {
         pending.status = 'success';
         pending.mpesaRef = mpesaRef;
         pending.amount = paidAmount;
         pending.loanCompleted = result.loanCompleted;
-        pendingRepayments.set(checkoutRequestId, pending);
+        pendingRepayments.set(settlementCheckoutId, pending);
       }
     }
   } catch (err) {
@@ -2272,54 +2285,12 @@ router.get('/status/:checkoutRequestId', protect, async (req: AuthRequest, res: 
   try {
     const { checkoutRequestId } = req.params;
 
-    // Fast path: in-memory Map
-    const deposit = pendingDeposits.get(checkoutRequestId);
-    if (deposit) {
-      return res.json({
-        success: true,
-        data: {
-          type: 'deposit',
-          status:     deposit.status,
-          mpesaRef:   deposit.mpesaRef,
-          amount:     deposit.amount,
-          resultDesc: deposit.resultDesc,
-        },
-      });
-    }
-
-    const share = pendingSharePurchases.get(checkoutRequestId);
-    if (share) {
-      return res.json({
-        success: true,
-        data: {
-          type: 'share_purchase',
-          status:     share.status,
-          mpesaRef:   share.mpesaRef,
-          amount:     share.amount,
-          resultDesc: share.resultDesc,
-        },
-      });
-    }
-
-    const regFee = pendingRegistrationFees.get(checkoutRequestId);
-    if (regFee) {
-      return res.json({
-        success: true,
-        data: {
-          type: 'registration_fee',
-          status: regFee.status,
-          mpesaRef: regFee.mpesaRef,
-          amount: regFee.amount,
-          resultDesc: regFee.resultDesc,
-        },
-      });
-    }
-
-    // Fallback: DB lookup (handles server restart where Map was cleared)
+    // The database is authoritative. The in-memory map can still say
+    // "pending" while a callback has already completed the ledger entry.
     const txn = await Transaction.findOne({
       checkoutRequestId,
       type: { $in: ['deposit', 'wallet_deposit', 'share_purchase', 'registration_fee', 'loan_repayment', 'tenx_contribution'] },
-    }).select('status mpesaRef amount type');
+    }).select('status mpesaRef amount type depositProcessed');
     if (txn) {
       return res.json({
         success: true,
@@ -2328,6 +2299,23 @@ router.get('/status/:checkoutRequestId', protect, async (req: AuthRequest, res: 
           status:   txn.status === 'completed' ? 'success' : txn.status === 'failed' ? 'failed' : 'pending',
           mpesaRef: txn.mpesaRef,
           amount:   txn.amount,
+        },
+      });
+    }
+
+    const deposit = pendingDeposits.get(checkoutRequestId);
+    const share = pendingSharePurchases.get(checkoutRequestId);
+    const regFee = pendingRegistrationFees.get(checkoutRequestId);
+    const pending = deposit || share || regFee;
+    if (pending) {
+      return res.json({
+        success: true,
+        data: {
+          type: deposit ? 'deposit' : share ? 'share_purchase' : 'registration_fee',
+          status: pending.status,
+          mpesaRef: pending.mpesaRef,
+          amount: pending.amount,
+          resultDesc: pending.resultDesc,
         },
       });
     }

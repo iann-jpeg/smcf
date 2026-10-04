@@ -85,6 +85,10 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
           queryClient.invalidateQueries({ queryKey: ["my-member"] });
           queryClient.invalidateQueries({ queryKey: ["my-transactions"] });
           queryClient.invalidateQueries({ queryKey: ["my-savings-history"] });
+          queryClient.invalidateQueries({ queryKey: ["my-unified-account"] });
+          queryClient.invalidateQueries({ queryKey: ["my-loans"] });
+          queryClient.invalidateQueries({ queryKey: ["my-repayments"] });
+          queryClient.invalidateQueries({ queryKey: ["my-guarantor-requests"] });
           queryClient.invalidateQueries({ queryKey: ["members"] });
           queryClient.invalidateQueries({ queryKey: ["transactions"] });
         } else if (d.status === "failed") {
