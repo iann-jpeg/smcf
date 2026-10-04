@@ -1411,7 +1411,61 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
             if (!member) return res.status(403).json({ success: false, message: 'You are not enrolled in the 10X Group' });
             if (!period) return res.status(400).json({ success: false, message: 'No 10X contribution period is open' });
             const pending = await TenXContribution.findOne({ member_id: member._id, period_id: period._id, status: 'PENDING' });
-            if (pending) return res.status(409).json({ success: false, message: 'A 10X payment is already pending', data: pending });
+            if (pending) {
+              const pendingAgeMs = Date.now() - new Date((pending as any).updated_at || (pending as any).created_at || 0).getTime();
+              const pendingTransaction = pending.payment_id
+                ? await Transaction.findOne({
+                    _id: pending.payment_id,
+                    memberId,
+                    type: 'tenx_contribution',
+                    status: 'pending',
+                    depositProcessed: { $ne: true },
+                  }).select('_id checkoutRequestId')
+                : await Transaction.findOne({
+                    memberId,
+                    type: 'tenx_contribution',
+                    status: 'pending',
+                    depositProcessed: { $ne: true },
+                    $or: [
+                      { mpesaRef: pending.transaction_reference },
+                      { transactionRef: pending.transaction_reference },
+                    ],
+                  }).select('_id checkoutRequestId');
+              if (pendingTransaction?.checkoutRequestId && pendingAgeMs < 10 * 60 * 1000) {
+                const existingCheckoutRequestId = String(pendingTransaction.checkoutRequestId);
+                pendingDeposits.set(existingCheckoutRequestId, {
+                  memberId,
+                  amount: numAmount,
+                  phone: mpesaPhone,
+                  status: 'pending',
+                  tenXContributionId: String(pending._id),
+                  tenXPayment: true,
+                  createdAt: Date.now(),
+                });
+                pollSACCOPayment(
+                  'deposit',
+                  existingCheckoutRequestId,
+                  String(pendingTransaction._id),
+                  memberId,
+                  numAmount,
+                  mpesaPhone,
+                ).catch((err) => console.error('[pollSACCOPayment 10X reuse]', err));
+                return res.json({
+                  success: true,
+                  data: { checkoutRequestId: existingCheckoutRequestId, reused: true, ...feeAmounts },
+                });
+              }
+              if (pendingTransaction) {
+                await Transaction.findByIdAndUpdate(pendingTransaction._id, {
+                  status: 'failed',
+                  processedAt: new Date(),
+                });
+              }
+              await TenXContribution.findByIdAndUpdate(pending._id, {
+                status: 'CANCELLED',
+                notes: 'Previous M-Pesa attempt expired before completion',
+              });
+            }
             const existingContribution = await TenXContribution.findOne({ member_id: member._id, period_id: period._id, status: 'SUCCESSFUL' });
             const contribution = existingContribution
               ? await TenXContribution.findByIdAndUpdate(existingContribution._id, { status: 'PENDING', payment_method: 'mpesa', transaction_reference: `10X-STK-${Date.now()}` }, { new: true })

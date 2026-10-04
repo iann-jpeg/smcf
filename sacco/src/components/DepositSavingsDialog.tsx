@@ -63,7 +63,9 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
         api.get("/members/me/wallet-agreement")
           .then((response: any) => {
             const data = response?.data ?? response;
-            if (data?.accepted && data?.version === WALLET_AGREEMENT_VERSION) setStep("input");
+            if (data?.accepted && data?.version === WALLET_AGREEMENT_VERSION && data?.hasWalletDeposit) {
+              setStep("input");
+            }
           })
           .catch(() => toast.error("Unable to load the Wallet agreement. Please try again."))
           .finally(() => setWalletAgreementLoading(false));

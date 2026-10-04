@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import { body, validationResult } from 'express-validator';
 import Member from '../models/Member';
 import User from '../models/User';
+import Saving from '../models/Saving';
 import { protect, authorize, AuthRequest } from '../middleware/auth';
 import { auditLog } from '../middleware/auditLog';
 
@@ -14,6 +15,7 @@ router.get('/me/wallet-agreement', protect, async (req: AuthRequest, res, next) 
   try {
     const member = await Member.findOne({ userId: req.userId }).select('walletAgreementVersion walletAgreementAcceptedAt');
     if (!member) return res.status(404).json({ success: false, message: 'Member profile not found' });
+    const hasWalletDeposit = await Saving.exists({ member_id: member._id, transaction_type: 'deposit', status: 'completed' });
     return res.json({
       success: true,
       data: {
@@ -21,6 +23,7 @@ router.get('/me/wallet-agreement', protect, async (req: AuthRequest, res, next) 
         accepted: member.walletAgreementVersion === WALLET_AGREEMENT_VERSION,
         acceptedVersion: member.walletAgreementVersion,
         acceptedAt: member.walletAgreementAcceptedAt,
+        hasWalletDeposit: Boolean(hasWalletDeposit),
       },
     });
   } catch (error) { return next(error); }
