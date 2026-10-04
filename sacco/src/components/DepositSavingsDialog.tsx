@@ -75,11 +75,12 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
   }, [open, memberPhone, paymentType, stopPolling]);
 
   function startPolling(id: string) {
-    pollRef.current = setInterval(async () => {
+    const checkStatus = async () => {
       try {
         const res = await api.get(`/mpesa/status/${id}`);
-        const d   = res as any;
-        if (d.status === "success") {
+        const d = ((res as any)?.data ?? res) as any;
+        const status = String(d?.status ?? "").toLowerCase();
+        if (status === "success" || status === "completed") {
           stopPolling();
           playAtmDepositSound();
           setMpesaRef(d.mpesaRef ?? null);
@@ -93,7 +94,7 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
           queryClient.invalidateQueries({ queryKey: ["my-guarantor-requests"] });
           queryClient.invalidateQueries({ queryKey: ["members"] });
           queryClient.invalidateQueries({ queryKey: ["transactions"] });
-        } else if (d.status === "failed") {
+        } else if (status === "failed" || status === "cancelled" || status === "canceled") {
           stopPolling();
           setFailReason(d.resultDesc || "Payment cancelled or failed. Please try again.");
           setStep("failed");
@@ -101,7 +102,10 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
       } catch {
         // network hiccup — keep polling
       }
-    }, 10_000);
+    };
+
+    void checkStatus();
+    pollRef.current = setInterval(() => { void checkStatus(); }, 5_000);
 
     timeoutRef.current = setTimeout(() => {
       stopPolling();

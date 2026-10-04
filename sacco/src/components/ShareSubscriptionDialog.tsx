@@ -64,11 +64,12 @@ export function ShareSubscriptionDialog({ open, onClose, memberId, memberPhone, 
   }, [open, memberPhone, stopPolling]);
 
   function startPolling(id: string) {
-    pollRef.current = setInterval(async () => {
+    const checkStatus = async () => {
       try {
         const res = await api.get(`/mpesa/status/${id}`);
-        const d = res as any;
-        if (d.status === "success") {
+        const d = ((res as any)?.data ?? res) as any;
+        const status = String(d?.status ?? "").toLowerCase();
+        if (status === "success" || status === "completed") {
           stopPolling();
           setMpesaRef(d.mpesaRef ?? null);
           setStep("success");
@@ -78,7 +79,7 @@ export function ShareSubscriptionDialog({ open, onClose, memberId, memberPhone, 
           queryClient.invalidateQueries({ queryKey: ["members"] });
           queryClient.invalidateQueries({ queryKey: ["transactions"] });
           queryClient.invalidateQueries({ queryKey: ["my-share-summary"] });
-        } else if (d.status === "failed") {
+        } else if (status === "failed" || status === "cancelled" || status === "canceled") {
           stopPolling();
           setFailReason(d.resultDesc || "Share purchase was cancelled or failed.");
           setStep("failed");
@@ -86,7 +87,10 @@ export function ShareSubscriptionDialog({ open, onClose, memberId, memberPhone, 
       } catch {
         // transient network issue, keep polling
       }
-    }, 10_000);
+    };
+
+    void checkStatus();
+    pollRef.current = setInterval(() => { void checkStatus(); }, 5_000);
 
     timeoutRef.current = setTimeout(() => {
       stopPolling();

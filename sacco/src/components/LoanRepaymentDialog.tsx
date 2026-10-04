@@ -59,11 +59,13 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
   }, [open, loan, memberPhone, stopPolling]);
 
   function startPolling(id: string) {
-    pollRef.current = setInterval(async () => {
+    const checkStatus = async () => {
       try {
         // api.get already unwraps json.data, so d = { status, mpesaRef, loanCompleted, ... }
-        const d = await api.get<{ status: string; mpesaRef?: string; loanCompleted?: boolean; resultDesc?: string }>(`/mpesa/repay-status/${id}`);
-        if (d.status === "success") {
+        const response = await api.get<{ status: string; mpesaRef?: string; loanCompleted?: boolean; resultDesc?: string }>(`/mpesa/repay-status/${id}`);
+        const d = ((response as any)?.data ?? response) as { status?: string; mpesaRef?: string; loanCompleted?: boolean; resultDesc?: string };
+        const status = String(d.status ?? "").toLowerCase();
+        if (status === "success" || status === "completed") {
           stopPolling();
           setMpesaRef(d.mpesaRef ?? null);
           setLoanCompleted(!!d.loanCompleted);
@@ -74,7 +76,7 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
           queryClient.invalidateQueries({ queryKey: ["loans"] });
           queryClient.invalidateQueries({ queryKey: ["transactions"] });
           queryClient.invalidateQueries({ queryKey: ["members"] });
-        } else if (d.status === "failed") {
+        } else if (status === "failed" || status === "cancelled" || status === "canceled") {
           stopPolling();
           setFailReason(d.resultDesc || "Payment cancelled or failed. Please try again.");
           setStep("failed");
@@ -82,7 +84,10 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
       } catch {
         // network hiccup — keep polling
       }
-    }, 10_000);
+    };
+
+    void checkStatus();
+    pollRef.current = setInterval(() => { void checkStatus(); }, 5_000);
 
     timeoutRef.current = setTimeout(() => {
       stopPolling();
