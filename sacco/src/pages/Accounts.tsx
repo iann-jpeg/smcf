@@ -60,6 +60,7 @@ export default function Accounts() {
   const [walletEditAmount, setWalletEditAmount] = useState("");
   const [walletEditDirection, setWalletEditDirection] = useState<"credit" | "debit">("credit");
   const [walletEditNote, setWalletEditNote] = useState("");
+  const [savingWalletAdjustment, setSavingWalletAdjustment] = useState(false);
   const [startingCycle, setStartingCycle] = useState(false);
   const [showCycleMemberChooser, setShowCycleMemberChooser] = useState(false);
   const [selectedCycleMemberIds, setSelectedCycleMemberIds] = useState<string[]>([]);
@@ -189,24 +190,38 @@ export default function Accounts() {
     } catch (err: any) {
       toast.error(err?.message || "Failed to apply wallet interest.");
     }
+  }
 
-    async function handleWalletAdjustment() {
-      if (!walletEditMember) return;
-      try {
-        await api.post(`/savings/admin/${walletEditMember._id}/adjustment`, {
-          amount: Number(walletEditAmount),
-          direction: walletEditDirection,
-          note: walletEditNote,
-        });
-        toast.success("Wallet balance adjustment recorded.");
-        setWalletEditMember(null);
-        setWalletEditAmount("");
-        setWalletEditNote("");
-        await refetchWalletAdmin();
-        qc.invalidateQueries({ queryKey: ["unified-account"] });
-      } catch (err: any) {
-        toast.error(err?.message || "Failed to update wallet balance.");
-      }
+  async function handleWalletAdjustment() {
+    if (!walletEditMember) return;
+    const amount = Number(walletEditAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error("Enter a valid positive adjustment amount.");
+      return;
+    }
+    if (!walletEditNote.trim()) {
+      toast.error("Enter a reason for this wallet adjustment.");
+      return;
+    }
+
+    setSavingWalletAdjustment(true);
+    try {
+      await api.post(`/savings/admin/${walletEditMember._id}/adjustment`, {
+        amount,
+        direction: walletEditDirection,
+        note: walletEditNote.trim(),
+      });
+      toast.success("Wallet balance adjustment recorded.");
+      setWalletEditMember(null);
+      setWalletEditAmount("");
+      setWalletEditNote("");
+      await refetchWalletAdmin();
+      await qc.invalidateQueries({ queryKey: ["unified-account"] });
+      await qc.invalidateQueries({ queryKey: ["members"] });
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update wallet balance.");
+    } finally {
+      setSavingWalletAdjustment(false);
     }
   }
 
@@ -668,7 +683,7 @@ export default function Accounts() {
               <Button variant="outline" className="gap-2" onClick={() => void handleApplyWalletInterest()}><TrendingUp className="h-4 w-4" /> Apply monthly 3% interest</Button>
             </div>
           </div>
-          {isAdmin && walletEditMember && <Card className="border-amber-300"><CardHeader><CardTitle>Adjust wallet balance</CardTitle><p className="text-sm text-muted-foreground">This records an auditable adjustment; it does not overwrite deposits or interest.</p></CardHeader><CardContent className="grid gap-3 md:grid-cols-4"><div><Label>Member</Label><p className="mt-2 font-medium">{walletEditMember.name}</p></div><div><Label htmlFor="wallet-adjustment-direction">Action</Label><select id="wallet-adjustment-direction" className="mt-2 h-10 w-full rounded-md border bg-background px-3 text-sm" value={walletEditDirection} onChange={(e) => setWalletEditDirection(e.target.value as "credit" | "debit")}><option value="credit">Add to balance</option><option value="debit">Subtract from balance</option></select></div><div><Label htmlFor="wallet-adjustment-amount">Amount (KES)</Label><Input id="wallet-adjustment-amount" className="mt-2" type="number" min="1" value={walletEditAmount} onChange={(e) => setWalletEditAmount(e.target.value)} /></div><div><Label htmlFor="wallet-adjustment-note">Reason</Label><Input id="wallet-adjustment-note" className="mt-2" placeholder="Required audit reason" value={walletEditNote} onChange={(e) => setWalletEditNote(e.target.value)} /></div><div className="flex gap-2 md:col-span-4"><Button onClick={() => void handleWalletAdjustment()}>Save adjustment</Button><Button variant="outline" onClick={() => setWalletEditMember(null)}>Cancel</Button></div></CardContent></Card>}
+          {isAdmin && walletEditMember && <Card className="border-amber-300"><CardHeader><CardTitle>Adjust wallet balance</CardTitle><p className="text-sm text-muted-foreground">This records an auditable adjustment; it does not overwrite deposits or interest.</p></CardHeader><CardContent className="grid gap-3 md:grid-cols-4"><div><Label>Member</Label><p className="mt-2 font-medium">{walletEditMember.name}</p></div><div><Label htmlFor="wallet-adjustment-direction">Action</Label><select id="wallet-adjustment-direction" className="mt-2 h-10 w-full rounded-md border bg-background px-3 text-sm" value={walletEditDirection} onChange={(e) => setWalletEditDirection(e.target.value as "credit" | "debit")}><option value="credit">Add to balance</option><option value="debit">Subtract from balance</option></select></div><div><Label htmlFor="wallet-adjustment-amount">Amount (KES)</Label><Input id="wallet-adjustment-amount" className="mt-2" type="number" min="1" value={walletEditAmount} onChange={(e) => setWalletEditAmount(e.target.value)} /></div><div><Label htmlFor="wallet-adjustment-note">Reason</Label><Input id="wallet-adjustment-note" className="mt-2" placeholder="Required audit reason" value={walletEditNote} onChange={(e) => setWalletEditNote(e.target.value)} /></div>          <div className="flex gap-2 md:col-span-4"><Button onClick={() => void handleWalletAdjustment()} disabled={savingWalletAdjustment}>{savingWalletAdjustment ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : "Save adjustment"}</Button><Button variant="outline" onClick={() => setWalletEditMember(null)} disabled={savingWalletAdjustment}>Cancel</Button></div></CardContent></Card>}
           <Card>
             <CardHeader><div className="flex items-center justify-between"><div><CardTitle>Member wallet balances</CardTitle><p className="text-sm text-muted-foreground">Deposits, interest and current available balances</p></div><Button variant="ghost" size="icon" onClick={() => refetchWalletAdmin()} title="Refresh wallet records"><RefreshCw className="h-4 w-4" /></Button></div></CardHeader>
             <CardContent>{walletAdminLoading ? <Skeleton className="h-48 w-full" /> : (walletAdminData?.members || []).length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No wallet records found.</p> : <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Member</TableHead><TableHead className="text-right">Balance</TableHead><TableHead className="text-right">Deposits</TableHead><TableHead className="text-right">Interest</TableHead><TableHead>Activity</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader><TableBody>{(walletAdminData?.members || []).map((member: any) => { const hasCollectedFunds = Number(member.totalDeposits || 0) > 0 || Number(member.currentBalance || 0) > 0; return <TableRow key={String(member._id)} className={hasCollectedFunds ? "bg-emerald-50/70 dark:bg-emerald-950/20" : undefined}><TableCell><p className="font-medium">{member.name}</p><p className="text-xs text-muted-foreground">{member.member_id || member.memberId}</p></TableCell><TableCell className="text-right font-semibold">{Number(member.currentBalance || 0).toLocaleString()}</TableCell><TableCell className="text-right">{Number(member.totalDeposits || 0).toLocaleString()}</TableCell><TableCell className="text-right">{Number(member.totalInterestEarned || 0).toLocaleString()}</TableCell><TableCell><Badge variant={hasCollectedFunds ? "default" : "secondary"}>{member.transactionCount || 0} records</Badge></TableCell><TableCell><Button size="sm" variant="outline" onClick={() => { setWalletEditMember(member); setWalletEditAmount(""); setWalletEditNote(""); }}>Edit balance</Button></TableCell></TableRow>; })}</TableBody></Table></div>}</CardContent>
