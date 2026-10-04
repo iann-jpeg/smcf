@@ -29,7 +29,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { StatCard } from "@/components/StatCard";
-import { Wallet, Landmark, TrendingUp, CreditCard, CalendarCheck, PlusCircle, User, Download, Bell, CheckCheck, Save, Lock, FileText, CalendarIcon, Sparkles, Shield, ShieldCheck, ShieldX, Clock, ArrowRightLeft, Camera, Upload, Eye, Trash2, AlertCircle, Loader2, Smartphone } from "lucide-react";
+import { Wallet, Landmark, PiggyBank, TrendingUp, CreditCard, CalendarCheck, PlusCircle, User, Download, Bell, CheckCheck, Save, Lock, FileText, CalendarIcon, Sparkles, Shield, ShieldCheck, ShieldX, Clock, ArrowRightLeft, Camera, Upload, Eye, Trash2, AlertCircle, Loader2, Smartphone } from "lucide-react";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { Separator } from "@/components/ui/separator";
 import { exportMyTransactions, exportMyRepayments, exportMyLoans, exportMyStatement, downloadMembershipForm } from "@/lib/pdf-export";
@@ -538,6 +538,13 @@ export default function MyAccount() {
             </Link>
           </Button>
           <Button
+            className="bg-emerald-700 hover:bg-emerald-800 text-white gap-2"
+            onClick={() => { setDepositType("savings"); setDepositOpen(true); }}
+          >
+            <PiggyBank className="h-4 w-4" />
+            Savings Deposit
+          </Button>
+          <Button
             className="bg-green-600 hover:bg-green-700 text-white gap-2"
             onClick={() => { setDepositType("wallet"); setDepositOpen(true); }}
           >
@@ -607,7 +614,7 @@ export default function MyAccount() {
           value={`KES ${Number(member?.savings ?? 0).toLocaleString()}`}
           icon={Wallet}
           variant="success"
-          subtitle="Tap to deposit"
+          subtitle="Use Savings Deposit above"
         />
         <StatCard
           title="Loan Balance"
