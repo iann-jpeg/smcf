@@ -3,7 +3,8 @@ import mongoose, { Document, Schema } from 'mongoose';
 export interface ISaving extends Document {
   member_id: mongoose.Types.ObjectId;
   amount: number;
-  transaction_type: 'deposit' | 'withdrawal' | 'interest';
+  transaction_type: 'deposit' | 'withdrawal' | 'interest' | 'adjustment';
+  adjustment_direction?: 'credit' | 'debit';
   balance_before: number;
   balance_after: number;
   interest_rate?: number;
@@ -23,7 +24,8 @@ export interface ISaving extends Document {
 const schema = new Schema<ISaving>({
   member_id: { type: Schema.Types.ObjectId, ref: 'Member', required: true },
   amount: { type: Number, required: true, min: 0 },
-  transaction_type: { type: String, enum: ['deposit', 'withdrawal', 'interest'], required: true },
+  transaction_type: { type: String, enum: ['deposit', 'withdrawal', 'interest', 'adjustment'], required: true },
+  adjustment_direction: { type: String, enum: ['credit', 'debit'] },
   balance_before: { type: Number, required: true, default: 0 },
   balance_after: { type: Number, required: true },
   interest_rate: { type: Number, default: 3 },

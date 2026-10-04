@@ -73,6 +73,7 @@ router.get('/', protect, async (req: AuthRequest, res, next) => {
     const walletBalance = completedWallet.reduce((total, record) => {
       if (record.transaction_type === 'deposit' || record.transaction_type === 'interest') return total + Number(record.amount || 0);
       if (record.transaction_type === 'withdrawal') return total - Number(record.amount || 0);
+      if (record.transaction_type === 'adjustment') return total + (record.adjustment_direction === 'credit' ? Number(record.amount || 0) : -Number(record.amount || 0));
       return total;
     }, 0);
     const walletPrincipal = completedWallet.filter((record) => record.transaction_type === 'deposit').reduce((total, record) => total + Number(record.amount || 0), 0);

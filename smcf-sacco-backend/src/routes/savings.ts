@@ -17,12 +17,15 @@ async function summary(memberId: mongoose.Types.ObjectId | string) {
   const deposits = records.filter((r) => r.transaction_type === 'deposit');
   const interest = records.filter((r) => r.transaction_type === 'interest');
   const withdrawals = records.filter((r) => r.transaction_type === 'withdrawal');
+  const adjustments = records.filter((r) => r.transaction_type === 'adjustment');
   const now = new Date();
   const locked = deposits.filter((r) => r.unlock_date && new Date(r.unlock_date) > now && r.maturity_status !== 'withdrawn');
   const totalDeposits = deposits.reduce((n, r) => n + Number(r.amount || 0), 0);
   const totalInterest = interest.reduce((n, r) => n + Number(r.amount || 0), 0);
   const totalWithdrawals = withdrawals.reduce((n, r) => n + Number(r.amount || 0), 0);
-  const balance = totalDeposits + totalInterest - totalWithdrawals;
+  const balance = totalDeposits + totalInterest - totalWithdrawals
+    + adjustments.filter((r) => r.adjustment_direction === 'credit').reduce((n, r) => n + Number(r.amount || 0), 0)
+    - adjustments.filter((r) => r.adjustment_direction === 'debit').reduce((n, r) => n + Number(r.amount || 0), 0);
   const lockedAmount = locked.reduce((n, r) => n + Number(r.amount || 0), 0);
   return {
     currentBalance: balance,
@@ -80,6 +83,38 @@ router.get('/admin/all', ...adminOnly, async (_req, res, next) => {
 router.get('/admin/pending-withdrawals', ...adminOnly, async (_req, res, next) => {
   try { return res.json({ success: true, data: await Saving.find({ transaction_type: 'withdrawal', status: 'pending' }).populate('member_id', 'name memberId phone').sort({ created_at: -1 }).lean() }); }
   catch (error) { return next(error); }
+});
+
+router.post('/admin/:memberId/adjustment', protect, authorize('admin'), async (req: AuthRequest, res, next) => {
+  try {
+    const member = await Member.findOne({ _id: req.params.memberId, status: { $ne: 'deleted' } }).select('_id name memberId');
+    const amount = Math.round(Number(req.body?.amount));
+    const direction = req.body?.direction === 'debit' ? 'debit' : req.body?.direction === 'credit' ? 'credit' : null;
+    const note = String(req.body?.note || '').trim();
+    if (!member) return res.status(404).json({ success: false, message: 'Member not found' });
+    if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ success: false, message: 'A positive adjustment amount is required' });
+    if (!direction) return res.status(400).json({ success: false, message: 'Adjustment direction must be credit or debit' });
+    if (!note) return res.status(400).json({ success: false, message: 'A reason is required for wallet adjustments' });
+
+    const wallet = await summary(member._id);
+    if (direction === 'debit' && amount > wallet.currentBalance) {
+      return res.status(400).json({ success: false, message: 'Debit cannot exceed the current wallet balance' });
+    }
+    const balanceAfter = direction === 'credit' ? wallet.currentBalance + amount : wallet.currentBalance - amount;
+    const record = await Saving.create({
+      member_id: member._id,
+      amount,
+      transaction_type: 'adjustment',
+      adjustment_direction: direction,
+      balance_before: wallet.currentBalance,
+      balance_after: balanceAfter,
+      payment_method: 'admin_adjustment',
+      status: 'completed',
+      notes: `ADMIN_ADJUSTMENT | ${direction.toUpperCase()} | ${note}`,
+      processed_at: new Date(),
+    });
+    return res.status(201).json({ success: true, data: record });
+  } catch (error) { return next(error); }
 });
 
 router.post('/admin/:action-withdrawal/:id', ...adminOnly, async (req: AuthRequest, res, next) => {
