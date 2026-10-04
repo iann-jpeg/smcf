@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import AuditLog from '../models/AuditLog';
 import Transaction from '../models/Transaction';
+import Loan from '../models/Loan';
 import { protect, authorize } from '../middleware/auth';
 
 const router = Router();
@@ -20,7 +21,9 @@ router.get('/', protect, authorize(...STAFF_ROLES), async (req, res, next) => {
       processedAt: { $gte: startDate, $lte: endDate },
     };
 
-    const [transactions, completedSummary, auditLogs] = await Promise.all([
+    const trendStart = new Date(startDate);
+    trendStart.setMonth(trendStart.getMonth() - 5);
+    const [transactions, completedSummary, auditLogs, monthlySummary, loanInterestSummary] = await Promise.all([
       Transaction.find(completedFilter)
         .populate('memberId', 'name memberId')
         .sort({ processedAt: -1 })
@@ -33,6 +36,7 @@ router.get('/', protect, authorize(...STAFF_ROLES), async (req, res, next) => {
             _id: '$type',
             count: { $sum: 1 },
             amount: { $sum: '$amount' },
+            feeAmount: { $sum: '$feeAmount' },
           },
         },
         { $sort: { amount: -1 } },
@@ -42,6 +46,21 @@ router.get('/', protect, authorize(...STAFF_ROLES), async (req, res, next) => {
         .sort({ createdAt: -1 })
         .limit(10)
         .lean(),
+      Transaction.aggregate([
+        { $match: { status: 'completed', processedAt: { $gte: trendStart, $lte: endDate } } },
+        {
+          $group: {
+            _id: { year: { $year: '$processedAt' }, month: { $month: '$processedAt' } },
+            income: { $sum: '$feeAmount' },
+            volume: { $sum: '$amount' },
+          },
+        },
+        { $sort: { '_id.year': 1, '_id.month': 1 } },
+      ]),
+      Loan.aggregate([
+        { $match: { status: { $in: ['disbursed', 'active', 'completed', 'defaulted'] } } },
+        { $group: { _id: null, total: { $sum: '$totalInterest' } } },
+      ]),
     ]);
 
     const summary = completedSummary.reduce(
@@ -60,6 +79,17 @@ router.get('/', protect, authorize(...STAFF_ROLES), async (req, res, next) => {
         byType: {} as Record<string, { count: number; amount: number }>,
       },
     );
+    const transactionFees = completedSummary.reduce(
+      (total, item) => total + Number(item.feeAmount || 0),
+      0,
+    );
+    const loanInterest = Number(loanInterestSummary[0]?.total || 0);
+    const monthly = monthlySummary.map((item) => ({
+      label: new Date(Number(item._id.year), Number(item._id.month) - 1, 1).toLocaleDateString('en-KE', { month: 'short' }),
+      income: Number(item.income || 0),
+      expenses: 0,
+      volume: Number(item.volume || 0),
+    }));
 
     return res.json({
       success: true,
@@ -74,10 +104,28 @@ router.get('/', protect, authorize(...STAFF_ROLES), async (req, res, next) => {
           sharePurchases: summary.byType.share_purchase?.amount || 0,
         },
         organizationalFunds: {
-          income: 0,
+          income: transactionFees + loanInterest,
           expenses: 0,
+          transactionFees,
+          loanInterest,
+          otherIncome: 0,
+          netPosition: transactionFees + loanInterest,
           classificationRequired: summary.verifiedTransactionCount,
-          message: 'Organizational income and expenses require explicit finance classification.',
+          message: 'Expenses are not classified in the current ledger and are shown as zero until finance records are entered.',
+        },
+        monthlyPerformance: monthly,
+        incomeSources: {
+          transactionFees,
+          loanInterest,
+          otherIncome: 0,
+        },
+        expenseBreakdown: {
+          hosting: 0,
+          domain: 0,
+          paymentApi: 0,
+          maintenance: 0,
+          bankCharges: 0,
+          taxes: 0,
         },
         recentTransactions: transactions,
         recentAuditActivity: auditLogs,

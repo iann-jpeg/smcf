@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Download, FileCheck2, Landmark, ReceiptText, ShieldCheck, Wallet } from "lucide-react";
+import { AlertTriangle, Download, FileCheck2, Landmark, ReceiptText, ShieldCheck, Wallet, TrendingUp, CircleDollarSign } from "lucide-react";
+import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +14,7 @@ type FinanceTransaction = {
   type: string;
   memberId?: { name?: string | null } | null;
   amount: number;
+  feeAmount?: number;
 };
 
 type AuditActivity = {
@@ -33,7 +35,14 @@ type FinanceOverview = {
     expenses?: number;
     classificationRequired?: number;
     message?: string;
+    transactionFees?: number;
+    loanInterest?: number;
+    otherIncome?: number;
+    netPosition?: number;
   };
+  monthlyPerformance?: { label: string; income: number; expenses: number; volume: number }[];
+  incomeSources?: { transactionFees: number; loanInterest: number; otherIncome: number };
+  expenseBreakdown?: Record<string, number>;
   recentTransactions: FinanceTransaction[];
   recentAuditActivity: AuditActivity[];
 };
@@ -69,6 +78,15 @@ export default function FinanceCompliance() {
   const recentTransactions = finance?.recentTransactions ?? [];
   const recentAuditActivity = finance?.recentAuditActivity ?? [];
   const loading = financeLoading || statementsLoading;
+  const incomeSources = finance?.incomeSources ?? { transactionFees: 0, loanInterest: 0, otherIncome: 0 };
+  const expenses = finance?.expenseBreakdown ?? {};
+  const totalIncome = Number(organizationalFunds.income || 0);
+  const totalExpenses = Number(organizationalFunds.expenses || 0);
+  const sourceChart = [
+    { name: "Transaction Fees", value: incomeSources.transactionFees, color: "#2d7a36" },
+    { name: "Loan Interest", value: incomeSources.loanInterest, color: "#c9a227" },
+    { name: "Other Income", value: incomeSources.otherIncome, color: "#7c3aed" },
+  ];
 
   const downloadKraReport = () => {
     exportKraFilingReport({
@@ -107,11 +125,33 @@ export default function FinanceCompliance() {
         </CardContent>
       </Card>
 
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Total Income</CardTitle></CardHeader><CardContent><p className="text-2xl font-semibold text-green-700">{loading ? "—" : kes(totalIncome)}</p></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Total Expenses</CardTitle></CardHeader><CardContent><p className="text-2xl font-semibold">{loading ? "—" : kes(totalExpenses)}</p><p className="text-xs text-muted-foreground">Awaiting classification</p></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Net Position</CardTitle></CardHeader><CardContent><p className="text-2xl font-semibold">{loading ? "—" : kes(totalIncome - totalExpenses)}</p></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Transaction Fees</CardTitle></CardHeader><CardContent><p className="text-2xl font-semibold">{loading ? "—" : kes(incomeSources.transactionFees)}</p></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Loan Interest</CardTitle></CardHeader><CardContent><p className="text-2xl font-semibold">{loading ? "—" : kes(incomeSources.loanInterest)}</p><p className="text-xs text-muted-foreground">Scheduled interest</p></CardContent></Card>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card><CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm"><ReceiptText className="h-4 w-4" /> Verified Transactions</CardTitle></CardHeader><CardContent><p className="text-2xl font-semibold">{loading ? "—" : finance?.verifiedTransactions?.verifiedTransactionCount ?? 0}</p><p className="text-xs text-muted-foreground">{kes(finance?.verifiedTransactions?.verifiedTransactionVolume)} total volume</p></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm"><Wallet className="h-4 w-4" /> Member Deposits</CardTitle></CardHeader><CardContent><p className="text-2xl font-semibold">{loading ? "—" : kes(memberFunds.deposits)}</p><p className="text-xs text-muted-foreground">Not organizational income</p></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm"><Landmark className="h-4 w-4" /> Closing Cash</CardTitle></CardHeader><CardContent><p className="text-2xl font-semibold">{loading ? "—" : kes(statements?.closingCashBalance)}</p><p className="text-xs text-muted-foreground">Existing SACCO statement</p></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm"><ShieldCheck className="h-4 w-4" /> Compliance State</CardTitle></CardHeader><CardContent><Badge variant="outline">Action required</Badge><p className="mt-2 text-xs text-muted-foreground">Configure obligations and evidence before filing claims.</p></CardContent></Card>
+      </div>
+
+      <Card>
+        <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><TrendingUp className="h-5 w-5" /> Income vs Expenses</CardTitle><p className="text-sm text-muted-foreground">Monthly performance</p></CardHeader>
+        <CardContent className="h-72">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={finance?.monthlyPerformance ?? []}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="label" /><YAxis tickFormatter={(value) => `KES ${Number(value).toLocaleString()}`} /><Tooltip formatter={(value: number) => kes(value)} /><Legend /><Bar dataKey="income" name="Income" fill="#2d7a36" radius={[4, 4, 0, 0]} /><Bar dataKey="expenses" name="Expenses" fill="#cbd5e1" radius={[4, 4, 0, 0]} /></BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><CircleDollarSign className="h-5 w-5" /> Income Sources</CardTitle></CardHeader><CardContent className="grid gap-4 md:grid-cols-2"><div className="h-56"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={sourceChart} dataKey="value" nameKey="name" innerRadius={55} outerRadius={82} paddingAngle={2}>{sourceChart.map((entry) => <Cell key={entry.name} fill={entry.color} />)}</Pie><Tooltip formatter={(value: number) => kes(value)} /></PieChart></ResponsiveContainer></div><div className="space-y-3 self-center">{sourceChart.map((entry) => <div key={entry.name} className="flex justify-between gap-4 text-sm"><span>{entry.name}</span><strong>{kes(entry.value)}</strong></div>)}</div></CardContent></Card>
+        <Card><CardHeader><CardTitle className="text-lg">Expense Breakdown</CardTitle></CardHeader><CardContent className="space-y-3">{Object.entries({ hosting: expenses.hosting, domain: expenses.domain, paymentApi: expenses.paymentApi, maintenance: expenses.maintenance, bankCharges: expenses.bankCharges, taxes: expenses.taxes }).map(([key, value]) => <div key={key} className="flex justify-between text-sm"><span className="capitalize text-muted-foreground">{readableLabel(key)}</span><strong>{kes(value)}</strong></div>)}<div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">Expense categories are ready for classification. No expense records are currently stored in the SACCO ledger.</div></CardContent></Card>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
