@@ -185,7 +185,7 @@ function extractProviderErrorMessage(payload: unknown, fallback: string): string
 
 function normalizePayHeroBaseUrl(rawUrl?: string): string {
   const value = String(rawUrl || '').trim().replace(/\/+$/, '');
-  return value || 'https://api.payhero.africa';
+  return value || 'https://backend.payhero.co.ke';
 }
 
 function hasPayHeroCredentials(): boolean {
