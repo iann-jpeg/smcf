@@ -510,6 +510,7 @@ async function pollSACCOPayment(
   amount: number,
   phone: string,
   loanId?: string,
+  walletPayment = false,
 ): Promise<void> {
   // Provider callbacks can arrive after the initial STK request has settled.
   // Keep the transaction pending during that window instead of marking a
@@ -525,7 +526,10 @@ async function pollSACCOPayment(
       return;
     }
 
-    const { status, mpesaReceiptNumber, amount: paidAmt, resultDesc } = await queryPayHeroStatus(checkoutRequestId);
+    const transactionForStatus = await Transaction.findById(pendingTxnId).select('transactionRef');
+    const { status, mpesaReceiptNumber, amount: paidAmt, resultDesc } = await queryPayHeroStatus(
+      transactionForStatus?.transactionRef || checkoutRequestId,
+    );
 
     if (status === 'success' && mpesaReceiptNumber) {
       const confirmedAmount = paidAmt || amount;
@@ -548,7 +552,7 @@ async function pollSACCOPayment(
             sourceLabel: 'M-Pesa STK',
             cycleNumber: pending?.cyclePayment ? pending.cycleNumber : undefined,
             tenXContributionId: pending?.tenXContributionId,
-            walletPayment: pending?.walletPayment,
+            walletPayment: walletPayment || pending?.walletPayment,
             processedAt: new Date(),
           });
           const d = pendingDeposits.get(checkoutRequestId);
@@ -1005,7 +1009,10 @@ async function settlePendingDeposit(params: {
     {
       checkoutRequestId: params.checkoutRequestId,
       type: transactionType,
-      depositProcessed: { $ne: true },
+      $or: [
+        { depositProcessed: { $ne: true } },
+        { financialPostingStatus: { $ne: 'completed' } },
+      ],
     },
     {
       $set: {
@@ -1027,6 +1034,9 @@ async function settlePendingDeposit(params: {
           : `M-Pesa Savings Deposit — Ref: ${params.mpesaRef} — ${params.phone || 'unknown'}`,
         processedAt,
         depositProcessed: true,
+        providerStatus: 'success',
+        financialPostingStatus: params.walletPayment ? 'pending' : 'completed',
+        reconciliationStatus: params.walletPayment ? 'none' : 'reconciled',
       },
     },
     { new: true }
@@ -1060,13 +1070,37 @@ async function settlePendingDeposit(params: {
       transaction_ref: params.mpesaRef,
       transaction_type: 'deposit',
     });
-    if (existingWalletRecord) return { applied: false, duplicate: true };
-
-    const lastWalletRecord = await Saving.findOne({ member_id: params.memberId }).sort({ created_at: -1 });
-    const balanceBefore = Number(lastWalletRecord?.balance_after || 0);
-    const unlockDate = new Date(processedAt);
-    unlockDate.setMonth(unlockDate.getMonth() + 3);
-    await Saving.create({ member_id: params.memberId, amount: creditedAmount, transaction_type: 'deposit', balance_before: balanceBefore, balance_after: balanceBefore + creditedAmount, payment_method: 'mpesa', transaction_ref: params.mpesaRef, status: 'completed', lock_period_months: 3, unlock_date: unlockDate, maturity_status: 'locked', notes: `Wallet deposit via M-Pesa STK (KES ${feeAmounts.feeAmount} transaction fee)` });
+    if (!existingWalletRecord) {
+      const lastWalletRecord = await Saving.findOne({ member_id: params.memberId }).sort({ created_at: -1 });
+      const balanceBefore = Number(lastWalletRecord?.balance_after || 0);
+      const unlockDate = new Date(processedAt);
+      unlockDate.setMonth(unlockDate.getMonth() + 3);
+      await Saving.create({
+        member_id: params.memberId,
+        amount: creditedAmount,
+        transaction_type: 'deposit',
+        balance_before: balanceBefore,
+        balance_after: balanceBefore + creditedAmount,
+        payment_method: 'mpesa',
+        transaction_ref: params.mpesaRef,
+        status: 'completed',
+        lock_period_months: 3,
+        unlock_date: unlockDate,
+        maturity_status: 'locked',
+        notes: `Wallet deposit via M-Pesa STK (KES ${feeAmounts.feeAmount} transaction fee)`,
+      });
+    }
+    await Transaction.findOneAndUpdate(
+      { checkoutRequestId: params.checkoutRequestId, type: transactionType },
+      {
+        providerStatus: 'success',
+        financialPostingStatus: 'completed',
+        reconciliationStatus: 'reconciled',
+        mpesaRef: params.mpesaRef,
+        processedAt,
+        depositProcessed: true,
+      },
+    );
   } else if (!cycleNumber && !params.tenXContributionId) {
     await recordSavingsDeposit({
       memberId: params.memberId,
@@ -2461,10 +2495,10 @@ router.get('/status/:checkoutRequestId', protect, async (req: AuthRequest, res: 
     const txn = await Transaction.findOne({
       checkoutRequestId,
       type: { $in: ['deposit', 'wallet_deposit', 'share_purchase', 'registration_fee', 'loan_repayment', 'tenx_contribution'] },
-    }).select('status providerStatus financialPostingStatus reconciliationStatus mpesaRef amount type depositProcessed memberId loanId cycleNumber grossAmount netAmount');
+    }).select('status providerStatus financialPostingStatus reconciliationStatus mpesaRef amount type depositProcessed memberId loanId cycleNumber grossAmount netAmount transactionRef');
     if (txn) {
-      if (txn.status === 'pending') {
-        const provider = await queryPayHeroStatus(checkoutRequestId);
+      if (txn.status === 'pending' || (txn.providerStatus === 'success' && txn.financialPostingStatus !== 'completed')) {
+        const provider = await queryPayHeroStatus(txn.transactionRef || checkoutRequestId);
         if (provider.status === 'success') {
           const member = await Member.findById(txn.memberId).select('phone');
           const pendingDeposit = pendingDeposits.get(checkoutRequestId);
@@ -2486,9 +2520,10 @@ router.get('/status/:checkoutRequestId', protect, async (req: AuthRequest, res: 
             Number(provider.amount || txn.amount),
             pendingDeposit?.phone || pendingShare?.phone || pendingRegistration?.phone || pendingRepayment?.phone || String(member?.phone || ''),
             txn.loanId || undefined,
+            txn.type === 'wallet_deposit' || pendingDeposit?.walletPayment,
           );
           const settled = await Transaction.findById(txn._id).select('status mpesaRef amount providerStatus financialPostingStatus reconciliationStatus');
-          if (settled?.status === 'completed') {
+          if (settled?.status === 'completed' && settled.financialPostingStatus === 'completed') {
             return res.json({
               success: true,
               data: {
@@ -2508,7 +2543,11 @@ router.get('/status/:checkoutRequestId', protect, async (req: AuthRequest, res: 
         success: true,
         data: {
           type: txn.type,
-          status:   txn.status === 'completed' ? 'success' : txn.status === 'failed' ? 'failed' : 'pending',
+          status:   txn.status === 'completed' && txn.financialPostingStatus === 'completed'
+            ? 'success'
+            : txn.status === 'failed'
+              ? 'failed'
+              : 'pending',
           mpesaRef: txn.mpesaRef,
           amount:   txn.amount,
           providerStatus: txn.providerStatus,
@@ -2681,10 +2720,10 @@ router.get('/repay-status/:checkoutRequestId', protect, async (req: AuthRequest,
   try {
     const { checkoutRequestId } = req.params;
 
-    const txn = await Transaction.findOne({ checkoutRequestId, type: 'loan_repayment' }).select('status mpesaRef amount loanId memberId');
+    const txn = await Transaction.findOne({ checkoutRequestId, type: 'loan_repayment' }).select('status mpesaRef amount loanId memberId transactionRef');
     if (txn) {
       if (txn.status === 'pending' && txn.loanId) {
-        const provider = await queryPayHeroStatus(checkoutRequestId);
+        const provider = await queryPayHeroStatus(txn.transactionRef || checkoutRequestId);
         if (provider.status === 'success') {
           const member = await Member.findById(txn.memberId).select('phone');
           const pending = pendingRepayments.get(checkoutRequestId);
@@ -2699,7 +2738,7 @@ router.get('/repay-status/:checkoutRequestId', protect, async (req: AuthRequest,
           );
         }
       }
-      const settled = await Transaction.findById(txn._id).select('status mpesaRef amount');
+      const settled = await Transaction.findById(txn._id).select('status mpesaRef amount providerStatus financialPostingStatus reconciliationStatus');
       return res.json({
         success: true,
         data: {
