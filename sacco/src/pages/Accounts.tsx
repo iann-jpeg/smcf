@@ -528,7 +528,7 @@ export default function Accounts() {
                           <Badge variant={txn.status === "completed" ? "default" : txn.status === "declined" ? "destructive" : "secondary"}>{txn.status}</Badge>
                         </div>
                         <p className="text-xs text-muted-foreground">M-Pesa: {txn.mpesa_ref || txn.mpesaRef || "—"}</p>
-                        <p className="text-sm">{txn.members?.name ?? "—"} • {txn.type}</p>
+                        <p className="text-sm">{txn.members?.name ?? "—"} • {txn.cycleNumber || txn.cycle_number ? `Cycle ${txn.cycleNumber || txn.cycle_number} contribution` : txn.type}</p>
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-muted-foreground">{new Date(txn.processed_at).toLocaleDateString()}</span>
                           <span className="font-semibold">KES {Number(txn.amount).toLocaleString()}</span>
@@ -556,7 +556,7 @@ export default function Accounts() {
                             <TableCell className="font-mono text-xs">{txn.mpesa_ref || txn.mpesaRef || "—"}</TableCell>
                             <TableCell>{new Date(txn.processed_at).toLocaleDateString()}</TableCell>
                             <TableCell className="font-medium">{txn.members?.name ?? "—"}</TableCell>
-                            <TableCell>{txn.type}</TableCell>
+                            <TableCell>{txn.cycleNumber || txn.cycle_number ? `Cycle ${txn.cycleNumber || txn.cycle_number} contribution` : txn.type}</TableCell>
                             <TableCell className="text-right font-semibold">{Number(txn.amount).toLocaleString()}</TableCell>
                             <TableCell><Badge variant={txn.status === "completed" ? "default" : txn.status === "declined" ? "destructive" : "secondary"}>{txn.status}</Badge></TableCell>
                           </TableRow>
@@ -593,7 +593,7 @@ export default function Accounts() {
                       <div key={txn.id} className="rounded-lg border p-3 space-y-3">
                         <div className="flex items-center justify-between gap-2">
                           <p className="font-medium text-sm">{txn.members?.name ?? txn.member_name ?? "—"}</p>
-                          <Badge variant="secondary">{txn.type}</Badge>
+                          <Badge variant="secondary">{txn.cycleNumber || txn.cycle_number ? `Cycle ${txn.cycleNumber || txn.cycle_number} contribution` : txn.type}</Badge>
                         </div>
                         <p className="text-xs text-muted-foreground">{new Date(txn.processed_at).toLocaleDateString()}</p>
                         <p className="text-xs text-muted-foreground">{txn.description ?? "—"}</p>
@@ -643,7 +643,7 @@ export default function Accounts() {
                           <TableRow key={txn.id}>
                             <TableCell>{new Date(txn.processed_at).toLocaleDateString()}</TableCell>
                             <TableCell className="font-medium">{txn.members?.name ?? txn.member_name ?? "—"}</TableCell>
-                            <TableCell><Badge variant="secondary">{txn.type}</Badge></TableCell>
+                            <TableCell><Badge variant="secondary">{txn.cycleNumber || txn.cycle_number ? `Cycle ${txn.cycleNumber || txn.cycle_number} contribution` : txn.type}</Badge></TableCell>
                             <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">{txn.description ?? "—"}</TableCell>
                             <TableCell className="text-right font-semibold">{Number(txn.amount).toLocaleString()}</TableCell>
                             <TableCell className="text-center">

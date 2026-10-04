@@ -152,7 +152,7 @@ export function UnifiedAccountModules({
                   {walletTransactions.slice(0, 20).map((transaction: any) => (
                     <TableRow key={String(transaction._id ?? transaction.id)}>
                       <TableCell>{transaction.processedAt ? new Date(transaction.processedAt).toLocaleDateString() : "—"}</TableCell>
-                      <TableCell className="capitalize">{String(transaction.type ?? "transaction").replaceAll("_", " ")}</TableCell>
+                      <TableCell className="capitalize">{transaction.cycleNumber || transaction.cycle_number ? `Cycle ${transaction.cycleNumber || transaction.cycle_number} contribution` : String(transaction.type ?? "transaction").replaceAll("_", " ")}</TableCell>
                       <TableCell className="text-right font-medium">{kes(transaction.amount)}</TableCell>
                       <TableCell>
                         <div className="flex items-center justify-end gap-2">

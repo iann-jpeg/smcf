@@ -511,6 +511,7 @@ async function pollSACCOPayment(
   phone: string,
   loanId?: string,
   walletPayment = false,
+  cycleNumber?: number,
 ): Promise<void> {
   // Provider callbacks can arrive after the initial STK request has settled.
   // Keep the transaction pending during that window instead of marking a
@@ -550,7 +551,7 @@ async function pollSACCOPayment(
             phone,
             mpesaRef: mpesaReceiptNumber,
             sourceLabel: 'M-Pesa STK',
-            cycleNumber: pending?.cyclePayment ? pending.cycleNumber : undefined,
+            cycleNumber: cycleNumber ?? (pending?.cyclePayment ? pending.cycleNumber : undefined),
             tenXContributionId: pending?.tenXContributionId,
             walletPayment: walletPayment || pending?.walletPayment,
             processedAt: new Date(),
@@ -2523,6 +2524,7 @@ router.get('/status/:checkoutRequestId', protect, async (req: AuthRequest, res: 
             pendingDeposit?.phone || pendingShare?.phone || pendingRegistration?.phone || pendingRepayment?.phone || String(member?.phone || ''),
             txn.loanId || undefined,
             txn.type === 'wallet_deposit' || pendingDeposit?.walletPayment,
+            txn.cycleNumber ?? undefined,
           );
           const settled = await Transaction.findById(txn._id).select('status mpesaRef amount providerStatus financialPostingStatus reconciliationStatus');
           if (settled?.status === 'completed' && settled.financialPostingStatus === 'completed') {
