@@ -1032,16 +1032,52 @@ const Index = () => {
             </div>
 
             <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 lg:gap-4">
-              {["Safaricom", "Co-operative Bank of Kenya", "Jubilee Insurance", "SM Digital Solutions", "SmartMoves Books"].map((brand, index) => (
+              {[
+                {
+                  brand: "Safaricom",
+                  logo: "https://upload.wikimedia.org/wikipedia/commons/a/a7/Safaricom-logo-png_seeklogo-530479.svg",
+                  alt: "Safaricom logo",
+                },
+                {
+                  brand: "Co-operative Bank of Kenya",
+                  logo: "https://www.co-opbank.co.ke/wp-content/uploads/2021/12/coop-bank-logo-footer.png",
+                  alt: "Co-operative Bank of Kenya logo",
+                },
+                {
+                  brand: "Jubilee Insurance",
+                  logo: "https://jubileeinsurance.com/ke/wp-content/uploads/2026/07/jubilee-group-logo.png",
+                  alt: "Jubilee Insurance logo",
+                },
+                {
+                  brand: "SM Digital Solutions",
+                  logo: null,
+                },
+                {
+                  brand: "SmartMoves Books",
+                  logo: null,
+                },
+              ].map((item, index) => (
                 <div
-                  key={brand}
+                  key={item.brand}
                   className="group flex min-h-[132px] animate-fade-in-up flex-col items-center justify-center rounded-[22px] border border-[#e5ece7] bg-white px-4 py-5 text-center shadow-[0_12px_28px_rgba(17,53,39,0.04)] transition duration-300 hover:-translate-y-0.5 hover:scale-[1.02] hover:shadow-[0_20px_40px_rgba(17,53,39,0.09)]"
                   style={{ animationDelay: `${index * 70}ms` }}
                 >
-                  <div className="flex h-12 w-full items-center justify-center rounded-xl border border-dashed border-[#cbd9d0] bg-[#f7faf7] px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#6d8278] transition group-hover:border-[#b8924a]">
-                    Official logo asset pending
-                  </div>
-                  <p className="mt-4 text-sm font-semibold leading-5 text-[#123026]">{brand}</p>
+                  {item.logo ? (
+                    <div className="flex h-12 w-full items-center justify-center rounded-xl border border-[#e5ece7] bg-[#f7faf7] px-3">
+                      <img
+                        src={item.logo}
+                        alt={item.alt}
+                        className="max-h-10 max-w-full object-contain"
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex h-12 w-full items-center justify-center rounded-xl border border-dashed border-[#cbd9d0] bg-[#f7faf7] px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#6d8278] transition group-hover:border-[#b8924a]">
+                      Official logo asset pending
+                    </div>
+                  )}
+                  <p className="mt-4 text-sm font-semibold leading-5 text-[#123026]">{item.brand}</p>
                 </div>
               ))}
             </div>
