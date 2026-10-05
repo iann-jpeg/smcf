@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { AlertCircle, BarChart3, CalendarPlus, CheckCircle2, Download, FastForward, FileText, Landmark, Megaphone, RefreshCw, Save, Send, Settings, ShieldCheck, TrendingUp, Wallet } from "lucide-react";
+import { AlertCircle, BarChart3, CalendarPlus, CheckCircle2, Download, FastForward, FileText, Landmark, Megaphone, RefreshCw, Save, Send, Settings, ShieldCheck, TrendingUp, Wallet, type LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -258,6 +258,7 @@ export default function CycleAdmin() {
 }
 
 function Row({ label, value }: { label: string; value: string }) { return <div className="flex items-center justify-between rounded-md border bg-muted/20 p-3 text-sm"><span className="text-muted-foreground">{label}</span><span className="font-semibold">{value}</span></div>; }
+function Metric({ title, value, icon: Icon }: { title: string; value: string; icon: LucideIcon }) { return <Card><CardContent className="flex items-center justify-between p-4"><div><p className="text-xs text-muted-foreground">{title}</p><p className="mt-1 text-2xl font-bold">{value}</p></div><Icon className="h-5 w-5 text-primary" /></CardContent></Card>; }
 function ProgressRow({ label, value }: { label: string; value: number }) { return <div><div className="mb-1 flex justify-between text-sm"><span>{label}</span><span>{Math.round(value)}%</span></div><div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary" style={{ width: `${Math.min(100, Math.max(0, value))}%` }} /></div></div>; }
 function Empty({ text }: { text: string }) { return <p className="py-8 text-center text-sm text-muted-foreground">{text}</p>; }
 function MemberRow({ member, pending, loading, onMarkPaid, onMarkNoPayment }: { member: any; pending: boolean; loading: boolean; onMarkPaid: (amount: number) => void; onMarkNoPayment: (amount: number) => void }) { const [amount, setAmount] = useState(String(member.monthly_contribution || 200)); return <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"><div><p className="font-medium">{member.name}</p><p className="text-xs text-muted-foreground">{member.member_id || member.memberId} · {member.phone || "No phone"}</p></div><div className="flex items-center gap-2"><Input className="w-28" type="number" value={amount} onChange={(event) => setAmount(event.target.value)} aria-label={`Contribution for ${member.name}`} /><Badge variant={pending ? "outline" : "default"}>{pending ? "Pending" : "Paid"}</Badge>{pending && <><Button size="sm" onClick={() => onMarkPaid(Number(amount))} disabled={loading}>Record paid</Button><Button size="sm" variant="outline" onClick={() => onMarkNoPayment(Number(amount))} disabled={loading}>Mark paid</Button></>}</div></div>; }
