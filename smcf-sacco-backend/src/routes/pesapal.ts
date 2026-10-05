@@ -56,8 +56,11 @@ async function pesapalToken(): Promise<string> {
     const nestedError = data.error && typeof data.error === 'object'
       ? data.error as Record<string, unknown>
       : null;
-    const detail = nestedError?.message || data.message || data.error;
-    throw new Error(`Pesapal authentication failed${detail ? `: ${String(detail)}` : ''}`);
+    const detail = nestedError?.message || data.message || (typeof data.error === 'string' ? data.error : '');
+    const status = response.status ? ` (HTTP ${response.status})` : '';
+    throw new Error(
+      `Pesapal authentication failed${status}${detail ? `: ${String(detail)}` : '. Verify that the credentials match the configured sandbox or production URL.'}`,
+    );
   }
   return token;
 }
