@@ -13,11 +13,15 @@ const SIMULATION_DELAY_MS = 2000;
 type Purpose = 'savings' | 'wallet' | 'cycle' | 'share_purchase' | 'registration_fee';
 
 function configured() {
-  return Boolean(process.env.PESAPAL_CONSUMER_KEY && process.env.PESAPAL_CONSUMER_SECRET);
+  return Boolean(String(process.env.PESAPAL_CONSUMER_KEY || '').trim() && String(process.env.PESAPAL_CONSUMER_SECRET || '').trim());
 }
 
 function baseUrl() {
-  return String(process.env.PESAPAL_BASE_URL || 'https://cybqa.pesapal.com/pesapalapi').replace(/\/+$/, '');
+  const configuredBaseUrl = String(process.env.PESAPAL_BASE_URL || '').trim().replace(/\/+$/, '');
+  if (!configuredBaseUrl || configuredBaseUrl === 'https://cybqa.pesapal.com/pesapalapi') {
+    return 'https://cybqa.pesapal.com/pesapalv3/api';
+  }
+  return configuredBaseUrl;
 }
 
 function callbackUrl() {
@@ -36,18 +40,24 @@ function purposeType(purpose: Purpose) {
 }
 
 async function pesapalToken(): Promise<string> {
+  const consumerKey = String(process.env.PESAPAL_CONSUMER_KEY || '').trim();
+  const consumerSecret = String(process.env.PESAPAL_CONSUMER_SECRET || '').trim();
   const response = await fetch(`${baseUrl()}/Auth/RequestToken`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({
-      consumer_key: process.env.PESAPAL_CONSUMER_KEY,
-      consumer_secret: process.env.PESAPAL_CONSUMER_SECRET,
+      consumer_key: consumerKey,
+      consumer_secret: consumerSecret,
     }),
   });
   const data = await response.json().catch(() => ({})) as Record<string, unknown>;
   const token = data.token;
   if (!response.ok || typeof token !== 'string' || !token) {
-    throw new Error(String(data.message || 'Pesapal authentication failed'));
+    const nestedError = data.error && typeof data.error === 'object'
+      ? data.error as Record<string, unknown>
+      : null;
+    const detail = nestedError?.message || data.message || data.error;
+    throw new Error(`Pesapal authentication failed${detail ? `: ${String(detail)}` : ''}`);
   }
   return token;
 }
