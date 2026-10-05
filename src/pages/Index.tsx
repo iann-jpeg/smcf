@@ -952,13 +952,15 @@ const Index = () => {
           </div>
 
           <div className="rounded-[30px] border border-[#e7efe9] bg-white p-6 shadow-[0_20px_50px_rgba(17,53,39,0.05)]">
-            <div className="grid gap-6 md:grid-cols-5">
+            <div className="grid gap-6 md:grid-cols-4 lg:grid-cols-7">
               {[
-                "Moses",
-                "Mary",
-                "Daniel",
-                "Aisha",
-                "John",
+                "Valinyala A.I",
+                "Excel Baraka",
+                "Joy Okello",
+                "Rosemary Njeri",
+                "Stephen Oduor",
+                "Joshua Oduor",
+                "Dyvine Eshiuma",
               ].map((name, index) => (
                 <div key={name} className="flex flex-col items-center justify-center rounded-[24px] border border-[#e7efe9] bg-[#f8faf8] p-4 text-center">
                   <div className={`mb-3 flex h-14 w-14 items-center justify-center rounded-full font-bold text-white ${index % 2 === 0 ? "bg-[#123026]" : "bg-[#1a6d4f]"}`}>
