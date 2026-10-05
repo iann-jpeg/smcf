@@ -37,7 +37,22 @@ router.get('/overview', ...adminOnly, async (_req: AuthRequest, res, next) => {
     const members = selectedMemberIds
       ? allMembers.filter((member: any) => selectedMemberIds.has(String(member._id)))
       : allMembers;
-    const currentPayments = payments.filter((payment) => Number(payment.cycle_number) === cycleNumber);
+    const enrichPayment = (payment: any) => {
+      const member = allMembers.find((candidate: any) =>
+        String(candidate._id) === String(payment.member_id || payment.memberId),
+      );
+      return {
+        ...payment,
+        member_name: payment.member_name || member?.name || null,
+        member_code: payment.member_code || member?.memberId || null,
+      };
+    };
+    const currentPayments = payments
+      .filter((payment) => Number(payment.cycle_number) === cycleNumber)
+      .map(enrichPayment);
+    const recentCyclePayments = payments
+      .filter((payment) => payment.type === 'cycle_payment' || payment.cycle_number != null)
+      .map(enrichPayment);
     const completedPayments = currentPayments.filter((payment) => payment.status === 'completed');
     const paidIds = new Set(completedPayments.map((payment) => String(payment.member_id)));
     const advancePayments = members.map((member: any) => {
@@ -60,6 +75,7 @@ router.get('/overview', ...adminOnly, async (_req: AuthRequest, res, next) => {
         allMembers,
         members,
         payments: currentPayments.slice(0, 100),
+        recentCyclePayments: recentCyclePayments.slice(0, 100),
         recentPayments: payments.slice(0, 100),
         disbursements,
         paidMemberIds: [...paidIds],

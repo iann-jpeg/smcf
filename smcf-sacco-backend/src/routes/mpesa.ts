@@ -1153,29 +1153,58 @@ async function recordCyclePayment(params: {
   if (existing) return existing;
 
   const memberObjectId = new mongoose.Types.ObjectId(params.memberId);
-  const result = await payments.insertOne({
-    member_id: memberObjectId,
-    paid_by: memberObjectId,
-    amount: params.amount,
-    phone: params.phone || '',
-    mpesa_transaction_id: params.mpesaRef,
-    checkout_request_id: params.checkoutRequestId,
-    transaction_reference: params.mpesaRef,
-    payment_method: 'payhero',
-    status: 'completed',
-    type: 'cycle_payment',
-    cycle_number: params.cycleNumber,
-    date: params.processedAt,
-    created_at: params.processedAt,
-    deposit_processed: true,
-    notes: `Cycle ${params.cycleNumber} contribution via PayHero STK`,
-  });
+  const activeCycle = await database.collection('cycles').findOne(
+    { cycle_number: params.cycleNumber },
+    { sort: { cycle_number: -1 } },
+  );
+  const defaultContribution = Number(activeCycle?.contribution_amount || 224);
+  let remaining = Number(params.amount);
+  let cycleNumber = params.cycleNumber;
+  let cyclesCovered = 0;
+  const paymentRows = [];
+
+  while (remaining > 0) {
+    const cycle = await database.collection('cycles').findOne({ cycle_number: cycleNumber });
+    const contribution = Number(cycle?.contribution_amount || defaultContribution);
+    const allocatedAmount = Math.min(remaining, contribution);
+    const isPartial = allocatedAmount < contribution;
+    const reference = cycleNumber === params.cycleNumber
+      ? params.mpesaRef
+      : `${params.mpesaRef}-CYCLE-${cycleNumber}`;
+
+    paymentRows.push({
+      member_id: memberObjectId,
+      paid_by: memberObjectId,
+      amount: allocatedAmount,
+      phone: params.phone || '',
+      mpesa_transaction_id: reference,
+      checkout_request_id: cycleNumber === params.cycleNumber ? params.checkoutRequestId : `${params.checkoutRequestId}-CYCLE-${cycleNumber}`,
+      transaction_reference: reference,
+      payment_method: 'payhero',
+      status: 'completed',
+      type: 'cycle_payment',
+      cycle_number: cycleNumber,
+      date: params.processedAt,
+      created_at: params.processedAt,
+      deposit_processed: true,
+      notes: isPartial
+        ? `Partial Cycle ${cycleNumber} contribution via PayHero STK`
+        : `Cycle ${cycleNumber} contribution via PayHero STK`,
+    });
+
+    if (!isPartial) cyclesCovered += 1;
+    remaining -= allocatedAmount;
+    if (isPartial) break;
+    cycleNumber += 1;
+  }
+
+  await payments.insertMany(paymentRows);
   await Member.findByIdAndUpdate(memberObjectId, {
-    $inc: { total_cycle_contribution: params.amount, cycle_contribution_count: 1 },
+    $inc: { total_cycle_contribution: params.amount, cycle_contribution_count: cyclesCovered },
     $set: { payment_status: 'paid', payment_date: params.processedAt },
   });
   await advanceCycleWhenComplete(params.cycleNumber);
-  return { _id: result.insertedId };
+  return { _id: paymentRows[0]?._id, cyclesCovered };
 }
 
 async function advanceCycleWhenComplete(cycleNumber: number) {
@@ -1188,11 +1217,22 @@ async function advanceCycleWhenComplete(cycleNumber: number) {
     ? currentCycle.member_ids.map((id: unknown) => String(id))
     : (await Member.find({ status: { $ne: 'deleted' } }).select('_id').lean()).map((member) => String(member._id));
   if (selectedIds.length === 0) return;
-  const paidCount = await database.collection('payments').countDocuments({
-    cycle_number: cycleNumber,
-    status: 'completed',
-    member_id: { $in: selectedIds.map((id) => new mongoose.Types.ObjectId(id)) },
-  });
+  const contribution = Number(currentCycle.contribution_amount || 224);
+  const paidMembers = await Promise.all(selectedIds.map(async (id) => {
+    const memberObjectId = new mongoose.Types.ObjectId(id);
+    const result = await database.collection('payments').aggregate([
+      {
+        $match: {
+          cycle_number: cycleNumber,
+          status: 'completed',
+          member_id: { $in: [memberObjectId, id] },
+        },
+      },
+      { $group: { _id: '$member_id', total: { $sum: '$amount' } } },
+    ]).toArray();
+    return result.some((row) => Number(row.total || 0) >= contribution);
+  }));
+  const paidCount = paidMembers.filter(Boolean).length;
   if (paidCount < selectedIds.length) return;
   const closed = await cycles.updateOne(
     { _id: currentCycle._id, status: 'active' },
@@ -1220,6 +1260,7 @@ async function advanceCycleWhenComplete(cycleNumber: number) {
     { _id: { $in: selectedIds.map((id) => new mongoose.Types.ObjectId(id)) } },
     { $set: { payment_status: 'pending', payment_date: null } },
   );
+  await advanceCycleWhenComplete(nextNumber);
 }
 
 function isDuplicateKeyError(err: unknown): err is { code?: number; keyValue?: Record<string, unknown>; keyPattern?: Record<string, unknown> } {
