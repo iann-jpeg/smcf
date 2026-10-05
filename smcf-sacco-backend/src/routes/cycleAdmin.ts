@@ -112,6 +112,8 @@ router.post('/payments/manual', ...adminOnly, async (req: AuthRequest, res, next
     const payment = await database.collection('payments').insertOne({
       member_id: member._id,
       paid_by: member._id,
+      member_name: member.name,
+      member_code: member.memberId,
       amount: parsedAmount,
       phone: phone || member.phone || '',
       mpesa_transaction_id: reference,
@@ -124,6 +126,16 @@ router.post('/payments/manual', ...adminOnly, async (req: AuthRequest, res, next
       date: new Date(),
       created_at: new Date(),
       deposit_processed: true,
+    });
+    const contributionAmount = Number(
+      (await database.collection('cycles').findOne({ cycle_number: parsedCycle }))?.contribution_amount || 224,
+    );
+    await Member.findByIdAndUpdate(member._id, {
+      $inc: {
+        total_cycle_contribution: parsedAmount,
+        cycle_contribution_count: Math.floor(parsedAmount / contributionAmount),
+      },
+      $set: { payment_status: 'paid', payment_date: new Date() },
     });
     return res.status(201).json({ success: true, data: { id: payment.insertedId, reference, member: member.name } });
   } catch (error) {
