@@ -15,6 +15,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { playAtmDepositSound } from "@/lib/sound";
 
 type Step = "agreement" | "input" | "processing" | "success" | "failed";
+type PaymentMethod = "mpesa" | "card";
 const WALLET_AGREEMENT_VERSION = "2026-10-04";
 
 interface Props {
@@ -33,6 +34,8 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
   const [amount,      setAmount]      = useState("");
   const [phone,       setPhone]       = useState(memberPhone ?? "");
   const [loading,     setLoading]     = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("mpesa");
+  const [autoPayment, setAutoPayment] = useState(false);
   const [checkoutId,  setCheckoutId]  = useState<string | null>(null);
   const [mpesaRef,    setMpesaRef]    = useState<string | null>(null);
   const [failReason,  setFailReason]  = useState<string | null>(null);
@@ -53,6 +56,8 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
       setAmount("");
       setPhone(memberPhone ?? "");
       setLoading(false);
+      setPaymentMethod("mpesa");
+      setAutoPayment(false);
       setCheckoutId(null);
       setMpesaRef(null);
       setFailReason(null);
@@ -118,10 +123,29 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
   async function handlePay() {
     const num = Number(amount);
     if (!num || num < 1) { toast.error("Enter a deposit amount"); return; }
-    if (!phone.trim()) { toast.error("Enter your M-Pesa phone number"); return; }
+    if (paymentMethod === "mpesa" && !phone.trim()) { toast.error("Enter your M-Pesa phone number"); return; }
 
     setLoading(true);
     try {
+      if (paymentMethod === "card") {
+        const res = await api.post("/pesapal/orders", {
+          memberId,
+          amount: num,
+          purpose: paymentType === "wallet" ? "wallet" : paymentType === "cycle" ? "cycle" : "savings",
+          cycleNumber,
+          subscription: autoPayment,
+          consentAccepted: autoPayment,
+        });
+        const order = (res as any)?.data ?? res;
+        if (order.redirectUrl) {
+          window.location.assign(String(order.redirectUrl));
+          return;
+        }
+        setCheckoutId(String(order.orderTrackingId || ""));
+        setStep("processing");
+        startPesapalPolling(String(order.orderTrackingId || ""));
+        return;
+      }
       const res = await api.post("/mpesa/deposit", {
         memberId,
         amount: num,
@@ -139,6 +163,39 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
     } finally {
       setLoading(false);
     }
+  }
+
+  function startPesapalPolling(orderTrackingId: string) {
+    const checkStatus = async () => {
+      try {
+        const res = await api.get(`/pesapal/orders/${encodeURIComponent(orderTrackingId)}/status`);
+        const d = ((res as any)?.data ?? res) as any;
+        const status = String(d?.status || "").toLowerCase();
+        if (["success", "completed"].includes(status) && d?.financialPostingStatus === "completed") {
+          stopPolling();
+          await queryClient.invalidateQueries({ queryKey: ["my-member"], refetchType: "active" });
+          await queryClient.invalidateQueries({ queryKey: ["my-transactions"], refetchType: "active" });
+          await queryClient.invalidateQueries({ queryKey: ["my-savings-history"], refetchType: "active" });
+          await queryClient.invalidateQueries({ queryKey: ["my-unified-account"], refetchType: "active" });
+          playAtmDepositSound();
+          setMpesaRef(d.paymentReference ?? null);
+          setStep("success");
+        } else if (status === "failed") {
+          stopPolling();
+          setFailReason("Card payment failed or was cancelled.");
+          setStep("failed");
+        }
+      } catch {
+        // Keep polling through temporary network errors.
+      }
+    };
+    void checkStatus();
+    pollRef.current = setInterval(() => { void checkStatus(); }, 5000);
+    timeoutRef.current = setTimeout(() => {
+      stopPolling();
+      setFailReason("Card payment timed out. If you completed it, contact support.");
+      setStep("failed");
+    }, 5 * 60 * 1000);
   }
 
   const amountNum = Number(amount) || 0;
@@ -209,14 +266,18 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
                 <div className="p-1.5 rounded-full bg-green-100 dark:bg-green-900/30">
                   <Wallet className="h-5 w-5 text-green-600 dark:text-green-400" />
                 </div>
-                {paymentType === "wallet" ? "Deposit to Wallet via M-Pesa" : paymentType === "cycle" ? `Pay Cycle ${cycleNumber ? `#${cycleNumber} ` : ""}via M-Pesa` : paymentType === "tenx" ? "Pay 10X Contribution via M-Pesa" : "Deposit Savings via M-Pesa"}
+                {paymentType === "wallet" ? "Deposit to Wallet" : paymentType === "cycle" ? `Pay Cycle ${cycleNumber ? `#${cycleNumber} ` : ""}` : paymentType === "tenx" ? "Pay 10X Contribution" : "Deposit Savings"}
               </DialogTitle>
               <DialogDescription>
-                Select any amount below. An M-Pesa STK push will be sent to your phone — just enter your PIN to complete the {paymentType === "wallet" ? "wallet deposit" : paymentType === "cycle" ? "cycle contribution" : paymentType === "tenx" ? "10X contribution" : "savings deposit"}.
+                  Select a payment method and amount. Card payments are verified by Pesapal before the SMCF account is credited.
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-5 py-2">
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => setPaymentMethod("mpesa")} className={cn("rounded-lg border-2 px-3 py-2 text-sm font-semibold", paymentMethod === "mpesa" ? "border-green-500 bg-green-50 text-green-700" : "border-border")}>M-Pesa</button>
+                <button type="button" onClick={() => setPaymentMethod("card")} className={cn("rounded-lg border-2 px-3 py-2 text-sm font-semibold", paymentMethod === "card" ? "border-blue-500 bg-blue-50 text-blue-700" : "border-border")}>Card (Pesapal)</button>
+              </div>
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Quick Amount</Label>
                 <div className="grid grid-cols-4 gap-2">
@@ -262,7 +323,7 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
                 )}
               </div>
 
-              <div className="space-y-1.5">
+              {paymentMethod === "mpesa" && <div className="space-y-1.5">
                 <Label htmlFor="deposit-phone">M-Pesa Phone Number</Label>
                 <div className="relative">
                   <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -275,14 +336,24 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
                     placeholder="e.g. 0712 345 678"
                   />
                 </div>
-              </div>
+              </div>}
+
+              {paymentMethod === "card" && (
+                <label className="flex items-start gap-3 rounded-lg border p-3 text-sm">
+                  <input type="checkbox" checked={autoPayment} onChange={(event) => setAutoPayment(event.target.checked)} className="mt-1 h-4 w-4" />
+                  <span>
+                    <span className="font-medium">Enable automatic monthly card payments</span>
+                    <span className="mt-1 block text-xs text-muted-foreground">You will authorize the recurring payment through Pesapal. SMCF never receives or stores your card number or CVV.</span>
+                  </span>
+                </label>
+              )}
 
               <div className="rounded-lg border border-green-200 dark:border-green-800 bg-green-50/60 dark:bg-green-900/10 flex items-start gap-3 px-4 py-3">
                 <div className="flex items-center justify-center rounded bg-[#00A550] px-2 py-0.5 shrink-0 mt-0.5">
-                  <span className="text-white text-[11px] font-black tracking-wide">M-PESA</span>
+                  <span className="text-white text-[11px] font-black tracking-wide">{paymentMethod === "mpesa" ? "M-PESA" : "PESAPAL"}</span>
                 </div>
                 <p className="text-[12px] text-muted-foreground leading-snug">
-                  A prompt will be sent directly to your phone. Enter your PIN to deposit to <span className="font-semibold text-foreground"><span className="text-[#C9A227]">SMC</span><span className="text-[#2D7A36]">F</span> SACCO Accounts</span>. Payment posts instantly.
+                  {paymentMethod === "mpesa" ? "A prompt will be sent directly to your phone. Enter your PIN to complete the payment." : "You will be redirected to Pesapal to complete the secure card payment. SMCF posts the payment only after provider verification."}
                 </p>
               </div>
             </div>
@@ -292,10 +363,10 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
               <Button
                 className="flex-1 gap-2 bg-green-600 hover:bg-green-700 text-white"
                 onClick={handlePay}
-                disabled={loading || !amount || amountNum < minimumAmount || !phone.trim()}
+                disabled={loading || !amount || amountNum < minimumAmount || (paymentMethod === "mpesa" && !phone.trim())}
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Smartphone className="h-4 w-4" />}
-                {loading ? "Sending..." : "Send M-Pesa Prompt"}
+                {loading ? "Starting..." : paymentMethod === "mpesa" ? "Send M-Pesa Prompt" : "Continue to Pesapal"}
               </Button>
             </div>
           </>

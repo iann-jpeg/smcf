@@ -23,6 +23,10 @@ export interface ITransaction extends Document {
   checkoutRequestId?: string;
   mpesaRef?: string;
   paymentGateway?: string;
+  providerOrderTrackingId?: string;
+  providerMerchantReference?: string;
+  paymentPurpose?: 'savings' | 'wallet' | 'cycle' | 'tenx' | 'loan_repayment' | 'registration_fee';
+  subscriptionId?: mongoose.Types.ObjectId;
   cycleNumber?: number;
   loanId?: string;
   depositProcessed?: boolean;
@@ -82,6 +86,10 @@ const TransactionSchema = new Schema<ITransaction>({
   checkoutRequestId: { type: String, default: null },
   mpesaRef: { type: String, default: null },
   paymentGateway: { type: String, default: null },
+  providerOrderTrackingId: { type: String, default: null, sparse: true },
+  providerMerchantReference: { type: String, default: null, sparse: true },
+  paymentPurpose: { type: String, enum: ['savings', 'wallet', 'cycle', 'tenx', 'loan_repayment', 'registration_fee'], default: null },
+  subscriptionId: { type: Schema.Types.ObjectId, ref: 'CardSubscription', default: null },
   cycleNumber: { type: Number, default: undefined, sparse: true },
   loanId: { type: String, default: null },
   depositProcessed: { type: Boolean, default: false },
@@ -95,6 +103,8 @@ TransactionSchema.index({ status: 1 });
 TransactionSchema.index({ providerStatus: 1, financialPostingStatus: 1 });
 TransactionSchema.index({ checkoutRequestId: 1 });
 TransactionSchema.index({ mpesaRef: 1 }, { sparse: true });
+TransactionSchema.index({ providerOrderTrackingId: 1 }, { sparse: true });
+TransactionSchema.index({ providerMerchantReference: 1 }, { sparse: true });
 TransactionSchema.index({ memberId: 1, cycleNumber: 1, processedAt: -1 });
 
 export default mongoose.model<ITransaction>('Transaction', TransactionSchema);

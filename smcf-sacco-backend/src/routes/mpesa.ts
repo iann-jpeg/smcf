@@ -975,7 +975,7 @@ async function settleRegistrationFeePayment(params: {
   return { updated: true, alreadyPaid: false, duplicate: false };
 }
 
-async function settlePendingDeposit(params: {
+export async function settlePendingDeposit(params: {
   checkoutRequestId: string;
   memberId: string;
   amount: number;
@@ -986,6 +986,7 @@ async function settlePendingDeposit(params: {
   tenXContributionId?: string;
   walletPayment?: boolean;
   processedAt?: Date;
+  paymentGateway?: string;
 }) {
   const cycleNumber = params.cycleNumber;
   const feeAmounts = calculateTransactionAmounts(
@@ -1021,7 +1022,7 @@ async function settlePendingDeposit(params: {
       $set: {
         status: 'completed',
         mpesaRef: params.mpesaRef,
-        paymentGateway: 'payhero',
+        paymentGateway: params.paymentGateway || 'payhero',
         ...(cycleNumber ? { cycleNumber } : {}),
         amount,
         grossAmount: amount,
@@ -1125,6 +1126,7 @@ async function settlePendingDeposit(params: {
       checkoutRequestId: params.checkoutRequestId,
       mpesaRef: params.mpesaRef,
       processedAt,
+      paymentGateway: params.paymentGateway,
     });
   }
 
@@ -1139,6 +1141,7 @@ async function recordCyclePayment(params: {
   checkoutRequestId: string;
   mpesaRef: string;
   processedAt: Date;
+  paymentGateway?: string;
 }) {
   const database = mongoose.connection.db;
   if (!database) throw new Error('Database connection unavailable');
@@ -1180,7 +1183,7 @@ async function recordCyclePayment(params: {
       mpesa_transaction_id: reference,
       checkout_request_id: cycleNumber === params.cycleNumber ? params.checkoutRequestId : `${params.checkoutRequestId}-CYCLE-${cycleNumber}`,
       transaction_reference: reference,
-      payment_method: 'payhero',
+      payment_method: params.paymentGateway || 'payhero',
       status: 'completed',
       type: 'cycle_payment',
       cycle_number: cycleNumber,
@@ -1188,8 +1191,8 @@ async function recordCyclePayment(params: {
       created_at: params.processedAt,
       deposit_processed: true,
       notes: isPartial
-        ? `Partial Cycle ${cycleNumber} contribution via PayHero STK`
-        : `Cycle ${cycleNumber} contribution via PayHero STK`,
+        ? `Partial Cycle ${cycleNumber} contribution via ${params.paymentGateway || 'PayHero'}`
+        : `Cycle ${cycleNumber} contribution via ${params.paymentGateway || 'PayHero'}`,
     });
 
     if (!isPartial) cyclesCovered += 1;
