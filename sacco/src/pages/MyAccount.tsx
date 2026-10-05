@@ -100,6 +100,7 @@ export default function MyAccount() {
   const regFeeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [regFeeProcessing, setRegFeeProcessing] = useState(false);
   const [regFeeCheckoutId, setRegFeeCheckoutId] = useState<string | null>(null);
+  const [regFeePaymentMethod, setRegFeePaymentMethod] = useState<"mpesa" | "card">("mpesa");
 
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get("tab") || "overview";
@@ -205,12 +206,23 @@ export default function MyAccount() {
 
     setRegFeeProcessing(true);
     try {
-      const response = await api.post('/mpesa/registration-fee/initiate', {
-        memberId: member.id,
-        phone: member.phone || currentPhone || undefined,
-      }) as any;
+      const response = regFeePaymentMethod === "card"
+        ? await api.post('/pesapal/orders', {
+            memberId: member.id,
+            amount: registrationPaymentAmount,
+            purpose: 'registration_fee',
+          }) as any
+        : await api.post('/mpesa/registration-fee/initiate', {
+            memberId: member.id,
+            phone: member.phone || currentPhone || undefined,
+          }) as any;
 
-      const checkoutId = String(response?.checkoutRequestId || response?.data?.checkoutRequestId || '');
+      const order = response?.data ?? response;
+      if (regFeePaymentMethod === "card" && order.redirectUrl) {
+        window.location.assign(String(order.redirectUrl));
+        return;
+      }
+      const checkoutId = String(order?.checkoutRequestId || '');
       if (!checkoutId) {
         throw new Error('Could not start registration fee payment. Try again.');
       }
@@ -219,8 +231,11 @@ export default function MyAccount() {
 
       regFeePollRef.current = setInterval(async () => {
         try {
-          const status = await api.get(`/mpesa/status/${checkoutId}`) as any;
-          const state = status?.status || status?.data?.status;
+          const status = regFeePaymentMethod === "card"
+            ? await api.get(`/pesapal/orders/${encodeURIComponent(checkoutId)}/status`) as any
+            : await api.get(`/mpesa/status/${checkoutId}`) as any;
+          const statusData = status?.data ?? status;
+          const state = statusData?.status;
           if (state === 'success') {
             stopRegFeePolling();
             setRegFeeProcessing(false);
@@ -234,7 +249,7 @@ export default function MyAccount() {
           if (state === 'failed') {
             stopRegFeePolling();
             setRegFeeProcessing(false);
-            toast.error(status?.resultDesc || status?.data?.resultDesc || 'Registration fee payment failed');
+            toast.error(statusData?.resultDesc || 'Registration fee payment failed');
           }
         } catch {
           // keep polling on transient errors
@@ -780,8 +795,28 @@ export default function MyAccount() {
           )}
           {!registrationFeePaid && (
             <div className="pt-2 space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant={regFeePaymentMethod === "mpesa" ? "default" : "outline"}
+                  onClick={() => setRegFeePaymentMethod("mpesa")}
+                  disabled={regFeeProcessing}
+                  className="gap-2"
+                >
+                  <Smartphone className="h-4 w-4" /> M-Pesa
+                </Button>
+                <Button
+                  type="button"
+                  variant={regFeePaymentMethod === "card" ? "default" : "outline"}
+                  onClick={() => setRegFeePaymentMethod("card")}
+                  disabled={regFeeProcessing}
+                  className="gap-2"
+                >
+                  <CreditCard className="h-4 w-4" /> Card
+                </Button>
+              </div>
               <Button onClick={handleRegistrationFeePayment} disabled={regFeeProcessing} className="gap-2">
-                {regFeeProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Smartphone className="h-4 w-4" />}
+                {regFeeProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : regFeePaymentMethod === "card" ? <CreditCard className="h-4 w-4" /> : <Smartphone className="h-4 w-4" />}
                 {regFeeProcessing ? 'Processing payment...' : 'Pay Now'}
               </Button>
               {regFeeProcessing && regFeeCheckoutId && (

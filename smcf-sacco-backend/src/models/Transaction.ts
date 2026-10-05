@@ -25,7 +25,7 @@ export interface ITransaction extends Document {
   paymentGateway?: string;
   providerOrderTrackingId?: string;
   providerMerchantReference?: string;
-  paymentPurpose?: 'savings' | 'wallet' | 'cycle' | 'tenx' | 'loan_repayment' | 'registration_fee';
+  paymentPurpose?: 'savings' | 'wallet' | 'cycle' | 'tenx' | 'loan_repayment' | 'share_purchase' | 'registration_fee';
   subscriptionId?: mongoose.Types.ObjectId;
   cycleNumber?: number;
   loanId?: string;
@@ -88,7 +88,7 @@ const TransactionSchema = new Schema<ITransaction>({
   paymentGateway: { type: String, default: null },
   providerOrderTrackingId: { type: String, default: null, sparse: true },
   providerMerchantReference: { type: String, default: null, sparse: true },
-  paymentPurpose: { type: String, enum: ['savings', 'wallet', 'cycle', 'tenx', 'loan_repayment', 'registration_fee'], default: null },
+  paymentPurpose: { type: String, enum: ['savings', 'wallet', 'cycle', 'tenx', 'loan_repayment', 'share_purchase', 'registration_fee'], default: null },
   subscriptionId: { type: Schema.Types.ObjectId, ref: 'CardSubscription', default: null },
   cycleNumber: { type: Number, default: undefined, sparse: true },
   loanId: { type: String, default: null },

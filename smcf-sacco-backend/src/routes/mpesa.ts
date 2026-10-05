@@ -880,13 +880,13 @@ async function findMemberByPhoneForRegistration(phone: string) {
   return allCandidates.find((m) => isSamePhone(String((m as { phone?: unknown }).phone || ''), normalized)) || null;
 }
 
-async function settleRegistrationFeePayment(params: {
+export async function settleRegistrationFeePayment(params: {
   memberId: string;
   amount: number;
   phone: string;
   mpesaRef: string;
   checkoutRequestId?: string;
-  source: 'callback' | 'polling' | 'reconcile';
+  source: 'callback' | 'polling' | 'reconcile' | 'pesapal';
 }) {
   const { memberId, amount, phone, mpesaRef, checkoutRequestId, source } = params;
   const feeAmounts = calculateTransactionAmounts(amount, 'registration_fee');
@@ -936,9 +936,10 @@ async function settleRegistrationFeePayment(params: {
       feeAmount: feeAmounts.feeAmount,
       netAmount: feeAmounts.netAmount,
       feeType: feeAmounts.feeType,
-      description: `M-Pesa Registration Fee - Ref: ${mpesaRef} - ${normalizePhone(phone)}`,
+      description: `${source === 'pesapal' ? 'Pesapal Card' : 'M-Pesa'} Registration Fee - Ref: ${mpesaRef} - ${normalizePhone(phone)}`,
       processedAt: new Date(),
       depositProcessed: true,
+      paymentGateway: source === 'pesapal' ? 'pesapal' : 'payhero',
     }
   );
 
@@ -964,15 +965,88 @@ async function settleRegistrationFeePayment(params: {
       feeAmount: feeAmounts.feeAmount,
       netAmount: feeAmounts.netAmount,
       feeType: feeAmounts.feeType,
-      description: `M-Pesa Registration Fee (${source}) - Ref: ${mpesaRef} - ${normalizePhone(phone)}`,
+      description: `${source === 'pesapal' ? 'Pesapal Card' : 'M-Pesa'} Registration Fee (${source}) - Ref: ${mpesaRef} - ${normalizePhone(phone)}`,
       status: 'completed',
       mpesaRef,
       checkoutRequestId: checkoutRequestId || null,
+      paymentGateway: source === 'pesapal' ? 'pesapal' : 'payhero',
       createdBy: null,
     });
   }
 
   return { updated: true, alreadyPaid: false, duplicate: false };
+}
+
+export async function settleSharePurchasePayment(params: {
+  memberId: string;
+  amount: number;
+  phone?: string;
+  mpesaRef: string;
+  checkoutRequestId?: string;
+  source: 'callback' | 'polling' | 'reconcile' | 'pesapal';
+}) {
+  const shareAmounts = calculateTransactionAmounts(params.amount, 'share_purchase');
+  const pending = params.checkoutRequestId
+    ? await Transaction.findOneAndUpdate(
+        {
+          checkoutRequestId: params.checkoutRequestId,
+          type: 'share_purchase',
+          status: 'pending',
+          depositProcessed: { $ne: true },
+        },
+        {
+          status: 'completed',
+          mpesaRef: params.mpesaRef,
+          amount: shareAmounts.grossAmount,
+          ...shareAmounts,
+          description: `${params.source === 'pesapal' ? 'Pesapal Card' : 'M-Pesa'} Share Purchase - Ref: ${params.mpesaRef}`,
+          processedAt: new Date(),
+          depositProcessed: true,
+          providerStatus: 'success',
+          financialPostingStatus: 'completed',
+          reconciliationStatus: 'reconciled',
+        },
+        { new: true },
+      )
+    : null;
+
+  if (!pending && params.checkoutRequestId) {
+    const completed = await Transaction.findOne({
+      checkoutRequestId: params.checkoutRequestId,
+      type: 'share_purchase',
+      status: 'completed',
+      depositProcessed: true,
+    }).select('_id');
+    if (completed) return { duplicate: true };
+  }
+
+  if (pending) {
+    await Member.findByIdAndUpdate(params.memberId, { $inc: { shares: shareAmounts.netAmount } });
+    await recalculateMemberRiskScore(params.memberId);
+    return { duplicate: false };
+  }
+
+  const transactionRef = createTransactionRef();
+  await Transaction.create({
+    transactionRef,
+    memberId: params.memberId,
+    type: 'share_purchase',
+    amount: shareAmounts.grossAmount,
+    ...shareAmounts,
+    description: `${params.source === 'pesapal' ? 'Pesapal Card' : 'M-Pesa'} Share Purchase - Ref: ${params.mpesaRef}`,
+    status: 'completed',
+    providerStatus: 'success',
+    financialPostingStatus: 'completed',
+    reconciliationStatus: 'reconciled',
+    mpesaRef: params.mpesaRef,
+    checkoutRequestId: params.checkoutRequestId || null,
+    paymentGateway: params.source === 'pesapal' ? 'pesapal' : 'payhero',
+    depositProcessed: true,
+    createdBy: null,
+  });
+  await Member.findByIdAndUpdate(params.memberId, { $inc: { shares: shareAmounts.netAmount } });
+  await recalculateMemberRiskScore(params.memberId);
+  return { duplicate: false };
 }
 
 export async function settlePendingDeposit(params: {

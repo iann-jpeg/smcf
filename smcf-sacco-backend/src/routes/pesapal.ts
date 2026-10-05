@@ -5,12 +5,12 @@ import Transaction from '../models/Transaction';
 import Member from '../models/Member';
 import CardSubscription from '../models/CardSubscription';
 import { protect, AuthRequest } from '../middleware/auth';
-import { settlePendingDeposit } from './mpesa';
+import { settlePendingDeposit, settleRegistrationFeePayment, settleSharePurchasePayment } from './mpesa';
 import { createTransactionRef } from '../utils/transactionRef';
 
 const router = Router();
 const SIMULATION_DELAY_MS = 2000;
-type Purpose = 'savings' | 'wallet' | 'cycle';
+type Purpose = 'savings' | 'wallet' | 'cycle' | 'share_purchase' | 'registration_fee';
 
 function configured() {
   return Boolean(process.env.PESAPAL_CONSUMER_KEY && process.env.PESAPAL_CONSUMER_SECRET);
@@ -29,7 +29,10 @@ function notificationId() {
 }
 
 function purposeType(purpose: Purpose) {
-  return purpose === 'wallet' ? 'wallet_deposit' : 'deposit';
+  if (purpose === 'wallet') return 'wallet_deposit';
+  if (purpose === 'share_purchase') return 'share_purchase';
+  if (purpose === 'registration_fee') return 'registration_fee';
+  return 'deposit';
 }
 
 async function pesapalToken(): Promise<string> {
@@ -87,23 +90,42 @@ async function settleOrder(transaction: any, providerStatus: Record<string, unkn
   }
 
   const reference = String(providerStatus.confirmation_code || providerStatus.transaction_reference || transaction.providerOrderTrackingId);
-  const result = await settlePendingDeposit({
-    checkoutRequestId: String(transaction.checkoutRequestId),
-    memberId: String(transaction.memberId),
-    amount: Number(transaction.amount),
-    mpesaRef: `PESAPAL-${reference}`,
-    sourceLabel: 'Pesapal card payment',
-    cycleNumber: transaction.cycleNumber,
-    processedAt: new Date(),
-    walletPayment: transaction.paymentPurpose === 'wallet',
-    paymentGateway: 'pesapal',
-  });
+  const paymentReference = `PESAPAL-${reference}`;
+  const member = await Member.findById(transaction.memberId).select('phone');
+  const result = transaction.paymentPurpose === 'share_purchase'
+    ? await settleSharePurchasePayment({
+        checkoutRequestId: String(transaction.checkoutRequestId),
+        memberId: String(transaction.memberId),
+        amount: Number(transaction.amount),
+        mpesaRef: paymentReference,
+        source: 'pesapal',
+      })
+    : transaction.paymentPurpose === 'registration_fee'
+      ? await settleRegistrationFeePayment({
+          checkoutRequestId: String(transaction.checkoutRequestId),
+          memberId: String(transaction.memberId),
+          amount: Number(transaction.amount),
+          phone: String(member?.phone || ''),
+          mpesaRef: paymentReference,
+          source: 'pesapal',
+        })
+      : await settlePendingDeposit({
+          checkoutRequestId: String(transaction.checkoutRequestId),
+          memberId: String(transaction.memberId),
+          amount: Number(transaction.amount),
+          mpesaRef: paymentReference,
+          sourceLabel: 'Pesapal card payment',
+          cycleNumber: transaction.cycleNumber,
+          processedAt: new Date(),
+          walletPayment: transaction.paymentPurpose === 'wallet',
+          paymentGateway: 'pesapal',
+        });
   await Transaction.findByIdAndUpdate(transaction._id, {
     providerStatus: 'success',
     financialPostingStatus: 'completed',
     reconciliationStatus: 'reconciled',
     status: 'completed',
-    mpesaRef: `PESAPAL-${reference}`,
+    mpesaRef: paymentReference,
     depositProcessed: true,
   });
   if (transaction.subscriptionId) {
@@ -122,10 +144,13 @@ router.post('/orders', protect, async (req: AuthRequest, res: Response, next: Ne
     const { memberId, amount, purpose = 'savings', cycleNumber, subscription = false, consentAccepted = false } = req.body;
     if (!memberId || !mongoose.isValidObjectId(memberId)) return res.status(400).json({ success: false, message: 'Valid memberId is required' });
     if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) return res.status(400).json({ success: false, message: 'Amount must be positive' });
-    if (!['savings', 'wallet', 'cycle'].includes(purpose)) return res.status(400).json({ success: false, message: 'Unsupported Pesapal payment purpose' });
+    if (!['savings', 'wallet', 'cycle', 'share_purchase', 'registration_fee'].includes(purpose)) return res.status(400).json({ success: false, message: 'Unsupported Pesapal payment purpose' });
+    if (purpose === 'share_purchase' && Number(amount) < 100) return res.status(400).json({ success: false, message: 'Minimum share purchase is KES 100' });
+    if (purpose === 'registration_fee' && Number(amount) !== 110) return res.status(400).json({ success: false, message: 'Registration payment must be exactly KES 110' });
     if (subscription && !consentAccepted) return res.status(400).json({ success: false, message: 'Recurring card payment consent is required' });
-    const member = await Member.findById(memberId).select('name email phone');
+    const member = await Member.findById(memberId).select('name email phone registrationFeePaid');
     if (!member) return res.status(404).json({ success: false, message: 'Member not found' });
+    if (purpose === 'registration_fee' && member.registrationFeePaid) return res.status(409).json({ success: false, message: 'Registration fee already paid' });
 
     const amountNumber = Math.round(Number(amount));
     const transactionRef = createTransactionRef();
@@ -136,7 +161,7 @@ router.post('/orders', protect, async (req: AuthRequest, res: Response, next: Ne
       const cardSubscription = await CardSubscription.create({
         memberId,
         amount: amountNumber,
-        purpose,
+        purpose: ['savings', 'wallet', 'cycle'].includes(purpose) ? purpose : 'savings',
         status: 'pending',
         providerCustomerReference: merchantReference,
         consentAcceptedAt: new Date(),

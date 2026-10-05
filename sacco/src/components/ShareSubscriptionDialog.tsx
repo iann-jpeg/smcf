@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Landmark, RefreshCw, Clock, CheckCircle2, Loader2, Smartphone, XCircle,
+  Landmark, RefreshCw, Clock, CheckCircle2, Loader2, Smartphone, XCircle, CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
@@ -15,6 +15,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 const SHARE_UNIT_PRICE = 100;
 type Step = "input" | "processing" | "success" | "failed";
+type PaymentMethod = "mpesa" | "card";
 
 interface Props {
   open: boolean;
@@ -31,6 +32,7 @@ export function ShareSubscriptionDialog({ open, onClose, memberId, memberPhone, 
   const [amount,      setAmount]      = useState("");
   const [phone,       setPhone]       = useState(memberPhone ?? "");
   const [loading,     setLoading]     = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("mpesa");
   const [checkoutId,  setCheckoutId]  = useState<string | null>(null);
   const [mpesaRef,    setMpesaRef]    = useState<string | null>(null);
   const [failReason,  setFailReason]  = useState<string | null>(null);
@@ -55,6 +57,7 @@ export function ShareSubscriptionDialog({ open, onClose, memberId, memberPhone, 
       setAmount("");
       setPhone(memberPhone ?? "");
       setLoading(false);
+      setPaymentMethod("mpesa");
       setCheckoutId(null);
       setMpesaRef(null);
       setFailReason(null);
@@ -84,6 +87,41 @@ export function ShareSubscriptionDialog({ open, onClose, memberId, memberPhone, 
           setFailReason(d.resultDesc || "Share purchase was cancelled or failed.");
           setStep("failed");
         }
+
+        function startPesapalPolling(id: string) {
+          const checkStatus = async () => {
+            try {
+              const res = await api.get(`/pesapal/orders/${encodeURIComponent(id)}/status`);
+              const d = ((res as any)?.data ?? res) as any;
+              if (["success", "completed"].includes(String(d?.status || "").toLowerCase()) && d?.financialPostingStatus === "completed") {
+                stopPolling();
+                setMpesaRef(d.paymentReference ?? null);
+                setStep("success");
+                await Promise.all([
+                  queryClient.invalidateQueries({ queryKey: ["my-member"] }),
+                  queryClient.invalidateQueries({ queryKey: ["my-transactions"] }),
+                  queryClient.invalidateQueries({ queryKey: ["my-unified-account"] }),
+                  queryClient.invalidateQueries({ queryKey: ["members"] }),
+                  queryClient.invalidateQueries({ queryKey: ["transactions"] }),
+                  queryClient.invalidateQueries({ queryKey: ["my-share-summary"] }),
+                ]);
+              } else if (["failed", "cancelled", "canceled"].includes(String(d?.status || "").toLowerCase())) {
+                stopPolling();
+                setFailReason("Card share purchase was cancelled or failed.");
+                setStep("failed");
+              }
+            } catch {
+              // transient network issue, keep polling
+            }
+          };
+          void checkStatus();
+          pollRef.current = setInterval(() => { void checkStatus(); }, 5_000);
+          timeoutRef.current = setTimeout(() => {
+            stopPolling();
+            setFailReason("Payment timed out. If you completed payment, contact support.");
+            setStep("failed");
+          }, 5 * 60 * 1000);
+        }
       } catch {
         // transient network issue, keep polling
       }
@@ -102,15 +140,27 @@ export function ShareSubscriptionDialog({ open, onClose, memberId, memberPhone, 
   async function handlePay() {
     const num = Number(amount);
     if (!num || num < 100) { toast.error("Minimum share subscription is KES 100"); return; }
-    if (!phone.trim()) { toast.error("Enter your M-Pesa phone number"); return; }
+    if (paymentMethod === "mpesa" && !phone.trim()) { toast.error("Enter your M-Pesa phone number"); return; }
 
     setLoading(true);
     try {
-      const res = await api.post("/mpesa/share-purchase", {
-        memberId,
-        amount: num,
-        phone: phone.trim(),
-      });
+      if (paymentMethod === "card") {
+        const res = await api.post("/pesapal/orders", {
+          memberId,
+          amount: num,
+          purpose: "share_purchase",
+        });
+        const order = (res as any)?.data ?? res;
+        if (order.redirectUrl) {
+          window.location.assign(String(order.redirectUrl));
+          return;
+        }
+        setCheckoutId(String(order.orderTrackingId || ""));
+        setStep("processing");
+        startPesapalPolling(String(order.orderTrackingId || ""));
+        return;
+      }
+      const res = await api.post("/mpesa/share-purchase", { memberId, amount: num, phone: phone.trim() });
       const id = (res as any)?.data?.checkoutRequestId || (res as any)?.checkoutRequestId;
       if (!id) throw new Error("No checkout ID returned");
       setCheckoutId(id);
@@ -199,6 +249,18 @@ export function ShareSubscriptionDialog({ open, onClose, memberId, memberPhone, 
               </div>
 
               <div className="space-y-1.5">
+                <Label>Payment Method</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button type="button" variant={paymentMethod === "mpesa" ? "default" : "outline"} onClick={() => setPaymentMethod("mpesa")} className="gap-2">
+                    <Smartphone className="h-4 w-4" /> M-Pesa
+                  </Button>
+                  <Button type="button" variant={paymentMethod === "card" ? "default" : "outline"} onClick={() => setPaymentMethod("card")} className="gap-2">
+                    <CreditCard className="h-4 w-4" /> Card
+                  </Button>
+                </div>
+              </div>
+
+              {paymentMethod === "mpesa" && <div className="space-y-1.5">
                 <Label htmlFor="share-phone">M-Pesa Phone Number</Label>
                 <div className="relative">
                   <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -211,14 +273,16 @@ export function ShareSubscriptionDialog({ open, onClose, memberId, memberPhone, 
                     placeholder="e.g. 0712 345 678"
                   />
                 </div>
-              </div>
+              </div>}
 
               <div className="rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50/60 dark:bg-purple-900/10 flex items-start gap-3 px-4 py-3">
                 <div className="flex items-center justify-center rounded bg-[#00A550] px-2 py-0.5 shrink-0 mt-0.5">
-                  <span className="text-white text-[11px] font-black tracking-wide">M-PESA</span>
+                  <span className="text-white text-[11px] font-black tracking-wide">{paymentMethod === "card" ? "CARD" : "M-PESA"}</span>
                 </div>
                 <p className="text-[12px] text-muted-foreground leading-snug">
-                  An <span className="font-semibold text-foreground">M-Pesa STK push</span> will be sent to your phone for approval.
+                  {paymentMethod === "card"
+                    ? <>You will be redirected to <span className="font-semibold text-foreground">Pesapal</span> to securely complete your card payment.</>
+                    : <>An <span className="font-semibold text-foreground">M-Pesa STK push</span> will be sent to your phone for approval.</>}
                   Share purchase posts automatically once payment is confirmed.
                 </p>
               </div>
@@ -240,10 +304,10 @@ export function ShareSubscriptionDialog({ open, onClose, memberId, memberPhone, 
               <Button
                 className="flex-1 gap-2 bg-purple-600 hover:bg-purple-700 text-white"
                 onClick={handlePay}
-                disabled={loading || !amount || amountNum < 100 || !phone.trim()}
+                disabled={loading || !amount || amountNum < 100 || (paymentMethod === "mpesa" && !phone.trim())}
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Smartphone className="h-4 w-4" />}
-                {loading ? "Sending..." : "Send M-Pesa Prompt"}
+                {loading ? "Starting..." : paymentMethod === "card" ? "Pay by Card" : "Send M-Pesa Prompt"}
               </Button>
             </div>
           </>
