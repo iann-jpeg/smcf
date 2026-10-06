@@ -96,6 +96,18 @@ All colors MUST be HSL.
     --sidebar-border: 220 13% 91%;
 
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Shared SMCF brand tokens used by the public landing page and auth gateway. */
+    --smcf-navy: 168 34% 14%;
+    --smcf-green: 151 56% 27%;
+    --smcf-teal: 166 31% 36%;
+    --smcf-gold: 40 43% 51%;
+    --smcf-ivory: 36 33% 96%;
+    --smcf-white: 0 0% 100%;
+    --smcf-text: 168 34% 14%;
+    --smcf-muted: 163 17% 42%;
+    --smcf-border: 141 24% 89%;
+    --smcf-dark-surface: 168 34% 11%;
   }
 
   .dark {
@@ -134,6 +146,16 @@ All colors MUST be HSL.
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+    --smcf-navy: 168 34% 14%;
+    --smcf-green: 151 56% 35%;
+    --smcf-teal: 166 31% 46%;
+    --smcf-gold: 40 43% 58%;
+    --smcf-ivory: 168 22% 10%;
+    --smcf-white: 168 20% 14%;
+    --smcf-text: 36 33% 96%;
+    --smcf-muted: 163 16% 70%;
+    --smcf-border: 163 16% 25%;
+    --smcf-dark-surface: 168 34% 8%;
   }
 }
 
@@ -193,6 +215,82 @@ All colors MUST be HSL.
   .overflow-x-auto,
   .overflow-y-auto {
     -webkit-overflow-scrolling: touch;
+  }
+}
+
+@layer components {
+  .landing-page {
+    color: hsl(var(--smcf-text));
+    background:
+      radial-gradient(circle at 8% 8%, hsl(var(--smcf-gold) / 0.1), transparent 26rem),
+      hsl(var(--smcf-ivory));
+  }
+
+  .landing-page::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.28;
+    background-image:
+      linear-gradient(hsl(var(--smcf-navy) / 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--smcf-navy) / 0.035) 1px, transparent 1px);
+    background-size: 42px 42px;
+    mask-image: linear-gradient(to bottom, black, transparent 72%);
+  }
+
+  .landing-page__nav {
+    border-color: hsl(var(--smcf-border) / 0.9);
+    background-color: hsl(var(--smcf-ivory) / 0.82);
+  }
+
+  .landing-page__nav a,
+  .landing-page__nav button {
+    transition: color 180ms ease, background-color 180ms ease, border-color 180ms ease,
+      transform 180ms ease;
+  }
+
+  .landing-page__nav a:focus-visible,
+  .landing-page__nav button:focus-visible,
+  .landing-page a:focus-visible,
+  .landing-page button:focus-visible {
+    outline: 3px solid hsl(var(--smcf-gold) / 0.55);
+    outline-offset: 3px;
+  }
+
+  .landing-page__hero {
+    background:
+      radial-gradient(circle at 12% 10%, hsl(var(--smcf-gold) / 0.17), transparent 24%),
+      radial-gradient(circle at 82% 35%, hsl(var(--smcf-teal) / 0.11), transparent 33%),
+      linear-gradient(135deg, hsl(var(--smcf-ivory)), hsl(36 29% 93%));
+  }
+
+  .landing-page__dark-section {
+    background:
+      radial-gradient(circle at 84% 10%, hsl(var(--smcf-teal) / 0.2), transparent 30%),
+      hsl(var(--smcf-dark-surface));
+  }
+
+  .landing-page__card {
+    border-color: hsl(var(--smcf-border));
+    box-shadow: 0 24px 70px hsl(var(--smcf-navy) / 0.07);
+  }
+
+  .landing-page__card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 30px 80px hsl(var(--smcf-navy) / 0.11);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-page__nav a,
+  .landing-page__nav button,
+  .landing-page__card {
+    transition: none;
+  }
+
+  .landing-page__card:hover {
+    transform: none;
   }
 }
 

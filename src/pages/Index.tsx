@@ -421,7 +421,7 @@ const Index = () => {
   );
 
   return (
-    <div className="min-h-screen bg-[#f7f3ee] text-[#162f2d]">
+    <div className="landing-page min-h-screen">
       <SEO
         title="SMCF - Smart Moves Cash Flow | Digital Table Banking Platform Kenya"
         description="Digital savings and contribution platform for Kenya. Track wallets, cycle contributions, payments and growth in one secure place."
@@ -430,7 +430,7 @@ const Index = () => {
       />
 
       <header
-        className={`fixed inset-x-0 top-0 z-50 border-b transition-all duration-300 ${
+        className={`landing-page__nav fixed inset-x-0 top-0 z-50 border-b transition-all duration-300 ${
           isScrolled
             ? "border-[#e8dec5] bg-[rgba(250,247,242,0.84)] backdrop-blur-xl shadow-[0_18px_45px_rgba(20,36,35,0.08)]"
             : "border-transparent bg-[rgba(250,247,242,0.6)] backdrop-blur-sm"
@@ -517,8 +517,8 @@ const Index = () => {
         )}
       </header>
 
-      <main className="pt-20">
-        <section id="home" className="relative overflow-hidden">
+      <main className="landing-page__content pt-20">
+        <section id="home" className="landing-page__hero relative overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(184,146,74,0.15),transparent_24%),radial-gradient(circle_at_center,_rgba(18,45,42,0.08),transparent_40%),linear-gradient(135deg,#f7f3ee_0%,#f5f0e8_42%,#efeae3_100%)]" />
           <div className="container relative mx-auto grid max-w-7xl items-center gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:py-20">
             <div className="animate-fade-in-up">
@@ -776,7 +776,7 @@ const Index = () => {
           </div>
         </section>
 
-        <section id="cycles" className="bg-[linear-gradient(135deg,#162f2d,#183f39_35%,#122b2b)] py-16 text-white sm:py-20">
+        <section id="cycles" className="landing-page__dark-section py-16 text-white sm:py-20">
           <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-[0.9fr_1.1fr]">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#e7dcc0]">Contribution cycles</p>
