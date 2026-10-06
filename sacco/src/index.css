@@ -146,4 +146,124 @@
   .auth-bg-image {
     background-image: url('./assets/placeholder.svg');
   }
+
+  .auth-gateway {
+    isolation: isolate;
+    background:
+      radial-gradient(circle at 78% 18%, hsl(152 52% 35% / 0.14), transparent 32rem),
+      radial-gradient(circle at 18% 78%, hsl(45 78% 48% / 0.12), transparent 28rem),
+      linear-gradient(135deg, hsl(220 40% 13%), hsl(220 37% 18%) 48%, hsl(152 35% 17%));
+  }
+
+  .auth-gateway__content {
+    animation: auth-gateway-enter 700ms ease-out both;
+  }
+
+  .auth-gateway__glow {
+    position: absolute;
+    width: 34rem;
+    height: 34rem;
+    border-radius: 9999px;
+    filter: blur(80px);
+    pointer-events: none;
+    opacity: 0.24;
+  }
+
+  .auth-gateway__glow--green {
+    top: -18rem;
+    right: -8rem;
+    background: hsl(152 60% 40%);
+  }
+
+  .auth-gateway__glow--gold {
+    bottom: -20rem;
+    left: -10rem;
+    background: hsl(45 90% 55%);
+  }
+
+  .auth-gateway__grid {
+    position: absolute;
+    inset: 0;
+    opacity: 0.08;
+    background-image: linear-gradient(hsl(0 0% 100% / 0.18) 1px, transparent 1px), linear-gradient(90deg, hsl(0 0% 100% / 0.18) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: linear-gradient(to bottom, transparent, black 20%, black 80%, transparent);
+    pointer-events: none;
+  }
+
+  .auth-gateway__network {
+    position: absolute;
+    inset: auto 0 0;
+    width: 100%;
+    height: 70%;
+    opacity: 0.26;
+    pointer-events: none;
+  }
+
+  .auth-gateway__network path {
+    stroke: hsl(152 65% 65% / 0.55);
+    stroke-width: 1.2;
+    stroke-dasharray: 8 12;
+  }
+
+  .auth-gateway__nodes circle {
+    fill: hsl(45 90% 65% / 0.8);
+  }
+
+  .auth-gateway__card {
+    border: 1px solid hsl(0 0% 100% / 0.55);
+    border-radius: 1.25rem;
+    box-shadow: 0 25px 70px hsl(220 40% 6% / 0.32);
+    animation: auth-card-enter 700ms 100ms ease-out both;
+  }
+
+  .auth-gateway__feature {
+    border: 1px solid hsl(0 0% 100% / 0.12);
+    border-radius: 0.75rem;
+    padding: 0.75rem;
+    background: hsl(0 0% 100% / 0.05);
+  }
+
+  .auth-gateway__float {
+    position: absolute;
+    z-index: 20;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.25rem;
+    min-width: 145px;
+    border: 1px solid hsl(0 0% 100% / 0.2);
+    border-radius: 0.75rem;
+    padding: 0.7rem 0.85rem;
+    color: hsl(220 40% 13%);
+    background: hsl(0 0% 100% / 0.88);
+    box-shadow: 0 12px 30px hsl(220 40% 6% / 0.18);
+    font-size: 0.75rem;
+  }
+
+  .auth-gateway__float--top {
+    top: -1.25rem;
+    right: -2.25rem;
+  }
+
+  .auth-gateway__float--bottom {
+    bottom: -1.25rem;
+    left: -2.25rem;
+  }
+
+  @keyframes auth-gateway-enter {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes auth-card-enter {
+    from { opacity: 0; transform: translateY(14px) scale(0.985); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .auth-gateway__content,
+    .auth-gateway__card {
+      animation: none;
+    }
+  }
 }

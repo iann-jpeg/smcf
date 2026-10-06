@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Eye, EyeOff, CheckCircle2, Mail } from "lucide-react";
+import { Loader2, Eye, EyeOff, CheckCircle2, Mail, ShieldCheck, WalletCards, UsersRound, Target } from "lucide-react";
 import { toast } from "sonner";
 import { storeAuth } from "@/hooks/useAuth";
 import { fetchFromSaccoApi } from "@/lib/saccoApiBase";
@@ -303,11 +303,45 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-background">
-      <div className="absolute inset-0 opacity-10 bg-cover bg-center auth-bg-image" />
+    <div className="auth-gateway min-h-screen flex items-center justify-center p-4 sm:p-6 relative overflow-hidden bg-background">
+      <div className="auth-gateway__glow auth-gateway__glow--green" aria-hidden="true" />
+      <div className="auth-gateway__glow auth-gateway__glow--gold" aria-hidden="true" />
+      <svg className="auth-gateway__network" viewBox="0 0 900 700" fill="none" aria-hidden="true">
+        <path d="M25 570C180 540 205 405 340 430S510 550 625 355 755 150 880 115" />
+        <path d="M70 640C220 555 275 600 390 505S560 280 715 300 800 210 890 180" />
+        <g className="auth-gateway__nodes">
+          <circle cx="25" cy="570" r="5" /><circle cx="340" cy="430" r="5" /><circle cx="625" cy="355" r="5" /><circle cx="880" cy="115" r="5" />
+          <circle cx="390" cy="505" r="4" /><circle cx="715" cy="300" r="4" />
+        </g>
+      </svg>
+      <div className="auth-gateway__grid" aria-hidden="true" />
+      <div className="auth-gateway__content relative z-10 w-full max-w-6xl">
+        <div className="grid items-center gap-10 lg:grid-cols-[1fr_420px]">
+          <section className="auth-gateway__story hidden lg:block" aria-label="SMCF SACCO">
+            <div className="mb-6 flex items-center gap-3">
+              <img src={`${import.meta.env.BASE_URL}favicon.png`} alt="" className="h-12 w-12 rounded-xl shadow-lg" />
+              <span className="text-sm font-semibold uppercase tracking-[0.24em] text-white/70">SMCF SACCO</span>
+            </div>
+            <p className="mb-4 text-sm font-semibold uppercase tracking-[0.22em] text-[#D4A72C]">Your financial journey</p>
+            <h1 className="max-w-lg text-5xl font-semibold leading-tight text-white xl:text-6xl">
+              Your money.<br />Your goals.<br /><span className="text-emerald-300">Your future.</span>
+            </h1>
+            <p className="mt-6 max-w-md text-lg leading-8 text-white/70">
+              Manage your savings, participate in cycles, grow your financial goals and stay connected to your SMCF journey.
+            </p>
+            <div className="mt-10 grid max-w-md grid-cols-3 gap-3 text-xs text-white/65">
+              <div className="auth-gateway__feature"><WalletCards className="mb-2 h-4 w-4 text-emerald-300" />Smart saving</div>
+              <div className="auth-gateway__feature"><UsersRound className="mb-2 h-4 w-4 text-[#D4A72C]" />Community</div>
+              <div className="auth-gateway__feature"><Target className="mb-2 h-4 w-4 text-emerald-300" />Shared growth</div>
+            </div>
+          </section>
+
+          <div className="relative">
+            <div className="auth-gateway__float auth-gateway__float--top hidden sm:flex"><span>Financial growth</span><span className="text-emerald-600">●</span></div>
+            <div className="auth-gateway__float auth-gateway__float--bottom hidden sm:flex"><span>Secure access</span><ShieldCheck className="h-4 w-4 text-emerald-700" /></div>
       
       {/* Main Auth Card */}
-      <Card className="w-full max-w-md relative z-10">
+      <Card className="auth-gateway__card w-full max-w-md relative z-10">
         <CardHeader className="text-center space-y-4">
           <img src={`${import.meta.env.BASE_URL}favicon.png`} alt="SMCF SACCO" className="mx-auto w-16 h-16 rounded-xl" />
           <div>
@@ -362,6 +396,10 @@ export default function Auth() {
                       ? `Try again in ${loginCooldownSeconds}s`
                       : "Sign In"}
                 </Button>
+                <p className="flex items-center justify-center gap-1.5 pt-1 text-xs text-muted-foreground">
+                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-700" />
+                  Secure access to your SMCF account
+                </p>
 
               </form>
             </TabsContent>
@@ -419,6 +457,14 @@ export default function Auth() {
           </Tabs>
         </CardContent>
       </Card>
+          </div>
+        </div>
+        <footer className="mt-8 text-center text-xs text-white/55 lg:text-left">
+          <span>© 2026 SMART MOVES DEVELOPMENT AGENCY</span>
+          <span className="mx-2 hidden sm:inline">·</span>
+          <span className="block sm:inline">Powering Grassroots Financial Freedom</span>
+        </footer>
+      </div>
 
       {/* Email Verification Modal */}
       {showVerificationModal && (
