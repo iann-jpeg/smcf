@@ -77,6 +77,7 @@ const memberServicesNav = [
 ];
 
 const adminNav = [
+  { title: "Strategic Intelligence", url: "/strategic-intelligence", icon: TrendingUp, allowedRoles: ["admin", "treasurer", "credit_committee", "auditor"] },
   { title: "10X Group", url: "/tenx", icon: UsersRound, allowedRoles: ["admin", "treasurer"] },
   { title: "Finance & Compliance", url: "/finance-compliance", icon: Calculator, allowedRoles: ["admin", "treasurer", "auditor"] },
   { title: "Reports", url: "/reports", icon: BarChart3, allowedRoles: ["admin", "credit_committee", "treasurer", "auditor"] },

@@ -51,6 +51,7 @@ const CycleAdmin       = lazyPage(() => import("./pages/CycleAdmin"), "cycle-adm
 const TenXAdmin        = lazyPage(() => import("./pages/TenXAdmin"), "tenx");
 const NotFound         = lazyPage(() => import("./pages/NotFound"), "not-found");
 const Transparency     = lazyPage(() => import("./pages/Transparency"), "transparency");
+const StrategicIntelligence = lazyPage(() => import("./pages/StrategicIntelligence"), "strategic-intelligence");
 
 // Thin route-level fallback — reuses the CSS spinner already on the page.
 function PageLoader() {
@@ -172,6 +173,7 @@ function ProtectedRoutes() {
           <Route path="/cycle-admin" element={<CycleAdmin />} />
           <Route path="/tenx" element={<TenXAdmin />} />
           <Route path="/finance-compliance" element={<FinanceCompliance />} />
+          <Route path="/strategic-intelligence" element={<StrategicIntelligence />} />
           <Route path="/compliance" element={<Compliance />} />
           <Route path="/documents" element={<Documents />} />
           <Route path="/registration-fee" element={<RegistrationFee />} />

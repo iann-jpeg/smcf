@@ -58,6 +58,7 @@ import { NextActionCard } from "@/components/NextActionCard";
 import { WalletSummaryVisual } from "@/components/WalletSummaryVisual";
 import { CycleProgressVisual } from "@/components/CycleProgressVisual";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 function statusVariant(status: string) {
   switch (status) {
@@ -101,6 +102,7 @@ export default function MyAccount() {
     enabled: Boolean(rawMember),
     staleTime: 120_000,
   });
+  const [calendarNoticeOpen, setCalendarNoticeOpen] = useState(false);
 
   const [phone, setPhone] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
@@ -118,6 +120,11 @@ export default function MyAccount() {
   const [regFeeProcessing, setRegFeeProcessing] = useState(false);
   const [regFeeCheckoutId, setRegFeeCheckoutId] = useState<string | null>(null);
   const [regFeePaymentMethod, setRegFeePaymentMethod] = useState<"mpesa" | "card">("mpesa");
+
+  useEffect(() => {
+    if (!rawMember || !Array.isArray(calendarData) || calendarData.length === 0) return;
+    setCalendarNoticeOpen(true);
+  }, [rawMember, calendarData]);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get("tab") || "overview";
@@ -505,9 +512,48 @@ export default function MyAccount() {
     ...upcomingRepayments.slice(0, 3).filter((item: any) => item.due_date).map((item: any) => ({ date: item.due_date, label: "Loan repayment due", amount: Number(item.amount || item.installment_amount || 0), tone: "warning" as const })),
     ...(activeCycle?.endDate || activeCycle?.end_date ? [{ date: activeCycle.endDate || activeCycle.end_date, label: `Cycle #${activeCycle.cycleNumber || activeCycle.cycle_number || ""} closes`, tone: "default" as const }] : []),
   ];
+  const managedCalendarEvents = Array.isArray(calendarData)
+    ? calendarData
+      .filter((event: any) => event?.startsAt)
+      .sort((a: any, b: any) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
+    : [];
 
   return (
     <div className="space-y-6">
+      <Dialog open={calendarNoticeOpen} onOpenChange={setCalendarNoticeOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-heading">
+              <CalendarCheck className="h-5 w-5 text-primary" />
+              Upcoming SMCF dates
+            </DialogTitle>
+            <DialogDescription>
+              Your SACCO administrator has added the following dates and events to your financial calendar.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[55vh] space-y-3 overflow-y-auto pr-1">
+            {managedCalendarEvents.map((event: any) => (
+              <div key={event._id || `${event.title}-${event.startsAt}`} className="rounded-lg border p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium">{event.title}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {format(new Date(event.startsAt), "EEEE, dd MMMM yyyy")}
+                      {event.endsAt ? ` - ${format(new Date(event.endsAt), "dd MMMM yyyy")}` : ""}
+                    </p>
+                  </div>
+                  {event.amount != null && (
+                    <span className="shrink-0 text-sm font-semibold">
+                      KES {Number(event.amount).toLocaleString()}
+                    </span>
+                  )}
+                </div>
+                {event.description && <p className="mt-2 text-sm text-muted-foreground">{event.description}</p>}
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
