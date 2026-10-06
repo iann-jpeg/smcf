@@ -28,8 +28,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
-import { StatCard } from "@/components/StatCard";
-import { Wallet, Landmark, PiggyBank, TrendingUp, CreditCard, CalendarCheck, PlusCircle, User, Download, Bell, CheckCheck, Save, Lock, FileText, CalendarIcon, Sparkles, Shield, ShieldCheck, ShieldX, Clock, ArrowRightLeft, Camera, Upload, Eye, Trash2, AlertCircle, Loader2, Smartphone } from "lucide-react";
+import { Wallet, Landmark, TrendingUp, CreditCard, CalendarCheck, PlusCircle, User, Download, Bell, CheckCheck, Save, Lock, FileText, CalendarIcon, Sparkles, Shield, ShieldCheck, ShieldX, Clock, ArrowRightLeft, Camera, Upload, Eye, Trash2, AlertCircle, Loader2, Smartphone } from "lucide-react";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { Separator } from "@/components/ui/separator";
 import { exportMyTransactions, exportMyRepayments, exportMyLoans, exportMyStatement, downloadMembershipForm } from "@/lib/pdf-export";
@@ -555,28 +554,93 @@ export default function MyAccount() {
           </div>
         </DialogContent>
       </Dialog>
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      {/* Compact member command-center header */}
+      <div className="flex flex-col gap-4 rounded-2xl border bg-card/80 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <MemberAvatar name={member.name} photo={member.profile_photo} size="md" />
           <div>
-            <h1 className="text-2xl font-heading font-bold">Good morning, {member.name?.split(" ")[0] || "Member"}</h1>
-            <p className="text-muted-foreground text-sm">
-              Your SMCF financial overview · {member.member_id}
-            </p>
-            {registrationFeePaid && (
-              <Badge className="mt-1 bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-100">
-                Verified Member
-              </Badge>
-            )}
-            <div className="mt-1 flex flex-wrap gap-1.5">
-              {Boolean((unifiedAccount as any)?.tenX?.enrolled) && <Badge variant="secondary" className="border-amber-300 bg-amber-50 text-[10px] text-amber-800">10X Enrolled</Badge>}
+            <h1 className="font-heading text-xl font-bold sm:text-2xl">
+              Good morning, {member.name?.split(" ")[0] || "Member"} 👋
+            </h1>
+            <p className="text-sm text-muted-foreground">Your SMCF financial journey · Member ID: {member.member_id}</p>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {registrationFeePaid && <Badge className="border border-emerald-300 bg-emerald-100 text-[10px] text-emerald-800 hover:bg-emerald-100">✓ Verified Member</Badge>}
+              {Boolean((unifiedAccount as any)?.tenX?.enrolled) && <Badge variant="secondary" className="border-amber-300 bg-amber-50 text-[10px] text-amber-800">10X Member</Badge>}
               {Boolean((unifiedAccount as any)?.cycles?.eligible) && <Badge variant="secondary" className="border-sky-300 bg-sky-50 text-[10px] text-sky-800">Cycle Member</Badge>}
             </div>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2 items-center">
-          {/* Date range pickers */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => exportMyStatement(member.name, member.member_id, member, loans, repayments, transactions, savingsHistory, { from: dateFrom, to: dateTo })}>
+            <FileText className="mr-2 h-4 w-4" /> Full Statement
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setSearchParams({ tab: "profile" }, { replace: true })}>More <ArrowRightLeft className="ml-2 h-4 w-4 rotate-90" /></Button>
+        </div>
+      </div>
+
+      {/* Authoritative position hero: values are read from existing member/account data. */}
+      <Card className="overflow-hidden border-primary/20 bg-gradient-to-br from-primary/[0.08] via-card to-card shadow-md">
+        <CardHeader className="pb-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">SMCF member command center</p>
+              <CardTitle className="mt-1 font-heading text-2xl">My financial position</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">Your verified balances, kept separate for clarity.</p>
+            </div>
+            <Badge variant="outline" className="gap-1.5 bg-background/70 text-xs"><Clock className="h-3.5 w-3.5" /> Updated just now</Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-2xl bg-primary p-4 text-primary-foreground shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] opacity-75">SACCO savings</p>
+              <p className="mt-2 text-2xl font-bold">KES {Number(member?.savings ?? 0).toLocaleString()}</p>
+              <p className="mt-1 text-xs opacity-75">Your savings balance</p>
+              <Button size="sm" variant="secondary" className="mt-4 gap-1.5" onClick={() => { setDepositType("savings"); setDepositOpen(true); }}><Save className="h-3.5 w-3.5" /> Save now</Button>
+            </div>
+            <div className="rounded-2xl border bg-card p-4 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Wallet</p>
+              <p className="mt-2 text-2xl font-bold">KES {Number(unifiedAccount?.wallet?.balance ?? 0).toLocaleString()}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Available balance</p>
+              <Button size="sm" variant="outline" className="mt-4 gap-1.5" onClick={() => { setDepositType("wallet"); setDepositOpen(true); }}><Wallet className="h-3.5 w-3.5" /> Deposit</Button>
+            </div>
+            <div className="rounded-2xl border bg-card p-4 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Shares · ownership stake</p>
+              <p className="mt-2 text-2xl font-bold">{memberSharesOwned.toLocaleString(undefined, { maximumFractionDigits: 2 })} units</p>
+              <p className="mt-1 text-xs text-muted-foreground">Share capital: KES {memberTotalShareCapital.toLocaleString()}</p>
+              <Button size="sm" variant="outline" className="mt-4 gap-1.5" onClick={() => { if (!sharePurchaseEnabled) { toast.error(sharePurchaseDisabledMessage); return; } setShareSubscribeOpen(true); }} disabled={!sharePurchaseEnabled}><Landmark className="h-3.5 w-3.5" /> Buy shares</Button>
+            </div>
+            <div className={cn("rounded-2xl border p-4 shadow-sm", Number(member.loan_balance) > 0 ? "border-amber-300 bg-amber-50/60" : "bg-card")}>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Loan balance</p>
+              <p className="mt-2 text-2xl font-bold">KES {Number(member.loan_balance || 0).toLocaleString()}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{activeLoans.length} active loan{activeLoans.length === 1 ? "" : "s"}</p>
+              <Button asChild size="sm" variant="outline" className="mt-4 gap-1.5"><Link to="/loans/apply"><PlusCircle className="h-3.5 w-3.5" /> Apply for loan</Link></Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Actions retain their existing handlers, but now have a clear hierarchy. */}
+      <Card className="border-muted shadow-sm">
+        <CardContent className="space-y-4 p-4 sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div><h2 className="font-heading text-lg font-semibold">Your next move</h2><p className="text-sm text-muted-foreground">Keep your financial journey moving with one focused action.</p></div>
+            <Button className="h-11 gap-2 rounded-xl px-6 shadow-md" onClick={() => { setDepositType("savings"); setDepositOpen(true); }}><Save className="h-4 w-4" /> Save now</Button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" className="gap-2" onClick={() => { setDepositType("wallet"); setDepositOpen(true); }}><Wallet className="h-4 w-4" /> Wallet deposit</Button>
+            <Button variant="outline" className="gap-2" onClick={() => { setDepositType("cycle"); setDepositOpen(true); }}><CalendarCheck className="h-4 w-4" /> Pay cycle</Button>
+            <Button variant="outline" className="gap-2" onClick={() => { if (!sharePurchaseEnabled) { toast.error(sharePurchaseDisabledMessage); return; } setShareSubscribeOpen(true); }} disabled={!sharePurchaseEnabled}><Landmark className="h-4 w-4" /> Buy shares</Button>
+            <Button asChild variant="ghost" className="gap-2"><Link to="/loans/apply"><PlusCircle className="h-4 w-4" /> Apply for loan</Link></Button>
+            <Button variant="ghost" className="gap-2" onClick={() => setShareTransferOpen(true)} disabled={Number(member?.shares) === 0}><ArrowRightLeft className="h-4 w-4" /> Transfer shares</Button>
+          </div>
+          {!sharePurchaseEnabled && <p className="text-xs text-muted-foreground">Share purchases are currently disabled by the SACCO administrator.</p>}
+        </CardContent>
+      </Card>
+
+      {/* Date range controls remain available for authoritative statement exports. */}
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/20 p-3">
+        <span className="mr-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Statement period</span>
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className={cn("w-[140px] justify-start text-left font-normal", !dateFrom && "text-muted-foreground")}>
@@ -623,116 +687,7 @@ export default function MyAccount() {
             <FileText className="mr-2 h-4 w-4" />
             {dateFrom || dateTo ? "Filtered Statement" : "Full Statement"}
           </Button>
-          <Button asChild>
-            <Link to="/loans/apply">
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Apply for Loan
-            </Link>
-          </Button>
-          <Button
-            className="bg-emerald-700 hover:bg-emerald-800 text-white gap-2"
-            onClick={() => { setDepositType("savings"); setDepositOpen(true); }}
-          >
-            <PiggyBank className="h-4 w-4" />
-            Savings Deposit
-          </Button>
-          <Button
-            className="bg-green-600 hover:bg-green-700 text-white gap-2"
-            onClick={() => { setDepositType("wallet"); setDepositOpen(true); }}
-          >
-            <Wallet className="h-4 w-4" />
-            Wallet Deposit
-          </Button>
-          <Button
-            className="bg-amber-500 hover:bg-amber-600 text-slate-950 gap-2"
-            onClick={() => { setDepositType("cycle"); setDepositOpen(true); }}
-          >
-            <CalendarCheck className="h-4 w-4" />
-            Pay Cycle
-          </Button>
-          <Button
-            className="bg-purple-600 hover:bg-purple-700 text-white gap-2"
-            onClick={() => {
-              if (!sharePurchaseEnabled) {
-                toast.error(sharePurchaseDisabledMessage);
-                return;
-              }
-              setShareSubscribeOpen(true);
-            }}
-            disabled={!sharePurchaseEnabled}
-            title={!sharePurchaseEnabled ? sharePurchaseDisabledMessage : undefined}
-          >
-            <Landmark className="h-4 w-4" />
-            Buy Shares
-          </Button>
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={() => setShareTransferOpen(true)}
-            disabled={Number(member?.shares) === 0}
-          >
-            <ArrowRightLeft className="h-4 w-4" />
-            Transfer Shares
-          </Button>
-          {!sharePurchaseEnabled && (
-            <div className="w-full text-xs text-muted-foreground">
-              Share purchases are currently disabled by the SACCO administrator.
-            </div>
-          )}
         </div>
-      </div>
-
-      {/* Account summary is the first member-facing financial overview. */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <StatCard
-          title="Share Capital"
-          value={`KES ${Number(member?.shares ?? 0).toLocaleString()}`}
-          subtitle={`Units: ${(Number(member?.shares ?? 0) / 100).toLocaleString()} @ KES 100/unit`}
-          icon={Landmark}
-          variant="accent"
-        />
-        <StatCard
-          title="Share Units"
-          value={`${(Number(member?.shares ?? 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} units`}
-          subtitle="Minimum 1 unit = KES 100"
-          icon={Landmark}
-          variant="accent"
-        />
-        <StatCard
-          title="Savings"
-          value={`KES ${Number(member?.savings ?? 0).toLocaleString()}`}
-          icon={Wallet}
-          variant="success"
-          subtitle="Use Savings Deposit above"
-        />
-        <StatCard
-          title="Loan Balance"
-          value={`KES ${Number(member.loan_balance).toLocaleString()}`}
-          icon={TrendingUp}
-          variant={Number(member.loan_balance) > 0 ? "warning" : "default"}
-        />
-        <StatCard
-          title="Active Loans"
-          value={activeLoans.length.toString()}
-          icon={CreditCard}
-          variant="destructive"
-          subtitle={pendingLoans.length > 0 ? `${pendingLoans.length} pending` : undefined}
-        />
-        <StatCard
-          title="Wallet Balance"
-          value={`KES ${Number(unifiedAccount?.wallet?.balance ?? 0).toLocaleString()}`}
-          icon={Wallet}
-          variant="success"
-          subtitle="Available balance"
-        />
-        <StatCard
-          title="Current Cycle"
-          value={unifiedAccount?.cycles?.active ? `#${unifiedAccount.cycles.active.cycleNumber}` : "None"}
-          icon={CalendarCheck}
-          variant="accent"
-          subtitle={unifiedAccount?.cycles?.active ? `${Number(unifiedAccount.cycles.active.memberContribution || 0).toLocaleString()} contributed` : "Join a cycle when available"}
-        />
-      </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <WalletSummaryVisual balance={Number(unifiedAccount?.wallet?.balance ?? 0)} history={walletHistory} />
