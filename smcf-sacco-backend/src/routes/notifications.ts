@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { body, validationResult } from 'express-validator';
 import Notification from '../models/Notification';
-import { protect, AuthRequest } from '../middleware/auth';
+import { protect, authorize, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
@@ -41,6 +41,7 @@ router.get('/', protect, async (req: AuthRequest, res, next) => {
 router.post(
   '/',
   protect,
+  authorize('admin', 'treasurer', 'credit_officer'),
   [
     body('userId').notEmpty().withMessage('User ID is required'),
     body('title').notEmpty().withMessage('Title is required'),

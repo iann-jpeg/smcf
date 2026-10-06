@@ -68,8 +68,15 @@ router.get('/', protect, async (req, res, next) => {
   try {
     const { status, memberId, guarantorMemberId } = req.query;
     let filter: any = {};
+    const authReq = req as AuthRequest;
+    const staff = authReq.user?.roles?.some((role) => ['admin', 'credit_officer', 'credit_committee', 'treasurer', 'auditor'].includes(role));
+    if (!staff) {
+      const own = await Member.findOne({ userId: authReq.userId }).select('_id');
+      if (!own) return res.status(404).json({ success: false, message: 'Member profile not found' });
+      filter.memberId = own._id;
+    }
     if (status)   filter.status   = status;
-    if (memberId) filter.memberId = memberId;
+    if (memberId && staff) filter.memberId = memberId;
 
     let loanIds: any[] | undefined;
     if (guarantorMemberId) {
@@ -115,6 +122,12 @@ router.get('/:id', protect, async (req, res, next) => {
         success: false,
         message: 'Loan not found'
       });
+    }
+    const authReq = req as AuthRequest;
+    const staff = authReq.user?.roles?.some((role) => ['admin', 'credit_officer', 'credit_committee', 'treasurer', 'auditor'].includes(role));
+    const own = !staff ? await Member.findOne({ userId: authReq.userId }).select('_id') : null;
+    if (!staff && (!own || String(loan.memberId._id || loan.memberId) !== String(own._id))) {
+      return res.status(403).json({ success: false, message: 'Not authorized to view this loan' });
     }
 
     // Get guarantors and approvals

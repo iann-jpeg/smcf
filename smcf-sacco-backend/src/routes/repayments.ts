@@ -144,8 +144,16 @@ router.get('/', protect, async (req: AuthRequest, res, next) => {
   try {
     const { memberId, loanId, limit = 50 } = req.query;
     const filter: any = {};
-    if (memberId) filter.memberId = memberId;
-    if (loanId)   filter.loanId   = loanId;
+    const staff = req.user?.roles?.some((role) => ['admin', 'treasurer', 'credit_officer', 'auditor'].includes(role));
+    if (staff) {
+      if (memberId) filter.memberId = memberId;
+      if (loanId) filter.loanId = loanId;
+    } else {
+      const own = await Member.findOne({ userId: req.userId }).select('_id');
+      if (!own) return res.status(404).json({ success: false, message: 'Member profile not found' });
+      filter.memberId = own._id;
+      if (loanId) filter.loanId = loanId;
+    }
 
     const records = await RepaymentRecord.find(filter)
       .populate('loanId', 'loanNumber')
@@ -164,6 +172,11 @@ router.get('/loan/:loanId/history', protect, async (req: AuthRequest, res, next)
   try {
     const loan = await Loan.findById(req.params.loanId);
     if (!loan) return res.status(404).json({ success: false, message: 'Loan not found' });
+    const staff = req.user?.roles?.some((role) => ['admin', 'treasurer', 'credit_officer', 'auditor'].includes(role));
+    if (!staff) {
+      const own = await Member.findOne({ userId: req.userId }).select('_id');
+      if (!own || String(loan.memberId) !== String(own._id)) return res.status(403).json({ success: false, message: 'Not authorized to view this loan' });
+    }
 
     const [records, transactions] = await Promise.all([
       RepaymentRecord.find({ loanId: req.params.loanId }).sort({ dueDate: 1 }),
@@ -225,4 +238,3 @@ router.post(
 export { processRepayment };
 
 export default router;
-

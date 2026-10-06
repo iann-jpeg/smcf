@@ -3,6 +3,7 @@ import Member from '../models/Member';
 import Loan from '../models/Loan';
 import Transaction from '../models/Transaction';
 import LoanGuarantor from '../models/LoanGuarantor';
+import RepaymentRecord from '../models/RepaymentRecord';
 import AuditLog from '../models/AuditLog';
 import { protect, authorize, AuthRequest } from '../middleware/auth';
 
@@ -62,6 +63,29 @@ async function loadFinancialDashboardSummary() {
 }
 
 const router = Router();
+
+router.get('/member-next-action', protect, async (req: AuthRequest, res, next) => {
+  try {
+    const member = await Member.findOne({ userId: req.userId }).select('name phone email nationalId dateOfBirth gender county occupation employer kycVerified registrationFeePaid savings');
+    if (!member) return res.status(404).json({ success: false, message: 'Member profile not found' });
+    const [overdueRepayments, pendingGuarantors, activeLoan] = await Promise.all([
+      RepaymentRecord.countDocuments({ memberId: member._id, status: 'overdue' }),
+      LoanGuarantor.countDocuments({ memberId: member._id, consentStatus: 'pending' }),
+      Loan.findOne({ memberId: member._id, status: { $in: ['approved', 'disbursed', 'active'] } }).select('_id'),
+    ]);
+    const profileFields = [member.phone, member.email, member.nationalId, member.dateOfBirth, member.gender, member.county, member.occupation];
+    const profileComplete = profileFields.filter(Boolean).length / profileFields.length >= 0.8;
+    let action = { key: 'profile', title: 'Complete your member profile', description: 'Add the remaining profile and KYC details to unlock all SACCO services.', href: '/my-account?tab=profile' };
+    if (!member.registrationFeePaid) action = { key: 'registration_fee', title: 'Complete your registration fee', description: 'Finish registration so your membership can be activated.', href: '/registration-fee' };
+    else if (!profileComplete || !member.kycVerified) action = { key: 'profile', title: 'Complete your member profile', description: 'Add the remaining profile and KYC details to unlock all SACCO services.', href: '/my-account?tab=profile' };
+    else if (overdueRepayments > 0) action = { key: 'repayment', title: 'Make an overdue repayment', description: `You have ${overdueRepayments} overdue repayment${overdueRepayments === 1 ? '' : 's'}.`, href: '/my-account?tab=repayments' };
+    else if (pendingGuarantors > 0) action = { key: 'guarantor', title: 'Respond to a guarantor request', description: `You have ${pendingGuarantors} guarantor request${pendingGuarantors === 1 ? '' : 's'} awaiting your response.`, href: '/guarantors' };
+    else if (!activeLoan) action = { key: 'savings', title: 'Build your SACCO balance', description: 'Make a savings or wallet deposit when you are ready.', href: '/my-account?tab=overview' };
+    return res.json({ success: true, data: { action, profileComplete, overdueRepayments, pendingGuarantors, hasActiveLoan: Boolean(activeLoan) } });
+  } catch (error) {
+    return next(error);
+  }
+});
 
 // @route   GET /api/dashboard/stats
 // @desc    Get dashboard statistics (ROLE-BASED)

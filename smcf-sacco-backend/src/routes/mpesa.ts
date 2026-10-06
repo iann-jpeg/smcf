@@ -15,6 +15,7 @@
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
+import crypto from 'crypto';
 import mongoose from 'mongoose';
 import Transaction from '../models/Transaction';
 import Member from '../models/Member';
@@ -30,6 +31,19 @@ import { recordSavingsDeposit } from '../utils/depositLedger';
 import { createTransactionRef } from '../utils/transactionRef';
 
 const router = Router();
+function validCallbackSecret(req: Request): boolean {
+  const expected = String(process.env.PAYMENT_CALLBACK_SECRET || '').trim();
+  const provided = String(req.headers['x-payment-callback-secret'] || '').trim();
+  return Boolean(expected.length >= 32 && provided.length === expected.length &&
+    crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected)));
+}
+
+async function assertPaymentOwnership(req: AuthRequest, memberId: string): Promise<boolean> {
+  const staff = req.user?.roles?.some((role) => ['admin', 'treasurer', 'credit_officer'].includes(role));
+  if (staff) return true;
+  const member = await Member.findOne({ userId: req.userId }).select('_id');
+  return Boolean(member && String(member._id) === String(memberId));
+}
 
 // ─── In-memory: PayHero payment-link payments (not STK) ───────────────────────
 // Created when member clicks "Pay via PayHero"; confirmed when member clicks "I've Paid"
@@ -1551,6 +1565,7 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
     const { memberId, amount, phone, paymentType, cycleNumber: requestedCycleNumber } = req.body;
 
     if (!memberId) return res.status(400).json({ success: false, message: 'memberId is required' });
+    if (!(await assertPaymentOwnership(req, String(memberId)))) return res.status(403).json({ success: false, message: 'You may only initiate payments for your own account' });
     if (!phone)    return res.status(400).json({ success: false, message: 'Phone number is required' });
     if (!amount || Number(amount) <= 0)
       return res.status(400).json({ success: false, message: 'Deposit amount must be positive' });
@@ -1896,6 +1911,7 @@ router.post('/share-purchase', protect, async (req: AuthRequest, res: Response, 
     const { memberId, amount, phone } = req.body;
 
     if (!memberId) return res.status(400).json({ success: false, message: 'memberId is required' });
+    if (!(await assertPaymentOwnership(req, String(memberId)))) return res.status(403).json({ success: false, message: 'You may only initiate payments for your own account' });
     if (!phone)    return res.status(400).json({ success: false, message: 'Phone number is required' });
     if (!amount || Number(amount) < 100)
       return res.status(400).json({ success: false, message: 'Minimum share purchase is KES 100' });
@@ -2010,6 +2026,7 @@ router.post('/registration-fee/initiate', protect, async (req: AuthRequest, res:
     const { memberId, phone } = req.body;
 
     if (!memberId) return res.status(400).json({ success: false, message: 'memberId is required' });
+    if (!(await assertPaymentOwnership(req, String(memberId)))) return res.status(403).json({ success: false, message: 'You may only initiate payments for your own account' });
 
     const member = await Member.findById(memberId).select('name email phone registrationFeePaid registrationFeePendingCheckoutId');
     if (!member) return res.status(404).json({ success: false, message: 'Member not found' });
@@ -2175,6 +2192,7 @@ router.post('/registration-fee/reconcile-manual', protect, authorize('admin', 't
 // the existing SACCO settlement functions above.
 
 router.post('/payhero/callback', async (req: Request, res: Response) => {
+  if (!validCallbackSecret(req)) return res.status(401).json({ success: false, message: 'Invalid callback signature' });
   res.status(200).json({ success: true });
 
   try {
@@ -2224,6 +2242,7 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
         ...(externalReference ? [{ transactionRef: externalReference }] : []),
       ],
       type: { $in: ['deposit', 'wallet_deposit', 'share_purchase', 'registration_fee', 'loan_repayment', 'tenx_contribution'] },
+      status: 'pending',
     }).select('_id memberId amount grossAmount feeAmount netAmount type loanId cycleNumber checkoutRequestId status depositProcessed');
 
     if (!transaction) {
@@ -2248,7 +2267,7 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
       return;
     }
 
-    if (Number.isFinite(callbackAmount) && callbackAmount !== Number(transaction.amount)) {
+    if (!Number.isFinite(callbackAmount) || callbackAmount !== Number(transaction.amount)) {
       await Transaction.findOneAndUpdate(
         { _id: transaction._id, status: 'pending' },
         {
@@ -2268,7 +2287,7 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
       return;
     }
 
-    const paidAmount = Number.isFinite(callbackAmount) ? Number(callbackAmount) : Number(transaction.amount);
+    const paidAmount = Number(callbackAmount);
     const memberId = String(transaction.memberId);
     await Transaction.findByIdAndUpdate(transaction._id, {
       providerStatus: 'success',
@@ -2421,6 +2440,7 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
 // Safaricom-compatible callback kept for backwards compatibility.
 
 router.post('/callback', async (req: Request, res: Response) => {
+  if (!validCallbackSecret(req)) return res.status(401).json({ success: false, message: 'Invalid callback signature' });
   res.json({ ResultCode: 0, ResultDesc: 'Accepted' });
 
   try {
@@ -2910,6 +2930,7 @@ router.post('/payment-initiated', protect, async (req: AuthRequest, res: Respons
     if (!memberId) {
       return res.status(400).json({ success: false, message: 'memberId is required' });
     }
+    if (!(await assertPaymentOwnership(req, String(memberId)))) return res.status(403).json({ success: false, message: 'You may only initiate payments for your own account' });
     const numAmount = Math.round(Number(amount));
     const manualType: FeeableTransactionType = type === 'loan_repay' ? 'loan_repayment' : 'deposit';
     let feeAmounts;
@@ -2968,6 +2989,11 @@ router.post('/payment-confirm', protect, async (req: AuthRequest, res: Response,
     if (!pending) {
       return res.status(404).json({ success: false, message: 'Payment record not found or expired' });
     }
+    if (!(await assertPaymentOwnership(req, pending.memberId))) return res.status(403).json({ success: false, message: 'You may only confirm your own payment' });
+    const existing = await Transaction.findOne({ transactionRef, status: 'pending' });
+    if (!existing) {
+      return res.status(409).json({ success: false, message: 'Payment is no longer pending' });
+    }
 
     const mpesaRef = `PAYHERO-CONFIRM-${Date.now()}`;
     const pendingFeeAmounts = calculateTransactionAmounts(
@@ -2977,8 +3003,8 @@ router.post('/payment-confirm', protect, async (req: AuthRequest, res: Response,
 
     if (pending.type === 'deposit') {
       // Mark transaction completed + add to savings
-      await Transaction.findOneAndUpdate(
-        { transactionRef },
+      const claimed = await Transaction.findOneAndUpdate(
+        { transactionRef, status: 'pending' },
         {
           status: 'completed',
           ...pendingFeeAmounts,
@@ -2986,7 +3012,8 @@ router.post('/payment-confirm', protect, async (req: AuthRequest, res: Response,
           processedAt: new Date(),
           depositProcessed: true,
         }
-      );
+      , { new: true });
+      if (!claimed) return res.status(409).json({ success: false, message: 'Payment is already being processed' });
       try {
         await recordSavingsDeposit({
           memberId: pending.memberId,

@@ -23,7 +23,13 @@ router.get('/', protect, async (req, res, next) => {
     const { memberId, type, status, limit = 50 } = req.query;
     const filter: any = {};
 
-    if (memberId) filter.memberId = memberId;
+    const staff = (req as AuthRequest).user?.roles?.some((role) => ['admin', 'treasurer', 'credit_officer', 'auditor'].includes(role));
+    if (staff) filter.memberId = memberId || undefined;
+    else {
+      const own = await Member.findOne({ userId: (req as AuthRequest).userId }).select('_id');
+      if (!own) return res.status(404).json({ success: false, message: 'Member profile not found' });
+      filter.memberId = own._id;
+    }
     if (type) filter.type = type;
     if (status) filter.status = status;
 
@@ -57,6 +63,11 @@ router.get('/:id', protect, async (req, res, next) => {
         success: false,
         message: 'Transaction not found'
       });
+    }
+    const authReq = req as AuthRequest;
+    const staff = authReq.user?.roles?.some((role) => ['admin', 'treasurer', 'credit_officer', 'auditor'].includes(role));
+    if (!staff && String(transaction.memberId._id || transaction.memberId) !== String((await Member.findOne({ userId: authReq.userId }).select('_id'))?._id)) {
+      return res.status(403).json({ success: false, message: 'Not authorized to view this transaction' });
     }
 
     res.json({

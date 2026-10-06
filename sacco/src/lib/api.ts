@@ -135,6 +135,24 @@ export const api = {
   },
 };
 
+export interface TransparencyMetrics {
+  memberCount: number;
+  totalSavings: number;
+  totalShares: number;
+  activeLoanCount: number;
+  completedTransactionCount: number;
+  disclaimer: string;
+  asOf: string;
+}
+
+export async function getPublicTransparency(): Promise<TransparencyMetrics> {
+  const response = await fetchFromSaccoApi("/transparency");
+  if (!response.ok) throw new Error("Transparency dashboard is currently unavailable");
+  const payload = await response.json() as { data?: TransparencyMetrics };
+  if (!payload.data) throw new Error("Transparency dashboard returned no data");
+  return payload.data;
+}
+
 export interface RegistrationFeeStatus {
   registrationFeePaid: boolean;
   registrationFeeAmount: number;
@@ -441,17 +459,15 @@ export async function getAdminCommsHealthStatus(): Promise<AdminCommsHealthStatu
   const mainSmcfUrl =
     (import.meta.env.VITE_MAIN_SMCF_API_URL as string) ||
     (import.meta.env.VITE_SMCF_PAYMENT_URL as string);
-  const bridgeKey =
-    (import.meta.env.VITE_MAIN_SMCF_BRIDGE_KEY as string) ||
-    (import.meta.env.VITE_SMCF_API_KEY as string);
-
-  const bridgeConfigured = Boolean(mainSmcfUrl && bridgeKey);
+  // Bridge credentials must never be bundled into browser code. Use a server-side
+  // proxy with its own authenticated service identity when bridge access is needed.
+  const bridgeConfigured = false;
   let bridgeOk = false;
   let bridgeStatus: number | null = null;
   let bridgeMessage = bridgeConfigured ? "" : "Bridge env not configured";
   let bridgeUrl = "";
 
-  if (bridgeConfigured) {
+  if (bridgeConfigured && mainSmcfUrl) {
     const bridgeBase = mainSmcfUrl.endsWith("/api")
       ? mainSmcfUrl
       : `${mainSmcfUrl.replace(/\/+$/, "")}/api`;
@@ -461,7 +477,6 @@ export async function getAdminCommsHealthStatus(): Promise<AdminCommsHealthStatu
       const bridgeRes = await fetch(bridgeUrl, {
         headers: {
           "Content-Type": "application/json",
-          "x-bridge-key": bridgeKey,
         },
       });
       bridgeStatus = bridgeRes.status;
@@ -510,21 +525,12 @@ export async function getMainSmcfBridgeMessages(): Promise<MemberMessageItem[]> 
     const mainSmcfUrl = 
       (import.meta.env.VITE_MAIN_SMCF_API_URL as string) || 
       (import.meta.env.VITE_SMCF_PAYMENT_URL as string);
-    const bridgeKey = 
-      (import.meta.env.VITE_MAIN_SMCF_BRIDGE_KEY as string) || 
-      (import.meta.env.VITE_SMCF_API_KEY as string);
-
-    if (!mainSmcfUrl || !bridgeKey) {
+    if (!mainSmcfUrl) {
       return [];
     }
-
-    const bridgeBase = mainSmcfUrl.endsWith("/api") ? mainSmcfUrl : `${mainSmcfUrl.replace(/\/+$/, "")}/api`;
-    const res = await fetch(`${bridgeBase}/member-messages/bridge-feed`, {
-      headers: {
-        "Content-Type": "application/json",
-        "x-bridge-key": bridgeKey,
-      },
-    });
+    // Do not call the cross-application bridge directly from the browser.
+    // A server-side proxy is required so credentials cannot be exposed.
+    return [];
 
     if (!res.ok) {
       if (res.status >= 500) {

@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { body, validationResult } from 'express-validator';
 import User from '../models/User';
 import Member from '../models/Member';
-import { protect, authorize, AuthRequest } from '../middleware/auth';
+import { protect, authorize, AuthRequest, jwtSecret } from '../middleware/auth';
+import SystemConfig from '../models/SystemConfig';
 import { 
   generateVerificationToken, 
   sendVerificationEmail,
@@ -15,11 +17,14 @@ import {
 
 const router = Router();
 
-const allowEmailTokenFallback = process.env.ALLOW_EMAIL_TOKEN_FALLBACK !== 'false';
+const allowEmailTokenFallback = process.env.ALLOW_EMAIL_TOKEN_FALLBACK === 'true';
 const resendCooldownSeconds = Math.max(1, Number(process.env.EMAIL_RESEND_COOLDOWN_SECONDS || 60));
 const resendCooldownMs = resendCooldownSeconds * 1000;
 const resendAttemptByEmail = new Map<string, number>();
 const requireEmailVerification = String(process.env.REQUIRE_EMAIL_VERIFICATION || '').toLowerCase() === 'true';
+const bootstrapSecretMatches = (provided: string, expected: string) =>
+  provided.length === expected.length &&
+  crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
 
 const getRetryAfterSeconds = (email: string): number => {
   const lastAttemptAt = resendAttemptByEmail.get(email);
@@ -39,8 +44,8 @@ const markResendAttempt = (email: string): void => {
 const generateToken = (id: string): string => {
   return jwt.sign(
     { id },
-    (process.env.JWT_SECRET || 'secret') as string,
-    { expiresIn: '7d' }
+    jwtSecret(),
+    { expiresIn: '7d', algorithm: 'HS256' }
   );
 };
 
@@ -118,7 +123,6 @@ router.post(
                   isEmailVerified: existingUser.isEmailVerified
                 },
                 requiresEmailVerification: true,
-                verificationToken,
               }
             });
           }
@@ -197,8 +201,7 @@ router.post(
             roles: user.roles,
             isEmailVerified: user.isEmailVerified
           },
-          requiresEmailVerification: true,
-          verificationToken: !emailSent.success && allowEmailTokenFallback ? verificationToken : undefined
+          requiresEmailVerification: true
         }
       });
     } catch (error) {
@@ -694,7 +697,7 @@ router.put(
 // @route   POST /api/auth/setup
 // @desc    First-run admin setup – promotes the given email to admin.
 //          Only works if NO admin users exist in the database yet.
-// @access  Public (intentionally – one-time bootstrap only)
+// @access  Public only with the out-of-band bootstrap secret.
 router.post(
   '/setup',
   [body('email').isEmail().withMessage('Valid email required')],
@@ -703,6 +706,12 @@ router.post(
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         return res.status(400).json({ success: false, errors: errors.array() });
+      }
+
+      const bootstrapSecret = String(process.env.ADMIN_BOOTSTRAP_SECRET || '').trim();
+      const providedSecret = String(req.headers['x-admin-bootstrap-secret'] || req.body.bootstrapSecret || '').trim();
+      if (!bootstrapSecret || bootstrapSecret.length < 32 || !providedSecret || !bootstrapSecretMatches(providedSecret, bootstrapSecret)) {
+        return res.status(403).json({ success: false, message: 'Admin bootstrap is not enabled' });
       }
 
       // Block if an admin already exists
@@ -714,18 +723,28 @@ router.post(
         });
       }
 
-      const user = await User.findOneAndUpdate(
+      const user = await User.findOne(
         { email: (req.body.email as string).toLowerCase() },
-        { $addToSet: { roles: 'admin' } },
-        { new: true }
       );
-
       if (!user) {
         return res.status(404).json({
           success: false,
           message: 'No account found with that email. Please register first.'
         });
       }
+      const config = await SystemConfig.getConfig();
+      const claimed = await SystemConfig.updateOne(
+        { _id: config._id, adminBootstrapConsumed: { $ne: true } },
+        { $set: { adminBootstrapConsumed: true } },
+      );
+      if (claimed.modifiedCount !== 1) {
+        return res.status(403).json({ success: false, message: 'Setup already complete' });
+      }
+      await User.updateOne(
+        { _id: user._id },
+        { $addToSet: { roles: 'admin' } },
+      );
+      user.roles = Array.from(new Set([...(user.roles || []), 'admin'])) as typeof user.roles;
 
       res.json({
         success: true,
@@ -793,19 +812,6 @@ router.post(
       );
 
       if (!emailSent.success) {
-        if (allowEmailTokenFallback) {
-          markResendAttempt(normalizedEmail);
-          return res.json({
-            success: true,
-            message: 'Email delivery is unavailable. Use the one-time reset code shown below.',
-            data: {
-              resetToken,
-              requiresEmailVerification: true,
-              message: 'Share this code with the user securely'
-            },
-          });
-        }
-
         // Clear the reset token if email fails
         user.passwordResetToken = undefined;
         user.passwordResetExpires = undefined;

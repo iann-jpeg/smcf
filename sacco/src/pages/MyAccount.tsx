@@ -53,6 +53,11 @@ import { ShareTransferDialog } from "@/components/ShareTransferDialog";
 import MemberRegistrationFormPanel from "@/components/member/MemberRegistrationFormPanel";
 import MembershipCardPanel from "@/components/member/MembershipCardPanel";
 import { UnifiedAccountModules } from "@/components/UnifiedAccountModules";
+import { FinancialCalendar } from "@/components/FinancialCalendar";
+import { NextActionCard } from "@/components/NextActionCard";
+import { WalletSummaryVisual } from "@/components/WalletSummaryVisual";
+import { CycleProgressVisual } from "@/components/CycleProgressVisual";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 
 function statusVariant(status: string) {
   switch (status) {
@@ -84,6 +89,18 @@ export default function MyAccount() {
   const { data: guarantorRequests = [] } = useMyGuarantorRequests();
   const respondToGuarantor = useRespondToGuarantorRequest();
   const pendingGuarantorCount = (guarantorRequests as any[]).filter((r) => r.consent_status === 'pending').length;
+  const { data: nextActionData } = useQuery({
+    queryKey: ["member-next-action"],
+    queryFn: () => api.get<{ action?: { title: string; description: string; href: string }; profileComplete?: boolean }>("/dashboard/member-next-action"),
+    enabled: Boolean(rawMember),
+    staleTime: 60_000,
+  });
+  const { data: calendarData } = useQuery({
+    queryKey: ["financial-calendar"],
+    queryFn: () => api.get<any[]>("/calendar-events"),
+    enabled: Boolean(rawMember),
+    staleTime: 120_000,
+  });
 
   const [phone, setPhone] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
@@ -439,10 +456,7 @@ export default function MyAccount() {
   if (memberLoading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-10 w-64" />
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-28" />)}
-        </div>
+        <LoadingSkeleton rows={3} className="h-28" />
       </div>
     );
   }
@@ -475,6 +489,22 @@ export default function MyAccount() {
   const memberDividendHistory = Array.isArray(memberShareData.dividendHistory)
     ? memberShareData.dividendHistory
     : [];
+  const activeCycle = unifiedAccount?.cycles?.active;
+  const walletHistory = (unifiedAccount?.wallet?.transactions || transactions)
+    .slice()
+    .reverse()
+    .slice(-8)
+    .map((item: any) => ({ label: item.processedAt || item.processed_at, amount: Number(item.balance ?? item.amount ?? 0) }));
+  const calendarEvents = [
+    ...(Array.isArray(calendarData) ? calendarData.map((event: any) => ({
+      date: event.startsAt,
+      label: event.title,
+      amount: event.amount == null ? undefined : Number(event.amount),
+      tone: event.type === "loan_repayment" ? "warning" as const : event.type === "notice" ? "default" as const : "success" as const,
+    })) : []),
+    ...upcomingRepayments.slice(0, 3).filter((item: any) => item.due_date).map((item: any) => ({ date: item.due_date, label: "Loan repayment due", amount: Number(item.amount || item.installment_amount || 0), tone: "warning" as const })),
+    ...(activeCycle?.endDate || activeCycle?.end_date ? [{ date: activeCycle.endDate || activeCycle.end_date, label: `Cycle #${activeCycle.cycleNumber || activeCycle.cycle_number || ""} closes`, tone: "default" as const }] : []),
+  ];
 
   return (
     <div className="space-y-6">
@@ -604,6 +634,25 @@ export default function MyAccount() {
           )}
         </div>
       </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <WalletSummaryVisual balance={Number(unifiedAccount?.wallet?.balance ?? 0)} history={walletHistory} />
+        <CycleProgressVisual
+          cycleNumber={activeCycle?.cycleNumber || activeCycle?.cycle_number}
+          paid={Number(activeCycle?.paidMembers || activeCycle?.paid_members || 0)}
+          total={Number(activeCycle?.memberCount || activeCycle?.member_count || 0)}
+          collected={Number(activeCycle?.memberContribution || activeCycle?.member_contribution || 0)}
+        />
+        <NextActionCard
+          title={nextActionData?.action?.title || "Next best action"}
+          description={nextActionData?.action?.description || (overdueRepayments.length > 0 ? `You have ${overdueRepayments.length} overdue repayment${overdueRepayments.length === 1 ? "" : "s"}.` : "Your account is up to date. Keep building your savings habit.")}
+          actionLabel="Take action"
+          href={nextActionData?.action?.href}
+          onAction={() => setSearchParams({ tab: overdueRepayments.length > 0 ? "repayments" : "overview" })}
+          complete={!nextActionData?.action && overdueRepayments.length === 0 && pendingGuarantorCount === 0}
+        />
+      </div>
+      <FinancialCalendar events={calendarEvents} />
 
       {/* Account Summary Cards */}
       {/**

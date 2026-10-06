@@ -10,6 +10,7 @@ export interface ISystemConfig extends Document {
   maxGuaranteeMultiplier: number;
   minGuarantors: number;
   minLiquidityRatio: number;
+  adminBootstrapConsumed: boolean;
 }
 
 interface ISystemConfigModel extends Model<ISystemConfig> {
@@ -27,6 +28,7 @@ const SystemConfigSchema = new mongoose.Schema<ISystemConfig>(
     maxGuaranteeMultiplier: { type: Number, default: 3 },
     minGuarantors:          { type: Number, default: 2 },
     minLiquidityRatio:      { type: Number, default: 20 },
+    adminBootstrapConsumed: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

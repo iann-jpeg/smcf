@@ -9,6 +9,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { FinancialCalendar } from "@/components/FinancialCalendar";
+import { CycleProgressVisual } from "@/components/CycleProgressVisual";
+import { NextActionCard } from "@/components/NextActionCard";
+import { EmptyState } from "@/components/EmptyState";
 
 const money = (value: unknown) => `KES ${Number(value || 0).toLocaleString()}`;
 const date = (value: unknown) => value ? new Date(String(value)).toLocaleString("en-KE") : "-";
@@ -36,6 +40,9 @@ export default function CycleAdmin() {
   const [payoutReference, setPayoutReference] = useState("");
   const [payoutNotes, setPayoutNotes] = useState("");
   const [recordingPayout, setRecordingPayout] = useState(false);
+  const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
+  const [calendarDraft, setCalendarDraft] = useState({ title: "", type: "notice", startsAt: "", description: "", amount: "" });
+  const [savingCalendarEvent, setSavingCalendarEvent] = useState(false);
 
   const load = useCallback(async () => {
     if (!isAdmin) return;
@@ -95,6 +102,31 @@ export default function CycleAdmin() {
   }, [toast]);
 
   useEffect(() => { if (tab === "wallet") void loadWallet(); }, [tab, loadWallet]);
+  const loadCalendarEvents = useCallback(async () => {
+    try {
+      const response = await api.get<any[]>("/calendar-events");
+      setCalendarEvents(Array.isArray(response) ? response : []);
+    } catch (error: any) {
+      toast({ title: "Unable to load calendar events", description: error?.message || "Please try again.", variant: "destructive" });
+    }
+  }, [toast]);
+  useEffect(() => { if (isAdmin) void loadCalendarEvents(); }, [isAdmin, loadCalendarEvents]);
+  const saveCalendarEvent = async () => {
+    if (!calendarDraft.title || !calendarDraft.startsAt) return;
+    setSavingCalendarEvent(true);
+    try {
+      await api.post("/calendar-events", { ...calendarDraft, amount: calendarDraft.amount || null, isPublic: false });
+      setCalendarDraft({ title: "", type: "notice", startsAt: "", description: "", amount: "" });
+      await loadCalendarEvents();
+      toast({ title: "Calendar event saved" });
+    } catch (error: any) {
+      toast({ title: "Could not save calendar event", description: error?.message || "Please try again.", variant: "destructive" });
+    } finally { setSavingCalendarEvent(false); }
+  };
+  const deleteCalendarEvent = async (id: string) => {
+    try { await api.del(`/calendar-events/${id}`); await loadCalendarEvents(); toast({ title: "Calendar event removed" }); }
+    catch (error: any) { toast({ title: "Could not remove calendar event", description: error?.message || "Please try again.", variant: "destructive" }); }
+  };
   const pendingMembers = useMemo(() => {
     const paid = new Set((Array.isArray(data.paidMemberIds) ? data.paidMemberIds : []).map(String));
     return members.filter((member: any) => !paid.has(String(member._id)) && !paid.has(String(member.member_id)));
@@ -231,6 +263,28 @@ export default function CycleAdmin() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><Metric title="Active cycle" value={`#${stats.cycleNumber || "-"}`} icon={TrendingUp} /><Metric title="Paid this cycle" value={`${stats.paidMembers || 0}/${stats.totalMembers || 0}`} icon={CheckCircle2} /><Metric title="Collected" value={money(stats.collected)} icon={Wallet} /><Metric title="Pending members" value={String(stats.pendingMembers || 0)} icon={AlertCircle} /><Metric title="Paid in advance" value={String(advancePayments.length)} icon={FastForward} /></div>
 
+      <div className="grid gap-4 lg:grid-cols-3">
+        <CycleProgressVisual cycleNumber={stats.cycleNumber} paid={Number(stats.paidMembers || 0)} total={Number(stats.totalMembers || 0)} collected={Number(stats.collected || 0)} target={Number(stats.target || 0)} />
+        <FinancialCalendar events={[
+          ...(currentCycle?.end_date ? [{ date: currentCycle.end_date, label: "Current cycle closes", tone: "warning" as const }] : []),
+          ...(currentCycle?.start_date ? [{ date: currentCycle.start_date, label: "Current cycle started", tone: "success" as const }] : []),
+        ]} />
+        <NextActionCard description={Number(stats.pendingMembers || 0) > 0 ? `${stats.pendingMembers} member${Number(stats.pendingMembers) === 1 ? "" : "s"} still need to complete this cycle.` : "All members are paid for the current cycle."} actionLabel="Manage members" onAction={() => { setTab("members"); setSearchParams({ tab: "members" }); }} complete={Number(stats.pendingMembers || 0) === 0} />
+      </div>
+      <Card>
+        <CardHeader><CardTitle>Financial calendar events</CardTitle><CardDescription>Create member-visible dates for repayments, cycle payments, wallet maturity, meetings and notices. No settlement is triggered by these reminders.</CardDescription></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+            <Input placeholder="Event title" value={calendarDraft.title} onChange={(e) => setCalendarDraft((d) => ({ ...d, title: e.target.value }))} />
+            <select className="h-10 rounded-md border bg-background px-3 text-sm" value={calendarDraft.type} onChange={(e) => setCalendarDraft((d) => ({ ...d, type: e.target.value }))}><option value="notice">Notice</option><option value="cycle_payment">Cycle payment</option><option value="loan_repayment">Loan repayment</option><option value="card_payment">Card payment</option><option value="wallet_maturity">Wallet maturity</option><option value="meeting">Meeting</option></select>
+            <Input type="datetime-local" value={calendarDraft.startsAt} onChange={(e) => setCalendarDraft((d) => ({ ...d, startsAt: e.target.value }))} />
+            <Input type="number" min="0" placeholder="Amount (optional)" value={calendarDraft.amount} onChange={(e) => setCalendarDraft((d) => ({ ...d, amount: e.target.value }))} />
+            <Button onClick={() => void saveCalendarEvent()} disabled={savingCalendarEvent || !calendarDraft.title || !calendarDraft.startsAt}>{savingCalendarEvent ? "Saving..." : "Add event"}</Button>
+          </div>
+          {calendarEvents.length === 0 ? <Empty text="No managed events yet." /> : <div className="divide-y rounded-md border">{calendarEvents.slice(0, 12).map((event: any) => <div key={String(event._id)} className="flex items-center justify-between gap-3 p-3"><div className="min-w-0"><p className="truncate text-sm font-medium">{event.title}</p><p className="text-xs text-muted-foreground">{new Date(event.startsAt).toLocaleString("en-KE")} · {event.type}</p></div><Button size="sm" variant="ghost" onClick={() => void deleteCalendarEvent(String(event._id))}>Remove</Button></div>)}</div>}
+        </CardContent>
+      </Card>
+
       <Tabs value={tab} onValueChange={(value) => { setTab(value); setSearchParams({ tab: value }); }} className="space-y-4">
         <TabsList className="flex w-full justify-start overflow-x-auto">{[["overview", "Overview"], ["members", "Members"], ["cycle-table", "Cycle table"], ["payments", "Payments"], ["advance", "Advance payments"], ["disbursements", "Disbursements"], ["analytics", "Analytics"], ["wallet", "Wallet deposits"], ["savings", "Savings & reserve"], ["admin", "Other admin"]].map(([value, label]) => <TabsTrigger key={value} value={value}>{label}</TabsTrigger>)}</TabsList>
 
@@ -260,6 +314,6 @@ export default function CycleAdmin() {
 function Row({ label, value }: { label: string; value: string }) { return <div className="flex items-center justify-between rounded-md border bg-muted/20 p-3 text-sm"><span className="text-muted-foreground">{label}</span><span className="font-semibold">{value}</span></div>; }
 function Metric({ title, value, icon: Icon }: { title: string; value: string; icon: LucideIcon }) { return <Card><CardContent className="flex items-center justify-between p-4"><div><p className="text-xs text-muted-foreground">{title}</p><p className="mt-1 text-2xl font-bold">{value}</p></div><Icon className="h-5 w-5 text-primary" /></CardContent></Card>; }
 function ProgressRow({ label, value }: { label: string; value: number }) { return <div><div className="mb-1 flex justify-between text-sm"><span>{label}</span><span>{Math.round(value)}%</span></div><div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary" style={{ width: `${Math.min(100, Math.max(0, value))}%` }} /></div></div>; }
-function Empty({ text }: { text: string }) { return <p className="py-8 text-center text-sm text-muted-foreground">{text}</p>; }
+function Empty({ text }: { text: string }) { return <EmptyState title={text} />; }
 function MemberRow({ member, pending, loading, onMarkPaid, onMarkNoPayment }: { member: any; pending: boolean; loading: boolean; onMarkPaid: (amount: number) => void; onMarkNoPayment: (amount: number) => void }) { const [amount, setAmount] = useState(String(member.monthly_contribution || 200)); return <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"><div><p className="font-medium">{member.name}</p><p className="text-xs text-muted-foreground">{member.member_id || member.memberId} · {member.phone || "No phone"}</p></div><div className="flex items-center gap-2"><Input className="w-28" type="number" value={amount} onChange={(event) => setAmount(event.target.value)} aria-label={`Contribution for ${member.name}`} /><Badge variant={pending ? "outline" : "default"}>{pending ? "Pending" : "Paid"}</Badge>{pending && <><Button size="sm" onClick={() => onMarkPaid(Number(amount))} disabled={loading}>Record paid</Button><Button size="sm" variant="outline" onClick={() => onMarkNoPayment(Number(amount))} disabled={loading}>Mark paid</Button></>}</div></div>; }
 function ModuleLinks({ links }: { links: Array<[string, string, any]> }) { return <div className="grid gap-4 md:grid-cols-2">{links.map(([href, label, Icon]) => <Card key={href}><CardContent className="flex items-center justify-between p-5"><div className="flex items-center gap-3"><Icon className="h-5 w-5 text-primary" /><span className="font-medium">{label}</span></div><Button asChild variant="outline" size="sm"><Link to={href}>Open</Link></Button></CardContent></Card>)}</div>; }

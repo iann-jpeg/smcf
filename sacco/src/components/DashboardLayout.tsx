@@ -2,16 +2,28 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { NotificationBell } from "@/components/NotificationBell";
 import { useAuth } from "@/hooks/useAuth";
+import { useEffect, useState } from "react";
+import { api } from "@/lib/api";
 import { getApiBaseForDebug } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "react-router-dom";
-import { ChevronRight, LogOut, Moon, Settings, Sun } from "lucide-react";
+import { ChevronRight, LogOut, Moon, Settings, Sun, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { useTheme } from "next-themes";
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { signOut, user, isStaff } = useAuth();
   const location = useLocation();
   const { theme, setTheme } = useTheme();
+  const [search, setSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<any>({ members: [], transactions: [], loans: [] });
+  useEffect(() => {
+    if (!isStaff || search.trim().length < 2) { setSearchResults({ members: [], transactions: [], loans: [] }); return; }
+    const timer = window.setTimeout(() => {
+      void api.get<any>(`/admin/search?q=${encodeURIComponent(search.trim())}`).then(setSearchResults).catch(() => setSearchResults({ members: [], transactions: [], loans: [] }));
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [isStaff, search]);
   const apiBase = getApiBaseForDebug();
   const maskEmail = (value?: string | null): string => {
     if (!value) return "";
@@ -72,6 +84,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               </div>
             </div>
             <div className="flex items-center gap-1.5 sm:gap-3">
+              {isStaff && <div className="relative hidden md:block"><Search className="pointer-events-none absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search members, loans..." className="h-9 w-48 pl-8 lg:w-64" aria-label="Search SACCO records" />{search.trim().length >= 2 && (searchResults.members.length + searchResults.transactions.length + searchResults.loans.length > 0) && <div className="absolute right-0 top-10 z-50 w-80 rounded-md border bg-popover p-2 text-xs shadow-lg">{[...searchResults.members.map((item: any) => `Member · ${item.name} (${item.memberId})`), ...searchResults.loans.map((item: any) => `Loan · ${item.loanNumber}`), ...searchResults.transactions.map((item: any) => `Transaction · ${item.transactionRef}`)].slice(0, 8).map((label, index) => <p key={`${label}-${index}`} className="rounded px-2 py-1.5 text-muted-foreground">{label}</p>)}</div>}</div>}
               {isStaff && (
                 <span
                   className="hidden md:inline rounded border border-amber-300/70 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800"

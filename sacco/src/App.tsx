@@ -50,6 +50,7 @@ const FinanceCompliance = lazyPage(() => import("./pages/FinanceCompliance"), "f
 const CycleAdmin       = lazyPage(() => import("./pages/CycleAdmin"), "cycle-admin");
 const TenXAdmin        = lazyPage(() => import("./pages/TenXAdmin"), "tenx");
 const NotFound         = lazyPage(() => import("./pages/NotFound"), "not-found");
+const Transparency     = lazyPage(() => import("./pages/Transparency"), "transparency");
 
 // Thin route-level fallback — reuses the CSS spinner already on the page.
 function PageLoader() {
@@ -226,6 +227,7 @@ const App = () => (
                 </PageErrorBoundary>
               } />
               <Route path="/verify-email" element={<VerifyEmailRoute />} />
+              <Route path="/transparency" element={<Transparency />} />
               <Route path="/*" element={<ProtectedRoutes />} />
             </Routes>
           </BrowserRouter>

@@ -1,0 +1,13 @@
+{
+  "name": "SMCF SACCO",
+  "short_name": "SMCF",
+  "start_url": "/sacco/",
+  "scope": "/sacco/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0f766e",
+  "description": "SMCF SACCO member and administration portal",
+  "icons": [
+    { "src": "/sacco/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

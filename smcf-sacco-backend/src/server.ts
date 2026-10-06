@@ -42,6 +42,9 @@ import financeOverviewRoutes from './routes/financeOverview';
 import cycleAdminRoutes from './routes/cycleAdmin';
 import tenXRoutes from './routes/tenx';
 import savingsRoutes from './routes/savings';
+import financialCalendarRoutes from './routes/financialCalendar';
+import transparencyRoutes from './routes/transparency';
+import globalSearchRoutes from './routes/globalSearch';
 import { startOverdueRepaymentJob } from './utils/overdueRepayments';
 
 // Initialize app
@@ -204,6 +207,9 @@ app.use('/api/finance/overview', financeOverviewRoutes);
 app.use('/api/cycle-admin', cycleAdminRoutes);
 app.use('/api/tenx', tenXRoutes);
 app.use('/api/savings', savingsRoutes);
+app.use('/api/calendar-events', financialCalendarRoutes);
+app.use('/api/transparency', transparencyRoutes);
+app.use('/api/admin/search', globalSearchRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {

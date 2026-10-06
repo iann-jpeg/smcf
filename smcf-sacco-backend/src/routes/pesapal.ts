@@ -77,6 +77,7 @@ async function fetchPesapalStatus(orderTrackingId: string) {
 }
 
 async function settleOrder(transaction: any, providerStatus: Record<string, unknown>) {
+  if (transaction.status !== 'pending') return transaction.status;
   const status = String(providerStatus.payment_status_description || providerStatus.status || providerStatus.payment_status_code || '').toLowerCase();
   const successful = ['completed', 'complete', 'paid', 'success', 'successful', '1'].includes(status);
   const failed = ['failed', 'invalid', 'reversed', 'cancelled', 'cancel'].includes(status);
@@ -92,7 +93,7 @@ async function settleOrder(transaction: any, providerStatus: Record<string, unkn
   }
 
   const providerAmount = Number(providerStatus.amount);
-  if (Number.isFinite(providerAmount) && providerAmount !== Number(transaction.amount)) {
+  if (!Number.isFinite(providerAmount) || providerAmount !== Number(transaction.amount)) {
     await Transaction.findByIdAndUpdate(transaction._id, {
       status: 'failed',
       providerStatus: 'failed',
@@ -161,6 +162,11 @@ router.post('/orders', protect, async (req: AuthRequest, res: Response, next: Ne
     if (purpose === 'share_purchase' && Number(amount) < 100) return res.status(400).json({ success: false, message: 'Minimum share purchase is KES 100' });
     if (purpose === 'registration_fee' && Number(amount) !== 110) return res.status(400).json({ success: false, message: 'Registration payment must be exactly KES 110' });
     if (subscription && !consentAccepted) return res.status(400).json({ success: false, message: 'Recurring card payment consent is required' });
+    const staff = req.user?.roles?.some((role) => ['admin', 'treasurer', 'credit_officer'].includes(role));
+    if (!staff) {
+      const own = await Member.findOne({ userId: req.userId }).select('_id');
+      if (!own || String(own._id) !== String(memberId)) return res.status(403).json({ success: false, message: 'You may only initiate payments for your own account' });
+    }
     const member = await Member.findById(memberId).select('name email phone registrationFeePaid');
     if (!member) return res.status(404).json({ success: false, message: 'Member not found' });
     if (purpose === 'registration_fee' && member.registrationFeePaid) return res.status(409).json({ success: false, message: 'Registration fee already paid' });
