@@ -247,7 +247,9 @@ All colors MUST be HSL.
 
   .landing-page__nav {
     border-color: hsl(var(--landing-gold) / 0.24);
-    background-color: hsl(var(--landing-ivory) / 0.9);
+    background:
+      linear-gradient(90deg, hsl(var(--landing-navy-deep) / 0.98), hsl(var(--landing-navy) / 0.96));
+    box-shadow: 0 10px 30px hsl(var(--landing-navy-deep) / 0.16);
   }
 
   .landing-page h1,
@@ -277,7 +279,37 @@ All colors MUST be HSL.
   }
 
   .landing-page > header a[href="#home"] {
-    color: hsl(var(--landing-navy));
+    color: hsl(0 0% 100%);
+  }
+
+  .landing-page__nav nav a {
+    color: hsl(220 18% 84%);
+  }
+
+  .landing-page__nav nav a:hover {
+    color: hsl(var(--landing-gold));
+  }
+
+  .landing-page__nav a[href="#home"] + div > div:first-child {
+    color: hsl(0 0% 100%) !important;
+  }
+
+  .landing-page__nav a[href="#home"] + div > div:last-child {
+    color: hsl(220 18% 70%) !important;
+  }
+
+  .landing-page__nav > div + div {
+    border-color: hsl(0 0% 100% / 0.2);
+    background: hsl(var(--landing-navy) / 0.98);
+  }
+
+  .landing-page__nav > div + div a:not([href="/sacco/auth"]) {
+    color: hsl(220 18% 86%);
+  }
+
+  .landing-page__nav > div + div a:not([href="/sacco/auth"]):hover {
+    background: hsl(0 0% 100% / 0.08);
+    color: hsl(var(--landing-gold));
   }
 
   .landing-page main > section {

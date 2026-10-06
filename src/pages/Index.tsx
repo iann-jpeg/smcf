@@ -779,6 +779,17 @@ const Index = () => {
         <section id="cycles" className="landing-page__dark-section py-16 text-white sm:py-20">
           <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-[0.9fr_1.1fr]">
             <div>
+              <div className="mb-5 inline-flex items-center gap-3 rounded-2xl border border-white/15 bg-white/10 px-3 py-2 backdrop-blur-sm">
+                <img
+                  src={smcfLogo}
+                  alt="SMCF SACCO"
+                  className="h-9 w-9 rounded-lg border border-[#D4A72C]/70 object-cover shadow-[0_8px_22px_rgba(0,0,0,0.2)]"
+                />
+                <div>
+                  <p className="text-xs font-bold tracking-[0.14em] text-white">SMCF SACCO</p>
+                  <p className="text-[9px] uppercase tracking-[0.16em] text-[#D4A72C]">Smart Moves Cash Flow</p>
+                </div>
+              </div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#e7dcc0]">Contribution cycles</p>
               <h2 className="mt-4 text-3xl font-black tracking-[-0.04em] sm:text-4xl">A clear path from contribution to payout.</h2>
               <p className="mt-5 max-w-xl text-lg leading-8 text-[#d7e5df]">
