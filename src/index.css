@@ -309,6 +309,62 @@ All colors MUST be HSL.
       linear-gradient(135deg, hsl(var(--landing-ivory)), hsl(220 19% 93%)) !important;
   }
 
+  /* Keep the public hero visually connected to the SACCO auth gateway. */
+  .landing-page__hero {
+    background:
+      radial-gradient(circle at 76% 14%, hsl(var(--landing-green) / 0.25), transparent 30rem),
+      radial-gradient(circle at 10% 86%, hsl(var(--landing-gold) / 0.16), transparent 25rem),
+      linear-gradient(135deg, hsl(var(--landing-navy)), hsl(var(--landing-navy-deep))) !important;
+  }
+
+  .landing-page__hero h1,
+  .landing-page__hero h2,
+  .landing-page__hero h3 {
+    color: hsl(0 0% 100%) !important;
+  }
+
+  .landing-page__hero p {
+    color: hsl(220 18% 82%) !important;
+  }
+
+  .landing-page__hero .border-t {
+    border-color: hsl(0 0% 100% / 0.16) !important;
+  }
+
+  .landing-page__hero > div > div:first-child > div:first-child {
+    border-color: hsl(var(--landing-gold) / 0.58) !important;
+    background: hsl(var(--landing-gold) / 0.12) !important;
+    color: hsl(var(--landing-gold)) !important;
+  }
+
+  .landing-page__hero > div > div:first-child > div:first-child span {
+    background: hsl(var(--landing-gold)) !important;
+  }
+
+  .landing-page__hero button {
+    border-color: hsl(0 0% 100% / 0.18) !important;
+    background: hsl(0 0% 100% / 0.1) !important;
+    color: hsl(0 0% 100%) !important;
+  }
+
+  .landing-page__hero button:hover {
+    background: hsl(0 0% 100% / 0.16) !important;
+  }
+
+  .landing-page__hero .mt-9.grid > div {
+    border-color: hsl(0 0% 100% / 0.14) !important;
+    background: hsl(0 0% 100% / 0.08) !important;
+  }
+
+  .landing-page__hero .mt-9.grid > div span {
+    color: hsl(220 18% 88%) !important;
+  }
+
+  .landing-page__hero .mt-9.grid > div > div {
+    background: hsl(var(--landing-gold) / 0.16) !important;
+    color: hsl(var(--landing-gold)) !important;
+  }
+
   .landing-page__dark-section {
     background:
       radial-gradient(circle at 84% 10%, hsl(var(--landing-green) / 0.22), transparent 30%),
