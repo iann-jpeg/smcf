@@ -59,6 +59,7 @@ import { WalletSummaryVisual } from "@/components/WalletSummaryVisual";
 import { CycleProgressVisual } from "@/components/CycleProgressVisual";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { MemberGrowthPanel } from "@/components/MemberGrowthPanel";
 
 function statusVariant(status: string) {
   switch (status) {
@@ -554,6 +555,7 @@ export default function MyAccount() {
           </div>
         </DialogContent>
       </Dialog>
+      <MemberGrowthPanel onSave={() => { setDepositType("savings"); setDepositOpen(true); }} />
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">

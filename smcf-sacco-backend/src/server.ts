@@ -46,6 +46,7 @@ import financialCalendarRoutes from './routes/financialCalendar';
 import transparencyRoutes from './routes/transparency';
 import globalSearchRoutes from './routes/globalSearch';
 import strategicIntelligenceRoutes from './routes/strategicIntelligence';
+import memberGrowthRoutes from './routes/memberGrowth';
 import { startOverdueRepaymentJob } from './utils/overdueRepayments';
 
 // Initialize app
@@ -212,6 +213,7 @@ app.use('/api/calendar-events', financialCalendarRoutes);
 app.use('/api/transparency', transparencyRoutes);
 app.use('/api/admin/search', globalSearchRoutes);
 app.use('/api/strategic-intelligence', strategicIntelligenceRoutes);
+app.use('/api/member-growth', memberGrowthRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {

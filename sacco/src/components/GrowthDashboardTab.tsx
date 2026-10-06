@@ -27,8 +27,6 @@ const MILESTONES = [
   { threshold: 500000, label: "SACCO Champion", emoji: "👑", icon: Crown, color: "hsl(var(--accent-foreground))" },
 ];
 
-const DIVIDEND_RATE = 0.10;
-
 export function GrowthDashboardTab({ member, savingsHistory }: GrowthDashboardTabProps) {
   const savings = Number(member.savings);
   const shares = Number(member.shares);
@@ -120,32 +118,6 @@ export function GrowthDashboardTab({ member, savingsHistory }: GrowthDashboardTa
       };
     });
   }, [savings, avgMonthlySaving]);
-
-  // Dividend projection data — project 12 months
-  const dividendProjection = useMemo(() => {
-    const data = [];
-    let cumSavings = savings;
-    let cumShares = shares;
-    const monthlyAdd = avgMonthlySaving > 0 ? avgMonthlySaving : 0;
-    for (let i = 0; i <= 12; i++) {
-      const total = cumSavings + cumShares;
-      const annualDividend = Math.round(total * DIVIDEND_RATE);
-      const month = new Date();
-      month.setMonth(month.getMonth() + i);
-      data.push({
-        month: month.toLocaleDateString("en-KE", { month: "short", year: "2-digit" }),
-        contribution: Math.round(total),
-        dividend: annualDividend,
-      });
-      cumSavings += monthlyAdd;
-    }
-    return data;
-  }, [savings, shares, avgMonthlySaving]);
-
-  const currentDividend = Math.round(totalContribution * DIVIDEND_RATE);
-  const projectedDividend = dividendProjection.length > 0
-    ? dividendProjection[dividendProjection.length - 1].dividend
-    : currentDividend;
 
   return (
     <div className="space-y-6">
@@ -275,71 +247,44 @@ export function GrowthDashboardTab({ member, savingsHistory }: GrowthDashboardTa
         </Card>
       )}
 
-      {/* Dividend Projection */}
       <Card>
         <CardHeader>
           <CardTitle className="font-heading text-lg flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
-            Live Dividend Projection
+            <TrendingUp className="h-5 w-5 text-primary" />
+            Verified savings trend
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Summary cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="rounded-lg border bg-primary/5 p-4 text-center">
-              <p className="text-xs text-muted-foreground">Current Contributions</p>
-              <p className="text-lg font-bold">KES {totalContribution.toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground">Current savings</p>
+              <p className="text-lg font-bold">KES {savings.toLocaleString()}</p>
             </div>
             <div className="rounded-lg border bg-chart-2/10 p-4 text-center">
-              <p className="text-xs text-muted-foreground">Est. Annual Dividend Now</p>
-              <p className="text-lg font-bold text-primary">KES {currentDividend.toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground">Average monthly saving</p>
+              <p className="text-lg font-bold text-primary">KES {Math.round(avgMonthlySaving).toLocaleString()}</p>
             </div>
             <div className="rounded-lg border bg-chart-4/10 p-4 text-center">
-              <p className="text-xs text-muted-foreground">Projected in 12 Months</p>
-              <p className="text-lg font-bold text-primary">KES {projectedDividend.toLocaleString()}</p>
-              {projectedDividend > currentDividend && (
-                <div className="flex items-center justify-center gap-1 text-xs text-primary mt-1">
-                  <TrendingUp className="h-3 w-3" />
-                  +KES {(projectedDividend - currentDividend).toLocaleString()}
-                </div>
-              )}
+              <p className="text-xs text-muted-foreground">Share capital</p>
+              <p className="text-lg font-bold text-primary">KES {shares.toLocaleString()}</p>
             </div>
           </div>
-
-          {/* Chart */}
-          <ChartContainer
-            config={{
-              dividend: { label: "Est. Dividend (KES)", color: "hsl(var(--chart-2))" },
-              contribution: { label: "Total Contributions (KES)", color: "hsl(var(--primary))" },
-            }}
-            className="h-[280px] w-full"
-          >
-            <AreaChart data={dividendProjection}>
+          <ChartContainer config={{ contribution: { label: "Verified savings (KES)", color: "hsl(var(--primary))" } }} className="h-[280px] w-full">
+            <AreaChart data={savingsHistory}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis dataKey="month" tick={{ fontSize: 11 }} className="text-muted-foreground" />
-              <YAxis tick={{ fontSize: 11 }} className="text-muted-foreground" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+              <YAxis dataKey="amount" tick={{ fontSize: 11 }} className="text-muted-foreground" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
               <ChartTooltip content={<ChartTooltipContent />} />
               <Area
                 type="monotone"
-                dataKey="contribution"
+                dataKey="amount"
                 stroke="hsl(var(--primary))"
                 fill="hsl(var(--primary) / 0.1)"
                 strokeWidth={2}
               />
-              <Area
-                type="monotone"
-                dataKey="dividend"
-                stroke="hsl(var(--chart-2))"
-                fill="hsl(var(--chart-2) / 0.15)"
-                strokeWidth={2}
-              />
             </AreaChart>
           </ChartContainer>
-
-          <p className="text-xs text-muted-foreground text-center">
-            * Projections based on 10% annual dividend rate and your current saving pace of KES {Math.round(avgMonthlySaving).toLocaleString()}/month.
-            Actual dividends depend on SACCO performance.
-          </p>
+          <p className="text-xs text-muted-foreground text-center">Only verified savings history is shown. Dividends are not projected because approved rates and distributions are determined by SMCF.</p>
         </CardContent>
       </Card>
     </div>
