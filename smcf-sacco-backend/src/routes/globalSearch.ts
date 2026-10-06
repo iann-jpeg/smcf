@@ -3,6 +3,7 @@ import Member from '../models/Member';
 import Transaction from '../models/Transaction';
 import Loan from '../models/Loan';
 import { authorize, AuthRequest, protect } from '../middleware/auth';
+import { recordUserActivity } from '../utils/userActivity';
 
 const router = Router();
 router.get('/', protect, authorize('admin', 'treasurer', 'credit_officer', 'auditor'), async (req: AuthRequest, res, next) => {
@@ -15,6 +16,15 @@ router.get('/', protect, authorize('admin', 'treasurer', 'credit_officer', 'audi
       Transaction.find({ $or: [{ transactionRef: expression }, { mpesaRef: expression }, { description: expression }] }).select('transactionRef amount type status processedAt memberId').limit(10).lean(),
       Loan.find({ loanNumber: expression }).select('loanNumber amount status memberId').limit(10).lean(),
     ]);
+    recordUserActivity(req, {
+      userId: (req as AuthRequest).userId,
+      event: 'search',
+      action: 'Global search',
+      path: '/admin/search',
+      searchCategories: ['members', 'transactions', 'loans'],
+      resultCount: members.length + transactions.length + loans.length,
+      metadata: { queryLength: query.length },
+    });
     return res.json({ success: true, data: { members, transactions, loans } });
   } catch (error) {
     return next(error);

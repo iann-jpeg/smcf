@@ -47,6 +47,7 @@ import transparencyRoutes from './routes/transparency';
 import globalSearchRoutes from './routes/globalSearch';
 import strategicIntelligenceRoutes from './routes/strategicIntelligence';
 import memberGrowthRoutes from './routes/memberGrowth';
+import userActivityRoutes from './routes/userActivity';
 import { startOverdueRepaymentJob } from './utils/overdueRepayments';
 
 // Initialize app
@@ -214,6 +215,7 @@ app.use('/api/transparency', transparencyRoutes);
 app.use('/api/admin/search', globalSearchRoutes);
 app.use('/api/strategic-intelligence', strategicIntelligenceRoutes);
 app.use('/api/member-growth', memberGrowthRoutes);
+app.use('/api/user-activity', userActivityRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {

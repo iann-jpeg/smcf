@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { fetchFromSaccoApi } from "@/lib/saccoApiBase";
 
 // ─── Auth user shape returned by the backend ──────────────────────────────
 export interface AuthUser {
@@ -6,6 +7,7 @@ export interface AuthUser {
   email: string;
   fullName?: string;
   roles: string[];
+  sessionId?: string;
 }
 
 // ─── Storage keys ──────────────────────────────────────────────────────────
@@ -79,7 +81,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("smcf-auth-change", sync);
   }, []);
 
+  useEffect(() => {
+    if (!token || !user) return;
+    const handleExit = () => {
+      void fetchFromSaccoApi("/user-activity/exit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ event: "session_exit", sessionId: user.sessionId, path: window.location.pathname }),
+        keepalive: true,
+      }).catch(() => undefined);
+    };
+    window.addEventListener("pagehide", handleExit);
+    return () => window.removeEventListener("pagehide", handleExit);
+  }, [token, user]);
+
   const signOut = () => {
+    if (token) {
+      void fetchFromSaccoApi("/user-activity/exit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ event: "logout", sessionId: user?.sessionId, path: window.location.pathname }),
+        keepalive: true,
+      }).catch(() => undefined);
+    }
     clearAuth();
     window.location.href = "/sacco/auth";
   };

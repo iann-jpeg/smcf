@@ -86,7 +86,7 @@ const adminNav = [
 
 const systemNav = [
   { title: "Notifications", url: "/notifications", icon: Bell, allowedRoles: ["admin", "treasurer", "auditor"] },
-  { title: "Audit & Compliance", url: "/compliance", icon: ClipboardList, allowedRoles: ["admin", "auditor"] },
+  { title: "Audit & Activity", url: "/compliance", icon: ClipboardList, allowedRoles: ["admin", "auditor"] },
   { title: "Documents", url: "/documents", icon: FileText, allowedRoles: ["admin", "auditor"] },
   { title: "Settings", url: "/settings", icon: Settings, allowedRoles: ["admin"] },
 ] satisfies StaffNavItem[];

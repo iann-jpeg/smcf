@@ -1,4 +1,5 @@
 import { useAuditLogs } from "@/hooks/useAuditLogs";
+import { useUserActivity } from "@/hooks/useUserActivity";
 import { useMembers } from "@/hooks/useMembers";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,12 +7,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Shield, Eye } from "lucide-react";
+import { Shield, Eye, Activity } from "lucide-react";
 import { format } from "date-fns";
 import { Link } from "react-router-dom";
 
 export default function Compliance() {
   const { data: auditLogs = [], isLoading: logsLoading } = useAuditLogs();
+  const { data: activities = [], isLoading: activitiesLoading } = useUserActivity();
   const { data: members = [] } = useMembers();
   const { hasRole } = useAuth();
   const isAdmin = hasRole("admin");
@@ -40,6 +42,41 @@ export default function Compliance() {
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">KYC Verified</CardTitle></CardHeader>
           <CardContent><p className="text-3xl font-heading font-bold">{kycVerified} <span className="text-sm font-body text-muted-foreground">/ {totalMembers}</span></p></CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="font-heading flex items-center gap-2">
+              <Activity className="h-4 w-4" /> User Activity & Sessions
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">Login, exit, action, and search activity. Search terms are not stored.</p>
+          </CardHeader>
+          <CardContent>
+            {activitiesLoading ? <Skeleton className="h-40 w-full" /> : activities.length === 0 ? (
+              <p className="py-8 text-center text-muted-foreground">No user activity recorded yet.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader><TableRow><TableHead>Time</TableHead><TableHead>User</TableHead><TableHead>Event</TableHead><TableHead>What happened</TableHead><TableHead>Details</TableHead><TableHead>IP</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {activities.map((activity: any) => (
+                      <TableRow key={activity.id}>
+                        <TableCell className="whitespace-nowrap font-mono text-xs">{format(new Date(activity.created_at), "yyyy-MM-dd HH:mm:ss")}</TableCell>
+                        <TableCell className="min-w-[160px] text-sm">{activity.user_name || activity.user_email || "Unknown user"}</TableCell>
+                        <TableCell><Badge variant={activity.event === "login" ? "default" : activity.event === "search" ? "secondary" : "outline"}>{activity.event}</Badge></TableCell>
+                        <TableCell className="text-sm">{activity.action}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {activity.event === "search"
+                            ? `${activity.search_categories.join(", ")} · ${activity.result_count ?? 0} results`
+                            : activity.path || "—"}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs text-muted-foreground">{activity.ip_address || "—"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Total Members</CardTitle></CardHeader>

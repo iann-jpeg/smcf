@@ -160,6 +160,7 @@ export default function Auth() {
             : rawUser.role
               ? [String(rawUser.role)]
               : ["member"],
+          sessionId: String(data?.data?.sessionId || ""),
         };
 
         if (!token || !normalizedUser.id) {

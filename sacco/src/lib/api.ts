@@ -369,6 +369,27 @@ export function normalizeAuditLog(a: DbDocument) {
   };
 }
 
+export function normalizeUserActivity(a: DbDocument) {
+  if (!a) return a;
+  a = base(a);
+  const user = (a.userId && typeof a.userId === "object" ? a.userId : null) as any;
+  return {
+    ...a,
+    id: a.id || String(a._id),
+    user_id: user ? String(user._id ?? user.id ?? "") : (a.userId ? String(a.userId) : null),
+    user_email: user?.email ?? null,
+    user_name: user?.fullName ?? null,
+    event: String(a.event ?? ""),
+    action: String(a.action ?? ""),
+    path: a.path ?? null,
+    search_categories: Array.isArray(a.searchCategories) ? a.searchCategories : [],
+    result_count: a.resultCount ?? null,
+    ip_address: a.ipAddress ?? null,
+    user_agent: a.userAgent ?? null,
+    created_at: a.createdAt ?? a.created_at,
+  };
+}
+
 // ─── Admin Communications API ──────────────────────────────────────────────
 
 export interface MemberMessageItem {

@@ -14,6 +14,7 @@ import {
   verifyEmailToken,
   getEmailDeliveryHealth,
 } from '../services/emailService';
+import { recordUserActivity } from '../utils/userActivity';
 
 const router = Router();
 
@@ -278,11 +279,21 @@ router.post(
 
       // Generate token
       const token = generateToken(user._id.toString());
+      const sessionId = crypto.randomUUID();
+      recordUserActivity(req, {
+        userId: user._id,
+        sessionId,
+        event: 'login',
+        action: 'User logged in',
+        path: '/auth/login',
+        metadata: { roles: user.roles },
+      });
 
       res.json({
         success: true,
         data: {
           token,
+          sessionId,
           user: {
             id: user._id,
             email: user.email,
