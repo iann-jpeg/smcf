@@ -6,7 +6,11 @@ import mongoose from 'mongoose';
 
 const router = Router();
 const staff = [protect, authorize('admin', 'treasurer', 'credit_officer', 'auditor')];
-const allowedTypes: FinancialCalendarEventType[] = ['cycle_payment', 'loan_repayment', 'card_payment', 'wallet_maturity', 'meeting', 'notice'];
+const allowedTypes: FinancialCalendarEventType[] = [
+  'general', 'cycle', 'savings', 'wallet', 'loans', 'shares', 'ten_x', 'training',
+  'financial_literacy', 'community', 'recruitment', 'youth', 'deadline', 'announcement',
+  'other', 'cycle_payment', 'loan_repayment', 'card_payment', 'wallet_maturity', 'meeting', 'notice',
+];
 
 function parseDate(value: unknown): Date | null {
   const date = new Date(String(value || ''));
@@ -23,7 +27,25 @@ router.get('/', protect, async (req: AuthRequest, res, next) => {
       ? {}
       : { $or: [{ memberIds: { $size: 0 } }, { memberIds: { $in: member?._id ? [member._id] : [] } }] };
     const events = await FinancialCalendarEvent.find({ startsAt: { $gte: from, $lte: to }, ...memberFilter })
-      .select('title description type startsAt endsAt amount isPublic memberIds')
+      .select('title description fullDescription type startsAt endsAt venue organizer contact registrationLink externalLink imageUrl status priority amount isPublic memberIds')
+      .sort({ startsAt: 1 })
+      .lean();
+    return res.json({ success: true, data: events });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/public', async (req, res, next) => {
+  try {
+    const from = parseDate(req.query.from) || new Date();
+    const to = parseDate(req.query.to) || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+    const events = await FinancialCalendarEvent.find({
+      startsAt: { $gte: from, $lte: to },
+      isPublic: true,
+      $or: [{ status: 'published' }, { status: { $exists: false } }],
+    })
+      .select('title description fullDescription type startsAt endsAt venue organizer contact registrationLink externalLink imageUrl status priority')
       .sort({ startsAt: 1 })
       .lean();
     return res.json({ success: true, data: events });
@@ -34,7 +56,10 @@ router.get('/', protect, async (req: AuthRequest, res, next) => {
 
 router.post('/', ...staff, async (req: AuthRequest, res, next) => {
   try {
-    const { title, description, type, startsAt, endsAt, amount, memberIds, isPublic } = req.body || {};
+    const {
+      title, description, fullDescription, type, startsAt, endsAt, venue, organizer, contact,
+      registrationLink, externalLink, imageUrl, status, priority, amount, memberIds, isPublic,
+    } = req.body || {};
     const start = parseDate(startsAt);
     if (!title || !allowedTypes.includes(type) || !start) {
       return res.status(400).json({ success: false, message: 'title, type and a valid startsAt are required' });
@@ -53,9 +78,18 @@ router.post('/', ...staff, async (req: AuthRequest, res, next) => {
     const event = await FinancialCalendarEvent.create({
       title: String(title).trim(),
       description: description ? String(description).trim() : null,
+      fullDescription: fullDescription ? String(fullDescription).trim() : null,
       type,
       startsAt: start,
       endsAt: end,
+      venue: venue ? String(venue).trim() : null,
+      organizer: organizer ? String(organizer).trim() : null,
+      contact: contact ? String(contact).trim() : null,
+      registrationLink: registrationLink ? String(registrationLink).trim() : null,
+      externalLink: externalLink ? String(externalLink).trim() : null,
+      imageUrl: imageUrl ? String(imageUrl).trim() : null,
+      status: ['draft', 'published', 'unpublished', 'cancelled', 'completed'].includes(status) ? status : 'draft',
+      priority: ['low', 'normal', 'high'].includes(priority) ? priority : 'normal',
       amount: parsedAmount,
       memberIds: parsedMemberIds,
       isPublic: Boolean(isPublic),

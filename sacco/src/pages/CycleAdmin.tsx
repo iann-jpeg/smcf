@@ -41,7 +41,7 @@ export default function CycleAdmin() {
   const [payoutNotes, setPayoutNotes] = useState("");
   const [recordingPayout, setRecordingPayout] = useState(false);
   const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
-  const [calendarDraft, setCalendarDraft] = useState({ title: "", type: "notice", startsAt: "", description: "", amount: "" });
+  const [calendarDraft, setCalendarDraft] = useState({ title: "", type: "notice", startsAt: "", description: "", amount: "", status: "draft", isPublic: false });
   const [savingCalendarEvent, setSavingCalendarEvent] = useState(false);
 
   const load = useCallback(async () => {
@@ -115,8 +115,8 @@ export default function CycleAdmin() {
     if (!calendarDraft.title || !calendarDraft.startsAt) return;
     setSavingCalendarEvent(true);
     try {
-      await api.post("/calendar-events", { ...calendarDraft, amount: calendarDraft.amount || null, isPublic: false });
-      setCalendarDraft({ title: "", type: "notice", startsAt: "", description: "", amount: "" });
+      await api.post("/calendar-events", { ...calendarDraft, amount: calendarDraft.amount || null });
+      setCalendarDraft({ title: "", type: "notice", startsAt: "", description: "", amount: "", status: "draft", isPublic: false });
       await loadCalendarEvents();
       toast({ title: "Calendar event saved" });
     } catch (error: any) {
@@ -272,16 +272,19 @@ export default function CycleAdmin() {
         <NextActionCard description={Number(stats.pendingMembers || 0) > 0 ? `${stats.pendingMembers} member${Number(stats.pendingMembers) === 1 ? "" : "s"} still need to complete this cycle.` : "All members are paid for the current cycle."} actionLabel="Manage members" onAction={() => { setTab("members"); setSearchParams({ tab: "members" }); }} complete={Number(stats.pendingMembers || 0) === 0} />
       </div>
       <Card>
-        <CardHeader><CardTitle>Financial calendar events</CardTitle><CardDescription>Create member-visible dates for repayments, cycle payments, wallet maturity, meetings and notices. No settlement is triggered by these reminders.</CardDescription></CardHeader>
+        <CardHeader><CardTitle>Events &amp; calendar</CardTitle><CardDescription>Create and publish organizational events for members and the public website. No settlement is triggered by these reminders.</CardDescription></CardHeader>
         <CardContent className="space-y-3">
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <Input placeholder="Event title" value={calendarDraft.title} onChange={(e) => setCalendarDraft((d) => ({ ...d, title: e.target.value }))} />
-            <select className="h-10 rounded-md border bg-background px-3 text-sm" value={calendarDraft.type} onChange={(e) => setCalendarDraft((d) => ({ ...d, type: e.target.value }))}><option value="notice">Notice</option><option value="cycle_payment">Cycle payment</option><option value="loan_repayment">Loan repayment</option><option value="card_payment">Card payment</option><option value="wallet_maturity">Wallet maturity</option><option value="meeting">Meeting</option></select>
+            <select className="h-10 rounded-md border bg-background px-3 text-sm" value={calendarDraft.type} onChange={(e) => setCalendarDraft((d) => ({ ...d, type: e.target.value }))}><option value="general">General</option><option value="meeting">Meeting</option><option value="cycle">Cycle</option><option value="training">Training</option><option value="financial_literacy">Financial literacy</option><option value="community">Community</option><option value="deadline">Deadline</option><option value="announcement">Announcement</option><option value="notice">Notice</option><option value="cycle_payment">Cycle payment</option><option value="loan_repayment">Loan repayment</option></select>
             <Input type="datetime-local" value={calendarDraft.startsAt} onChange={(e) => setCalendarDraft((d) => ({ ...d, startsAt: e.target.value }))} />
             <Input type="number" min="0" placeholder="Amount (optional)" value={calendarDraft.amount} onChange={(e) => setCalendarDraft((d) => ({ ...d, amount: e.target.value }))} />
-            <Button onClick={() => void saveCalendarEvent()} disabled={savingCalendarEvent || !calendarDraft.title || !calendarDraft.startsAt}>{savingCalendarEvent ? "Saving..." : "Add event"}</Button>
+            <Input placeholder="Short description (optional)" value={calendarDraft.description} onChange={(e) => setCalendarDraft((d) => ({ ...d, description: e.target.value }))} />
+            <select className="h-10 rounded-md border bg-background px-3 text-sm" value={calendarDraft.status} onChange={(e) => setCalendarDraft((d) => ({ ...d, status: e.target.value }))}><option value="draft">Draft</option><option value="published">Published</option><option value="unpublished">Unpublished</option><option value="cancelled">Cancelled</option></select>
+            <label className="flex items-center gap-2 rounded-md border px-3 text-sm"><input type="checkbox" checked={calendarDraft.isPublic} onChange={(e) => setCalendarDraft((d) => ({ ...d, isPublic: e.target.checked }))} /> Visible on public website</label>
+            <Button onClick={() => void saveCalendarEvent()} disabled={savingCalendarEvent || !calendarDraft.title || !calendarDraft.startsAt}>{savingCalendarEvent ? "Saving..." : "Create event"}</Button>
           </div>
-          {calendarEvents.length === 0 ? <Empty text="No managed events yet." /> : <div className="divide-y rounded-md border">{calendarEvents.slice(0, 12).map((event: any) => <div key={String(event._id)} className="flex items-center justify-between gap-3 p-3"><div className="min-w-0"><p className="truncate text-sm font-medium">{event.title}</p><p className="text-xs text-muted-foreground">{new Date(event.startsAt).toLocaleString("en-KE")} · {event.type}</p></div><Button size="sm" variant="ghost" onClick={() => void deleteCalendarEvent(String(event._id))}>Remove</Button></div>)}</div>}
+          {calendarEvents.length === 0 ? <Empty text="No managed events yet." /> : <div className="divide-y rounded-md border">{calendarEvents.slice(0, 12).map((event: any) => <div key={String(event._id)} className="flex items-center justify-between gap-3 p-3"><div className="min-w-0"><p className="truncate text-sm font-medium">{event.title}</p><p className="text-xs text-muted-foreground">{new Date(event.startsAt).toLocaleString("en-KE")} · {event.type} · {event.status || "legacy"}{event.isPublic ? " · public" : ""}</p></div><Button size="sm" variant="ghost" onClick={() => void deleteCalendarEvent(String(event._id))}>Remove</Button></div>)}</div>}
         </CardContent>
       </Card>
 

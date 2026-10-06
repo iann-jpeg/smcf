@@ -23,6 +23,7 @@ import {
   ArrowRight,
   CheckCircle2,
   FileText,
+  CalendarDays,
 } from "lucide-react";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
@@ -82,6 +83,8 @@ const Index = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [publicEvents, setPublicEvents] = useState<any[]>([]);
+  const [selectedPublicEvent, setSelectedPublicEvent] = useState<any | null>(null);
   // userRole is simplified for UI: 'admin' means any administrative role (treasurer, secretary, etc.)
   const [userRole, setUserRole] = useState<"admin" | "member" | null>(null);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
@@ -146,6 +149,14 @@ const Index = () => {
 
     restoreAuth();
   }, []);
+
+  useEffect(() => {
+    if (userRole || hasCurrentUser) return;
+    fetch(`${API_BASE}/api/calendar-events/public`)
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error("Events unavailable")))
+      .then((payload) => setPublicEvents(Array.isArray(payload?.data) ? payload.data : []))
+      .catch(() => setPublicEvents([]));
+  }, [hasCurrentUser, userRole]);
 
   // Fetch data when admin logs in - MUST be before any conditional returns
   useEffect(() => {
@@ -258,11 +269,23 @@ const Index = () => {
     { label: "How It Works", href: "#how-it-works" },
     { label: "Features", href: "#features" },
     { label: "Cycles", href: "#cycles" },
+    { label: "Events", href: "#events" },
     { label: "FAQ", href: "#faq" },
     { label: "Contact", href: "#contact" },
   ];
 
   const whatsappGroupLink = "https://chat.whatsapp.com/LkA4eYRR8L2CQ5HwulTfyJ";
+  const publicEventMonth = new Date();
+  const monthStart = new Date(publicEventMonth.getFullYear(), publicEventMonth.getMonth(), 1);
+  const monthOffset = monthStart.getDay();
+  const monthDays = new Date(publicEventMonth.getFullYear(), publicEventMonth.getMonth() + 1, 0).getDate();
+  const eventForDay = (day: number) => publicEvents.filter((event) => {
+    const eventDate = new Date(event.startsAt);
+    return eventDate.getFullYear() === publicEventMonth.getFullYear()
+      && eventDate.getMonth() === publicEventMonth.getMonth()
+      && eventDate.getDate() === day;
+  });
+  const upcomingPublicEvents = publicEvents.filter((event) => new Date(event.startsAt) >= new Date()).slice(0, 5);
 
   // Show loading state while checking authentication
   if (isLoading) {
@@ -988,6 +1011,87 @@ const Index = () => {
             <div className="mt-6 h-20 rounded-[24px] bg-[radial-gradient(circle_at_center,_rgba(29,109,77,0.12),transparent_55%)]" />
           </div>
         </section>
+
+        <section id="events" className="bg-[#f0f4ef] py-16 sm:py-20">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6">
+            <div className="mb-10 text-center">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#2a5a49]">SMCF Events &amp; Activities</p>
+              <h2 className="mt-3 text-3xl font-black tracking-[-0.04em] text-[#123026] sm:text-4xl">Stay connected with what is happening next.</h2>
+              <p className="mx-auto mt-4 max-w-2xl text-lg leading-8 text-[#4d645d]">Stay connected with upcoming SMCF activities, meetings, payment dates and important events.</p>
+            </div>
+
+            {publicEvents.length === 0 ? (
+              <div className="rounded-[28px] border border-[#dfe9e3] bg-white p-8 text-center text-[#527166] shadow-sm">
+                <CalendarDays className="mx-auto h-8 w-8 text-[#1d6d4d]" />
+                <p className="mt-3 font-semibold text-[#123026]">No public events have been published yet.</p>
+                <p className="mt-1 text-sm">Check back soon for upcoming SMCF activities.</p>
+              </div>
+            ) : (
+              <div className="grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">
+                <div className="rounded-[28px] border border-[#dfe9e3] bg-white p-5 shadow-sm sm:p-7">
+                  <div className="mb-5 flex items-center justify-between">
+                    <h3 className="text-xl font-bold text-[#123026]">{publicEventMonth.toLocaleString("en", { month: "long", year: "numeric" })}</h3>
+                    <span className="rounded-full bg-[#edf7f1] px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1d6d4d]">Public calendar</span>
+                  </div>
+                  <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold uppercase tracking-[0.12em] text-[#789087] sm:gap-2">
+                    {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => <div key={day} className="py-2">{day}</div>)}
+                    {Array.from({ length: monthOffset }).map((_, index) => <div key={`empty-${index}`} className="min-h-16 rounded-xl bg-[#f8faf8] sm:min-h-20" />)}
+                    {Array.from({ length: monthDays }).map((_, index) => {
+                      const day = index + 1;
+                      const dayEvents = eventForDay(day);
+                      return (
+                        <button
+                          type="button"
+                          key={day}
+                          onClick={() => dayEvents[0] && setSelectedPublicEvent(dayEvents[0])}
+                          className="min-h-16 rounded-xl border border-[#edf2ee] bg-[#fbfdfb] p-2 text-left transition hover:border-[#b8924a] hover:bg-[#fffaf3] sm:min-h-20"
+                        >
+                          <span className="text-sm font-bold text-[#123026]">{day}</span>
+                          <span className="mt-1 block space-y-1">
+                            {dayEvents.slice(0, 2).map((event) => (
+                              <span key={event._id || event.title} className="block truncate text-[10px] font-semibold text-[#1d6d4d]">● {event.title}</span>
+                            ))}
+                            {dayEvents.length > 2 && <span className="block text-[10px] font-semibold text-[#b8924a]">+{dayEvents.length - 2} more</span>}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="rounded-[28px] border border-[#dfe9e3] bg-white p-5 shadow-sm sm:p-7">
+                  <h3 className="text-xl font-bold text-[#123026]">Upcoming events</h3>
+                  <div className="mt-5 space-y-3">
+                    {upcomingPublicEvents.length === 0 ? <p className="text-sm text-[#648073]">No upcoming events this year.</p> : upcomingPublicEvents.map((event) => (
+                      <button type="button" key={event._id || event.title} onClick={() => setSelectedPublicEvent(event)} className="w-full rounded-2xl border border-[#e7efe9] bg-[#f8faf8] p-4 text-left transition hover:border-[#b8924a]">
+                        <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#b8924a]">{new Date(event.startsAt).toLocaleDateString("en-KE", { month: "short", day: "numeric" })}</p>
+                        <p className="mt-1 font-bold text-[#123026]">{event.title}</p>
+                        <p className="mt-1 text-sm text-[#648073]">{new Date(event.startsAt).toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit" })}{event.venue ? ` • ${event.venue}` : ""}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {selectedPublicEvent && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#061b15]/70 p-4" role="dialog" aria-modal="true" aria-label="Event details" onClick={() => setSelectedPublicEvent(null)}>
+            <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[28px] bg-white p-6 shadow-2xl sm:p-8" onClick={(event) => event.stopPropagation()}>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#1d6d4d]">{selectedPublicEvent.type || "SMCF event"}</p>
+              <h2 className="mt-2 text-2xl font-black text-[#123026]">{selectedPublicEvent.title}</h2>
+              <p className="mt-4 text-sm font-semibold text-[#527166]">{new Date(selectedPublicEvent.startsAt).toLocaleString("en-KE")}</p>
+              {selectedPublicEvent.venue && <p className="mt-2 text-sm text-[#527166]">Venue: {selectedPublicEvent.venue}</p>}
+              <p className="mt-5 whitespace-pre-line text-base leading-7 text-[#4d645d]">{selectedPublicEvent.fullDescription || selectedPublicEvent.description || "More details will be shared by SMCF."}</p>
+              <div className="mt-7 flex flex-wrap gap-3">
+                {selectedPublicEvent.registrationLink && <a href={selectedPublicEvent.registrationLink} target="_blank" rel="noreferrer" className="rounded-full bg-[#1d6d4d] px-5 py-3 text-sm font-semibold text-white">Register</a>}
+                {selectedPublicEvent.externalLink && <a href={selectedPublicEvent.externalLink} target="_blank" rel="noreferrer" className="rounded-full border border-[#b8924a] px-5 py-3 text-sm font-semibold text-[#123026]">Learn more</a>}
+                <button type="button" onClick={() => setSelectedPublicEvent(null)} className="rounded-full border border-[#dfe9e3] px-5 py-3 text-sm font-semibold text-[#527166]">Close</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <section id="faq" className="bg-[#f0f4ef] py-16 sm:py-20">
           <div className="mx-auto max-w-5xl px-4 sm:px-6">
