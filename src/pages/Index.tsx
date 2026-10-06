@@ -1,4 +1,4 @@
-import smcfLogo from "@/assets/newsmcflogo.png";
+import saccoLogo from "@/assets/sacco-logo.png";
 import landingBackground from "@/assets/landingbackground.jpg";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import SEO from "@/components/SEO";
@@ -367,7 +367,7 @@ const Index = () => {
           <header className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-50">
             <div className="container mx-auto px-4 py-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <img src={smcfLogo} alt="SMCF - Smart Moves Cash Flow Admin Dashboard Logo" className="w-10 h-10" />
+                <img src={saccoLogo} alt="SMCF SACCO logo" className="h-10 w-24 object-contain" />
                 <div>
                   <h1 className="text-xl"><StyledSMCF /> Admin</h1>
                   <p className="text-xs text-muted-foreground">
@@ -438,7 +438,7 @@ const Index = () => {
       >
         <div className="container mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
           <a href="#home" className="flex items-center gap-3">
-            <img src={smcfLogo} alt="SMCF" className="h-11 w-11 rounded-xl object-cover shadow-sm sm:h-12 sm:w-12" />
+            <img src={saccoLogo} alt="SMCF SACCO" className="h-11 w-28 rounded-xl object-contain shadow-sm sm:h-12 sm:w-32" />
             <div>
               <div className="text-lg font-bold tracking-tight text-[#123026] sm:text-xl">
                 <StyledSMCF />
@@ -781,9 +781,9 @@ const Index = () => {
             <div>
               <div className="mb-5 inline-flex items-center gap-3 rounded-2xl border border-white/15 bg-white/10 px-3 py-2 backdrop-blur-sm">
                 <img
-                  src={smcfLogo}
+                  src={saccoLogo}
                   alt="SMCF SACCO"
-                  className="h-9 w-9 rounded-lg border border-[#D4A72C]/70 object-cover shadow-[0_8px_22px_rgba(0,0,0,0.2)]"
+                  className="h-9 w-16 rounded-lg border border-[#D4A72C]/70 object-contain shadow-[0_8px_22px_rgba(0,0,0,0.2)]"
                 />
                 <div>
                   <p className="text-xs font-bold tracking-[0.14em] text-white">SMCF SACCO</p>
@@ -1102,7 +1102,7 @@ const Index = () => {
         <div className="mx-auto grid max-w-7xl gap-8 px-4 py-12 sm:px-6 lg:grid-cols-[1.2fr_0.8fr_0.8fr]">
           <div>
             <div className="flex items-center gap-3">
-              <img src={smcfLogo} alt="SMCF" className="h-11 w-11 rounded-xl object-cover" />
+              <img src={saccoLogo} alt="SMCF SACCO" className="h-11 w-32 rounded-xl object-contain" />
               <div>
                 <div className="text-xl font-bold"><StyledSMCF /></div>
                 <div className="text-xs uppercase tracking-[0.18em] text-[#dfe9e3]">Smart Moves Development Agency</div>

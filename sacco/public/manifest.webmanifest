@@ -8,6 +8,6 @@
   "theme_color": "#0f766e",
   "description": "SMCF SACCO member and administration portal",
   "icons": [
-    { "src": "/sacco/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    { "src": "/sacco/favicon.png", "sizes": "1536x1024", "type": "image/png", "purpose": "any" }
   ]
 }
