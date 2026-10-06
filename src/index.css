@@ -220,10 +220,16 @@ All colors MUST be HSL.
 
 @layer components {
   .landing-page {
-    color: hsl(var(--smcf-text));
+    --landing-navy: 220 40% 13%;
+    --landing-navy-deep: 220 42% 9%;
+    --landing-gold: 45 90% 55%;
+    --landing-green: 152 60% 40%;
+    --landing-ivory: 220 20% 97%;
+    color: hsl(var(--landing-navy));
     background:
-      radial-gradient(circle at 8% 8%, hsl(var(--smcf-gold) / 0.1), transparent 26rem),
-      hsl(var(--smcf-ivory));
+      radial-gradient(circle at 12% 6%, hsl(var(--landing-gold) / 0.12), transparent 25rem),
+      hsl(var(--landing-ivory));
+    font-family: var(--font-body);
   }
 
   .landing-page::before {
@@ -240,8 +246,46 @@ All colors MUST be HSL.
   }
 
   .landing-page__nav {
-    border-color: hsl(var(--smcf-border) / 0.9);
-    background-color: hsl(var(--smcf-ivory) / 0.82);
+    border-color: hsl(var(--landing-gold) / 0.24);
+    background-color: hsl(var(--landing-ivory) / 0.9);
+  }
+
+  .landing-page h1,
+  .landing-page h2,
+  .landing-page h3,
+  .landing-page h4 {
+    font-family: var(--font-heading);
+  }
+
+  .landing-page > header img {
+    border: 2px solid hsl(var(--landing-gold) / 0.65);
+    box-shadow: 0 8px 24px hsl(var(--landing-navy) / 0.16);
+  }
+
+  .landing-page > header a[href="/sacco/auth"],
+  .landing-page main a[href="/sacco/auth"] {
+    border-color: hsl(var(--landing-gold));
+    background: hsl(var(--landing-gold));
+    color: hsl(var(--landing-navy));
+    box-shadow: 0 12px 30px hsl(var(--landing-gold) / 0.22);
+  }
+
+  .landing-page > header a[href="/sacco/auth"]:hover,
+  .landing-page main a[href="/sacco/auth"]:hover {
+    background: hsl(45 90% 62%);
+    color: hsl(var(--landing-navy-deep));
+  }
+
+  .landing-page > header a[href="#home"] {
+    color: hsl(var(--landing-navy));
+  }
+
+  .landing-page main > section {
+    position: relative;
+  }
+
+  .landing-page main > section:not(#home):not(#cycles):not(#faq):not(#contact) {
+    background-color: hsl(var(--landing-ivory));
   }
 
   .landing-page__nav a,
@@ -260,25 +304,36 @@ All colors MUST be HSL.
 
   .landing-page__hero {
     background:
-      radial-gradient(circle at 12% 10%, hsl(var(--smcf-gold) / 0.17), transparent 24%),
-      radial-gradient(circle at 82% 35%, hsl(var(--smcf-teal) / 0.11), transparent 33%),
-      linear-gradient(135deg, hsl(var(--smcf-ivory)), hsl(36 29% 93%));
+      radial-gradient(circle at 12% 10%, hsl(var(--landing-gold) / 0.18), transparent 24%),
+      radial-gradient(circle at 82% 35%, hsl(var(--landing-green) / 0.13), transparent 33%),
+      linear-gradient(135deg, hsl(var(--landing-ivory)), hsl(220 19% 93%)) !important;
   }
 
   .landing-page__dark-section {
     background:
-      radial-gradient(circle at 84% 10%, hsl(var(--smcf-teal) / 0.2), transparent 30%),
-      hsl(var(--smcf-dark-surface));
+      radial-gradient(circle at 84% 10%, hsl(var(--landing-green) / 0.22), transparent 30%),
+      linear-gradient(135deg, hsl(var(--landing-navy)), hsl(var(--landing-navy-deep))) !important;
   }
 
   .landing-page__card {
-    border-color: hsl(var(--smcf-border));
-    box-shadow: 0 24px 70px hsl(var(--smcf-navy) / 0.07);
+    border-color: hsl(var(--landing-navy) / 0.1);
+    box-shadow: 0 24px 70px hsl(var(--landing-navy) / 0.1);
   }
 
   .landing-page__card:hover {
     transform: translateY(-3px);
-    box-shadow: 0 30px 80px hsl(var(--smcf-navy) / 0.11);
+    box-shadow: 0 30px 80px hsl(var(--landing-navy) / 0.15);
+  }
+
+  .landing-page footer {
+    background:
+      radial-gradient(circle at 80% 0%, hsl(var(--landing-green) / 0.18), transparent 26rem),
+      hsl(var(--landing-navy-deep)) !important;
+  }
+
+  .landing-page .text-\[\#b8924a\],
+  .landing-page .text-\[\#e7dcc0\] {
+    color: hsl(var(--landing-gold)) !important;
   }
 }
 
