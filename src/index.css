@@ -349,17 +349,20 @@ All colors MUST be HSL.
       linear-gradient(135deg, hsl(var(--landing-navy)), hsl(var(--landing-navy-deep))) !important;
   }
 
-  .landing-page__hero h1,
-  .landing-page__hero h2,
-  .landing-page__hero h3 {
+  /* The legacy light hero overlay conflicted with the SACCO theme and washed out content. */
+  .landing-page__hero > .absolute {
+    display: none;
+  }
+
+  .landing-page__hero > .container > div:first-child h1 {
     color: hsl(0 0% 100%) !important;
   }
 
-  .landing-page__hero p {
+  .landing-page__hero > .container > div:first-child p {
     color: hsl(220 18% 82%) !important;
   }
 
-  .landing-page__hero .border-t {
+  .landing-page__hero > .container > div:first-child .border-t {
     border-color: hsl(0 0% 100% / 0.16) !important;
   }
 
@@ -383,18 +386,30 @@ All colors MUST be HSL.
     background: hsl(0 0% 100% / 0.16) !important;
   }
 
-  .landing-page__hero .mt-9.grid > div {
+  .landing-page__hero > .container > div:first-child .mt-9.grid > div {
     border-color: hsl(0 0% 100% / 0.14) !important;
     background: hsl(0 0% 100% / 0.08) !important;
   }
 
-  .landing-page__hero .mt-9.grid > div span {
+  .landing-page__hero > .container > div:first-child .mt-9.grid > div span {
     color: hsl(220 18% 88%) !important;
   }
 
-  .landing-page__hero .mt-9.grid > div > div {
+  .landing-page__hero > .container > div:first-child .mt-9.grid > div > div {
     background: hsl(var(--landing-gold) / 0.16) !important;
     color: hsl(var(--landing-gold)) !important;
+  }
+
+  .landing-page__hero > .container > div:last-child h2,
+  .landing-page__hero > .container > div:last-child h3,
+  .landing-page__hero > .container > div:last-child p {
+    color: hsl(var(--landing-navy)) !important;
+  }
+
+  .landing-page__hero > .container > div:last-child .text-white,
+  .landing-page__hero > .container > div:last-child .text-white\/70,
+  .landing-page__hero > .container > div:last-child .text-white\/75 {
+    color: hsl(0 0% 100%) !important;
   }
 
   .landing-page__dark-section {
