@@ -682,30 +682,7 @@ export default function MyAccount() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <WalletSummaryVisual balance={Number(unifiedAccount?.wallet?.balance ?? 0)} history={walletHistory} />
-        <CycleProgressVisual
-          cycleNumber={activeCycle?.cycleNumber || activeCycle?.cycle_number}
-          paid={Number(activeCycle?.paidMembers || activeCycle?.paid_members || 0)}
-          total={Number(activeCycle?.memberCount || activeCycle?.member_count || 0)}
-          collected={Number(activeCycle?.memberContribution || activeCycle?.member_contribution || 0)}
-        />
-        <NextActionCard
-          title={nextActionData?.action?.title || "Next best action"}
-          description={nextActionData?.action?.description || (overdueRepayments.length > 0 ? `You have ${overdueRepayments.length} overdue repayment${overdueRepayments.length === 1 ? "" : "s"}.` : "Your account is up to date. Keep building your savings habit.")}
-          actionLabel="Take action"
-          href={nextActionData?.action?.href}
-          onAction={() => setSearchParams({ tab: overdueRepayments.length > 0 ? "repayments" : "overview" })}
-          complete={!nextActionData?.action && overdueRepayments.length === 0 && pendingGuarantorCount === 0}
-        />
-      </div>
-      <FinancialCalendar events={calendarEvents} />
-      <MemberGrowthPanel onSave={() => { setDepositType("savings"); setDepositOpen(true); }} />
-
-      {/* Account Summary Cards */}
-      {/**
-       * Share capital and units calculation
-       * Share unit price is the same as in ShareSubscriptionDialog (KES 100). */}
+      {/* Account summary is the first member-facing financial overview. */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <StatCard
           title="Share Capital"
@@ -756,6 +733,26 @@ export default function MyAccount() {
           subtitle={unifiedAccount?.cycles?.active ? `${Number(unifiedAccount.cycles.active.memberContribution || 0).toLocaleString()} contributed` : "Join a cycle when available"}
         />
       </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <WalletSummaryVisual balance={Number(unifiedAccount?.wallet?.balance ?? 0)} history={walletHistory} />
+        <CycleProgressVisual
+          cycleNumber={activeCycle?.cycleNumber || activeCycle?.cycle_number}
+          paid={Number(activeCycle?.paidMembers || activeCycle?.paid_members || 0)}
+          total={Number(activeCycle?.memberCount || activeCycle?.member_count || 0)}
+          collected={Number(activeCycle?.memberContribution || activeCycle?.member_contribution || 0)}
+        />
+        <NextActionCard
+          title={nextActionData?.action?.title || "Next best action"}
+          description={nextActionData?.action?.description || (overdueRepayments.length > 0 ? `You have ${overdueRepayments.length} overdue repayment${overdueRepayments.length === 1 ? "" : "s"}.` : "Your account is up to date. Keep building your savings habit.")}
+          actionLabel="Take action"
+          href={nextActionData?.action?.href}
+          onAction={() => setSearchParams({ tab: overdueRepayments.length > 0 ? "repayments" : "overview" })}
+          complete={!nextActionData?.action && overdueRepayments.length === 0 && pendingGuarantorCount === 0}
+        />
+      </div>
+      <FinancialCalendar events={calendarEvents} />
+      <MemberGrowthPanel onSave={() => { setDepositType("savings"); setDepositOpen(true); }} />
 
       <Card>
         <CardHeader>
