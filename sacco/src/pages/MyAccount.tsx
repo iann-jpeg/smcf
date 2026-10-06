@@ -555,7 +555,6 @@ export default function MyAccount() {
           </div>
         </DialogContent>
       </Dialog>
-      <MemberGrowthPanel onSave={() => { setDepositType("savings"); setDepositOpen(true); }} />
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -701,6 +700,7 @@ export default function MyAccount() {
         />
       </div>
       <FinancialCalendar events={calendarEvents} />
+      <MemberGrowthPanel onSave={() => { setDepositType("savings"); setDepositOpen(true); }} />
 
       {/* Account Summary Cards */}
       {/**
