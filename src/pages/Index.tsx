@@ -25,6 +25,7 @@ import {
   FileText,
 } from "lucide-react";
 import { lazy, Suspense, useEffect, useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
 // Test components removed; render the real AdminDashboard
 import OrganizationDialog from "@/components/OrganizationDialog";
 import MemberMessageComposer from "@/components/MemberMessageComposer";
@@ -260,6 +261,8 @@ const Index = () => {
     { label: "FAQ", href: "#faq" },
     { label: "Contact", href: "#contact" },
   ];
+
+  const whatsappGroupLink = "https://chat.whatsapp.com/LkA4eYRR8L2CQ5HwulTfyJ";
 
   // Show loading state while checking authentication
   if (isLoading) {
@@ -1011,6 +1014,50 @@ const Index = () => {
                 </details>
               ))}
             </div>
+          </div>
+        </section>
+
+        <section className="px-4 py-16 sm:px-6 lg:py-20">
+          <div className="mx-auto grid max-w-6xl items-center gap-10 overflow-hidden rounded-[34px] border border-[#d8eadf] bg-[linear-gradient(135deg,#e9f8ef,#f8fcf9)] px-6 py-10 shadow-[0_25px_70px_rgba(17,53,39,0.08)] sm:px-10 lg:grid-cols-[1fr_auto] lg:px-14">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#1d6d4d]">Join the community</p>
+              <h2 className="mt-4 text-3xl font-black tracking-[-0.04em] text-[#123026] sm:text-4xl">
+                Connect with SMCF on WhatsApp.
+              </h2>
+              <p className="mt-4 max-w-xl text-lg leading-8 text-[#4d645d]">
+                Join the SMCF Cooperative Investment WhatsApp group for community updates, conversations and opportunities.
+              </p>
+              <a
+                href={whatsappGroupLink}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-7 inline-flex items-center justify-center rounded-full bg-[#1d9f58] px-6 py-3.5 text-base font-semibold text-white shadow-[0_14px_30px_rgba(29,159,88,0.24)] transition hover:-translate-y-0.5 hover:bg-[#16864a]"
+              >
+                Join WhatsApp group
+              </a>
+              <p className="mt-4 break-all text-sm text-[#527166]">{whatsappGroupLink}</p>
+            </div>
+
+            <a
+              href={whatsappGroupLink}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Scan QR code to join the SMCF WhatsApp group"
+              className="mx-auto flex w-fit flex-col items-center rounded-[26px] border border-[#dfe9e3] bg-white p-4 shadow-[0_16px_35px_rgba(17,53,39,0.1)] transition hover:-translate-y-1 hover:shadow-[0_20px_42px_rgba(17,53,39,0.16)]"
+            >
+              <QRCodeSVG
+                value={whatsappGroupLink}
+                size={208}
+                bgColor="#ffffff"
+                fgColor="#123026"
+                level="H"
+                includeMargin
+                title="SMCF WhatsApp group QR code"
+              />
+              <span className="mt-3 text-center text-xs font-semibold uppercase tracking-[0.14em] text-[#527166]">
+                Scan to join
+              </span>
+            </a>
           </div>
         </section>
 
