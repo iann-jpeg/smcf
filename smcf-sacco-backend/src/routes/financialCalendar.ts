@@ -2,6 +2,7 @@ import { Router } from 'express';
 import FinancialCalendarEvent, { FinancialCalendarEventType } from '../models/FinancialCalendarEvent';
 import Member from '../models/Member';
 import { authorize, AuthRequest, protect } from '../middleware/auth';
+import mongoose from 'mongoose';
 
 const router = Router();
 const staff = [protect, authorize('admin', 'treasurer', 'credit_officer', 'auditor')];
@@ -40,14 +41,23 @@ router.post('/', ...staff, async (req: AuthRequest, res, next) => {
     }
     const end = endsAt ? parseDate(endsAt) : null;
     if (endsAt && !end) return res.status(400).json({ success: false, message: 'endsAt must be a valid date' });
+    if (end && end < start) return res.status(400).json({ success: false, message: 'endsAt cannot be before startsAt' });
+    const parsedAmount = amount === '' || amount == null ? null : Number(amount);
+    if (parsedAmount !== null && (!Number.isFinite(parsedAmount) || parsedAmount < 0)) {
+      return res.status(400).json({ success: false, message: 'amount must be a non-negative number' });
+    }
+    const parsedMemberIds = Array.isArray(memberIds) ? memberIds.map(String) : [];
+    if (parsedMemberIds.some((id) => !mongoose.isValidObjectId(id))) {
+      return res.status(400).json({ success: false, message: 'memberIds must contain valid member IDs' });
+    }
     const event = await FinancialCalendarEvent.create({
       title: String(title).trim(),
       description: description ? String(description).trim() : null,
       type,
       startsAt: start,
       endsAt: end,
-      amount: amount === '' || amount == null ? null : Number(amount),
-      memberIds: Array.isArray(memberIds) ? memberIds : [],
+      amount: parsedAmount,
+      memberIds: parsedMemberIds,
       isPublic: Boolean(isPublic),
       createdBy: req.userId,
     });

@@ -183,6 +183,15 @@ app.get('/health', (req: Request, res: Response) => {
   });
 });
 
+// Keep health checks compatible with clients and proxies that prefix API routes.
+app.get('/api/health', (req: Request, res: Response) => {
+  res.status(200).json({
+    status: 'success',
+    message: 'Server is running',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/members', memberRoutes);
