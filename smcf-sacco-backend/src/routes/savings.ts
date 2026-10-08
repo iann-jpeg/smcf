@@ -2,11 +2,24 @@ import { Router } from 'express';
 import mongoose from 'mongoose';
 import Member from '../models/Member';
 import Saving from '../models/Saving';
+import Transaction from '../models/Transaction';
 import { AuthRequest, authorize, protect } from '../middleware/auth';
 
 const router = Router();
 const adminOnly = [protect, authorize('admin', 'treasurer')];
 const currentPeriod = () => `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+
+function calculateWithdrawalFee(amount: number) {
+  if (amount <= 100) return 15;
+  if (amount <= 500) return 18;
+  if (amount <= 1000) return 30;
+  if (amount <= 2500) return 38;
+  if (amount <= 5000) return 95;
+  if (amount <= 10000) return 145;
+  if (amount <= 20000) return 235;
+  if (amount <= 50000) return 350;
+  return 385;
+}
 
 async function memberForRequest(req: AuthRequest) {
   return Member.findOne({ userId: req.userId });
@@ -23,6 +36,7 @@ async function summary(memberId: mongoose.Types.ObjectId | string) {
   const totalDeposits = deposits.reduce((n, r) => n + Number(r.amount || 0), 0);
   const totalInterest = interest.reduce((n, r) => n + Number(r.amount || 0), 0);
   const totalWithdrawals = withdrawals.reduce((n, r) => n + Number(r.amount || 0), 0);
+  const totalWithdrawalFees = withdrawals.reduce((n, r) => n + Number(r.fee_amount || 0), 0);
   const balance = totalDeposits + totalInterest - totalWithdrawals
     + adjustments.filter((r) => r.adjustment_direction === 'credit').reduce((n, r) => n + Number(r.amount || 0), 0)
     - adjustments.filter((r) => r.adjustment_direction === 'debit').reduce((n, r) => n + Number(r.amount || 0), 0);
@@ -33,6 +47,7 @@ async function summary(memberId: mongoose.Types.ObjectId | string) {
     totalDeposits,
     totalInterestEarned: totalInterest,
     totalWithdrawals,
+    totalWithdrawalFees,
     lockedAmount,
     availableForWithdrawal: Math.max(0, balance - lockedAmount),
     nextMaturityDate: locked.length ? locked.map((r) => new Date(r.unlock_date as Date)).sort((a, b) => a.getTime() - b.getTime())[0] : null,
@@ -67,8 +82,9 @@ router.post('/withdrawal', protect, async (req: AuthRequest, res, next) => {
     if (amount > wallet.availableForWithdrawal) return res.status(400).json({ success: false, message: 'Requested amount is not available or has not matured' });
     const pending = await Saving.exists({ member_id: member._id, transaction_type: 'withdrawal', status: 'pending' });
     if (pending) return res.status(409).json({ success: false, message: 'A withdrawal request is already pending' });
-    const record = await Saving.create({ member_id: member._id, amount, transaction_type: 'withdrawal', balance_before: wallet.currentBalance, balance_after: wallet.currentBalance - amount, payment_method: 'manual', status: 'pending', notes: 'Wallet withdrawal request', created_at: new Date() });
-    return res.status(201).json({ success: true, data: record });
+    const feeAmount = calculateWithdrawalFee(amount);
+    const record = await Saving.create({ member_id: member._id, amount, fee_amount: feeAmount, net_amount: amount - feeAmount, transaction_type: 'withdrawal', balance_before: wallet.currentBalance, balance_after: wallet.currentBalance - amount, payment_method: 'manual', status: 'pending', notes: `Wallet withdrawal request | Fee: KES ${feeAmount}`, created_at: new Date() });
+    return res.status(201).json({ success: true, data: record, fee: feeAmount, netAmount: amount - feeAmount });
   } catch (error) { return next(error); }
 });
 
@@ -130,8 +146,41 @@ router.post('/admin/:action-withdrawal/:id', ...adminOnly, async (req: AuthReque
       record.status = 'failed'; record.rejection_reason = req.body?.rejection_reason || 'Rejected by administrator'; record.processed_at = new Date(); await record.save();
       return res.json({ success: true, data: record });
     }
-    record.status = 'completed'; record.processed_at = new Date(); record.notes = 'Wallet withdrawal completed by administrator'; await record.save();
-    return res.json({ success: true, data: record });
+    const memberWallet = await summary(record.member_id);
+    if (record.amount > memberWallet.availableForWithdrawal) {
+      return res.status(409).json({ success: false, message: 'Withdrawal can no longer be approved because the available wallet balance changed' });
+    }
+    const feeAmount = Number(record.fee_amount || calculateWithdrawalFee(record.amount));
+    const netAmount = Math.max(0, Number(record.amount) - feeAmount);
+    const processedAt = new Date();
+    const updated = await Saving.findOneAndUpdate(
+      { _id: record._id, transaction_type: 'withdrawal', status: 'pending' },
+      { $set: { status: 'completed', fee_amount: feeAmount, net_amount: netAmount, balance_before: memberWallet.currentBalance, balance_after: memberWallet.currentBalance - Number(record.amount), processed_at: processedAt, notes: `Wallet withdrawal approved by administrator | Fee: KES ${feeAmount} | Net payout: KES ${netAmount}` } },
+      { new: true },
+    );
+    if (!updated) return res.status(409).json({ success: false, message: 'Withdrawal was already processed' });
+    try {
+      await Transaction.create({
+        transactionRef: `WALLET-WD-${String(record._id)}`,
+        memberId: record.member_id,
+        type: 'withdrawal',
+        amount: record.amount,
+        grossAmount: record.amount,
+        feeAmount,
+        netAmount,
+        feeType: 'unified_transaction_fee',
+        description: `Wallet withdrawal approved; KES ${feeAmount} transaction fee deducted`,
+        status: 'completed',
+        financialPostingStatus: 'completed',
+        processedAt,
+        createdBy: req.user?._id || null,
+        paymentGateway: 'manual',
+      });
+    } catch (error) {
+      await Saving.findByIdAndUpdate(record._id, { status: 'failed', rejection_reason: 'Transaction ledger posting failed', processed_at: new Date() });
+      throw error;
+    }
+    return res.json({ success: true, data: updated, fee: feeAmount, netAmount });
   } catch (error) { return next(error); }
 });
 
