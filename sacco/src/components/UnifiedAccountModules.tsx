@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -92,23 +93,10 @@ export function UnifiedAccountModules({
     && String(transaction.status).toLowerCase() === "pending",
   );
   const availableBalance = Math.max(0, Number(wallet?.availableForWithdrawal ?? wallet?.balance ?? 0));
-
-  const withdrawalFee = (amount: number) => {
-    if (amount <= 100) return 15;
-    if (amount <= 500) return 18;
-    if (amount <= 1000) return 30;
-    if (amount <= 2500) return 38;
-    if (amount <= 5000) return 95;
-    if (amount <= 10000) return 145;
-    if (amount <= 20000) return 235;
-    if (amount <= 50000) return 350;
-    return 385;
-  };
-
   const requestedAmount = Number(withdrawalAmount);
+  const withdrawalFee = (amount: number) => amount <= 100 ? 15 : amount <= 500 ? 18 : amount <= 1000 ? 30 : amount <= 2500 ? 38 : amount <= 5000 ? 95 : amount <= 10000 ? 145 : amount <= 20000 ? 235 : amount <= 50000 ? 350 : 385;
   const fee = requestedAmount > 0 ? withdrawalFee(requestedAmount) : 0;
   const estimatedNet = Math.max(0, requestedAmount - fee);
-  const canRequestWithdrawal = availableBalance > 0 && !pendingWithdrawal;
 
   const submitWithdrawal = async () => {
     if (!Number.isFinite(requestedAmount) || requestedAmount <= 0 || requestedAmount > availableBalance) {
@@ -145,51 +133,37 @@ export function UnifiedAccountModules({
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>
-          <CardHeader className="pb-2"><div className="flex flex-wrap items-center justify-between gap-2"><CardTitle className="flex items-center gap-2 text-sm"><Wallet className="h-4 w-4" /> Wallet Balance</CardTitle><div className="flex gap-2">{onDepositSavings && <Button size="sm" onClick={onDepositSavings}>Deposit via STK</Button>}{onWithdrawalRequested && <Button size="sm" variant="outline" onClick={() => setWithdrawalOpen(true)} disabled={!canRequestWithdrawal}>Withdraw</Button>}</div></div></CardHeader>
+          <CardHeader className="pb-2"><div className="flex flex-wrap items-center justify-between gap-2"><CardTitle className="flex items-center gap-2 text-sm"><Wallet className="h-4 w-4" /> Wallet Balance</CardTitle><div className="flex gap-2">{onDepositSavings && <Button size="sm" onClick={onDepositSavings}>Deposit via STK</Button>}{onWithdrawalRequested && <Button size="sm" variant="outline" onClick={() => setWithdrawalOpen(true)} disabled={availableBalance <= 0 || pendingWithdrawal}>Withdraw</Button>}</div></div></CardHeader>
           <CardContent><p className="text-2xl font-semibold">{kes(wallet?.balance)}</p></CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm">Wallet Deposits</CardTitle></CardHeader>
           <CardContent><p className="text-2xl font-semibold">{kes(wallet?.totalDeposits)}</p></CardContent>
         </Card>
-
-        <Dialog open={withdrawalOpen} onOpenChange={setWithdrawalOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Request wallet withdrawal</DialogTitle>
-              <DialogDescription>
-                Withdrawals are reviewed by an administrator. The transaction fee is deducted from the requested amount before payout.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="unified-withdrawal-amount">Amount (KES)</Label>
-                <Input id="unified-withdrawal-amount" type="number" min="1" max={availableBalance} value={withdrawalAmount} onChange={(event) => setWithdrawalAmount(event.target.value)} />
-                <p className="text-xs text-muted-foreground">Available balance: {kes(availableBalance)}</p>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-2"><Label htmlFor="unified-account-name">Account name</Label><Input id="unified-account-name" value={accountName} onChange={(event) => setAccountName(event.target.value)} /></div>
-                <div className="space-y-2"><Label htmlFor="unified-account-number">Account number</Label><Input id="unified-account-number" value={accountNumber} onChange={(event) => setAccountNumber(event.target.value)} /></div>
-              </div>
-              <div className="space-y-2"><Label htmlFor="unified-bank-name">Bank name</Label><Input id="unified-bank-name" value={bankName} onChange={(event) => setBankName(event.target.value)} /></div>
-              {requestedAmount > 0 && (
-                <div className="rounded-md bg-muted p-3 text-sm">
-                  <div className="flex justify-between"><span>Transaction fee</span><span>{kes(fee)}</span></div>
-                  <div className="flex justify-between font-semibold"><span>Estimated net payout</span><span>{kes(estimatedNet)}</span></div>
-                </div>
-              )}
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setWithdrawalOpen(false)}>Cancel</Button>
-                <Button onClick={submitWithdrawal} disabled={withdrawalSubmitting}>{withdrawalSubmitting ? "Submitting..." : "Submit request"}</Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm">Wallet Withdrawals</CardTitle></CardHeader>
-          <CardContent><p className="text-2xl font-semibold">{kes(wallet?.totalWithdrawals)}</p>{pendingWithdrawal && <p className="mt-1 text-xs text-amber-700">Approval pending</p>}</CardContent>
+          <CardContent><p className="text-2xl font-semibold">{kes(wallet?.totalWithdrawals)}</p></CardContent>
         </Card>
       </div>
+
+      <Dialog open={withdrawalOpen} onOpenChange={setWithdrawalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Request wallet withdrawal</DialogTitle>
+            <DialogDescription>Withdrawals require administrator approval. The fee is deducted from the requested amount.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2"><Label htmlFor="withdrawal-amount">Amount (KES)</Label><Input id="withdrawal-amount" type="number" min="1" max={availableBalance} value={withdrawalAmount} onChange={(event) => setWithdrawalAmount(event.target.value)} /><p className="text-xs text-muted-foreground">Available balance: {kes(availableBalance)}</p></div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2"><Label htmlFor="withdrawal-account-name">Account name</Label><Input id="withdrawal-account-name" value={accountName} onChange={(event) => setAccountName(event.target.value)} /></div>
+              <div className="space-y-2"><Label htmlFor="withdrawal-account-number">Account number</Label><Input id="withdrawal-account-number" value={accountNumber} onChange={(event) => setAccountNumber(event.target.value)} /></div>
+            </div>
+            <div className="space-y-2"><Label htmlFor="withdrawal-bank-name">Bank name</Label><Input id="withdrawal-bank-name" value={bankName} onChange={(event) => setBankName(event.target.value)} /></div>
+            {requestedAmount > 0 && <div className="rounded-md bg-muted p-3 text-sm"><div className="flex justify-between"><span>Transaction fee</span><span>{kes(fee)}</span></div><div className="flex justify-between font-semibold"><span>Estimated net payout</span><span>{kes(estimatedNet)}</span></div></div>}
+            <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setWithdrawalOpen(false)}>Cancel</Button><Button onClick={submitWithdrawal} disabled={withdrawalSubmitting}>{withdrawalSubmitting ? "Submitting..." : "Submit request"}</Button></div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><CalendarSync className="h-5 w-5" /> Active Cycle</CardTitle></CardHeader>
