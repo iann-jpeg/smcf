@@ -1503,6 +1503,9 @@ export default function MyAccount() {
             onPayCycle={() => { setDepositType("cycle"); setDepositOpen(true); }}
             onPayTenX={() => { setDepositType("tenx"); setDepositOpen(true); }}
             onDepositSavings={() => { setDepositType("savings"); setDepositOpen(true); }}
+            onWithdrawalRequested={() => {
+              queryClient.invalidateQueries({ queryKey: ["my-unified-account"] });
+            }}
           />
         </TabsContent>
 
