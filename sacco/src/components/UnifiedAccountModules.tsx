@@ -149,21 +149,28 @@ export function UnifiedAccountModules({
               <Table>
                 <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {walletTransactions.slice(0, 20).map((transaction: any) => (
+                  {walletTransactions.slice(0, 20).map((transaction: any) => {
+                    const transactionDate = transaction.processedAt
+                      ?? transaction.processed_at
+                      ?? transaction.createdAt
+                      ?? transaction.created_at
+                      ?? transaction.date;
+                    return (
                     <TableRow key={String(transaction._id ?? transaction.id)}>
-                      <TableCell>{transaction.processedAt ? new Date(transaction.processedAt).toLocaleDateString() : "—"}</TableCell>
+                      <TableCell>{transactionDate ? new Date(transactionDate).toLocaleDateString() : "—"}</TableCell>
                       <TableCell className="capitalize">{transaction.cycleNumber || transaction.cycle_number ? `Cycle ${transaction.cycleNumber || transaction.cycle_number} contribution` : String(transaction.type ?? "transaction").replaceAll("_", " ")}</TableCell>
                       <TableCell className="text-right font-medium">{kes(transaction.amount)}</TableCell>
                       <TableCell>
                         <div className="flex items-center justify-end gap-2">
                           <Badge variant={transaction.status === "completed" ? "default" : "outline"}>{transaction.status ?? "—"}</Badge>
-                          <Button variant="ghost" size="icon" title="Download receipt" onClick={() => exportPaymentReceipt({ memberName, memberId, amount: transaction.amount, date: transaction.processedAt, status: transaction.status, type: transaction.type, reference: transaction.mpesaRef || transaction.transactionRef, gateway: transaction.paymentGateway })}>
+                          <Button variant="ghost" size="icon" title="Download receipt" onClick={() => exportPaymentReceipt({ memberName, memberId, amount: transaction.amount, date: transactionDate, status: transaction.status, type: transaction.type ?? transaction.transaction_type, reference: transaction.mpesaRef || transaction.transactionRef || transaction.transaction_ref, gateway: transaction.paymentGateway || transaction.payment_method })}>
                             <Download className="h-4 w-4" />
                           </Button>
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
