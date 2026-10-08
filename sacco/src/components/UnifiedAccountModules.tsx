@@ -70,6 +70,13 @@ export function UnifiedAccountModules({
   onDepositSavings?: () => void;
   onWithdrawalRequested?: () => void;
 }) {
+  const [withdrawalOpen, setWithdrawalOpen] = useState(false);
+  const [withdrawalAmount, setWithdrawalAmount] = useState("");
+  const [accountName, setAccountName] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [withdrawalSubmitting, setWithdrawalSubmitting] = useState(false);
+
   if (isLoading) {
     return <Skeleton className="h-48 w-full" />;
   }
@@ -80,12 +87,6 @@ export function UnifiedAccountModules({
   const walletTransactions = wallet?.transactions ?? [];
   const cyclePayments = data?.cycles?.payments ?? [];
   const tenX = data?.tenX;
-  const [withdrawalOpen, setWithdrawalOpen] = useState(false);
-  const [withdrawalAmount, setWithdrawalAmount] = useState("");
-  const [accountName, setAccountName] = useState("");
-  const [accountNumber, setAccountNumber] = useState("");
-  const [bankName, setBankName] = useState("");
-  const [withdrawalSubmitting, setWithdrawalSubmitting] = useState(false);
   const pendingWithdrawal = walletTransactions.some((transaction: any) =>
     String(transaction.type ?? transaction.transaction_type).toLowerCase() === "withdrawal"
     && String(transaction.status).toLowerCase() === "pending",
