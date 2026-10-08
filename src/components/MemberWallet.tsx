@@ -57,6 +57,18 @@ import MemberQRCode from "@/components/MemberQRCode";
 import QRScanner from "@/components/QRScanner";
 import { StyledSMCF } from "@/components/StyledSMCF";
 
+const calculateWithdrawalFee = (amount: number) => {
+  if (amount <= 100) return 15;
+  if (amount <= 500) return 18;
+  if (amount <= 1000) return 30;
+  if (amount <= 2500) return 38;
+  if (amount <= 5000) return 95;
+  if (amount <= 10000) return 145;
+  if (amount <= 20000) return 235;
+  if (amount <= 50000) return 350;
+  return 385;
+};
+
 interface MemberWalletProps {
   userData: any;
 }
@@ -558,7 +570,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
       return;
     }
 
-    if (amount > (summary.currentBalance || 0)) {
+    if (amount > Math.max(0, (summary.currentBalance || 0) - lockedFunds.amount)) {
       toast({
         title: "Insufficient Balance",
         description: "You don't have enough balance for this withdrawal",
@@ -579,7 +591,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
 
     setIsProcessing(true);
     try {
-      const res = await fetch(`${API_BASE}/api/savings/withdraw`, {
+      const res = await fetch(`${API_BASE}/api/savings/withdrawal`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -599,7 +611,7 @@ const MemberWallet = ({ userData }: MemberWalletProps) => {
       if (data.success) {
         toast({
           title: "Withdrawal Requested",
-          description: data.message,
+          description: `Your request is awaiting administrator approval. Fee: KES ${Number(data.fee || 0).toLocaleString()}; net payout: KES ${Number(data.netAmount || amount).toLocaleString()}.`,
         });
         setShowWithdrawDialog(false);
         setWithdrawAmount("");
@@ -1611,6 +1623,13 @@ ${getSmcfPrintStampStyles()}
                 {lockedFunds.amount === 0 && (
                   <div className="text-sm text-green-700 font-medium">
                     Available to Withdraw: KES {(summary.currentBalance || 0).toLocaleString()}
+                  </div>
+                )}
+                {Number(withdrawAmount) > 0 && (
+                  <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-900 dark:bg-amber-950/20">
+                    <div className="flex justify-between"><span>Withdrawal fee</span><span className="font-medium">KES {calculateWithdrawalFee(Number(withdrawAmount)).toLocaleString()}</span></div>
+                    <div className="mt-1 flex justify-between font-semibold text-emerald-700"><span>Estimated net payout</span><span>KES {Math.max(0, Number(withdrawAmount) - calculateWithdrawalFee(Number(withdrawAmount))).toLocaleString()}</span></div>
+                    <p className="mt-2 text-xs text-muted-foreground">The request will be reviewed by an administrator. Your wallet balance changes only after approval.</p>
                   </div>
                 )}
               </div>

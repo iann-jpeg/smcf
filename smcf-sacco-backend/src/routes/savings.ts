@@ -83,7 +83,11 @@ router.post('/withdrawal', protect, async (req: AuthRequest, res, next) => {
     const pending = await Saving.exists({ member_id: member._id, transaction_type: 'withdrawal', status: 'pending' });
     if (pending) return res.status(409).json({ success: false, message: 'A withdrawal request is already pending' });
     const feeAmount = calculateWithdrawalFee(amount);
-    const record = await Saving.create({ member_id: member._id, amount, fee_amount: feeAmount, net_amount: amount - feeAmount, transaction_type: 'withdrawal', balance_before: wallet.currentBalance, balance_after: wallet.currentBalance - amount, payment_method: 'manual', status: 'pending', notes: `Wallet withdrawal request | Fee: KES ${feeAmount}`, created_at: new Date() });
+    const accountName = String(req.body?.account_name || '').trim();
+    const accountNumber = String(req.body?.account_number || '').trim();
+    const bankName = String(req.body?.bank_name || '').trim();
+    if (!accountName || !accountNumber || !bankName) return res.status(400).json({ success: false, message: 'Payment account details are required' });
+    const record = await Saving.create({ member_id: member._id, amount, fee_amount: feeAmount, net_amount: amount - feeAmount, account_name: accountName, account_number: accountNumber, bank_name: bankName, transaction_type: 'withdrawal', balance_before: wallet.currentBalance, balance_after: wallet.currentBalance - amount, payment_method: 'manual', status: 'pending', notes: `Wallet withdrawal request | Fee: KES ${feeAmount}`, created_at: new Date() });
     return res.status(201).json({ success: true, data: record, fee: feeAmount, netAmount: amount - feeAmount });
   } catch (error) { return next(error); }
 });

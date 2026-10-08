@@ -5,6 +5,9 @@ export interface ISaving extends Document {
   amount: number;
   fee_amount?: number;
   net_amount?: number;
+  account_name?: string;
+  account_number?: string;
+  bank_name?: string;
   transaction_type: 'deposit' | 'withdrawal' | 'interest' | 'adjustment';
   adjustment_direction?: 'credit' | 'debit';
   balance_before: number;
@@ -28,6 +31,9 @@ const schema = new Schema<ISaving>({
   amount: { type: Number, required: true, min: 0 },
   fee_amount: { type: Number, default: 0, min: 0 },
   net_amount: { type: Number, default: null, min: 0 },
+  account_name: { type: String, default: '' },
+  account_number: { type: String, default: '' },
+  bank_name: { type: String, default: '' },
   transaction_type: { type: String, enum: ['deposit', 'withdrawal', 'interest', 'adjustment'], required: true },
   adjustment_direction: { type: String, enum: ['credit', 'debit'] },
   balance_before: { type: Number, required: true, default: 0 },
