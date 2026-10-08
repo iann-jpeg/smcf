@@ -28,7 +28,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
-import { Wallet, Landmark, TrendingUp, CreditCard, CalendarCheck, PlusCircle, User, Download, Bell, CheckCheck, Save, Lock, FileText, CalendarIcon, Sparkles, Shield, ShieldCheck, ShieldX, Clock, ArrowRightLeft, Camera, Upload, Eye, Trash2, AlertCircle, Loader2, Smartphone } from "lucide-react";
+import { Wallet, Landmark, TrendingUp, CreditCard, CalendarCheck, PlusCircle, User, Download, Bell, CheckCheck, Save, Lock, FileText, CalendarIcon, Sparkles, Shield, ShieldCheck, ShieldX, Clock, ArrowRightLeft, Camera, Upload, Eye, Trash2, AlertCircle, Loader2, Smartphone, UsersRound, Target, Trophy } from "lucide-react";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { Separator } from "@/components/ui/separator";
 import { exportMyTransactions, exportMyRepayments, exportMyLoans, exportMyStatement, downloadMembershipForm } from "@/lib/pdf-export";
@@ -101,6 +101,12 @@ export default function MyAccount() {
     queryFn: () => api.get<any[]>("/calendar-events"),
     enabled: Boolean(rawMember),
     staleTime: 120_000,
+  });
+  const { data: tenXProgress } = useQuery({
+    queryKey: ["tenx-progress"],
+    queryFn: () => api.get<any>("/tenx/progress"),
+    enabled: Boolean(rawMember),
+    staleTime: 60_000,
   });
   const [calendarNoticeOpen, setCalendarNoticeOpen] = useState(false);
 
@@ -617,6 +623,78 @@ export default function MyAccount() {
               <Button asChild size="sm" variant="outline" className="mt-4 gap-1.5"><Link to="/loans/apply"><PlusCircle className="h-3.5 w-3.5" /> Apply for loan</Link></Button>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="overflow-hidden border-amber-200 bg-gradient-to-br from-amber-50/80 via-card to-card shadow-sm">
+        <CardHeader className="pb-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-amber-700"><Trophy className="h-4 w-4" /> 10X group movement</p>
+              <CardTitle className="mt-1 font-heading text-xl">See the group move forward together</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">A transparent view of 10X progress, without exposing other members’ personal payment details.</p>
+            </div>
+            <Badge variant="outline" className={tenXProgress?.enrolled ? "border-amber-300 bg-amber-100/70 text-amber-800" : ""}>
+              {tenXProgress?.enrolled ? "You are enrolled" : "Group progress"}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {!tenXProgress ? (
+            <div className="h-24 animate-pulse rounded-2xl bg-muted/50" />
+          ) : (
+            <>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-2xl bg-amber-600 p-4 text-white shadow-sm">
+                  <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-amber-100"><UsersRound className="h-3.5 w-3.5" /> Enrolled members</p>
+                  <p className="mt-2 text-2xl font-bold">{tenXProgress.group.enrolledMembers}</p>
+                  <p className="mt-1 text-xs text-amber-100">Moving as one team</p>
+                </div>
+                <div className="rounded-2xl border bg-card p-4">
+                  <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground"><Target className="h-3.5 w-3.5" /> Current month</p>
+                  <p className="mt-2 text-2xl font-bold">{tenXProgress.group.current.paymentRate}%</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{tenXProgress.group.current.paidMembers}/{tenXProgress.group.enrolledMembers} members paid</p>
+                </div>
+                <div className="rounded-2xl border bg-card p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Group collected</p>
+                  <p className="mt-2 text-2xl font-bold">KES {Number(tenXProgress.group.current.collected || 0).toLocaleString()}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{tenXProgress.group.current.period}</p>
+                </div>
+                <div className="rounded-2xl border bg-card p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Your status</p>
+                  <p className="mt-2 text-lg font-bold">{tenXProgress.enrolled ? tenXProgress.member.status : "Not enrolled"}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{tenXProgress.enrolled ? `KES ${Number(tenXProgress.member.amountPaid || 0).toLocaleString()} paid this month` : "Ask an administrator to enroll you"}</p>
+                </div>
+              </div>
+
+              <div className="mt-5 rounded-2xl border bg-background/70 p-4">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="font-semibold">This month’s group momentum</span>
+                  <span className="font-bold text-amber-700">{tenXProgress.group.current.paymentRate}%</span>
+                </div>
+                <Progress value={tenXProgress.group.current.paymentRate} className="mt-3 h-3 [&>div]:bg-amber-500" />
+                <div className="mt-2 flex flex-wrap justify-between gap-2 text-xs text-muted-foreground">
+                  <span>KES {Number(tenXProgress.group.current.collected || 0).toLocaleString()} collected</span>
+                  <span>KES {Number(tenXProgress.group.current.outstanding || 0).toLocaleString()} remaining</span>
+                </div>
+              </div>
+
+              {Array.isArray(tenXProgress.history) && tenXProgress.history.length > 1 && (
+                <div className="mt-5">
+                  <p className="mb-3 text-sm font-semibold">Recent group journey</p>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {tenXProgress.history.slice(0, 3).map((item: any) => (
+                      <div key={item.period} className="rounded-xl border bg-background/60 p-3">
+                        <div className="flex items-center justify-between text-xs text-muted-foreground"><span>{item.period}</span><span className="font-bold text-primary">{item.paymentRate}%</span></div>
+                        <Progress value={item.paymentRate} className="mt-2 h-2" />
+                        <p className="mt-2 text-xs text-muted-foreground">KES {Number(item.collected || 0).toLocaleString()} collected</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </CardContent>
       </Card>
 

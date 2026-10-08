@@ -17,6 +17,96 @@ function currentPeriod() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
+router.get('/me', protect, async (req: AuthRequest, res, next) => {
+  try {
+    const member = await Member.findOne({ userId: req.userId })
+      .select('_id is10XMember')
+      .lean();
+    if (!member) return res.status(404).json({ success: false, message: 'Member profile not found' });
+    if (!member.is10XMember) return res.status(403).json({ success: false, message: 'Member is not enrolled in 10X' });
+
+    const period = await TenXPeriod.findOne({ period: currentPeriod(), status: 'OPEN' }).lean();
+    const contributions = await TenXContribution.find({ member_id: member._id })
+      .sort({ period: -1, created_at: -1 })
+      .limit(24)
+      .lean();
+    return res.json({
+      success: true,
+      data: {
+        currentPeriod: period ? { period: period.period, due_amount: period.due_amount, due_date: period.due_date } : null,
+        contributions,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/progress', protect, async (req: AuthRequest, res, next) => {
+  try {
+    const member = await Member.findOne({ userId: req.userId })
+      .select('_id is10XMember tenXJoinedAt name memberId')
+      .lean();
+    if (!member) return res.status(404).json({ success: false, message: 'Member profile not found' });
+
+    const enrolledMembers = await Member.countDocuments({ is10XMember: true, status: { $ne: 'deleted' } });
+    const periods = await TenXPeriod.find().sort({ period: -1 }).limit(12).lean();
+    const periodIds = periods.map((period) => period._id);
+    const contributions = periodIds.length
+      ? await TenXContribution.find({ period_id: { $in: periodIds } }).select('member_id period_id period amount_due amount_paid status payment_date').lean()
+      : [];
+    const memberContributions = contributions.filter((item) => String(item.member_id) === String(member._id));
+
+    const history = periods.map((period) => {
+      const periodContributions = contributions.filter((item) => String(item.period_id) === String(period._id));
+      const successful = periodContributions.filter((item) => item.status === 'SUCCESSFUL');
+      const collected = successful.reduce((sum, item) => sum + Number(item.amount_paid || 0), 0);
+      const paidMembers = new Set(successful.map((item) => String(item.member_id))).size;
+      const expected = Number(period.due_amount || 0) * enrolledMembers;
+      return {
+        period: period.period,
+        dueAmount: Number(period.due_amount || 0),
+        expected,
+        collected,
+        outstanding: Math.max(0, expected - collected),
+        paidMembers,
+        paymentRate: enrolledMembers ? Math.round((paidMembers / enrolledMembers) * 100) : 0,
+        status: period.status,
+      };
+    });
+    const current = history[0] || {
+      period: currentPeriod(), dueAmount: 0, expected: 0, collected: 0, outstanding: 0, paidMembers: 0, paymentRate: 0, status: 'OPEN',
+    };
+    const memberCurrent = memberContributions.find((item) => item.period === current.period);
+    const cumulativeExpected = history.reduce((sum, item) => sum + item.expected, 0);
+    const cumulativeCollected = history.reduce((sum, item) => sum + item.collected, 0);
+
+    return res.json({
+      success: true,
+      data: {
+        enrolled: Boolean(member.is10XMember),
+        joinedAt: member.tenXJoinedAt,
+        member: {
+          dueAmount: Number(memberCurrent?.amount_due || current.dueAmount || 0),
+          amountPaid: Number(memberCurrent?.amount_paid || 0),
+          status: memberCurrent?.status || 'PENDING',
+          paymentDate: memberCurrent?.payment_date || null,
+        },
+        group: {
+          enrolledMembers,
+          current,
+          cumulativeExpected,
+          cumulativeCollected,
+          cumulativeRate: cumulativeExpected ? Math.round((cumulativeCollected / cumulativeExpected) * 100) : 0,
+        },
+        history,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 async function nextReceiptNumber() {
   const count = await TenXContribution.countDocuments({ receipt_number: { $exists: true } });
   return `SMCF-10X-${new Date().getFullYear()}-${String(count + 1).padStart(6, '0')}`;
