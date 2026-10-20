@@ -1,21 +1,20 @@
 /**
- * M-Pesa STK Push via PayHero.
+ * M-Pesa STK Push via Safaricom Daraja.
  *
  * Environment variables needed (add to .env):
- *   PAYHERO_API_URL       – PayHero API base URL
- *   PAYHERO_API_USERNAME  – PayHero Basic Auth username
- *   PAYHERO_API_PASSWORD  – PayHero Basic Auth password
- *   PAYHERO_CHANNEL_ID    – PayHero payment channel ID
- *   PAYHERO_ACCOUNT_ID    – PayHero account ID
- *   PAYHERO_CALLBACK_URL  – Public URL PayHero will POST the payment result to
+ *   DARAJA_API_URL        – Daraja base API URL
+ *   DARAJA_CONSUMER_KEY   – Safaricom consumer key
+ *   DARAJA_CONSUMER_SECRET – Safaricom consumer secret
+ *   DARAJA_SHORTCODE      – Daraja B2C/B2B shortcode or till number
+ *   DARAJA_PASSKEY        – Daraja passkey
+ *   DARAJA_CALLBACK_URL   – Public URL Daraja will POST the payment result to
  *
- * If PayHero credentials are not set the route runs in simulation mode:
+ * If Daraja credentials are not set the route runs in simulation mode:
  * the STK push is faked and auto-succeeds after ~5 seconds so you can demo the
  * full UI flow without real credentials.
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
-import crypto from 'crypto';
 import mongoose from 'mongoose';
 import Transaction from '../models/Transaction';
 import Member from '../models/Member';
@@ -31,12 +30,6 @@ import { recordSavingsDeposit } from '../utils/depositLedger';
 import { createTransactionRef } from '../utils/transactionRef';
 
 const router = Router();
-function validCallbackSecret(req: Request): boolean {
-  const expected = String(process.env.PAYMENT_CALLBACK_SECRET || '').trim();
-  const provided = String(req.headers['x-payment-callback-secret'] || '').trim();
-  return Boolean(expected.length >= 32 && provided.length === expected.length &&
-    crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected)));
-}
 
 async function assertPaymentOwnership(req: AuthRequest, memberId: string): Promise<boolean> {
   const staff = req.user?.roles?.some((role) => ['admin', 'treasurer', 'credit_officer'].includes(role));
@@ -44,28 +37,6 @@ async function assertPaymentOwnership(req: AuthRequest, memberId: string): Promi
   const member = await Member.findOne({ userId: req.userId }).select('_id');
   return Boolean(member && String(member._id) === String(memberId));
 }
-
-// ─── In-memory: PayHero payment-link payments (not STK) ───────────────────────
-// Created when member clicks "Pay via PayHero"; confirmed when member clicks "I've Paid"
-
-interface PendingManualPayment {
-  type: 'deposit' | 'loan_repay';
-  memberId: string;
-  loanId?: string;
-  amount: number;
-  phone: string; // 254xx format
-  txnRef: string; // DB transaction ref
-  createdAt: number;
-}
-
-const pendingManualPayments = new Map<string, PendingManualPayment>(); // key: txnRef
-
-setInterval(() => {
-  const cutoff = Date.now() - 30 * 60 * 1000; // 30 min TTL
-  for (const [k, v] of pendingManualPayments.entries()) {
-    if (v.createdAt < cutoff) pendingManualPayments.delete(k);
-  }
-}, 10 * 60 * 1000);
 
 // ─── In-memory pending deposits ────────────────────────────────────────────
 // Key: CheckoutRequestID (or simulated ID)
@@ -112,21 +83,26 @@ interface PendingRegistrationFee {
 
 const pendingRegistrationFees = new Map<string, PendingRegistrationFee>();
 
+interface PendingManualPayment {
+  type: 'deposit' | 'loan_repay' | 'share_subscribe';
+  memberId: string;
+  loanId?: string;
+  amount: number;
+  phone: string;
+  txnRef: string;
+  createdAt: number;
+}
+
+const pendingManualPayments = new Map<string, PendingManualPayment>();
+
 type LooseRecord = Record<string, unknown>;
 
-type PayHeroPaymentResponse = LooseRecord & {
+type DarajaSTKResponse = LooseRecord & {
   success: boolean;
-  provider: 'payhero';
   checkoutRequestId?: string;
-  providerReference?: string;
-  externalReference?: string;
-  status?: string;
-  message?: unknown;
-};
-
-type PayHeroCustomerContext = {
-  name?: string | null;
-  email?: string | null;
+  merchantRequestId?: string;
+  responseCode?: string;
+  customerMessage?: string;
 };
 
 function asRecord(value: unknown): LooseRecord | null {
@@ -226,213 +202,184 @@ function extractProviderErrorMessage(payload: unknown, fallback: string): string
   return fallback;
 }
 
-function normalizePayHeroBaseUrl(rawUrl?: string): string {
+function normalizeDarajaBaseUrl(rawUrl?: string): string {
   const value = String(rawUrl || '').trim().replace(/\/+$/, '');
-  return value || 'https://backend.payhero.co.ke';
+  return value || (process.env.NODE_ENV === 'production'
+    ? 'https://api.safaricom.co.ke'
+    : 'https://sandbox.safaricom.co.ke');
 }
 
-function hasPayHeroCredentials(): boolean {
+function hasDarajaCredentials(): boolean {
   return Boolean(
-    process.env.PAYHERO_API_USERNAME &&
-    process.env.PAYHERO_API_PASSWORD &&
-    process.env.PAYHERO_CALLBACK_URL
+    process.env.DARAJA_CONSUMER_KEY &&
+    process.env.DARAJA_CONSUMER_SECRET &&
+    process.env.DARAJA_SHORTCODE &&
+    process.env.DARAJA_PASSKEY &&
+    process.env.DARAJA_CALLBACK_URL
   );
 }
 
-function parsePositiveId(value: string | undefined, name: string): number {
-  const normalized = String(value || '').trim();
-  if (!/^\d+$/.test(normalized) || Number(normalized) <= 0) {
-    const err = new Error(`PayHero ${name} must be a positive numeric ID`) as Error & { statusCode?: number };
-    err.statusCode = 503;
-    throw err;
-  }
-  return Number(normalized);
+function validCallbackSecret(req: Request): boolean {
+  const configuredSecret = String(process.env.PAYMENT_CALLBACK_SECRET || '').trim();
+  if (!configuredSecret) return false;
+  const suppliedSecret = String(req.header('X-Payment-Callback-Secret') || '').trim();
+  return suppliedSecret === configuredSecret;
 }
 
-function splitCustomerName(name?: string | null): { first_name: string; last_name: string } {
-  const normalized = String(name || '').trim().replace(/\s+/g, ' ');
-  if (!normalized) return { first_name: 'SMCF', last_name: 'Member' };
-  const parts = normalized.split(' ');
-  if (parts.length === 1) {
-    return { first_name: parts[0], last_name: 'Member' };
+function assertDarajaConfiguration(): void {
+  if (!hasDarajaCredentials()) {
+    const error = new Error('Safaricom Daraja is not fully configured') as Error & { statusCode?: number };
+    error.statusCode = 503;
+    throw error;
   }
-  return {
-    first_name: parts.shift() || 'SMCF',
-    last_name: parts.join(' ') || 'Member',
+
+  const apiUrl = normalizeDarajaBaseUrl(process.env.DARAJA_API_URL);
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(apiUrl);
+  } catch {
+    const error = new Error('DARAJA_API_URL must be a valid HTTPS URL') as Error & { statusCode?: number };
+    error.statusCode = 503;
+    throw error;
+  }
+
+  if (parsedUrl.protocol !== 'https:') {
+    const error = new Error('DARAJA_API_URL must use HTTPS') as Error & { statusCode?: number };
+    error.statusCode = 503;
+    throw error;
+  }
+  if (process.env.NODE_ENV === 'production' && parsedUrl.hostname === 'sandbox.safaricom.co.ke') {
+    const error = new Error('Production payments cannot use the Safaricom Daraja sandbox') as Error & { statusCode?: number };
+    error.statusCode = 503;
+    throw error;
+  }
+  if (!/^https:\/\//i.test(String(process.env.DARAJA_CALLBACK_URL || ''))) {
+    const error = new Error('DARAJA_CALLBACK_URL must be a public HTTPS URL') as Error & { statusCode?: number };
+    error.statusCode = 503;
+    throw error;
+  }
+  if (!/^\d+$/.test(String(process.env.DARAJA_SHORTCODE || '').trim())) {
+    const error = new Error('DARAJA_SHORTCODE must contain only digits') as Error & { statusCode?: number };
+    error.statusCode = 503;
+    throw error;
+  }
+}
+
+function getDarajaTimestamp(date = new Date()): string {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+}
+
+function buildDarajaPassword(shortcode: string, passkey: string, timestamp: string): string {
+  return Buffer.from(`${shortcode}${passkey}${timestamp}`).toString('base64');
+}
+
+let darajaTokenCache: { token: string; expiresAt: number } | undefined;
+
+async function getDarajaToken(): Promise<string> {
+  if (darajaTokenCache && darajaTokenCache.expiresAt > Date.now() + 30_000) {
+    return darajaTokenCache.token;
+  }
+
+  const apiUrl = normalizeDarajaBaseUrl(process.env.DARAJA_API_URL);
+  const consumerKey = String(process.env.DARAJA_CONSUMER_KEY || '').trim();
+  const consumerSecret = String(process.env.DARAJA_CONSUMER_SECRET || '').trim();
+
+  if (!consumerKey || !consumerSecret) {
+    throw new Error('Daraja consumer key/secret are not configured');
+  }
+
+  const auth = Buffer.from(`${consumerKey}:${consumerSecret}`).toString('base64');
+  const response = await fetch(`${apiUrl}/oauth/v1/generate?grant_type=client_credentials`, {
+    method: 'GET',
+    headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' },
+    signal: AbortSignal.timeout(15_000),
+  });
+  const payload = await response.json().catch(() => ({})) as {
+    access_token?: string;
+    expires_in?: string;
+    error?: string;
+    error_description?: string;
   };
-}
-
-async function discoverPayHeroNetwork(baseUrl: string, authHeader: string, countryCode = 'KE') {
-  const endpoints = [
-    `${baseUrl}/api/global/discovery/payment-world/country/${encodeURIComponent(countryCode)}`,
-    `${baseUrl}/api/global/discovery/payment-world/country?country=${encodeURIComponent(countryCode)}`,
-  ];
-
-  let lastMessage = '';
-  for (const endpoint of endpoints) {
-    try {
-      const res = await fetch(endpoint, {
-        method: 'GET',
-        headers: { Authorization: authHeader, Accept: 'application/json' },
-      });
-
-      const text = await res.text().catch(() => '');
-      let data: unknown = {};
-      try {
-        data = text ? JSON.parse(text) : {};
-      } catch {
-        data = { message: text || 'Unexpected discovery response' };
-      }
-
-      if (!res.ok) {
-        lastMessage = extractProviderErrorMessage(data, `PayHero discovery failed with HTTP ${res.status}`);
-        continue;
-      }
-
-      const record = asRecord(data);
-      const payload = asRecord(record?.data) ?? record ?? {};
-      const providerNetworks = asRecord(getPathValue(payload, ['provider_networks']))
-        ?? asRecord(getPathValue(payload, ['data', 'provider_networks']))
-        ?? asRecord(getPathValue(data, ['provider_networks']));
-
-      const candidates = providerNetworks?.['m-pesa'] ?? providerNetworks?.m_pesa ?? providerNetworks?.mpesa;
-      if (Array.isArray(candidates) && candidates.length > 0) {
-        return candidates[0] as LooseRecord;
-      }
-
-      lastMessage = 'PayHero discovery completed but no m-pesa provider network was returned';
-    } catch (err) {
-      lastMessage = toErrorMessage(err, 'PayHero discovery failed');
-    }
+  if (!response.ok || !payload.access_token) {
+    throw new Error(payload.error_description || payload.error || `Unable to obtain Daraja access token (HTTP ${response.status})`);
   }
 
-  const error = new Error(lastMessage || 'Unable to discover PayHero provider network') as Error & { statusCode?: number };
-  error.statusCode = 502;
-  throw error;
+  const expiresIn = Number(payload.expires_in) || 3600;
+  darajaTokenCache = {
+    token: payload.access_token,
+    expiresAt: Date.now() + Math.max(60, expiresIn - 60) * 1000,
+  };
+  return darajaTokenCache.token;
 }
 
-async function sendPayHeroGlobalPayment(
+async function sendDarajaSTK(
   phone: string,
   amount: number,
   reference: string,
   description: string,
-  customerContext?: PayHeroCustomerContext,
-): Promise<PayHeroPaymentResponse> {
-  const username = process.env.PAYHERO_API_USERNAME;
-  const password = process.env.PAYHERO_API_PASSWORD;
-  const callbackUrl = process.env.PAYHERO_CALLBACK_URL;
-  const vendorId = process.env.PAYHERO_VENDOR_ID || process.env.PAYHERO_ACCOUNT_ID;
-
-  if (!username || !password || !callbackUrl || !vendorId) {
-    const err = new Error('PayHero payment configuration is incomplete') as Error & { statusCode?: number };
-    err.statusCode = 503;
-    throw err;
+): Promise<DarajaSTKResponse> {
+  assertDarajaConfiguration();
+  const apiUrl = normalizeDarajaBaseUrl(process.env.DARAJA_API_URL);
+  const shortcode = String(process.env.DARAJA_SHORTCODE).trim();
+  const passkey = String(process.env.DARAJA_PASSKEY).trim();
+  const timestamp = getDarajaTimestamp();
+  const transactionType = String(process.env.DARAJA_TRANSACTION_TYPE || 'CustomerPayBillOnline').trim();
+  if (!['CustomerPayBillOnline', 'CustomerBuyGoodsOnline'].includes(transactionType)) {
+    const error = new Error('DARAJA_TRANSACTION_TYPE must be CustomerPayBillOnline or CustomerBuyGoodsOnline') as Error & { statusCode?: number };
+    error.statusCode = 503;
+    throw error;
   }
-
-  const auth = Buffer.from(`${username}:${password}`).toString('base64');
-  const baseUrl = normalizePayHeroBaseUrl(process.env.PAYHERO_API_URL);
-  const network = await discoverPayHeroNetwork(baseUrl, `Basic ${auth}`, 'KE');
-  const { first_name, last_name } = splitCustomerName(customerContext?.name);
-  const customerEmail = String(customerContext?.email || '').trim() || 'payments@smcf.app';
-  const customerPhone = `+${normalizePhone(phone)}`;
-
   const requestBody = {
-    request_type: 'payment',
-    transaction_channel: 'momo',
-    provider: 'yellowcard',
-    amount,
-    currency: 'KES',
-    country: 'KE',
-    customer: {
-      first_name,
-      last_name,
-      email: customerEmail,
-      phone: customerPhone,
-      country: 'KE',
-    },
-    vendor_config: {
-      vendor_id: parsePositiveId(vendorId, 'vendor ID'),
-    },
-    provider_config: network,
-    payment_config: {
-      account_number: customerPhone,
-      callback_url: callbackUrl,
-    },
-    external_reference: reference,
-    description,
+    BusinessShortCode: shortcode,
+    Password: buildDarajaPassword(shortcode, passkey, timestamp),
+    Timestamp: timestamp,
+    TransactionType: transactionType,
+    Amount: Math.round(amount),
+    PartyA: normalizePhone(phone),
+    PartyB: shortcode,
+    PhoneNumber: normalizePhone(phone),
+    CallBackURL: String(process.env.DARAJA_CALLBACK_URL).trim(),
+    AccountReference: reference.replace(/[^a-zA-Z0-9]/g, '').slice(0, 12) || 'SMCF',
+    TransactionDesc: description.replace(/[^a-zA-Z0-9 ]/g, '').slice(0, 13) || 'SMCF Payment',
   };
 
-  const requestUrl = `${baseUrl}/api/global/payments`;
-  let res: Awaited<ReturnType<typeof fetch>>;
+  const requestUrl = `${apiUrl}/mpesa/stkpush/v1/processrequest`;
+  let response: Awaited<ReturnType<typeof fetch>>;
   try {
-    res = await fetch(requestUrl, {
+    response = await fetch(requestUrl, {
       method: 'POST',
       headers: {
-        Authorization: `Basic ${auth}`,
+        Authorization: `Bearer ${await getDarajaToken()}`,
         'Content-Type': 'application/json',
+        Accept: 'application/json',
       },
       body: JSON.stringify(requestBody),
+      signal: AbortSignal.timeout(20_000),
     });
   } catch (err) {
-    console.error('[PayHero] global payment request failed', {
-      endpoint: requestUrl,
-      reference,
-      amount,
-      phoneSuffix: normalizePhoneForPayHero(phone).slice(-4),
-      error: toErrorMessage(err, 'Network error'),
-    });
-    const networkError = new Error('PayHero could not be reached. Please try again.') as Error & { statusCode?: number };
-    networkError.statusCode = 502;
-    throw networkError;
+    const error = new Error(`Safaricom Daraja STK request failed: ${toErrorMessage(err, 'network error')}`) as Error & { statusCode?: number };
+    error.statusCode = 502;
+    throw error;
   }
 
-  const responseText = await res.text().catch(() => '');
-  let data: unknown = {};
-  try {
-    data = responseText ? JSON.parse(responseText) : {};
-  } catch {
-    data = { message: 'Unexpected response from PayHero' };
-  }
+  const data: unknown = await response.json().catch(() => ({}));
   const dataRecord = asRecord(data);
-  const checkoutRequestId = extractCheckoutRequestId(data);
-
-  if (!res.ok || !checkoutRequestId) {
-    const providerCode = dataRecord?.code ?? dataRecord?.error_code ?? dataRecord?.errorCode ?? dataRecord?.status_code ?? null;
-    const providerMessage = extractProviderErrorMessage(data, 'Payment request could not be initiated. Please try again.');
-    const message = providerCode === 'resource_not_found'
-      ? 'PayHero could not resolve the requested resource for this tenant. Check that the API username/password belong to the same PayHero workspace as the discovered network and vendor ID.'
-      : providerMessage;
-
-    console.error('[PayHero] global payment rejected', {
-      endpoint: requestUrl,
-      httpStatus: res.status,
-      reference,
-      amount,
-      phoneSuffix: normalizePhone(phone).slice(-4),
-      providerCode,
-      message,
-    });
-
-    const err = new Error(message) as Error & { statusCode?: number };
-    err.statusCode = res.ok ? 502 : res.status >= 400 && res.status < 500 ? 400 : 502;
-    throw err;
+  const checkoutRequestId = typeof dataRecord?.CheckoutRequestID === 'string'
+    ? dataRecord.CheckoutRequestID
+    : undefined;
+  if (!response.ok || !checkoutRequestId) {
+    const message = extractProviderErrorMessage(data, `Safaricom Daraja rejected the STK request (HTTP ${response.status})`);
+    const error = new Error(message) as Error & { statusCode?: number };
+    error.statusCode = response.status >= 400 && response.status < 500 ? 400 : 502;
+    throw error;
   }
-
-  const providerReference = [
-    getPathValue(data, ['merchant_reference']),
-    getPathValue(data, ['merchantReference']),
-    getPathValue(data, ['transaction_reference']),
-    getPathValue(data, ['transactionReference']),
-  ].find((value): value is string => typeof value === 'string' && Boolean(value.trim()));
-
   return {
     success: true,
-    provider: 'payhero',
     checkoutRequestId,
-    providerReference,
-    externalReference: reference,
-    status: typeof dataRecord?.status === 'string' ? dataRecord.status : 'accepted',
-    message: dataRecord?.message,
+    merchantRequestId: typeof dataRecord.MerchantRequestID === 'string' ? dataRecord.MerchantRequestID : undefined,
+    responseCode: typeof dataRecord.ResponseCode === 'string' ? dataRecord.ResponseCode : undefined,
+    customerMessage: typeof dataRecord.CustomerMessage === 'string' ? dataRecord.CustomerMessage : undefined,
   };
 }
 
@@ -450,8 +397,8 @@ setInterval(() => {
   }
 }, 10 * 60 * 1000);
 
-/** Query PayHero for the current status of an STK push by its request ID. */
-async function queryPayHeroStatus(reference: string): Promise<{
+/** Query Safaricom for the current status of an STK push by its checkout request ID. */
+async function queryDarajaStatus(checkoutRequestId: string): Promise<{
   success: boolean;
   status: string;
   mpesaReceiptNumber?: string;
@@ -459,59 +406,52 @@ async function queryPayHeroStatus(reference: string): Promise<{
   resultDesc?: string;
   amount?: number;
 }> {
-  const username = process.env.PAYHERO_API_USERNAME;
-  const password = process.env.PAYHERO_API_PASSWORD;
-  const baseUrl = normalizePayHeroBaseUrl(process.env.PAYHERO_API_URL);
   try {
-    if (!username || !password) return { success: false, status: 'pending' };
-    const auth = Buffer.from(`${username}:${password}`).toString('base64');
-    const statusUrl = `${baseUrl}/api/v2/transaction-status?reference=${encodeURIComponent(reference)}`;
-    const res = await fetch(statusUrl, {
-      method: 'GET',
-      headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' },
+    assertDarajaConfiguration();
+    const shortcode = String(process.env.DARAJA_SHORTCODE).trim();
+    const timestamp = getDarajaTimestamp();
+    const response = await fetch(`${normalizeDarajaBaseUrl(process.env.DARAJA_API_URL)}/mpesa/stkpushquery/v1/query`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${await getDarajaToken()}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        BusinessShortCode: shortcode,
+        Password: buildDarajaPassword(shortcode, String(process.env.DARAJA_PASSKEY).trim(), timestamp),
+        Timestamp: timestamp,
+        CheckoutRequestID: checkoutRequestId,
+      }),
+      signal: AbortSignal.timeout(15_000),
     });
-    if (!res.ok) return { success: false, status: 'pending' };
-    const data: unknown = await res.json().catch(() => ({}));
+    const data: unknown = await response.json().catch(() => ({}));
     const dataRecord = asRecord(data);
-    if (!dataRecord) return { success: false, status: 'pending' };
-    const payload = asRecord(getPathValue(dataRecord, ['data', 'response'])) ?? asRecord(dataRecord.data) ?? dataRecord;
-    const rawResultCode = findProviderValue(data, ['ResultCode', 'resultCode', 'result_code']);
+    if (!response.ok || !dataRecord) {
+      console.warn('[Daraja STK query] provider request failed', {
+        httpStatus: response.status,
+        checkoutRequestId,
+        message: extractProviderErrorMessage(data, 'Daraja status query failed'),
+      });
+      return { success: false, status: 'pending' };
+    }
+    const rawResultCode = dataRecord.ResultCode;
     const resultCode = typeof rawResultCode === 'string' || typeof rawResultCode === 'number' ? rawResultCode : undefined;
-    const receipt = findProviderValue(data, [
-      'provider_reference',
-      'providerReference',
-      'third_party_reference',
-      'thirdPartyReference',
-      'MpesaReceiptNumber',
-      'receipt_number',
-      'receiptNumber',
-      'TransactionID',
-      'transactionId',
-      'transaction_id',
-    ]);
-    const resultDesc = findProviderValue(data, ['ResultDesc', 'resultDesc', 'ResultDescription', 'message', 'description']);
-    const rawAmount = findProviderValue(data, ['Amount', 'amount']);
-    const rawStatus = findProviderValue(data, ['status', 'transaction_status', 'payment_status']);
-    const status = String(rawStatus ?? '').toLowerCase();
-    // PayHero can report a completed payment before exposing the M-Pesa
-    // receipt in the same response. Do not leave a paid transaction pending
-    // just because that optional field is delayed or named differently.
-    const isSuccess = isSuccessfulProviderStatus(resultCode) || isSuccessfulProviderStatus(status);
-    const isFailed = !isSuccess && ((resultCode !== undefined && String(resultCode) !== '0' && String(resultCode) !== 'pending') || ['failed', 'cancelled', 'canceled', 'rejected'].includes(status));
-    const normalizedReceipt = typeof receipt === 'string' && receipt.trim()
-      ? receipt.trim()
-      : isSuccess
-        ? `PAYHERO-${reference}`
-        : '';
+    const resultDesc = typeof dataRecord.ResultDesc === 'string' ? dataRecord.ResultDesc : undefined;
+    const resultCodeNumber = resultCode === undefined ? undefined : Number(resultCode);
+    const isSuccess = resultCodeNumber === 0;
+    const isFailed = resultCodeNumber !== undefined && resultCodeNumber !== 0;
     return {
       success: true,
       status: isSuccess ? 'success' : isFailed ? 'failed' : 'pending',
-      mpesaReceiptNumber: normalizedReceipt,
       resultCode,
-      resultDesc: typeof resultDesc === 'string' ? resultDesc : undefined,
-      amount: rawAmount === undefined ? undefined : Number(rawAmount),
+      resultDesc,
     };
-  } catch {
+  } catch (error) {
+    console.error('[Daraja STK query] failed', {
+      checkoutRequestId,
+      message: toErrorMessage(error, 'Unable to query Safaricom Daraja'),
+    });
     return { success: false, status: 'pending' };
   }
 }
@@ -542,7 +482,7 @@ async function pollSACCOPayment(
     }
 
     const transactionForStatus = await Transaction.findById(pendingTxnId).select('checkoutRequestId transactionRef');
-    const { status, mpesaReceiptNumber, amount: paidAmt, resultDesc } = await queryPayHeroStatus(
+    const { status, mpesaReceiptNumber, amount: paidAmt, resultDesc } = await queryDarajaStatus(
       transactionForStatus?.checkoutRequestId || checkoutRequestId || transactionForStatus?.transactionRef || '',
     );
 
@@ -684,120 +624,9 @@ async function pollSACCOPayment(
   setTimeout(tick, INTERVAL);
 }
 
-/** Initiate a PayHero M-Pesa collection and return the normalized provider response. */
-async function sendPayHeroChannelPayment(
-  phone: string,
-  amount: number,
-  reference: string,
-  description: string,
-): Promise<PayHeroPaymentResponse> {
-  const username = process.env.PAYHERO_API_USERNAME;
-  const password = process.env.PAYHERO_API_PASSWORD;
-  const channelId = process.env.PAYHERO_CHANNEL_ID;
-  const accountId = process.env.PAYHERO_ACCOUNT_ID;
-  const callbackUrl = process.env.PAYHERO_CALLBACK_URL;
-  if (!username || !password || !channelId || !accountId || !callbackUrl) {
-    const err = new Error('PayHero channel payment configuration is incomplete') as Error & { statusCode?: number };
-    err.statusCode = 503;
-    throw err;
-  }
-
-  const auth = Buffer.from(`${username}:${password}`).toString('base64');
-  const requestUrl = `${normalizePayHeroBaseUrl(process.env.PAYHERO_API_URL)}/api/v2/payments`;
-  const requestBody = {
-    amount,
-    currency: 'KES',
-    phone_number: normalizePhoneForPayHero(phone),
-    provider: 'm-pesa',
-    channel_id: Number(channelId) || channelId,
-    account_id: Number(accountId) || accountId,
-    external_reference: reference,
-    callback_url: callbackUrl,
-    description,
-  };
-
-  let res: Awaited<ReturnType<typeof fetch>>;
-  try {
-    res = await fetch(requestUrl, {
-      method: 'POST',
-      headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody),
-    });
-  } catch (err) {
-    console.error('[PayHero] channel request failed', { endpoint: requestUrl, channelId, reference, amount, phoneSuffix: normalizePhoneForPayHero(phone).slice(-4), error: toErrorMessage(err, 'Network error') });
-    const networkError = new Error('PayHero could not be reached. Please try again.') as Error & { statusCode?: number };
-    networkError.statusCode = 502;
-    throw networkError;
-  }
-
-  const responseText = await res.text().catch(() => '');
-  let data: unknown = {};
-  try { data = responseText ? JSON.parse(responseText) : {}; } catch { data = { message: 'Unexpected response from PayHero' }; }
-  const dataRecord = asRecord(data);
-  const checkoutRequestId = extractCheckoutRequestId(data);
-  if (!res.ok || !checkoutRequestId) {
-    const message = extractProviderErrorMessage(data, 'Payment request could not be initiated. Please try again.');
-    console.error('[PayHero] channel payment rejected', {
-      endpoint: requestUrl,
-      httpStatus: res.status,
-      channelId,
-      reference,
-      amount,
-      phoneSuffix: normalizePhoneForPayHero(phone).slice(-4),
-      providerCode: dataRecord?.code ?? dataRecord?.error_code ?? dataRecord?.errorCode ?? null,
-      message,
-    });
-    const err = new Error(message) as Error & { statusCode?: number };
-    err.statusCode = res.ok ? 502 : res.status >= 400 && res.status < 500 ? 400 : 502;
-    throw err;
-  }
-
-  const providerReference = [
-    getPathValue(data, ['merchant_reference']),
-    getPathValue(data, ['merchantReference']),
-    getPathValue(data, ['transaction_reference']),
-    getPathValue(data, ['transactionReference']),
-  ].find((value): value is string => typeof value === 'string' && Boolean(value.trim()));
-  return {
-    success: true,
-    provider: 'payhero',
-    checkoutRequestId,
-    providerReference,
-    externalReference: reference,
-    status: typeof dataRecord?.status === 'string' ? dataRecord.status : 'accepted',
-    message: dataRecord?.message,
-  };
-}
-
-async function sendPayHeroSTK(
-  phone: string,
-  amount: number,
-  reference: string,
-  description: string,
-  customerContext?: PayHeroCustomerContext,
-): Promise<PayHeroPaymentResponse> {
-  if (!hasPayHeroCredentials()) {
-    const err = new Error('PayHero payment configuration is incomplete') as Error & { statusCode?: number };
-    err.statusCode = 503;
-    throw err;
-  }
-
-  const paymentMode = String(process.env.PAYHERO_PAYMENT_MODE || '').trim().toLowerCase();
-  if (paymentMode === 'channel' || (!paymentMode && process.env.PAYHERO_CHANNEL_ID && process.env.PAYHERO_ACCOUNT_ID)) {
-    return sendPayHeroChannelPayment(phone, amount, reference, description);
-  }
-  return sendPayHeroGlobalPayment(phone, amount, reference, description, customerContext);
-}
-
-function looksLikeSuspended(message: string): boolean {
-  const m = String(message || '').toLowerCase();
-  return m.includes('suspended') || m.includes('policy violation');
-}
-
 function extractCheckoutRequestId(payload: unknown): string | undefined {
   const candidates = [
-    // PayHero's transaction-status endpoint requires its reference UUID.
-    // Prefer it over provider/legacy transaction identifiers.
+    // Prefer the Daraja checkout request identifier over legacy identifiers.
     getPathValue(payload, ['data', 'reference']),
     getPathValue(payload, ['reference']),
     getPathValue(payload, ['data', 'TransactionReference']),
@@ -833,14 +662,6 @@ function normalizePhone(raw: string): string {
   let p = String(raw).trim().replace(/\s+/g, '').replace(/^\+/, '');
   if (p.startsWith('0')) p = '254' + p.slice(1);
   if (!p.startsWith('254')) p = '254' + p;
-  return p;
-}
-
-// PayHero requires 07XXXXXXXXX / 01XXXXXXXXX format (not 254-prefix)
-function normalizePhoneForPayHero(raw: string): string {
-  let p = String(raw).trim().replace(/\s+/g, '').replace(/^\+/, '');
-  if (p.startsWith('254')) p = '0' + p.slice(3);
-  if (!p.startsWith('0')) p = '0' + p;
   return p;
 }
 
@@ -953,7 +774,7 @@ export async function settleRegistrationFeePayment(params: {
       description: `${source === 'pesapal' ? 'Pesapal Card' : 'M-Pesa'} Registration Fee - Ref: ${mpesaRef} - ${normalizePhone(phone)}`,
       processedAt: new Date(),
       depositProcessed: true,
-      paymentGateway: source === 'pesapal' ? 'pesapal' : 'payhero',
+      paymentGateway: source === 'pesapal' ? 'pesapal' : 'daraja',
     }
   );
 
@@ -983,7 +804,7 @@ export async function settleRegistrationFeePayment(params: {
       status: 'completed',
       mpesaRef,
       checkoutRequestId: checkoutRequestId || null,
-      paymentGateway: source === 'pesapal' ? 'pesapal' : 'payhero',
+      paymentGateway: source === 'pesapal' ? 'pesapal' : 'daraja',
       createdBy: null,
     });
   }
@@ -1054,7 +875,7 @@ export async function settleSharePurchasePayment(params: {
     reconciliationStatus: 'reconciled',
     mpesaRef: params.mpesaRef,
     checkoutRequestId: params.checkoutRequestId || null,
-    paymentGateway: params.source === 'pesapal' ? 'pesapal' : 'payhero',
+    paymentGateway: params.source === 'pesapal' ? 'pesapal' : 'daraja',
     depositProcessed: true,
     createdBy: null,
   });
@@ -1110,7 +931,7 @@ export async function settlePendingDeposit(params: {
       $set: {
         status: 'completed',
         mpesaRef: params.mpesaRef,
-        paymentGateway: params.paymentGateway || 'payhero',
+        paymentGateway: params.paymentGateway || 'daraja',
         ...(cycleNumber ? { cycleNumber } : {}),
         amount,
         grossAmount: amount,
@@ -1118,11 +939,11 @@ export async function settlePendingDeposit(params: {
         netAmount: creditedAmount,
         feeType: feeAmounts.feeType,
         description: params.walletPayment
-          ? `Wallet deposit via PayHero STK - Ref: ${params.mpesaRef} - ${params.phone || 'unknown'}`
+          ? `Wallet deposit via Daraja STK - Ref: ${params.mpesaRef} - ${params.phone || 'unknown'}`
           : cycleNumber
-          ? `Cycle ${cycleNumber} contribution via PayHero STK — Ref: ${params.mpesaRef} — ${params.phone || 'unknown'}`
+          ? `Cycle ${cycleNumber} contribution via Daraja STK — Ref: ${params.mpesaRef} — ${params.phone || 'unknown'}`
           : params.tenXContributionId
-          ? `10X contribution via PayHero STK — Ref: ${params.mpesaRef} — ${params.phone || 'unknown'}`
+          ? `10X contribution via Daraja STK — Ref: ${params.mpesaRef} — ${params.phone || 'unknown'}`
           : `M-Pesa Savings Deposit — Ref: ${params.mpesaRef} — ${params.phone || 'unknown'}`,
         processedAt,
         depositProcessed: true,
@@ -1271,7 +1092,7 @@ async function recordCyclePayment(params: {
       mpesa_transaction_id: reference,
       checkout_request_id: cycleNumber === params.cycleNumber ? params.checkoutRequestId : `${params.checkoutRequestId}-CYCLE-${cycleNumber}`,
       transaction_reference: reference,
-      payment_method: params.paymentGateway || 'payhero',
+      payment_method: params.paymentGateway || 'daraja',
       status: 'completed',
       type: 'cycle_payment',
       cycle_number: cycleNumber,
@@ -1279,8 +1100,8 @@ async function recordCyclePayment(params: {
       created_at: params.processedAt,
       deposit_processed: true,
       notes: isPartial
-        ? `Partial Cycle ${cycleNumber} contribution via ${params.paymentGateway || 'PayHero'}`
-        : `Cycle ${cycleNumber} contribution via ${params.paymentGateway || 'PayHero'}`,
+        ? `Partial Cycle ${cycleNumber} contribution via ${params.paymentGateway || 'Daraja'}`
+        : `Cycle ${cycleNumber} contribution via ${params.paymentGateway || 'Daraja'}`,
     });
 
     if (!isPartial) cyclesCovered += 1;
@@ -1443,7 +1264,7 @@ async function createOrGetPendingDepositTransaction(params: {
             status: 'pending',
             checkoutRequestId: params.checkoutRequestId,
             ...(params.cycleNumber ? { cycleNumber: params.cycleNumber } : {}),
-            paymentGateway: 'payhero',
+            paymentGateway: 'daraja',
             createdBy: null,
           },
         },
@@ -1505,53 +1326,42 @@ async function createOrGetPendingDepositTransaction(params: {
 // Admin diagnostics endpoint: returns masked provider config to compare environments
 
 router.get('/provider-diagnostics', protect, authorize('admin'), async (_req: AuthRequest, res: Response) => {
-  const username = process.env.PAYHERO_API_USERNAME;
-  const vendorId = process.env.PAYHERO_VENDOR_ID || process.env.PAYHERO_ACCOUNT_ID;
-  const channelId = process.env.PAYHERO_CHANNEL_ID;
-  const accountId = process.env.PAYHERO_ACCOUNT_ID;
-  const tillNumber = process.env.PAYHERO_TILL_NUMBER || '6938069';
-  const configuredMode = String(process.env.PAYHERO_PAYMENT_MODE || '').trim().toLowerCase();
-  const paymentMode = configuredMode || (channelId && accountId ? 'channel' : 'global');
-  const callbackUrl = process.env.PAYHERO_CALLBACK_URL;
-  const apiUrl = normalizePayHeroBaseUrl(process.env.PAYHERO_API_URL);
-  const vendorIdIsValid = /^\d+$/.test(String(vendorId || '').trim()) && Number(vendorId) > 0;
-  const channelIdIsValid = /^\d+$/.test(String(channelId || '').trim()) && Number(channelId) > 0;
-  const accountIdIsValid = /^\d+$/.test(String(accountId || '').trim()) && Number(accountId) > 0;
+  const consumerKey = process.env.DARAJA_CONSUMER_KEY;
+  const consumerSecret = process.env.DARAJA_CONSUMER_SECRET;
+  const shortcode = process.env.DARAJA_SHORTCODE;
+  const passkey = process.env.DARAJA_PASSKEY;
+  const callbackUrl = process.env.DARAJA_CALLBACK_URL;
+  const apiUrl = normalizeDarajaBaseUrl(process.env.DARAJA_API_URL);
+  const apiUrlIsProduction = new URL(apiUrl).hostname === 'api.safaricom.co.ke';
 
   return res.json({
     success: true,
     data: {
       configured: {
-        username: !!username,
-        vendorId: !!vendorId,
-        channelId: !!channelId,
-        accountId: !!accountId,
+        consumerKey: !!consumerKey,
+        consumerSecret: !!consumerSecret,
+        shortcode: !!shortcode,
+        passkey: !!passkey,
         callbackUrl: !!callbackUrl,
-        vendorIdIsValid,
-        channelIdIsValid,
-        accountIdIsValid,
-        readyForCollection: paymentMode === 'channel'
-          ? Boolean(username && channelIdIsValid && accountIdIsValid && callbackUrl)
-          : Boolean(username && vendorIdIsValid && callbackUrl),
+        shortcodeIsValid: /^\d+$/.test(String(shortcode || '').trim()),
+        callbackUrlIsHttps: /^https:\/\//i.test(String(callbackUrl || '')),
+        apiUrlIsProduction,
+        readyForCollection: hasDarajaCredentials(),
       },
       values: {
         apiUrl,
         callbackUrl,
-        usernameMasked: maskSecret(username),
-        vendorId: vendorId ? maskSecret(vendorId) : null,
-        channelId,
-        accountId: accountId ? maskSecret(accountId) : null,
-        tillNumber: tillNumber ? maskSecret(tillNumber) : null,
-        paymentMode,
+        consumerKeyMasked: maskSecret(consumerKey),
+        consumerSecretConfigured: Boolean(consumerSecret),
+        shortcode,
+        passkeyConfigured: Boolean(passkey),
         service: 'smcf-sacco-backend',
         commit: process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || null,
       },
       fingerprints: {
-        username: envFingerprint(username),
+        consumerKey: envFingerprint(consumerKey),
       },
-      notes: paymentMode === 'channel'
-        ? 'Payments use the PayHero v2 channel flow. The channel ID must identify the active Till channel, while account ID must be the PayHero account resource ID, not the Till number.'
-        : 'Payments use the PayHero global flow. Set PAYHERO_PAYMENT_MODE=channel with the matching PayHero account and channel IDs to route through a specific channel.',
+      notes: 'Payments use Safaricom Daraja STK Push. Production must use https://api.safaricom.co.ke and a public HTTPS callback URL.',
     },
   });
 });
@@ -1570,8 +1380,8 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
     if (!amount || Number(amount) <= 0)
       return res.status(400).json({ success: false, message: 'Deposit amount must be positive' });
 
-    const payHeroMember = await Member.findById(memberId).select('name email phone');
-    if (!payHeroMember) {
+    const member = await Member.findById(memberId).select('name email phone');
+    if (!member) {
       return res.status(404).json({ success: false, message: 'Member not found' });
     }
 
@@ -1739,9 +1549,9 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
     }
 
     // ── Simulation mode (no credentials set) ──────────────────────────────
-    const hasCredentials = hasPayHeroCredentials();
+    const credentialsConfigured = hasDarajaCredentials();
 
-    if (!hasCredentials) {
+    if (!credentialsConfigured) {
       const simId = `SIM-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 
       pendingDeposits.set(simId, {
@@ -1780,22 +1590,19 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
       });
     }
 
-    // ── Real STK Push via PayHero ────────────────────────────────────
-    const stkData = await sendPayHeroSTK(
+    // ── Real STK Push via Safaricom Daraja ───────────────────────────
+    const stkData = await sendDarajaSTK(
       mpesaPhone,
       numAmount,
       'SMCF-SAVINGS',
       tenXPayment ? 'SMCF 10X Contribution' : walletPayment ? 'SMCF Wallet Deposit' : 'SMCF SACCO Savings Deposit',
-      { name: String(payHeroMember.name || ''), email: payHeroMember.email ? String(payHeroMember.email) : null }
     );
-    // PayHero proxies the Safaricom response — CheckoutRequestID may be top-level
-    // or nested under data depending on the PayHero version.
     const checkoutRequestId = extractCheckoutRequestId(stkData);
 
     if (!checkoutRequestId) {
       return res.status(400).json({
         success: false,
-        message: stkData.message || 'Payment request could not be initiated. Please try again.',
+        message: stkData.customerMessage || 'Payment request could not be initiated. Please try again.',
       });
     }
 
@@ -1830,7 +1637,7 @@ router.post('/deposit', protect, async (req: AuthRequest, res: Response, next: N
       createdAt: Date.now(),
     });
 
-    // Start server-side PayHero polling — no callback dependency
+    // Poll as a recovery path if the callback is delayed.
     if (txnDoc.status === 'pending' && txnDoc.depositProcessed !== true) {
       pollSACCOPayment('deposit', checkoutRequestId, String(txnDoc._id), memberId, numAmount, mpesaPhone).catch(
         (err) => console.error('[pollSACCOPayment deposit]', err)
@@ -1851,16 +1658,16 @@ async function recordDeposit(memberId: string, amount: number, phone: string, mp
     transactionRef,
     memberId,
     type: walletPayment ? 'wallet_deposit' : tenXContributionId ? 'tenx_contribution' : 'deposit',
-    paymentGateway: 'payhero',
+    paymentGateway: 'daraja',
     ...(cycleNumber ? { cycleNumber } : {}),
     amount: feeAmounts.grossAmount,
     ...feeAmounts,
     description: walletPayment
-      ? `Wallet deposit via PayHero STK - Ref: ${mpesaRef} - ${phone}`
+      ? `Wallet deposit via Daraja STK - Ref: ${mpesaRef} - ${phone}`
       : cycleNumber
-      ? `Cycle ${cycleNumber} contribution via PayHero STK — Ref: ${mpesaRef} — ${phone}`
+      ? `Cycle ${cycleNumber} contribution via Daraja STK — Ref: ${mpesaRef} — ${phone}`
       : tenXContributionId
-      ? `10X contribution via PayHero STK — Ref: ${mpesaRef} — ${phone}`
+      ? `10X contribution via Daraja STK — Ref: ${mpesaRef} — ${phone}`
       : `M-Pesa Savings Deposit — Ref: ${mpesaRef} — ${phone}`,
     status: 'completed',
     checkoutRequestId: checkoutRequestId || null,
@@ -1916,17 +1723,17 @@ router.post('/share-purchase', protect, async (req: AuthRequest, res: Response, 
     if (!amount || Number(amount) < 100)
       return res.status(400).json({ success: false, message: 'Minimum share purchase is KES 100' });
 
-    const payHeroMember = await Member.findById(memberId).select('name email phone');
-    if (!payHeroMember) {
+    const member = await Member.findById(memberId).select('name email phone');
+    if (!member) {
       return res.status(404).json({ success: false, message: 'Member not found' });
     }
 
     const mpesaPhone = normalizePhone(phone);
     const numAmount  = Math.round(Number(amount));
     const feeAmounts = calculateTransactionAmounts(numAmount, 'share_purchase');
-    const hasCredentials = hasPayHeroCredentials();
+    const credentialsConfigured = hasDarajaCredentials();
 
-    if (!hasCredentials) {
+    if (!credentialsConfigured) {
       const simId = `SHRSIM-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
       pendingSharePurchases.set(simId, {
         memberId,
@@ -1971,19 +1778,18 @@ router.post('/share-purchase', protect, async (req: AuthRequest, res: Response, 
       });
     }
 
-    const stkData = await sendPayHeroSTK(
+    const stkData = await sendDarajaSTK(
       mpesaPhone,
       numAmount,
       'SMCF-SHARES',
       'SMCF SACCO Share Purchase',
-      { name: String(payHeroMember.name || ''), email: payHeroMember.email ? String(payHeroMember.email) : null }
     );
     const checkoutRequestId = extractCheckoutRequestId(stkData);
 
     if (!checkoutRequestId) {
       return res.status(400).json({
         success: false,
-        message: stkData.message || 'Payment request could not be initiated. Please try again.',
+        message: stkData.customerMessage || 'Payment request could not be initiated. Please try again.',
       });
     }
 
@@ -2041,9 +1847,9 @@ router.post('/registration-fee/initiate', protect, async (req: AuthRequest, res:
 
     const numAmount = REGISTRATION_GROSS_AMOUNT;
     const feeAmounts = calculateTransactionAmounts(numAmount, 'registration_fee');
-    const hasCredentials = hasPayHeroCredentials();
+    const credentialsConfigured = hasDarajaCredentials();
 
-    if (!hasCredentials) {
+    if (!credentialsConfigured) {
       const simId = `REGSIM-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 
       pendingRegistrationFees.set(simId, {
@@ -2100,19 +1906,18 @@ router.post('/registration-fee/initiate', protect, async (req: AuthRequest, res:
       return res.json({ success: true, simulated: true, data: { checkoutRequestId: simId } });
     }
 
-    const stkData = await sendPayHeroSTK(
+    const stkData = await sendDarajaSTK(
       mpesaPhone,
       numAmount,
       'SMCF-REGFEE',
       'SMCF SACCO Registration Fee',
-      { name: String(member.name || ''), email: member.email ? String(member.email) : null }
     );
     const checkoutRequestId = extractCheckoutRequestId(stkData);
 
     if (!checkoutRequestId) {
       return res.status(400).json({
         success: false,
-        message: stkData.message || 'Payment request could not be initiated. Please try again.',
+        message: stkData.customerMessage || 'Payment request could not be initiated. Please try again.',
       });
     }
 
@@ -2187,11 +1992,11 @@ router.post('/registration-fee/reconcile-manual', protect, authorize('admin', 't
   }
 });
 
-// ─── POST /api/mpesa/payhero/callback ────────────────────────────────────────
-// PayHero posts the final provider result here. Business settlement remains in
+// ─── POST /api/mpesa/daraja/callback ─────────────────────────────────────────
+// Daraja posts the final provider result here. Business settlement remains in
 // the existing SACCO settlement functions above.
 
-router.post('/payhero/callback', async (req: Request, res: Response) => {
+router.post('/daraja/callback', async (req: Request, res: Response) => {
   if (!validCallbackSecret(req)) return res.status(401).json({ success: false, message: 'Invalid callback signature' });
   res.status(200).json({ success: true });
 
@@ -2225,10 +2030,10 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
     ]);
     const mpesaRef = typeof rawMpesaRef === 'string' && rawMpesaRef.trim()
       ? rawMpesaRef.trim()
-      : success ? `PAYHERO-${checkoutRequestId || externalReference || Date.now()}` : undefined;
+      : success ? `DARAJA-${checkoutRequestId || externalReference || Date.now()}` : undefined;
     const resultDesc = String(findProviderValue(payload, ['message', 'ResultDesc', 'description']) ?? 'Payment failed or was cancelled');
 
-    console.info('[payhero callback]', {
+    console.info('[daraja callback]', {
       checkoutRequestId: checkoutRequestId || null,
       externalReference: externalReference || null,
       status,
@@ -2246,7 +2051,7 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
     }).select('_id memberId amount grossAmount feeAmount netAmount type loanId cycleNumber checkoutRequestId status depositProcessed');
 
     if (!transaction) {
-      console.warn('[payhero callback] pending transaction not found', { checkoutRequestId, externalReference });
+      console.warn('[daraja callback] pending transaction not found', { checkoutRequestId, externalReference });
       return;
     }
     const settlementCheckoutId = String(transaction.checkoutRequestId || checkoutRequestId || externalReference || transaction._id);
@@ -2279,7 +2084,7 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
           processedAt: new Date(),
         },
       );
-      console.warn('[payhero callback] amount mismatch', {
+      console.warn('[daraja callback] amount mismatch', {
         checkoutRequestId: settlementCheckoutId,
         expectedAmount: Number(transaction.amount),
         receivedAmount: callbackAmount,
@@ -2305,7 +2110,7 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
         amount: paidAmount,
         phone: pending?.phone,
         mpesaRef,
-        sourceLabel: 'PayHero STK',
+        sourceLabel: 'Daraja STK',
         cycleNumber: pending?.cyclePayment ? pending.cycleNumber : transaction.cycleNumber ?? undefined,
         tenXContributionId: pending?.tenXContributionId,
         walletPayment: transaction.type === 'wallet_deposit' || pending?.walletPayment,
@@ -2339,7 +2144,7 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
           description: `M-Pesa Share Purchase — Ref: ${mpesaRef}`,
           processedAt: new Date(),
           depositProcessed: true,
-          paymentGateway: 'payhero',
+          paymentGateway: 'daraja',
           providerStatus: 'success',
           financialPostingStatus: 'completed',
           reconciliationStatus: 'reconciled',
@@ -2394,7 +2199,7 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
           ...repaymentAmounts,
           processedAt: new Date(),
           depositProcessed: true,
-          paymentGateway: 'payhero',
+          paymentGateway: 'daraja',
           providerStatus: 'success',
           financialPostingStatus: 'completed',
           reconciliationStatus: 'reconciled',
@@ -2406,7 +2211,7 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
         transaction.loanId,
         repaymentAmounts.netAmount,
         'mpesa',
-        `PayHero Ref: ${mpesaRef}`,
+        `Daraja Ref: ${mpesaRef}`,
         null,
       );
       const pending = pendingRepayments.get(settlementCheckoutId);
@@ -2419,7 +2224,7 @@ router.post('/payhero/callback', async (req: Request, res: Response) => {
       }
     }
   } catch (err) {
-    console.error('[payhero callback error]', toErrorMessage(err, 'Unable to process callback'));
+    console.error('[daraja callback error]', toErrorMessage(err, 'Unable to process callback'));
     const checkoutRequestId = extractCheckoutRequestId(asRecord(req.body));
     if (checkoutRequestId) {
       await Transaction.findOneAndUpdate(
@@ -2639,7 +2444,7 @@ router.get('/status/:checkoutRequestId', protect, async (req: AuthRequest, res: 
     }).select('status providerStatus financialPostingStatus reconciliationStatus mpesaRef amount type depositProcessed memberId loanId cycleNumber grossAmount netAmount transactionRef');
     if (txn) {
       if (txn.status === 'pending' || (txn.providerStatus === 'success' && txn.financialPostingStatus !== 'completed')) {
-        const provider = await queryPayHeroStatus(txn.checkoutRequestId || checkoutRequestId || txn.transactionRef || '');
+        const provider = await queryDarajaStatus(txn.checkoutRequestId || checkoutRequestId || txn.transactionRef || '');
         if (provider.status === 'success') {
           const member = await Member.findById(txn.memberId).select('phone');
           const pendingDeposit = pendingDeposits.get(checkoutRequestId);
@@ -2762,7 +2567,7 @@ router.post('/loan-repay', protect, async (req: AuthRequest, res: Response, next
     if (!['disbursed', 'active'].includes(loan.status))
       return res.status(400).json({ success: false, message: 'Loan is not active' });
 
-    const payHeroMember = await Member.findById(loan.memberId).select('name email phone');
+    const member = await Member.findById(loan.memberId).select('name email phone');
 
     const mpesaPhone = normalizePhone(phone);
     const numAmount  = Math.round(Number(amount));
@@ -2771,9 +2576,9 @@ router.post('/loan-repay', protect, async (req: AuthRequest, res: Response, next
       return res.status(400).json({ success: false, message: `Amount after the KES ${UNIFIED_TRANSACTION_FEE} fee cannot exceed the outstanding balance of KES ${Math.round(loan.balance).toLocaleString()}` });
     }
 
-    const hasCredentials = hasPayHeroCredentials();
+    const credentialsConfigured = hasDarajaCredentials();
 
-    if (!hasCredentials) {
+    if (!credentialsConfigured) {
       const simId = `REPSIM-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
       pendingRepayments.set(simId, {
         loanId,
@@ -2804,19 +2609,18 @@ router.post('/loan-repay', protect, async (req: AuthRequest, res: Response, next
       return res.json({ success: true, simulated: true, data: { checkoutRequestId: simId } });
     }
 
-    // ── Real STK Push via PayHero ────────────────────────────────────
-    const stkData = await sendPayHeroSTK(
+    // ── Real STK Push via Safaricom Daraja ───────────────────────────
+    const stkData = await sendDarajaSTK(
       mpesaPhone,
       numAmount,
       loan.loanNumber,
       `SMCF Loan Repayment ${loan.loanNumber}`,
-      { name: String(payHeroMember?.name || ''), email: payHeroMember?.email ? String(payHeroMember.email) : null }
     );
 
     const checkoutRequestId = extractCheckoutRequestId(stkData);
 
     if (!checkoutRequestId) {
-      return res.status(400).json({ success: false, message: stkData.message || 'Payment request could not be initiated. Please try again.' });
+      return res.status(400).json({ success: false, message: stkData.customerMessage || 'Payment request could not be initiated. Please try again.' });
     }
 
     const memberId = String(loan.memberId);
@@ -2845,7 +2649,7 @@ router.post('/loan-repay', protect, async (req: AuthRequest, res: Response, next
       createdAt: Date.now(),
     });
 
-    // Start server-side PayHero polling
+    // Poll as a recovery path if the callback is delayed.
     pollSACCOPayment('loan_repay', checkoutRequestId, String(txnDoc._id), memberId, numAmount, mpesaPhone, loanId).catch(
       (err) => console.error('[pollSACCOPayment loan-repay]', err)
     );
@@ -2865,7 +2669,7 @@ router.get('/repay-status/:checkoutRequestId', protect, async (req: AuthRequest,
     const txn = await Transaction.findOne({ checkoutRequestId, type: 'loan_repayment' }).select('status mpesaRef amount loanId memberId checkoutRequestId transactionRef');
     if (txn) {
       if (txn.status === 'pending' && txn.loanId) {
-        const provider = await queryPayHeroStatus(txn.checkoutRequestId || checkoutRequestId || txn.transactionRef || '');
+        const provider = await queryDarajaStatus(txn.checkoutRequestId || checkoutRequestId || txn.transactionRef || '');
         if (provider.status === 'success') {
           const member = await Member.findById(txn.memberId).select('phone');
           const pending = pendingRepayments.get(checkoutRequestId);
@@ -2907,7 +2711,7 @@ router.get('/repay-status/:checkoutRequestId', protect, async (req: AuthRequest,
 });
 
 // ─── POST /api/mpesa/payment-initiated ──────────────────────────────────────
-// Called BEFORE opening PayHero payment link.
+// Called BEFORE opening a manual M-Pesa payment flow.
 // Creates a pending transaction in DB immediately (shows in member history).
 // Body: { memberId, amount, phone, type: 'deposit'|'loan_repay', loanId? }
 
@@ -2952,7 +2756,7 @@ router.post('/payment-initiated', protect, async (req: AuthRequest, res: Respons
       type: txnType,
       amount: feeAmounts.grossAmount,
       ...feeAmounts,
-      description: `M-Pesa via PayHero — Pending admin confirmation${loanTag}`,
+      description: `M-Pesa via Daraja — Pending admin confirmation${loanTag}`,
       status: 'pending',
       createdBy: null,
     });
@@ -2995,7 +2799,7 @@ router.post('/payment-confirm', protect, async (req: AuthRequest, res: Response,
       return res.status(409).json({ success: false, message: 'Payment is no longer pending' });
     }
 
-    const mpesaRef = `PAYHERO-CONFIRM-${Date.now()}`;
+    const mpesaRef = `DARAJA-CONFIRM-${Date.now()}`;
     const pendingFeeAmounts = calculateTransactionAmounts(
       pending.amount,
       pending.type === 'loan_repay' ? 'loan_repayment' : 'deposit',
@@ -3008,7 +2812,7 @@ router.post('/payment-confirm', protect, async (req: AuthRequest, res: Response,
         {
           status: 'completed',
           ...pendingFeeAmounts,
-          description: `M-Pesa Savings Deposit via PayHero — Member confirmed`,
+          description: `M-Pesa Savings Deposit via Daraja — Member confirmed`,
           processedAt: new Date(),
           depositProcessed: true,
         }
@@ -3019,7 +2823,7 @@ router.post('/payment-confirm', protect, async (req: AuthRequest, res: Response,
           memberId: pending.memberId,
           amount: pendingFeeAmounts.netAmount,
           reference: mpesaRef,
-          sourceLabel: 'PayHero payment link',
+          sourceLabel: 'Daraja payment flow',
           processedAt: new Date(),
           note: `Transaction ${transactionRef}`,
           notificationPath: '/accounts',
@@ -3040,7 +2844,7 @@ router.post('/payment-confirm', protect, async (req: AuthRequest, res: Response,
         pending.loanId,
         pendingFeeAmounts.netAmount,
         'mpesa',
-        `PayHero payment — Member confirmed — ${mpesaRef}`,
+        `Daraja payment — Member confirmed — ${mpesaRef}`,
         null
       );
     }

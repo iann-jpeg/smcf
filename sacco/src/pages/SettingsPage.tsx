@@ -30,16 +30,16 @@ interface SystemConfig {
   sharePurchaseEnabled: boolean;
 }
 
-interface PayHeroDiagnostics {
+interface DarajaDiagnostics {
   configured: {
     readyForCollection: boolean;
+    apiUrlIsProduction: boolean;
+    callbackUrlIsHttps: boolean;
   };
   values: {
+    apiUrl: string | null;
     callbackUrl: string | null;
-    channelId: string | null;
-    accountId: string | null;
-    tillNumber: string | null;
-    paymentMode: string;
+    shortcode: string | null;
   };
   notes: string;
 }
@@ -64,13 +64,13 @@ export default function SettingsPage() {
   const [selectedRole, setSelectedRole] = useState<AppRole>("member");
   const [selectedUserId, setSelectedUserId] = useState("");
   const {
-    data: payHeroDiagnostics,
-    isLoading: payHeroLoading,
-    isFetching: payHeroFetching,
-    refetch: refetchPayHero,
+    data: darajaDiagnostics,
+    isLoading: darajaLoading,
+    isFetching: darajaFetching,
+    refetch: refetchDaraja,
   } = useQuery({
-    queryKey: ["payhero-diagnostics"],
-    queryFn: () => api.get<PayHeroDiagnostics>("/mpesa/provider-diagnostics"),
+    queryKey: ["daraja-diagnostics"],
+    queryFn: () => api.get<DarajaDiagnostics>("/mpesa/provider-diagnostics"),
     enabled: isAdmin,
     retry: false,
   });
@@ -271,38 +271,40 @@ export default function SettingsPage() {
               <CardHeader className="flex flex-row items-start justify-between gap-4">
                 <div>
                   <CardTitle className="font-heading flex items-center gap-2">
-                    {payHeroDiagnostics?.configured.readyForCollection
+                    {darajaDiagnostics?.configured.readyForCollection
                       ? <CheckCircle2 className="h-5 w-5 text-emerald-600" />
                       : <AlertCircle className="h-5 w-5 text-amber-600" />}
-                    PayHero readiness
+                    Daraja readiness
                   </CardTitle>
                   <CardDescription>Admin-only diagnostics for the production payment channel. Secrets are never shown.</CardDescription>
                 </div>
-                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => refetchPayHero()} disabled={payHeroFetching}>
-                  <RefreshCw className={`h-3.5 w-3.5 ${payHeroFetching ? "animate-spin" : ""}`} /> Refresh
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => refetchDaraja()} disabled={darajaFetching}>
+                  <RefreshCw className={`h-3.5 w-3.5 ${darajaFetching ? "animate-spin" : ""}`} /> Refresh
                 </Button>
               </CardHeader>
               <CardContent>
-                {payHeroLoading ? (
-                  <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Checking PayHero configuration…</div>
-                ) : payHeroDiagnostics ? (
+                {darajaLoading ? (
+                  <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Checking Daraja configuration…</div>
+                ) : darajaDiagnostics ? (
                   <div className="space-y-4">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant={payHeroDiagnostics.configured.readyForCollection ? "default" : "destructive"}>
-                        {payHeroDiagnostics.configured.readyForCollection ? "Ready for collection" : "Not ready"}
+                      <Badge variant={darajaDiagnostics.configured.readyForCollection ? "default" : "destructive"}>
+                        {darajaDiagnostics.configured.readyForCollection ? "Ready for collection" : "Not ready"}
                       </Badge>
-                      <Badge variant="outline">Mode: {payHeroDiagnostics.values.paymentMode}</Badge>
+                      <Badge variant={darajaDiagnostics.configured.apiUrlIsProduction ? "default" : "secondary"}>
+                        {darajaDiagnostics.configured.apiUrlIsProduction ? "Production API" : "Sandbox API"}
+                      </Badge>
                     </div>
                     <div className="grid gap-3 text-sm sm:grid-cols-2">
-                      <div><span className="text-muted-foreground">Channel ID:</span> <strong>{payHeroDiagnostics.values.channelId || "Not configured"}</strong></div>
-                      <div><span className="text-muted-foreground">Till:</span> <strong>{payHeroDiagnostics.values.tillNumber || "Not configured"}</strong></div>
-                      <div><span className="text-muted-foreground">PayHero account:</span> <strong>{payHeroDiagnostics.values.accountId || "Not configured"}</strong></div>
-                      <div><span className="text-muted-foreground">Callback:</span> <strong className="break-all">{payHeroDiagnostics.values.callbackUrl || "Not configured"}</strong></div>
+                      <div><span className="text-muted-foreground">Shortcode:</span> <strong>{darajaDiagnostics.values.shortcode || "Not configured"}</strong></div>
+                      <div><span className="text-muted-foreground">API URL:</span> <strong className="break-all">{darajaDiagnostics.values.apiUrl || "Not configured"}</strong></div>
+                      <div><span className="text-muted-foreground">Callback:</span> <strong className="break-all">{darajaDiagnostics.values.callbackUrl || "Not configured"}</strong></div>
+                      <div><span className="text-muted-foreground">Callback HTTPS:</span> <strong>{darajaDiagnostics.configured.callbackUrlIsHttps ? "Yes" : "No"}</strong></div>
                     </div>
-                    <p className="text-xs text-muted-foreground">{payHeroDiagnostics.notes}</p>
+                    <p className="text-xs text-muted-foreground">{darajaDiagnostics.notes}</p>
                   </div>
                 ) : (
-                  <p className="text-sm text-destructive">Unable to load PayHero diagnostics. Confirm the SACCO backend is reachable.</p>
+                  <p className="text-sm text-destructive">Unable to load Daraja diagnostics. Confirm the SACCO backend is reachable.</p>
                 )}
               </CardContent>
             </Card>

@@ -352,7 +352,7 @@ router.patch(
           loanId,
           txn.amount,
           'mpesa',
-          `PayHero confirmed by admin on ${new Date().toLocaleDateString('en-KE')}`,
+          `Daraja confirmed by admin on ${new Date().toLocaleDateString('en-KE')}`,
           req.userId!
         );
       }

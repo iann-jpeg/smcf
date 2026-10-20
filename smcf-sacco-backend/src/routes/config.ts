@@ -15,6 +15,12 @@ const CONFIG_FIELDS = [
   'maxGuaranteeMultiplier',
   'minGuarantors',
   'minLiquidityRatio',
+  'tenXMinShares',
+  'tenXMinSavings',
+  'tenXSharesApproved',
+  'tenXSavingsApproved',
+  'tenXMonthlyContribution',
+  'tenXAssetPlan',
 ] as const;
 
 // @route   GET /api/config

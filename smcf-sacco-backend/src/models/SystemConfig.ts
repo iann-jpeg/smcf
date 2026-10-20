@@ -10,6 +10,12 @@ export interface ISystemConfig extends Document {
   maxGuaranteeMultiplier: number;
   minGuarantors: number;
   minLiquidityRatio: number;
+  tenXMinShares: number;
+  tenXMinSavings: number;
+  tenXSharesApproved: boolean;
+  tenXSavingsApproved: boolean;
+  tenXMonthlyContribution: number;
+  tenXAssetPlan: string;
   adminBootstrapConsumed: boolean;
 }
 
@@ -28,6 +34,12 @@ const SystemConfigSchema = new mongoose.Schema<ISystemConfig>(
     maxGuaranteeMultiplier: { type: Number, default: 3 },
     minGuarantors:          { type: Number, default: 2 },
     minLiquidityRatio:      { type: Number, default: 20 },
+    tenXMinShares:          { type: Number, default: 100 },
+    tenXMinSavings:         { type: Number, default: 20000 },
+    tenXSharesApproved:     { type: Boolean, default: false },
+    tenXSavingsApproved:    { type: Boolean, default: false },
+    tenXMonthlyContribution:{ type: Number, default: 1000 },
+    tenXAssetPlan:          { type: String, default: 'Event equipment, such as tents and chairs' },
     adminBootstrapConsumed: { type: Boolean, default: false },
   },
   { timestamps: true }
