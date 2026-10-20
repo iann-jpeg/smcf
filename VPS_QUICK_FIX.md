@@ -1,10 +1,10 @@
-# 🔧 VPS QUICK FIX: Get sacco-backend Running
+﻿# ðŸ”§ VPS QUICK FIX: Get sacco-backend Running
 
-## ⚠️ **Problem Found**
-- ✅ `smcf-backend` restarted successfully
-- ❌ `sacco-backend` not found in PM2
+## âš ï¸ **Problem Found**
+- âœ… `smcf-backend` restarted successfully
+- âŒ `sacco-backend` not found in PM2
 
-## 🚀 **Quick Fix (Run These Commands on VPS)**
+## ðŸš€ **Quick Fix (Run These Commands on VPS)**
 
 ### **Step 1: Check PM2 Status**
 ```bash
@@ -50,10 +50,10 @@ pm2 status
 
 **Expected Output:**
 ```
-│ Name          │ id │ mode │ status  │
-├───────────────┼────┼──────┼─────────┤
-│ smcf-backend  │ 0  │ fork │ online  │
-│ sacco-backend │ 1  │ fork │ online  │
+â”‚ Name          â”‚ id â”‚ mode â”‚ status  â”‚
+â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
+â”‚ smcf-backend  â”‚ 0  â”‚ fork â”‚ online  â”‚
+â”‚ sacco-backend â”‚ 1  â”‚ fork â”‚ online  â”‚
 ```
 
 ### **Step 5: Test Health Endpoints**
@@ -69,7 +69,7 @@ curl http://localhost:5001/health
 
 ---
 
-## 🔍 **If Still Not Working**
+## ðŸ” **If Still Not Working**
 
 ### Check Error Logs
 ```bash
@@ -103,7 +103,7 @@ npm start              # See actual error messages
 
 ---
 
-## ✅ **Success Criteria**
+## âœ… **Success Criteria**
 
 After completing these steps, you should have:
 - [ ] Both backends showing `online` in `pm2 status`
@@ -114,11 +114,12 @@ After completing these steps, you should have:
 
 ---
 
-## 📞 **Next: Test the System**
+## ðŸ“ž **Next: Test the System**
 
 Once both are running:
-1. Try logging in: https://smcf.app
-2. Try payment: https://smcf.app → SACCO Portal
+1. Try logging in: https://smart-moves.tech
+2. Try payment: https://smart-moves.tech â†’ SACCO Portal
 3. Monitor logs: `pm2 logs`
 
 **You should NOT get 502 errors anymore!**
+

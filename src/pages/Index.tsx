@@ -1,4 +1,4 @@
-import saccoLogo from "@/assets/sacco-logo.png";
+﻿import saccoLogo from "@/assets/sacco-logo.png";
 import landingBackground from "@/assets/landingbackground.jpg";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import SEO from "@/components/SEO";
@@ -452,7 +452,7 @@ const Index = () => {
         title="SMCF - Smart Moves Cash Flow | Digital Table Banking Platform Kenya"
         description="Digital savings and contribution platform for Kenya. Track wallets, cycle contributions, payments and growth in one secure place."
         keywords="table banking Kenya, digital chama, SMCF, savings wallet Kenya, contribution cycles, smart moves cash flow, member dashboard"
-        url="https://smcf.app"
+        url="https://smart-moves.tech"
       />
 
       <header
@@ -558,7 +558,7 @@ const Index = () => {
               </h1>
 
               <p className="mt-6 max-w-lg text-lg leading-8 text-[#536c67] sm:text-xl">
-                A refined wealth platform for savings, wallets, contribution cycles and long-term capital planning—designed for members who value trust, discretion and a globally informed approach to financial growth.
+                A refined wealth platform for savings, wallets, contribution cycles and long-term capital planningâ€”designed for members who value trust, discretion and a globally informed approach to financial growth.
               </p>
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -1049,7 +1049,7 @@ const Index = () => {
                           <span className="text-sm font-bold text-[#123026]">{day}</span>
                           <span className="mt-1 block space-y-1">
                             {dayEvents.slice(0, 2).map((event) => (
-                              <span key={event._id || event.title} className="block truncate text-[10px] font-semibold text-[#1d6d4d]">● {event.title}</span>
+                              <span key={event._id || event.title} className="block truncate text-[10px] font-semibold text-[#1d6d4d]">â— {event.title}</span>
                             ))}
                             {dayEvents.length > 2 && <span className="block text-[10px] font-semibold text-[#b8924a]">+{dayEvents.length - 2} more</span>}
                           </span>
@@ -1066,7 +1066,7 @@ const Index = () => {
                       <button type="button" key={event._id || event.title} onClick={() => setSelectedPublicEvent(event)} className="w-full rounded-2xl border border-[#e7efe9] bg-[#f8faf8] p-4 text-left transition hover:border-[#b8924a]">
                         <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#b8924a]">{new Date(event.startsAt).toLocaleDateString("en-KE", { month: "short", day: "numeric" })}</p>
                         <p className="mt-1 font-bold text-[#123026]">{event.title}</p>
-                        <p className="mt-1 text-sm text-[#648073]">{new Date(event.startsAt).toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit" })}{event.venue ? ` • ${event.venue}` : ""}</p>
+                        <p className="mt-1 text-sm text-[#648073]">{new Date(event.startsAt).toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit" })}{event.venue ? ` â€¢ ${event.venue}` : ""}</p>
                       </button>
                     ))}
                   </div>
@@ -1280,7 +1280,7 @@ const Index = () => {
             </ul>
 
             <div className="mt-6 text-sm text-[#d7e5df]">
-              <div>Email: <a href="mailto:administrator@smcf.app" className="hover:text-white">administrator@smcf.app</a></div>
+              <div>Email: <a href="mailto:administrator@smart-moves.tech" className="hover:text-white">administrator@smart-moves.tech</a></div>
               <div className="mt-2">Phone: <a href="tel:+254759097157" className="hover:text-white">+254 759 097 157</a></div>
             </div>
           </div>
@@ -1288,7 +1288,7 @@ const Index = () => {
 
         <div className="border-t border-white/10">
           <div className="mx-auto flex max-w-7xl items-center justify-center px-4 py-5 text-sm text-[#d7e5df]">
-            © {new Date().getFullYear()} SMART MOVES DEVELOPMENT AGENCY
+            Â© {new Date().getFullYear()} SMART MOVES DEVELOPMENT AGENCY
           </div>
         </div>
       </footer>
@@ -1299,3 +1299,4 @@ const Index = () => {
 };
 
 export default Index;
+

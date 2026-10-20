@@ -1,4 +1,4 @@
-# SMCF - Smart Moves Cash Flow
+﻿# SMCF - Smart Moves Cash Flow
 # Robots.txt for SEO Optimization
 
 User-agent: *
@@ -35,7 +35,8 @@ User-agent: WhatsApp
 Allow: /
 
 # Sitemap
-Sitemap: https://smcf.app/sitemap.xml
+Sitemap: https://smart-moves.tech/sitemap.xml
 
 # Crawl-delay (optional, to prevent server overload)
 Crawl-delay: 1
+

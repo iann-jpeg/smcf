@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+﻿import { useEffect } from 'react';
 
 interface SEOProps {
   title?: string;
@@ -17,8 +17,8 @@ export const SEO = ({
   title = 'SMCF - Smart Moves Cash Flow | Digital Table Banking Platform',
   description = 'Comprehensive digital table banking platform with automated contributions, secure savings, loans management, and M-Pesa integration for group financial empowerment.',
   keywords = 'table banking, digital banking, group savings, chama management, SMCF, financial platform, M-Pesa integration, loans, savings, Kenya banking',
-  image = 'https://smcf.app/src/assets/newsmcflogo.png',
-  url = 'https://smcf.app',
+  image = 'https://smart-moves.tech/src/assets/newsmcflogo.png',
+  url = 'https://smart-moves.tech',
   type = 'website',
 }: SEOProps) => {
   useEffect(() => {
@@ -70,3 +70,4 @@ export const SEO = ({
 };
 
 export default SEO;
+

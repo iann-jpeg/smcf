@@ -1,4 +1,4 @@
-# Recalculate member totals on production
+﻿# Recalculate member totals on production
 Write-Host "Recalculating member totals on PRODUCTION..." -ForegroundColor Cyan
 
 $backendUrl = "https://smcf-c99o.onrender.com"
@@ -38,10 +38,11 @@ try {
     Write-Host "Updated $($recalcResponse.updatedCount) out of $($recalcResponse.totalMembers) members" -ForegroundColor Cyan
     Write-Host $recalcResponse.message -ForegroundColor White
     
-    Write-Host "Done! Refresh https://www.smcf.app to see updated data." -ForegroundColor Green
+    Write-Host "Done! Refresh https://www.smart-moves.tech to see updated data." -ForegroundColor Green
     
 } catch {
     Write-Host "Error occurred:" -ForegroundColor Red
     Write-Host $_.Exception.Message -ForegroundColor Red
     exit 1
 }
+

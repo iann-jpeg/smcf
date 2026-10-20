@@ -1,4 +1,4 @@
-# 🔥 VPS Emergency Recovery Plan
+﻿# ðŸ”¥ VPS Emergency Recovery Plan
 
 ## Current Crisis
 - **Main Backend**: Crashing with `SyntaxError: Unexpected token ')'`
@@ -7,7 +7,7 @@
 
 ---
 
-## 🚀 IMMEDIATE ACTION STEPS (Execute in Order)
+## ðŸš€ IMMEDIATE ACTION STEPS (Execute in Order)
 
 ### **STEP 1: Clean PM2 State**
 ```bash
@@ -44,7 +44,7 @@ cd smcf-sacco-backend && npm ci && cd ..
 # Check main backend syntax
 cd /var/www/smcf/backend
 node -c server.js 2>&1
-# ✅ Expected: No output (silent = valid syntax)
+# âœ… Expected: No output (silent = valid syntax)
 
 # If that fails, check the exact error
 node server.js 2>&1 | head -20
@@ -99,7 +99,7 @@ pm2 logs smcf-backend --lines 50
 
 ---
 
-## 🔍 If Step 3 or 5 Fails: Detailed Debugging
+## ðŸ” If Step 3 or 5 Fails: Detailed Debugging
 
 ### If `node -c server.js` Still Fails:
 ```bash
@@ -144,7 +144,7 @@ mongo mongodb://localhost:27017/smcf
 
 ---
 
-## ✅ Success Checklist
+## âœ… Success Checklist
 
 After all steps, verify:
 
@@ -167,11 +167,11 @@ After all steps, verify:
   - No EADDRINUSE errors
   - Normal operation logs
 
-- [ ] Frontend loads at https://smcf.app without 502 errors
+- [ ] Frontend loads at https://smart-moves.tech without 502 errors
 
 ---
 
-## 📋 Common Issues & Fixes
+## ðŸ“‹ Common Issues & Fixes
 
 | Issue | Symptom | Fix |
 |-------|---------|-----|
@@ -183,7 +183,7 @@ After all steps, verify:
 
 ---
 
-## 🆘 If Still Failing After All Steps
+## ðŸ†˜ If Still Failing After All Steps
 
 ### Provide These Diagnostics:
 ```bash
@@ -208,10 +208,11 @@ Then share outputs starting with **STEP 1** diagnostic.
 
 ---
 
-## 🎯 Expected Timeline
+## ðŸŽ¯ Expected Timeline
 - **Step 1-2**: 2-3 minutes
 - **Step 3**: < 30 seconds
 - **Step 4-5**: 1-2 minutes
 - **Total**: ~5-7 minutes to full recovery
 
 **Do these steps right now and report back when complete!**
+

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -76,7 +76,7 @@ export default function TrafficDashboard() {
       // Detect if blocked by ad blocker
       const errorMessage = error instanceof Error ? error.message : '';
       if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
-        setError('⚠️ Analytics blocked by ad blocker. Please disable your ad blocker for this site or add www.smcf.app to your allowlist to view analytics.');
+        setError('âš ï¸ Analytics blocked by ad blocker. Please disable your ad blocker for this site or add www.smart-moves.tech to your allowlist to view analytics.');
       } else {
         setError(error instanceof Error ? error.message : 'Failed to load analytics data');
       }
@@ -304,3 +304,4 @@ export default function TrafficDashboard() {
     </div>
   );
 }
+

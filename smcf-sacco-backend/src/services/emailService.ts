@@ -1,8 +1,8 @@
-import { Resend } from 'resend';
+﻿import { Resend } from 'resend';
 import crypto from 'crypto';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const DEFAULT_FROM = 'SMCF SACCO <noreply@smcf.app>';
+const DEFAULT_FROM = 'SMCF SACCO <noreply@smart-moves.tech>';
 
 function getFromAddress(): string {
   // Prefer configured sender, fallback to Resend's verified sandbox sender.
@@ -455,3 +455,4 @@ export const sendBulkEmail = async ({
 
   return result;
 };
+

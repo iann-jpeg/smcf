@@ -1,8 +1,8 @@
-# 🚀 CONTABO VPS DEPLOYMENT CHECKLIST
+﻿# ðŸš€ CONTABO VPS DEPLOYMENT CHECKLIST
 
-## ✅ **CRITICAL: What Has Been Fixed**
+## âœ… **CRITICAL: What Has Been Fixed**
 
-### 1. **Backend Payment Bug (FIXED ✓)**
+### 1. **Backend Payment Bug (FIXED âœ“)**
 - **File**: `backend/routes/lipia.js`
 - **Issue**: Null reference when `payment.paid_by` field undefined
 - **Fix Applied**: Safe fallback pattern at 3 locations (lines ~538, 1378, 1388)
@@ -12,22 +12,22 @@
   payerId: payment.paid_by ? payment.paid_by.toString() : payment.member_id.toString()
   ```
 
-### 2. **Main Backend .env (READY ✓)**
+### 2. **Main Backend .env (READY âœ“)**
 - **File**: `backend/.env`
 - **Port**: 4000
 - **Database**: `mongodb://localhost:27017/smcf`
 - **Status**: Correct for Contabo VPS
 
-### 3. **SACCO Backend .env (READY ✓)**
+### 3. **SACCO Backend .env (READY âœ“)**
 - **File**: `smcf-sacco-backend/.env`
 - **Port**: 5001
 - **Database**: `mongodb://localhost:27017/smcf-sacco`
-- **Frontend URL**: `https://smcfsacco.vercel.app`
+- **Frontend URL**: `https://smart-moves.tech`
 - **Status**: Corrected and ready for deployment
 
 ---
 
-## 🔧 **DEPLOYMENT STEPS (Contabo VPS)**
+## ðŸ”§ **DEPLOYMENT STEPS (Contabo VPS)**
 
 ### **Step 1: Copy Updated .env Files**
 ```bash
@@ -93,7 +93,7 @@ pm2 logs sacco-backend --lines 20
 
 ---
 
-## 🔍 **VERIFICATION CHECKLIST**
+## ðŸ” **VERIFICATION CHECKLIST**
 
 - [ ] Both .env files copied to VPS
 - [ ] Latest code pulled (`git pull origin main`)
@@ -107,15 +107,15 @@ pm2 logs sacco-backend --lines 20
 
 ---
 
-## 🧪 **MANUAL TEST**
+## ðŸ§ª **MANUAL TEST**
 
 ### **Test 1: Login (Verify No 502)**
-1. Go to https://smcf.app
+1. Go to https://smart-moves.tech
 2. Login with: **254759097157** / **password**
 3. Should NOT get 502 error
 
 ### **Test 2: M-Pesa Payment (Verify Payment Processing)**
-1. Go to https://smcf.app → SACCO Portal
+1. Go to https://smart-moves.tech â†’ SACCO Portal
 2. Initiate payment
 3. Check PM2 logs for payment processing
 4. Should complete without 502 errors
@@ -128,9 +128,9 @@ pm2 logs sacco-backend --lines 20
 
 ---
 
-## 📊 **EXPECTED RESULT**
+## ðŸ“Š **EXPECTED RESULT**
 
-✅ **System State After Deployment:**
+âœ… **System State After Deployment:**
 - Main backend running on port 4000
 - SACCO backend running on port 5001
 - Both connected to local MongoDB
@@ -141,7 +141,7 @@ pm2 logs sacco-backend --lines 20
 
 ---
 
-## 🆘 **TROUBLESHOOTING**
+## ðŸ†˜ **TROUBLESHOOTING**
 
 ### **502 Errors Persist**
 ```bash
@@ -178,7 +178,7 @@ kill -9 [PID]
 
 ---
 
-## 📝 **ENVIRONMENT CONFIGURATION SUMMARY**
+## ðŸ“ **ENVIRONMENT CONFIGURATION SUMMARY**
 
 ### **Main Backend (`backend/.env`)**
 ```
@@ -191,10 +191,11 @@ SACCO_BACKEND_URL=http://127.0.0.1:5001
 ```
 PORT=5001
 MONGODB_URI=mongodb://localhost:27017/smcf-sacco
-FRONTEND_URL=https://smcfsacco.vercel.app
-MPESA_CALLBACK_URL=https://smcf.app/sacco/api/mpesa/callback
+FRONTEND_URL=https://smart-moves.tech
+MPESA_CALLBACK_URL=https://smart-moves.tech/sacco/api/mpesa/callback
 ```
 
 ---
 
-**🎯 Goal**: Deploy fixed code to Contabo VPS and verify all 502 errors are resolved.
+**ðŸŽ¯ Goal**: Deploy fixed code to Contabo VPS and verify all 502 errors are resolved.
+

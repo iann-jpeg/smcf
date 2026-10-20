@@ -1,4 +1,4 @@
-# Admin Email Notification System - Implementation Guide
+﻿# Admin Email Notification System - Implementation Guide
 
 ## Overview
 
@@ -6,19 +6,19 @@ The admin email notification system automatically notifies administrators about 
 
 ## Features
 
-✅ **Automated Activity Notifications**
+âœ… **Automated Activity Notifications**
 - Loan applications, approvals, and disbursements
 - Payment receipts and defaults
 - Member registrations and KYC completions
 - Large transactions and system errors
 
-✅ **Beautiful Email Templates**
+âœ… **Beautiful Email Templates**
 - Color-coded by severity (Low, Medium, High, Critical)
 - Activity-specific icons and branding
 - Detailed information tables
 - Mobile-responsive design
 
-✅ **Fire-and-Forget Pattern**
+âœ… **Fire-and-Forget Pattern**
 - Never blocks main request
 - Errors are logged but don't affect user operations
 - Reliable delivery with Resend API
@@ -218,18 +218,18 @@ await notifySystemError(errorType, errorMessage, context);
 
 | Type | Icon | Severity | Trigger |
 |------|------|----------|---------|
-| LOAN_REQUEST | 📋 | Medium | New loan application submitted |
-| LOAN_APPROVED | ✅ | Low | Loan approved by committee |
-| LOAN_DISBURSED | 💰 | Low | Loan funds transferred to member |
-| PAYMENT_RECEIVED | ✓ | Low | Member payment processed |
-| DEFAULT_ALERT | ⚠️ | High | Loan payment overdue |
-| MEMBER_REGISTERED | 👤 | Low | New member joins system |
-| MEMBER_KYC | 🔍 | Low | KYC verification completed |
-| SHARE_PURCHASED | 📈 | Low | Member purchases shares |
-| DIVIDEND_DECLARED | 💵 | Medium | Dividend declared to members |
-| LARGE_TRANSACTION | 🚨 | High | Transaction exceeds threshold |
-| SYSTEM_ERROR | ❌ | Critical | System error occurs |
-| ACTIVITY_ALERT | 🔔 | Low | General activity alert |
+| LOAN_REQUEST | ðŸ“‹ | Medium | New loan application submitted |
+| LOAN_APPROVED | âœ… | Low | Loan approved by committee |
+| LOAN_DISBURSED | ðŸ’° | Low | Loan funds transferred to member |
+| PAYMENT_RECEIVED | âœ“ | Low | Member payment processed |
+| DEFAULT_ALERT | âš ï¸ | High | Loan payment overdue |
+| MEMBER_REGISTERED | ðŸ‘¤ | Low | New member joins system |
+| MEMBER_KYC | ðŸ” | Low | KYC verification completed |
+| SHARE_PURCHASED | ðŸ“ˆ | Low | Member purchases shares |
+| DIVIDEND_DECLARED | ðŸ’µ | Medium | Dividend declared to members |
+| LARGE_TRANSACTION | ðŸš¨ | High | Transaction exceeds threshold |
+| SYSTEM_ERROR | âŒ | Critical | System error occurs |
+| ACTIVITY_ALERT | ðŸ”” | Low | General activity alert |
 
 ## Email Template Features
 
@@ -277,14 +277,14 @@ curl http://localhost:5000/api/admin/notification-status
 
 ## Best Practices
 
-### ✅ DO
+### âœ… DO
 - Use fire-and-forget pattern (don't await in request handlers)
 - Include relevant transaction IDs in details
 - Use appropriate severity levels
 - Test with actual admin emails before deploying
 - Monitor admin email delivery in logs
 
-### ❌ DON'T
+### âŒ DON'T
 - Await notification functions in critical paths
 - Send duplicate notifications for the same event
 - Include sensitive data (passwords, tokens) in emails
@@ -294,12 +294,12 @@ curl http://localhost:5000/api/admin/notification-status
 
 ### 1. Render.com Environment Variables
 
-Go to your service's **Settings → Environment**:
+Go to your service's **Settings â†’ Environment**:
 
 ```
 ADMIN_EMAILS=ianabungana5@gmail.com,admin@organization.com
 RESEND_API_KEY=re_xxxxxxxxxxxxx
-RESEND_FROM_EMAIL=noreply@smcf.app
+RESEND_FROM_EMAIL=noreply@smart-moves.tech
 ```
 
 ### 2. Verify Email Sender
@@ -355,7 +355,7 @@ ADMIN_EMAILS=admin1@example.com,admin2@example.com,admin3@example.com
 
 ## Future Enhancements
 
-🔄 Planned improvements:
+ðŸ”„ Planned improvements:
 - [ ] Notification frequency throttling
 - [ ] Email digests (hourly/daily summaries)
 - [ ] Admin preference preferences (which activities to receive)
@@ -365,4 +365,5 @@ ADMIN_EMAILS=admin1@example.com,admin2@example.com,admin3@example.com
 
 ---
 
-**Questions or issues?** Contact support@smcf.app
+**Questions or issues?** Contact support@smart-moves.tech
+

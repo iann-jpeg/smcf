@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Admin Notification Service
  * Sends email notifications to admin for system activities
  * Fire-and-forget pattern to never block main request
@@ -54,21 +54,21 @@ function generateActivityEmailTemplate(notification: ActivityNotification): {
   
   // Activity-specific icons
   const icons: Record<string, string> = {
-    'LOAN_REQUEST': '📋',
-    'LOAN_APPROVED': '✅',
-    'LOAN_DISBURSED': '💰',
-    'PAYMENT_RECEIVED': '✓',
-    'DEFAULT_ALERT': '⚠️',
-    'MEMBER_REGISTERED': '👤',
-    'MEMBER_KYC': '🔍',
-    'SHARE_PURCHASED': '📈',
-    'DIVIDEND_DECLARED': '💵',
-    'LARGE_TRANSACTION': '🚨',
-    'SYSTEM_ERROR': '❌',
-    'ACTIVITY_ALERT': '🔔'
+    'LOAN_REQUEST': 'ðŸ“‹',
+    'LOAN_APPROVED': 'âœ…',
+    'LOAN_DISBURSED': 'ðŸ’°',
+    'PAYMENT_RECEIVED': 'âœ“',
+    'DEFAULT_ALERT': 'âš ï¸',
+    'MEMBER_REGISTERED': 'ðŸ‘¤',
+    'MEMBER_KYC': 'ðŸ”',
+    'SHARE_PURCHASED': 'ðŸ“ˆ',
+    'DIVIDEND_DECLARED': 'ðŸ’µ',
+    'LARGE_TRANSACTION': 'ðŸš¨',
+    'SYSTEM_ERROR': 'âŒ',
+    'ACTIVITY_ALERT': 'ðŸ””'
   };
   
-  const icon = icons[type] || '📌';
+  const icon = icons[type] || 'ðŸ“Œ';
   const subject = `[SMCF SACCO] ${icon} ${title}`;
   
   // Build details table if available
@@ -167,8 +167,8 @@ function generateActivityEmailTemplate(notification: ActivityNotification): {
       <!-- Unsubscribe link -->
       <div style="text-align: center; margin: 16px 0; color: #9ca3af; font-size: 11px;">
         <p style="margin: 0;">
-          <a href="mailto:support@smcf.app" style="color: #0f7034; text-decoration: none;">Contact Support</a> | 
-          <a href="https://smcf.app" style="color: #0f7034; text-decoration: none;">Dashboard</a>
+          <a href="mailto:support@smart-moves.tech" style="color: #0f7034; text-decoration: none;">Contact Support</a> | 
+          <a href="https://smart-moves.tech" style="color: #0f7034; text-decoration: none;">Dashboard</a>
         </p>
       </div>
     </body>
@@ -192,7 +192,7 @@ function formatDetailValue(value: any): string {
     }
   }
   if (typeof value === 'boolean') {
-    return value ? '✅ Yes' : '❌ No';
+    return value ? 'âœ… Yes' : 'âŒ No';
   }
   return String(value);
 }
@@ -416,3 +416,4 @@ export function getAdminNotificationStatus() {
     status: ADMIN_EMAILS.length > 0 && ADMIN_EMAILS[0] ? 'active' : 'not configured'
   };
 }
+

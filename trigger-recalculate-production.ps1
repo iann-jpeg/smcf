@@ -1,5 +1,5 @@
-# PowerShell script to trigger member totals recalculation on PRODUCTION
-Write-Host "🔄 Recalculating member totals on PRODUCTION..." -ForegroundColor Cyan
+﻿# PowerShell script to trigger member totals recalculation on PRODUCTION
+Write-Host "ðŸ”„ Recalculating member totals on PRODUCTION..." -ForegroundColor Cyan
 Write-Host "This will update all member payment totals from historical payment records." -ForegroundColor Yellow
 Write-Host ""
 
@@ -12,7 +12,7 @@ $password = Read-Host "Enter admin password" -AsSecureString
 $passwordText = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($password))
 
 try {
-    Write-Host "`n📝 Logging in to production..." -ForegroundColor Yellow
+    Write-Host "`nðŸ“ Logging in to production..." -ForegroundColor Yellow
     
     # Login to get token
     $loginBody = @{
@@ -27,15 +27,15 @@ try {
         -ErrorAction Stop
     
     if (-not $loginResponse.token) {
-        Write-Host "❌ Login failed: No token received" -ForegroundColor Red
+        Write-Host "âŒ Login failed: No token received" -ForegroundColor Red
         exit 1
     }
     
     $token = $loginResponse.token
-    Write-Host "✅ Login successful!" -ForegroundColor Green
+    Write-Host "âœ… Login successful!" -ForegroundColor Green
     
     # Call recalculate endpoint on production
-    Write-Host "`n🔄 Triggering recalculation on PRODUCTION database..." -ForegroundColor Yellow
+    Write-Host "`nðŸ”„ Triggering recalculation on PRODUCTION database..." -ForegroundColor Yellow
     
     $headers = @{
         "Authorization" = "Bearer $token"
@@ -47,19 +47,19 @@ try {
         -Headers $headers `
         -ErrorAction Stop
     
-    Write-Host "`n✅ SUCCESS!" -ForegroundColor Green
+    Write-Host "`nâœ… SUCCESS!" -ForegroundColor Green
     Write-Host "Updated $($recalcResponse.updatedCount) out of $($recalcResponse.totalMembers) members" -ForegroundColor Cyan
     Write-Host "Message: $($recalcResponse.message)" -ForegroundColor White
     
     if ($recalcResponse.errors -and $recalcResponse.errors.Count -gt 0) {
-        Write-Host "`n⚠️  Some errors occurred:" -ForegroundColor Yellow
+        Write-Host "`nâš ï¸  Some errors occurred:" -ForegroundColor Yellow
         $recalcResponse.errors | ForEach-Object {
             Write-Host "  - $($_.member): $($_.error)" -ForegroundColor Red
         }
     }
     
-    Write-Host "`n✅ All member totals have been recalculated on PRODUCTION!" -ForegroundColor Green
-    Write-Host "Refresh https://www.smcf.app to see the updated data." -ForegroundColor Cyan
+    Write-Host "`nâœ… All member totals have been recalculated on PRODUCTION!" -ForegroundColor Green
+    Write-Host "Refresh https://www.smart-moves.tech to see the updated data." -ForegroundColor Cyan
     
 } catch {
     $errorMessage = $_.Exception.Message
@@ -71,3 +71,4 @@ try {
     }
     exit 1
 }
+

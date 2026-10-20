@@ -1,4 +1,4 @@
-import express, { Application, Request, Response } from 'express';
+﻿import express, { Application, Request, Response } from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -83,8 +83,8 @@ app.use(helmet());
 // CORS
 const ALLOWED_ORIGINS = [
   process.env.FRONTEND_URL,
-  'https://www.smcf.app',
-  'https://smcf.app',
+  'https://www.smart-moves.tech',
+  'https://smart-moves.tech',
   'http://localhost:5173',
   'http://localhost:3000',
 ].filter(Boolean) as string[];
@@ -252,3 +252,4 @@ process.on('unhandledRejection', (err: Error) => {
 });
 
 export default app;
+

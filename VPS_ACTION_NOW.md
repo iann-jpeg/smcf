@@ -1,13 +1,13 @@
-# ⚡ RIGHT NOW: VPS Action Plan
+﻿# âš¡ RIGHT NOW: VPS Action Plan
 
-## 🎯 Current Situation
-✅ Main backend (`smcf-backend`) restarted successfully  
-❌ SACCO backend (`sacco-backend`) NOT FOUND in PM2  
-⚠️ Need to start `sacco-backend` manually
+## ðŸŽ¯ Current Situation
+âœ… Main backend (`smcf-backend`) restarted successfully  
+âŒ SACCO backend (`sacco-backend`) NOT FOUND in PM2  
+âš ï¸ Need to start `sacco-backend` manually
 
 ---
 
-## 🔥 **RUN THESE 4 COMMANDS RIGHT NOW** (on VPS)
+## ðŸ”¥ **RUN THESE 4 COMMANDS RIGHT NOW** (on VPS)
 
 ### **Command 1: Check Current PM2 Apps**
 ```bash
@@ -45,12 +45,12 @@ pm2 status
 ```
 
 **You should see:**
-- `smcf-backend` → `online` (port 4000)
-- `sacco-backend` → `online` (port 5001)
+- `smcf-backend` â†’ `online` (port 4000)
+- `sacco-backend` â†’ `online` (port 5001)
 
 ---
 
-## ✅ **Quick Verification**
+## âœ… **Quick Verification**
 
 ```bash
 # Test both backends respond
@@ -66,9 +66,9 @@ pm2 logs --lines 20
 
 ---
 
-## 📊 **Expected Results**
+## ðŸ“Š **Expected Results**
 
-### ✅ If Working
+### âœ… If Working
 ```
 HTTP/1.1 200 OK
 {
@@ -77,7 +77,7 @@ HTTP/1.1 200 OK
 }
 ```
 
-### ❌ If Failing
+### âŒ If Failing
 ```
 ECONNREFUSED (backend not running)
 or
@@ -86,7 +86,7 @@ or
 
 ---
 
-## 🚨 **If sacco-backend Won't Start**
+## ðŸš¨ **If sacco-backend Won't Start**
 
 Check error logs:
 ```bash
@@ -101,18 +101,18 @@ pm2 logs sacco-backend --lines 50
 
 ---
 
-## 🎯 **SUCCESS = All 4 Green Checkmarks**
+## ðŸŽ¯ **SUCCESS = All 4 Green Checkmarks**
 
 - [ ] `pm2 status` shows both backends `online`
 - [ ] `curl http://localhost:4000/health` returns 200
 - [ ] `curl http://localhost:5001/health` returns 200  
 - [ ] `pm2 logs` shows no errors
 
-**Then**: Test login at https://smcf.app (should work without 502!)
+**Then**: Test login at https://smart-moves.tech (should work without 502!)
 
 ---
 
-## 📝 **After You Complete These Steps**
+## ðŸ“ **After You Complete These Steps**
 
 Reply with the output of:
 ```bash
@@ -121,3 +121,4 @@ pm2 logs --lines 20
 ```
 
 So I can verify both backends are running and see if there are any issues.
+

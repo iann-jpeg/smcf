@@ -1,4 +1,4 @@
-# SMCF SACCO Codebase Exploration Summary
+﻿# SMCF SACCO Codebase Exploration Summary
 
 ## Executive Summary
 The codebase has a well-structured backend with email infrastructure (Resend API), in-app notifications, and audit logging systems in place. Both backends exist but the SACCO backend (smcf-sacco-backend) is more feature-complete with modern TypeScript architecture.
@@ -13,7 +13,7 @@ The codebase has a well-structured backend with email infrastructure (Resend API
 - **Email Provider**: Resend API v6.9.4
 - **Configuration**:
   - `RESEND_API_KEY`: API key for authentication
-  - `RESEND_FROM_EMAIL`: Sender address (default: `SMCF SACCO <noreply@smcf.app>`)
+  - `RESEND_FROM_EMAIL`: Sender address (default: `SMCF SACCO <noreply@smart-moves.tech>`)
   - `ALLOW_EMAIL_TOKEN_FALLBACK`: Fallback mode for development
   - `FRONTEND_URL`: URL for verification links
 
@@ -69,7 +69,7 @@ interface INotification {
 2. `notifyMember(memberId, title, message, type, link)`
    - Looks up member's linked userId and notifies
    
-3. `notifyStaff(title, message, type, link)` ⭐ **KEY FOR ADMIN NOTIFICATIONS**
+3. `notifyStaff(title, message, type, link)` â­ **KEY FOR ADMIN NOTIFICATIONS**
    - Targets all users with roles: `admin`, `credit_officer`, `credit_committee`, `treasurer`
    - Creates notifications for entire staff
    - Fire-and-forget pattern (never throws)
@@ -176,14 +176,14 @@ Features:
 **Structure**:
 ```
 src/
-├── config/          # Database connection
-├── middleware/      # Auth, error handling, audit logging
-├── models/          # 22 TypeScript models
-├── routes/          # 14 API routes
-├── services/        # Business logic (emailService, etc.)
-├── scripts/         # Setup/seed scripts
-├── types/           # Type definitions
-└── utils/           # Helpers (notify.ts, etc.)
+â”œâ”€â”€ config/          # Database connection
+â”œâ”€â”€ middleware/      # Auth, error handling, audit logging
+â”œâ”€â”€ models/          # 22 TypeScript models
+â”œâ”€â”€ routes/          # 14 API routes
+â”œâ”€â”€ services/        # Business logic (emailService, etc.)
+â”œâ”€â”€ scripts/         # Setup/seed scripts
+â”œâ”€â”€ types/           # Type definitions
+â””â”€â”€ utils/           # Helpers (notify.ts, etc.)
 ```
 
 **Routes Available** (14 total):
@@ -191,7 +191,7 @@ src/
 - notifications, dashboard, auditLogs
 - simulation, repayments, savingsHistory
 - users, mpesa, config, shares
-- communications (email broadcast) ✅
+- communications (email broadcast) âœ…
 
 ### Original Backend (smcf/backend) - **LEGACY**
 **Language**: JavaScript
@@ -417,7 +417,7 @@ Includes:
 **SACCO Backend** (`.env.example`):
 ```
 RESEND_API_KEY=your-api-key
-RESEND_FROM_EMAIL=SMCF SACCO <noreply@smcf.app>
+RESEND_FROM_EMAIL=SMCF SACCO <noreply@smart-moves.tech>
 ALLOW_EMAIL_TOKEN_FALLBACK=false
 ADMIN_EMAIL_BATCH_SIZE=25
 ADMIN_EMAIL_MAX_RECIPIENTS=5000
@@ -430,16 +430,16 @@ FRONTEND_URL=http://localhost:5173
 
 | Aspect | Status | Details |
 |--------|--------|---------|
-| **Email Service** | ✅ Implemented | Resend API with verification emails |
-| **Email Templates** | ⚠️ Partial | Only verification email exists |
-| **In-App Notifications** | ✅ Implemented | Staff notification function exists |
-| **Email Broadcast to Admins** | ❌ Missing | Need dedicated admin notification system |
-| **Activity Logging** | ✅ Implemented | AdminAuditLog + AuditLog models |
-| **Event Tracking** | ⚠️ Partial | Request-response based, no event emitter |
-| **Admin Authorization** | ✅ Implemented | Role-based middleware |
-| **Audit Trail** | ✅ Implemented | Action tracking with IP, device, user agent |
-| **Email Retry Logic** | ❌ Missing | No queue/retry system |
-| **Notification Preferences** | ❌ Missing | No per-admin settings |
+| **Email Service** | âœ… Implemented | Resend API with verification emails |
+| **Email Templates** | âš ï¸ Partial | Only verification email exists |
+| **In-App Notifications** | âœ… Implemented | Staff notification function exists |
+| **Email Broadcast to Admins** | âŒ Missing | Need dedicated admin notification system |
+| **Activity Logging** | âœ… Implemented | AdminAuditLog + AuditLog models |
+| **Event Tracking** | âš ï¸ Partial | Request-response based, no event emitter |
+| **Admin Authorization** | âœ… Implemented | Role-based middleware |
+| **Audit Trail** | âœ… Implemented | Action tracking with IP, device, user agent |
+| **Email Retry Logic** | âŒ Missing | No queue/retry system |
+| **Notification Preferences** | âŒ Missing | No per-admin settings |
 
 ---
 
@@ -453,4 +453,5 @@ FRONTEND_URL=http://localhost:5173
 6. **Add Email Preferences** - Let admins control notification channels
 7. **Testing** - Setup integration tests for notification flow
 8. **Documentation** - Document the admin notification system
+
 
