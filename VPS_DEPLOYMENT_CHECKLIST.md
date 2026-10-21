@@ -197,7 +197,29 @@ DARAJA_SHORTCODE=8315413
 DARAJA_TILL_NUMBER=6938069
 DARAJA_TRANSACTION_TYPE=CustomerBuyGoodsOnline
 DARAJA_CALLBACK_URL=https://smart-moves.tech/sacco-api/api/mpesa/daraja/callback
+# Optional M-Pesa Dynamic QR backup. Keep disabled until the QR callback is
+# registered with Safaricom for the production shortcode.
+DARAJA_QR_ENABLED=false
+DARAJA_QR_CALLBACK_URL=https://smart-moves.tech/sacco-api/api/mpesa/qr/callback
+DARAJA_QR_TRANSACTION_CODE=BG
+PESAPAL_BASE_URL=https://pay.pesapal.com/v3
+PESAPAL_CALLBACK_URL=https://smart-moves.tech/sacco-api/api/pesapal/callback
 ```
+
+The member account now has an additive **Backup payment options** control.
+It exposes the existing Pesapal order flow and the optional Daraja Dynamic QR
+flow without changing the existing M-Pesa STK dialogs.
+
+For Pesapal, confirm that `PESAPAL_CONSUMER_KEY`, `PESAPAL_CONSUMER_SECRET`,
+and `PESAPAL_IPN_ID` are present in the backend `.env`. Register the callback
+URL above with Pesapal.
+
+For M-Pesa QR, first register
+`https://smart-moves.tech/sacco-api/api/mpesa/qr/callback` as the C2B/QR
+notification URL for the production shortcode/till with Safaricom. Only then
+set `DARAJA_QR_ENABLED=true` and restart the backend. QR payments remain
+pending until Safaricom delivers the callback, after which the normal
+transaction/balance settlement helpers are used.
 
 ### **Combined public landing page and SACCO deployment**
 

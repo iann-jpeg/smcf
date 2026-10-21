@@ -30,6 +30,7 @@ import savingsHistoryRoutes from './routes/savingsHistory';
 import userRoutes from './routes/users';
 import mpesaRoutes from './routes/mpesa';
 import pesapalRoutes from './routes/pesapal';
+import mpesaQrRoutes from './routes/mpesaQr';
 import configRoutes from './routes/config';
 import sharesRoutes from './routes/shares';
 import shareCapitalDividendsRoutes from './routes/shareCapitalDividends';
@@ -206,6 +207,7 @@ app.use('/api/savings-history', savingsHistoryRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/mpesa', mpesaRoutes);
 app.use('/api/pesapal', pesapalRoutes);
+app.use('/api/mpesa/qr', mpesaQrRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/shares', sharesRoutes);
 app.use('/api/share-capital-dividends', shareCapitalDividendsRoutes);
@@ -252,4 +254,3 @@ process.on('unhandledRejection', (err: Error) => {
 });
 
 export default app;
-

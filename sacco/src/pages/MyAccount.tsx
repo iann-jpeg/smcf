@@ -48,6 +48,7 @@ import { GrowthDashboardTab } from "@/components/GrowthDashboardTab";
 import { DepositSavingsDialog } from "@/components/DepositSavingsDialog";
 import { LoanRepaymentDialog } from "@/components/LoanRepaymentDialog";
 import { ShareSubscriptionDialog } from "@/components/ShareSubscriptionDialog";
+import { BackupPaymentOptions } from "@/components/BackupPaymentOptions";
 import { ShareTransferDialog } from "@/components/ShareTransferDialog";
 import MemberRegistrationFormPanel from "@/components/member/MemberRegistrationFormPanel";
 import MembershipCardPanel from "@/components/member/MembershipCardPanel";
@@ -2048,6 +2049,17 @@ export default function MyAccount() {
         memberId={member.id}
         memberPhone={member.phone}
         currentShares={Number(member.shares)}
+      />
+
+      <BackupPaymentOptions
+        memberId={member.id}
+        cycleNumber={(unifiedAccount as any)?.cycles?.active?.cycleNumber}
+        onComplete={() => {
+          queryClient.invalidateQueries({ queryKey: ["my-member"] });
+          queryClient.invalidateQueries({ queryKey: ["my-transactions"] });
+          queryClient.invalidateQueries({ queryKey: ["my-unified-account"] });
+          queryClient.invalidateQueries({ queryKey: ["my-savings-history"] });
+        }}
       />
 
       {/* Share Transfer Dialog */}
