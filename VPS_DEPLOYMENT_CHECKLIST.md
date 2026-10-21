@@ -195,29 +195,27 @@ FRONTEND_URL=https://smart-moves.tech
 DARAJA_CALLBACK_URL=https://smart-moves.tech/sacco-api/api/mpesa/daraja/callback
 ```
 
-### **SACCO-only domain deployment**
+### **Combined public landing page and SACCO deployment**
 
-The production site should serve the SACCO build at the domain root. Build it
-with `VITE_SACCO_BASE_PATH=/`, then point Nginx `root` to
-`/var/www/smcf/sacco/dist`. Keep `/sacco-api/` proxied to the SACCO backend on
-port 5001. Do not point the domain root at the parent repository or the
-unbuilt `sacco` source directory; that serves `/src/main.tsx` as HTML and
-causes a blank page.
+The public landing page must remain at the domain root. The SACCO application
+is served under `/sacco/`, and the SACCO backend remains behind `/sacco-api/`
+on port 5001. Build the combined application from the repository root so
+`dist/index.html` contains the landing page and `dist/sacco/index.html`
+contains the SACCO application.
 
 ```bash
 cd /var/www/smcf
 git pull origin main
-cd sacco
-export VITE_SACCO_BASE_PATH=/
+export VITE_SACCO_BASE_PATH=/sacco/
 export VITE_SACCO_API_URL=/sacco-api
 npm install --no-audit --no-fund
-npm run build
+npm run build:all
 ```
 
 Use this Nginx layout for the SACCO-only site:
 
 ```nginx
-root /var/www/smcf/sacco/dist;
+root /var/www/smcf/dist;
 index index.html;
 
 location /sacco-api/ {
@@ -231,6 +229,14 @@ location /sacco-api/ {
 
 location / {
     try_files $uri $uri/ /index.html;
+}
+```
+
+The `/sacco/` location is served from the combined `dist/sacco` output:
+
+```nginx
+location /sacco/ {
+    try_files $uri $uri/ /sacco/index.html;
 }
 ```
 
