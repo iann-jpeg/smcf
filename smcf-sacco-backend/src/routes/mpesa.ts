@@ -368,12 +368,20 @@ async function sendDarajaSTK(
   const checkoutRequestId = typeof dataRecord?.CheckoutRequestID === 'string'
     ? dataRecord.CheckoutRequestID
     : undefined;
-  if (!response.ok || !checkoutRequestId) {
+  const responseCode = dataRecord?.ResponseCode;
+  const responseCodeIsSuccess = responseCode === undefined || Number(responseCode) === 0;
+  if (!response.ok || !checkoutRequestId || !responseCodeIsSuccess) {
     const message = extractProviderErrorMessage(data, `Safaricom Daraja rejected the STK request (HTTP ${response.status})`);
     const error = new Error(message) as Error & { statusCode?: number };
     error.statusCode = response.status >= 400 && response.status < 500 ? 400 : 502;
     throw error;
   }
+  console.info('[Daraja STK push accepted]', {
+    checkoutRequestId,
+    merchantRequestId: dataRecord.MerchantRequestID || null,
+    responseCode: responseCode ?? null,
+    customerMessage: dataRecord.CustomerMessage || null,
+  });
   return {
     success: true,
     checkoutRequestId,
@@ -2260,6 +2268,12 @@ router.post(['/daraja/callback', '/callback'], async (req: Request, res: Respons
 
     const { ResultCode, ResultDesc, CheckoutRequestID, CallbackMetadata } = cb;
     const callbackSucceeded = Number(ResultCode) === 0;
+    console.info('[Daraja native callback received]', {
+      checkoutRequestId: CheckoutRequestID || null,
+      resultCode: ResultCode ?? null,
+      resultDesc: ResultDesc || null,
+      succeeded: callbackSucceeded,
+    });
     type CallbackItem = { Name?: string; Value?: unknown };
     const items: CallbackItem[] = Array.isArray(CallbackMetadata?.Item) ? CallbackMetadata.Item : [];
     const get = (n: string): unknown => items.find((i) => i.Name === n)?.Value;
