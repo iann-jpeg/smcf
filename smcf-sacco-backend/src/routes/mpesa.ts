@@ -471,7 +471,9 @@ async function pollSACCOPayment(
   // Keep the transaction pending during that window instead of marking a
   // potentially paid transaction as failed.
   const MAX_MS   = 5 * 60_000;
-  const INTERVAL = 3_000;
+  // Daraja can rate-limit repeated STK queries. The callback remains the
+  // preferred completion path; this slower poll is only a recovery path.
+  const INTERVAL = 8_000;
   const start    = Date.now();
 
   const tick = async (): Promise<void> => {
@@ -486,7 +488,12 @@ async function pollSACCOPayment(
       transactionForStatus?.checkoutRequestId || checkoutRequestId || transactionForStatus?.transactionRef || '',
     );
 
-    if (status === 'success' && mpesaReceiptNumber) {
+    if (status === 'success') {
+      // STK query responses normally contain ResultCode/ResultDesc but not
+      // CallbackMetadata. The callback may arrive shortly afterwards with the
+      // real receipt number, so use the checkout ID as a temporary idempotent
+      // reference rather than leaving a confirmed payment pending forever.
+      const providerReference = mpesaReceiptNumber || checkoutRequestId;
       const confirmedAmount = paidAmt || amount;
       await Transaction.findByIdAndUpdate(pendingTxnId, {
         providerStatus: 'success',
@@ -503,7 +510,7 @@ async function pollSACCOPayment(
             memberId,
             amount: confirmedAmount,
             phone,
-            mpesaRef: mpesaReceiptNumber,
+            mpesaRef: providerReference,
             sourceLabel: 'M-Pesa STK',
             cycleNumber: cycleNumber ?? (pending?.cyclePayment ? pending.cycleNumber : undefined),
             tenXContributionId: pending?.tenXContributionId,
@@ -511,7 +518,7 @@ async function pollSACCOPayment(
             processedAt: new Date(),
           });
           const d = pendingDeposits.get(checkoutRequestId);
-          if (d) { d.status = 'success'; d.mpesaRef = mpesaReceiptNumber; d.amount = confirmedAmount; pendingDeposits.set(checkoutRequestId, d); }
+          if (d) { d.status = 'success'; d.mpesaRef = providerReference; d.amount = confirmedAmount; pendingDeposits.set(checkoutRequestId, d); }
 
         } else if (type === 'share_purchase') {
           const shareAmounts = calculateTransactionAmounts(confirmedAmount, 'share_purchase');
@@ -519,10 +526,10 @@ async function pollSACCOPayment(
             { _id: pendingTxnId, status: 'pending', depositProcessed: { $ne: true } },
             {
             status: 'completed',
-            mpesaRef: mpesaReceiptNumber,
+            mpesaRef: providerReference,
             amount: confirmedAmount,
             ...shareAmounts,
-            description: `M-Pesa Share Purchase — Ref: ${mpesaReceiptNumber} — ${phone}`,
+            description: `M-Pesa Share Purchase — Ref: ${providerReference} — ${phone}`,
             processedAt: new Date(),
             depositProcessed: true,
             },
@@ -533,13 +540,13 @@ async function pollSACCOPayment(
             await recalculateMemberRiskScore(memberId);
           }
           const s = pendingSharePurchases.get(checkoutRequestId);
-          if (s) { s.status = 'success'; s.mpesaRef = mpesaReceiptNumber; s.amount = confirmedAmount; pendingSharePurchases.set(checkoutRequestId, s); }
+          if (s) { s.status = 'success'; s.mpesaRef = providerReference; s.amount = confirmedAmount; pendingSharePurchases.set(checkoutRequestId, s); }
 
           const member = await Member.findById(memberId).select('name memberId');
           const displayName = member?.name || member?.memberId || 'Member';
           void notifyStaff(
             'Share Purchase Received',
-            `${displayName} purchased shares worth KES ${Number(confirmedAmount).toLocaleString()} via M-Pesa. Ref: ${mpesaReceiptNumber}.`,
+            `${displayName} purchased shares worth KES ${Number(confirmedAmount).toLocaleString()} via M-Pesa. Ref: ${providerReference}.`,
             'info',
             '/accounts'
           );
@@ -550,11 +557,11 @@ async function pollSACCOPayment(
             memberId,
             amount: confirmedAmount,
             phone,
-            mpesaRef: mpesaReceiptNumber,
+            mpesaRef: providerReference,
             source: 'polling',
           });
           const f = pendingRegistrationFees.get(checkoutRequestId);
-          if (f) { f.status = 'success'; f.mpesaRef = mpesaReceiptNumber; f.amount = confirmedAmount; pendingRegistrationFees.set(checkoutRequestId, f); }
+          if (f) { f.status = 'success'; f.mpesaRef = providerReference; f.amount = confirmedAmount; pendingRegistrationFees.set(checkoutRequestId, f); }
 
         } else if (type === 'loan_repay' && loanId) {
           const repaymentAmounts = calculateTransactionAmounts(confirmedAmount, 'loan_repayment');
@@ -562,10 +569,10 @@ async function pollSACCOPayment(
           await Transaction.findByIdAndDelete(pendingTxnId);
           const result = await processRepayment(
             loanId, repaymentAmounts.netAmount, 'mpesa',
-            `Phone: ${phone} Ref: ${mpesaReceiptNumber}`, null
+            `Phone: ${phone} Ref: ${providerReference}`, null
           );
           const r = pendingRepayments.get(checkoutRequestId);
-          if (r) { r.status = 'success'; r.mpesaRef = mpesaReceiptNumber; r.amount = confirmedAmount; r.loanCompleted = result.loanCompleted; pendingRepayments.set(checkoutRequestId, r); }
+          if (r) { r.status = 'success'; r.mpesaRef = providerReference; r.amount = confirmedAmount; r.loanCompleted = result.loanCompleted; pendingRepayments.set(checkoutRequestId, r); }
         }
         await Transaction.findByIdAndUpdate(pendingTxnId, {
           financialPostingStatus: 'completed',
