@@ -5,7 +5,8 @@
  *   DARAJA_API_URL        – Daraja base API URL
  *   DARAJA_CONSUMER_KEY   – Safaricom consumer key
  *   DARAJA_CONSUMER_SECRET – Safaricom consumer secret
- *   DARAJA_SHORTCODE      – Daraja B2C/B2B shortcode or till number
+ *   DARAJA_SHORTCODE      – Daraja business shortcode used for STK/password
+ *   DARAJA_TILL_NUMBER    – Buy Goods till used as PartyB (same as shortcode for PayBill)
  *   DARAJA_PASSKEY        – Daraja passkey
  *   DARAJA_CALLBACK_URL   – Public URL Daraja will POST the payment result to
  *
@@ -263,6 +264,12 @@ function assertDarajaConfiguration(): void {
     error.statusCode = 503;
     throw error;
   }
+  const tillNumber = String(process.env.DARAJA_TILL_NUMBER || process.env.DARAJA_SHORTCODE || '').trim();
+  if (!/^\d+$/.test(tillNumber)) {
+    const error = new Error('DARAJA_TILL_NUMBER must contain only digits') as Error & { statusCode?: number };
+    error.statusCode = 503;
+    throw error;
+  }
 }
 
 function getDarajaTimestamp(date = new Date()): string {
@@ -337,7 +344,7 @@ async function sendDarajaSTK(
     TransactionType: transactionType,
     Amount: Math.round(amount),
     PartyA: normalizePhone(phone),
-    PartyB: shortcode,
+    PartyB: String(process.env.DARAJA_TILL_NUMBER || shortcode).trim(),
     PhoneNumber: normalizePhone(phone),
     CallBackURL: String(process.env.DARAJA_CALLBACK_URL).trim(),
     AccountReference: reference.replace(/[^a-zA-Z0-9]/g, '').slice(0, 12) || 'SMCF',

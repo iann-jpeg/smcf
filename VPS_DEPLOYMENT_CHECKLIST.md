@@ -192,6 +192,10 @@ SACCO_BACKEND_URL=http://127.0.0.1:5001
 PORT=5001
 MONGODB_URI=mongodb://localhost:27017/smcf-sacco
 FRONTEND_URL=https://smart-moves.tech
+DARAJA_API_URL=https://api.safaricom.co.ke
+DARAJA_SHORTCODE=8315413
+DARAJA_TILL_NUMBER=6938069
+DARAJA_TRANSACTION_TYPE=CustomerBuyGoodsOnline
 DARAJA_CALLBACK_URL=https://smart-moves.tech/sacco-api/api/mpesa/daraja/callback
 ```
 
