@@ -584,6 +584,50 @@ export default function MyAccount() {
         </div>
       </div>
 
+      <Card className="relative overflow-hidden border-amber-300 bg-gradient-to-r from-amber-500 via-amber-600 to-orange-600 text-white shadow-lg shadow-amber-900/15">
+        <div className="pointer-events-none absolute -right-10 -top-12 h-40 w-40 rounded-full bg-white/10" />
+        <CardContent className="relative flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div className="flex items-start gap-4">
+            <div className="rounded-2xl bg-white/20 p-3 shadow-inner">
+              <CalendarCheck className="h-8 w-8" />
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-100">Your first priority</p>
+              <h2 className="mt-1 font-heading text-2xl font-bold">Cycles</h2>
+              <p className="mt-1 max-w-xl text-sm text-amber-50">
+                {activeCycle
+                  ? `Cycle ${activeCycle.cycleNumber || activeCycle.cycle_number || ""} is active. Make your contribution and stay on track.`
+                  : "View your contribution cycle and make your payment from one place."}
+              </p>
+              {activeCycle && (
+                <p className="mt-2 text-xs font-semibold text-amber-100">
+                  {Number(activeCycle.paidMembers || activeCycle.paid_members || 0)} of {Number(activeCycle.memberCount || activeCycle.member_count || 0)} members paid
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <Button
+              size="lg"
+              variant="secondary"
+              className="font-bold text-amber-900 shadow-md hover:bg-amber-50"
+              onClick={() => { setDepositType("cycle"); setDepositOpen(true); }}
+            >
+              <CalendarCheck className="mr-2 h-5 w-5" />
+              Pay Cycle Contribution
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="border-white/60 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+              onClick={() => setSearchParams({ tab: "wallet-cycles" })}
+            >
+              View Cycle Details
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Authoritative position hero: values are read from existing member/account data. */}
       <Card className="overflow-hidden border-primary/20 bg-gradient-to-br from-primary/[0.08] via-card to-card shadow-md">
         <CardHeader className="pb-4">

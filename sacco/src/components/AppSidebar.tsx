@@ -52,8 +52,8 @@ const shareNav = [
 ] satisfies StaffNavItem[];
 
 const memberNav = [
+  { title: "Cycles · Pay Contribution", url: "/my-account?tab=wallet-cycles", icon: CalendarCheck },
   { title: "My Account", url: "/my-account", icon: UserCircle },
-  { title: "Wallet & Cycles", url: "/my-account?tab=wallet-cycles", icon: CalendarCheck },
   { title: "Apply for Loan", url: "/loans/apply", icon: CreditCard },
 ];
 
@@ -155,7 +155,7 @@ export function AppSidebar() {
   const renderMemberGroup = (label: string, items: typeof memberFinanceNav) => (
     <SidebarGroup key={label}>
       <SidebarGroupLabel className="text-sidebar-foreground/50 text-[10px] uppercase tracking-[0.16em]">{label}</SidebarGroupLabel>
-      <SidebarGroupContent><SidebarMenu>{items.map((item) => <SidebarMenuItem key={item.title}><SidebarMenuButton asChild><NavLink to={item.url} onClick={handleNavClick} className="hover:bg-sidebar-accent" activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold"><item.icon className="mr-3 h-4 w-4" /><span>{item.title}</span></NavLink></SidebarMenuButton></SidebarMenuItem>)}</SidebarMenu></SidebarGroupContent>
+      <SidebarGroupContent><SidebarMenu>{items.map((item) => <SidebarMenuItem key={item.title}><SidebarMenuButton asChild><NavLink to={item.url} onClick={handleNavClick} className={item.title.startsWith("Cycles") ? "border border-amber-300/70 bg-amber-100/80 font-semibold text-amber-900 shadow-sm hover:bg-amber-200/80 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-100 dark:hover:bg-amber-900/60" : "hover:bg-sidebar-accent"} activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold"><item.icon className="mr-3 h-4 w-4" /><span>{item.title}</span></NavLink></SidebarMenuButton></SidebarMenuItem>)}</SidebarMenu></SidebarGroupContent>
     </SidebarGroup>
   );
 
