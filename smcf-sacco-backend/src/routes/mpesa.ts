@@ -2514,11 +2514,14 @@ router.get('/status/:checkoutRequestId', protect, async (req: AuthRequest, res: 
           }
         }
       }
+      const transactionCompleted = txn.status === 'completed' && (
+        txn.financialPostingStatus === 'completed' || txn.depositProcessed === true
+      );
       return res.json({
         success: true,
         data: {
           type: txn.type,
-          status:   txn.status === 'completed' && txn.financialPostingStatus === 'completed'
+          status:   transactionCompleted
             ? 'success'
             : txn.status === 'failed'
               ? 'failed'

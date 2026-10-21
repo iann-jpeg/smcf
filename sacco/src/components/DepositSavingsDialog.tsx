@@ -69,16 +69,11 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
       try {
         const res = await api.get(`/mpesa/status/${id}`);
         const d = ((res as any)?.data ?? res) as any;
-        const statusValues = [
-          d?.status,
-          d?.providerStatus,
-          d?.paymentStatus,
-          d?.transaction_status,
-        ].map((value) => String(value ?? "").trim().toLowerCase());
+        const status = String(d?.status ?? "").trim().toLowerCase();
         const isFinanciallyComplete = String(d?.financialPostingStatus ?? "").toLowerCase() === "completed";
-        const isSuccess = statusValues.some((value) => ["success", "successful", "completed", "complete", "paid", "approved", "confirmed"].includes(value))
+        const isSuccess = ["success", "successful", "completed", "complete", "paid", "approved", "confirmed"].includes(status)
           && (!d?.financialPostingStatus || isFinanciallyComplete);
-        const isFailed = statusValues.some((value) => ["failed", "cancelled", "canceled", "declined", "reversed"].includes(value));
+        const isFailed = ["failed", "cancelled", "canceled", "declined", "reversed"].includes(status);
         if (isSuccess) {
           stopPolling();
             await Promise.all([
