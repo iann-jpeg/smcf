@@ -36,6 +36,7 @@ export function ShareSubscriptionDialog({ open, onClose, memberId, memberPhone, 
   const [failReason,  setFailReason]  = useState<string | null>(null);
   const pollRef    = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const failureChecksRef = useRef(0);
   const queryClient = useQueryClient();
 
   const stopPolling = useCallback(() => {
@@ -58,6 +59,7 @@ export function ShareSubscriptionDialog({ open, onClose, memberId, memberPhone, 
       setCheckoutId(null);
       setMpesaRef(null);
       setFailReason(null);
+      failureChecksRef.current = 0;
       stopPolling();
     }
     return () => stopPolling();
@@ -80,6 +82,10 @@ export function ShareSubscriptionDialog({ open, onClose, memberId, memberPhone, 
           queryClient.invalidateQueries({ queryKey: ["transactions"] });
           queryClient.invalidateQueries({ queryKey: ["my-share-summary"] });
         } else if (status === "failed" || status === "cancelled" || status === "canceled") {
+          if (failureChecksRef.current < 3) {
+            failureChecksRef.current += 1;
+            return;
+          }
           stopPolling();
           setFailReason(d.resultDesc || "Share purchase was cancelled or failed.");
           setStep("failed");

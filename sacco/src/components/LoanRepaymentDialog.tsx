@@ -37,6 +37,7 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
   const [failReason,    setFailReason]    = useState<string | null>(null);
   const pollRef    = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const failureChecksRef = useRef(0);
   const queryClient = useQueryClient();
 
   const stopPolling = useCallback(() => {
@@ -53,6 +54,7 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
       setMpesaRef(null);
       setLoanCompleted(false);
       setFailReason(null);
+      failureChecksRef.current = 0;
       stopPolling();
     }
     return () => stopPolling();
@@ -77,6 +79,10 @@ export function LoanRepaymentDialog({ open, onClose, loan, memberPhone }: Props)
           queryClient.invalidateQueries({ queryKey: ["transactions"] });
           queryClient.invalidateQueries({ queryKey: ["members"] });
         } else if (status === "failed" || status === "cancelled" || status === "canceled") {
+          if (failureChecksRef.current < 3) {
+            failureChecksRef.current += 1;
+            return;
+          }
           stopPolling();
           setFailReason(d.resultDesc || "Payment cancelled or failed. Please try again.");
           setStep("failed");

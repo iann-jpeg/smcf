@@ -40,6 +40,7 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
   const [walletAgreementLoading, setWalletAgreementLoading] = useState(false);
   const pollRef    = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const failureChecksRef = useRef(0);
   const queryClient = useQueryClient();
 
   const stopPolling = useCallback(() => {
@@ -56,6 +57,7 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
       setCheckoutId(null);
       setMpesaRef(null);
       setFailReason(null);
+      failureChecksRef.current = 0;
       setWalletAgreementChecked(false);
       stopPolling();
       // Wallet terms must be accepted before every Wallet deposit.
@@ -91,6 +93,12 @@ export function DepositSavingsDialog({ open, onClose, memberId, memberPhone, pay
             setMpesaRef(d.mpesaRef ?? null);
             setStep("success");
         } else if (isFailed) {
+          // Safaricom callbacks and database settlement can cross an HTTP
+          // polling response. Confirm terminal failure before showing it.
+          if (failureChecksRef.current < 3) {
+            failureChecksRef.current += 1;
+            return;
+          }
           stopPolling();
           setFailReason(d.resultDesc || "Payment cancelled or failed. Please try again.");
           setStep("failed");
