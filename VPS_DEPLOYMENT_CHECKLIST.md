@@ -192,10 +192,9 @@ SACCO_BACKEND_URL=http://127.0.0.1:5001
 PORT=5001
 MONGODB_URI=mongodb://localhost:27017/smcf-sacco
 FRONTEND_URL=https://smart-moves.tech
-MPESA_CALLBACK_URL=https://smart-moves.tech/sacco/api/mpesa/callback
+DARAJA_CALLBACK_URL=https://smart-moves.tech/sacco/api/mpesa/daraja/callback
 ```
 
 ---
 
 **ðŸŽ¯ Goal**: Deploy fixed code to Contabo VPS and verify all 502 errors are resolved.
-

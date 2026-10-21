@@ -219,7 +219,7 @@ function hasDarajaCredentials(): boolean {
   );
 }
 
-function validCallbackSecret(req: Request): boolean {
+function validLegacyCallbackSecret(req: Request): boolean {
   const configuredSecret = String(process.env.PAYMENT_CALLBACK_SECRET || '').trim();
   if (!configuredSecret) return false;
   const suppliedSecret = String(req.header('X-Payment-Callback-Secret') || '').trim();
@@ -1992,12 +1992,11 @@ router.post('/registration-fee/reconcile-manual', protect, authorize('admin', 't
   }
 });
 
-// ─── POST /api/mpesa/daraja/callback ─────────────────────────────────────────
-// Daraja posts the final provider result here. Business settlement remains in
-// the existing SACCO settlement functions above.
+// ─── POST /api/mpesa/legacy-daraja/callback ──────────────────────────────────
+// Retained for older provider adapters that send a normalized callback payload.
 
-router.post('/daraja/callback', async (req: Request, res: Response) => {
-  if (!validCallbackSecret(req)) return res.status(401).json({ success: false, message: 'Invalid callback signature' });
+router.post('/legacy-daraja/callback', async (req: Request, res: Response) => {
+  if (!validLegacyCallbackSecret(req)) return res.status(401).json({ success: false, message: 'Invalid callback signature' });
   res.status(200).json({ success: true });
 
   try {
@@ -2241,18 +2240,19 @@ router.post('/daraja/callback', async (req: Request, res: Response) => {
   }
 });
 
-// ─── POST /api/mpesa/callback ────────────────────────────────────────────────
-// Safaricom-compatible callback kept for backwards compatibility.
+// ─── POST /api/mpesa/daraja/callback ─────────────────────────────────────────
+// Safaricom sends the native Body.stkCallback payload to this endpoint.
+// /callback remains as a compatibility alias for existing deployments.
 
-router.post('/callback', async (req: Request, res: Response) => {
-  if (!validCallbackSecret(req)) return res.status(401).json({ success: false, message: 'Invalid callback signature' });
-  res.json({ ResultCode: 0, ResultDesc: 'Accepted' });
+router.post(['/daraja/callback', '/callback'], async (req: Request, res: Response) => {
+  res.status(200).json({ ResultCode: 0, ResultDesc: 'Accepted' });
 
   try {
     const cb = req.body?.Body?.stkCallback;
     if (!cb) return;
 
     const { ResultCode, ResultDesc, CheckoutRequestID, CallbackMetadata } = cb;
+    const callbackSucceeded = Number(ResultCode) === 0;
     type CallbackItem = { Name?: string; Value?: unknown };
     const items: CallbackItem[] = Array.isArray(CallbackMetadata?.Item) ? CallbackMetadata.Item : [];
     const get = (n: string): unknown => items.find((i) => i.Name === n)?.Value;
@@ -2261,13 +2261,13 @@ router.post('/callback', async (req: Request, res: Response) => {
     const paidAmt  = Number(get('Amount'));
     const depositTxn = await Transaction.findOne({
       checkoutRequestId: CheckoutRequestID,
-      type: { $in: ['deposit', 'wallet_deposit'] },
+      type: { $in: ['deposit', 'wallet_deposit', 'tenx_contribution'] },
     }).select('memberId amount description type');
 
     // ── Savings deposit ──────────────────────────────────────────────────
     const deposit = pendingDeposits.get(CheckoutRequestID);
     if (deposit || depositTxn) {
-      if (ResultCode !== 0) {
+      if (!callbackSucceeded) {
         if (deposit) {
           deposit.status = 'failed';
           deposit.resultDesc = ResultDesc || 'Payment cancelled or failed';
@@ -2309,7 +2309,7 @@ router.post('/callback', async (req: Request, res: Response) => {
     // ── Share purchase ───────────────────────────────────────────────────
     const sharePurchase = pendingSharePurchases.get(CheckoutRequestID);
     if (sharePurchase) {
-      if (ResultCode !== 0) {
+      if (!callbackSucceeded) {
         sharePurchase.status = 'failed';
         sharePurchase.resultDesc = ResultDesc || 'Payment cancelled or failed';
       } else {
@@ -2354,7 +2354,7 @@ router.post('/callback', async (req: Request, res: Response) => {
     // ── Loan repayment ───────────────────────────────────────────────────
     const regFee = pendingRegistrationFees.get(CheckoutRequestID);
     if (regFee) {
-      if (ResultCode !== 0) {
+      if (!callbackSucceeded) {
         regFee.status = 'failed';
         regFee.resultDesc = ResultDesc || 'Payment cancelled or failed';
       } else {
@@ -2383,7 +2383,7 @@ router.post('/callback', async (req: Request, res: Response) => {
 
     const repayment = pendingRepayments.get(CheckoutRequestID);
     if (repayment) {
-      if (ResultCode !== 0) {
+      if (!callbackSucceeded) {
         repayment.status     = 'failed';
         repayment.resultDesc = ResultDesc || 'Payment cancelled or failed';
       } else {
