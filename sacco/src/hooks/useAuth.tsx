@@ -105,7 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }).catch(() => undefined);
     }
     clearAuth();
-    window.location.href = "/sacco/auth";
+    window.location.href = `${import.meta.env.BASE_URL}auth`;
   };
 
   const roles   = user?.roles ?? [];

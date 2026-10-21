@@ -192,7 +192,46 @@ SACCO_BACKEND_URL=http://127.0.0.1:5001
 PORT=5001
 MONGODB_URI=mongodb://localhost:27017/smcf-sacco
 FRONTEND_URL=https://smart-moves.tech
-DARAJA_CALLBACK_URL=https://smart-moves.tech/sacco/api/mpesa/daraja/callback
+DARAJA_CALLBACK_URL=https://smart-moves.tech/sacco-api/api/mpesa/daraja/callback
+```
+
+### **SACCO-only domain deployment**
+
+The production site should serve the SACCO build at the domain root. Build it
+with `VITE_SACCO_BASE_PATH=/`, then point Nginx `root` to
+`/var/www/smcf/sacco/dist`. Keep `/sacco-api/` proxied to the SACCO backend on
+port 5001. Do not point the domain root at the parent repository or the
+unbuilt `sacco` source directory; that serves `/src/main.tsx` as HTML and
+causes a blank page.
+
+```bash
+cd /var/www/smcf
+git pull origin main
+cd sacco
+export VITE_SACCO_BASE_PATH=/
+export VITE_SACCO_API_URL=/sacco-api
+npm install --no-audit --no-fund
+npm run build
+```
+
+Use this Nginx layout for the SACCO-only site:
+
+```nginx
+root /var/www/smcf/sacco/dist;
+index index.html;
+
+location /sacco-api/ {
+    proxy_pass http://127.0.0.1:5001/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+
+location / {
+    try_files $uri $uri/ /index.html;
+}
 ```
 
 ---

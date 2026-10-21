@@ -91,8 +91,9 @@ async function handle<T>(res: Response, path: string): Promise<T> {
       // Token expired / invalid – clear session and redirect to login
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem("smcf_auth_user");
-      if (window.location.pathname !== "/sacco/auth") {
-        window.location.href = "/sacco/auth";
+      const authPath = `${import.meta.env.BASE_URL}auth`;
+      if (window.location.pathname !== authPath) {
+        window.location.href = authPath;
       }
     }
     throw new Error("Unauthorized");

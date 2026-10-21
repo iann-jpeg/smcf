@@ -103,7 +103,9 @@ const queryClient = new QueryClient({
   },
 });
 
-const routerBasename = import.meta.env.DEV ? undefined : "/sacco";
+const routerBasename = import.meta.env.DEV || import.meta.env.BASE_URL === "/"
+  ? undefined
+  : import.meta.env.BASE_URL.replace(/\/$/, "");
 
 type NotificationInput = Record<string, unknown> & {
   _id?: string | object;
