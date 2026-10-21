@@ -202,7 +202,7 @@ DARAJA_CALLBACK_URL=https://smart-moves.tech/sacco-api/api/mpesa/daraja/callback
 DARAJA_QR_ENABLED=false
 DARAJA_QR_CALLBACK_URL=https://smart-moves.tech/sacco-api/api/mpesa/qr/callback
 DARAJA_QR_TRANSACTION_CODE=BG
-PESAPAL_BASE_URL=https://pay.pesapal.com/v3
+PESAPAL_BASE_URL=https://pay.pesapal.com/v3/api
 PESAPAL_CALLBACK_URL=https://smart-moves.tech/sacco-api/api/pesapal/callback
 ```
 

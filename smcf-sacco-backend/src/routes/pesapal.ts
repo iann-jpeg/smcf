@@ -21,6 +21,9 @@ function baseUrl() {
   if (!configuredBaseUrl || configuredBaseUrl === 'https://cybqa.pesapal.com/pesapalapi') {
     return 'https://cybqa.pesapal.com/pesapalv3/api';
   }
+  if (configuredBaseUrl === 'https://pay.pesapal.com/v3') {
+    return 'https://pay.pesapal.com/v3/api';
+  }
   return configuredBaseUrl;
 }
 
@@ -51,7 +54,7 @@ async function pesapalToken(): Promise<string> {
     }),
   });
   const data = await response.json().catch(() => ({})) as Record<string, unknown>;
-  const token = data.token;
+  const token = data.token || data.access_token;
   if (!response.ok || typeof token !== 'string' || !token) {
     const nestedError = data.error && typeof data.error === 'object'
       ? data.error as Record<string, unknown>

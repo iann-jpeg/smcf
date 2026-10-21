@@ -223,6 +223,49 @@ export default function MyAccount() {
     };
   }, []);
 
+  useEffect(() => {
+    const orderTrackingId = new URLSearchParams(window.location.search).get("pesapal");
+    if (!orderTrackingId) return;
+
+    let attempts = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let stopped = false;
+    const checkPesapalStatus = async () => {
+      try {
+        const result = await api.get<{ status?: string; financialPostingStatus?: string }>(
+          `/pesapal/orders/${encodeURIComponent(orderTrackingId)}/status`,
+        );
+        const state = String(result.status || "").toLowerCase();
+        const posting = String(result.financialPostingStatus || "").toLowerCase();
+        if (state === "success" || state === "completed" || (state === "pending" && posting === "completed")) {
+          toast.success("Pesapal payment verified and account updated");
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ["my-member"] }),
+            queryClient.invalidateQueries({ queryKey: ["my-transactions"] }),
+            queryClient.invalidateQueries({ queryKey: ["my-unified-account"] }),
+            queryClient.invalidateQueries({ queryKey: ["my-savings-history"] }),
+          ]);
+          window.history.replaceState({}, document.title, window.location.pathname);
+          return;
+        }
+        if (["failed", "cancelled", "reversed"].includes(state)) {
+          toast.error("Pesapal payment was not completed");
+          window.history.replaceState({}, document.title, window.location.pathname);
+          return;
+        }
+      } catch {
+        // The provider callback may still be settling; retry briefly.
+      }
+      attempts += 1;
+      if (!stopped && attempts < 12) timer = setTimeout(() => void checkPesapalStatus(), 5000);
+    };
+    void checkPesapalStatus();
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [queryClient]);
+
   const registrationFeePaid = Boolean((member as any)?.registration_fee_paid);
   const registrationFeeAmount = Number((member as any)?.registration_fee_amount ?? 100);
   const registrationPaymentAmount = registrationFeeAmount + 10;
