@@ -629,6 +629,23 @@ export default function MyAccount() {
         </CardContent>
       </Card>
 
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50/80 p-4 shadow-sm dark:bg-amber-950/20">
+        <div>
+          <p className="font-semibold text-amber-900 dark:text-amber-100">Payment backup</p>
+          <p className="text-sm text-amber-800/80 dark:text-amber-200/80">Use Pesapal or M-Pesa QR if the normal prompt is unavailable.</p>
+        </div>
+        <BackupPaymentOptions
+          memberId={member.id}
+          cycleNumber={(unifiedAccount as any)?.cycles?.active?.cycleNumber}
+          onComplete={() => {
+            queryClient.invalidateQueries({ queryKey: ["my-member"] });
+            queryClient.invalidateQueries({ queryKey: ["my-transactions"] });
+            queryClient.invalidateQueries({ queryKey: ["my-unified-account"] });
+            queryClient.invalidateQueries({ queryKey: ["my-savings-history"] });
+          }}
+        />
+      </div>
+
       {/* Authoritative position hero: values are read from existing member/account data. */}
       <Card className="overflow-hidden border-primary/20 bg-gradient-to-br from-primary/[0.08] via-card to-card shadow-md">
         <CardHeader className="pb-4">
@@ -2049,17 +2066,6 @@ export default function MyAccount() {
         memberId={member.id}
         memberPhone={member.phone}
         currentShares={Number(member.shares)}
-      />
-
-      <BackupPaymentOptions
-        memberId={member.id}
-        cycleNumber={(unifiedAccount as any)?.cycles?.active?.cycleNumber}
-        onComplete={() => {
-          queryClient.invalidateQueries({ queryKey: ["my-member"] });
-          queryClient.invalidateQueries({ queryKey: ["my-transactions"] });
-          queryClient.invalidateQueries({ queryKey: ["my-unified-account"] });
-          queryClient.invalidateQueries({ queryKey: ["my-savings-history"] });
-        }}
       />
 
       {/* Share Transfer Dialog */}
