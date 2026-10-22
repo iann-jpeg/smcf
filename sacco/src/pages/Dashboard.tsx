@@ -106,6 +106,9 @@ export default function Dashboard() {
                 <div key={txn.id} className="flex items-center justify-between py-2 border-b last:border-0">
                   <div>
                     <p className="text-sm font-medium">{txn.type}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {txn.members?.name ?? txn.memberId?.name ?? "Unknown account"}
+                    </p>
                     <p className="text-xs text-muted-foreground">{new Date(txn.processed_at).toLocaleDateString()}</p>
                   </div>
                   <div className="text-right">
